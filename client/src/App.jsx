@@ -19,6 +19,7 @@ function App() {
             <Route path="/comic/:id" element={<ComicEditor />} />
             <Route path="/comic/:id/settings" element={<ComicSettings />} />
             <Route path="/comic/:id/page/:pageId" element={<PageEditor />} />
+            <Route path="/comic/:id/cover" element={<PageEditor isCover />} />
           </Routes>
         </main>
       </div>

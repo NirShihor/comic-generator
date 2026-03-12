@@ -85,10 +85,10 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-// Generate comic page with full prompt template
+// Generate comic page using GPT-4o native image generation (same as ChatGPT)
 router.post('/generate-page', async (req, res) => {
   try {
-    const { prompt, size = '1024x1536' } = req.body;
+    const { prompt, size = '1024x1792' } = req.body;
 
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({
@@ -100,22 +100,29 @@ router.post('/generate-page', async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY
     });
 
-    console.log('Generating image with prompt length:', prompt.length);
+    console.log('Generating with GPT image model, prompt length:', prompt.length);
 
+    // Use gpt-image-1 (native ChatGPT image generation)
+    // Supported sizes: 1024x1024, 1024x1536, 1536x1024, auto
     const response = await openai.images.generate({
-      model: 'dall-e-3',
+      model: 'gpt-image-1',
       prompt: prompt,
       n: 1,
-      size: size,
-      quality: 'hd'
+      size: '1024x1536',
+      quality: 'high'
     });
 
-    const imageUrl = response.data[0].url;
+    // gpt-image-1 returns base64 by default
+    const imageData = response.data[0];
+    let buffer;
 
-    // Download and save the image locally
-    const imageResponse = await fetch(imageUrl);
-    const arrayBuffer = await imageResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    if (imageData.b64_json) {
+      buffer = Buffer.from(imageData.b64_json, 'base64');
+    } else if (imageData.url) {
+      const imageResponse = await fetch(imageData.url);
+      const arrayBuffer = await imageResponse.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    }
 
     const filename = `generated-${uuidv4()}.png`;
     const filePath = path.join(__dirname, '../../uploads', filename);
@@ -124,8 +131,7 @@ router.post('/generate-page', async (req, res) => {
     res.json({
       filename,
       path: `/uploads/${filename}`,
-      originalUrl: imageUrl,
-      revisedPrompt: response.data[0].revised_prompt
+      revisedPrompt: imageData.revised_prompt || prompt
     });
   } catch (error) {
     console.error('Page generation error:', error);

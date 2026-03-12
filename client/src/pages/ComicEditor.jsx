@@ -5,7 +5,7 @@ import api from '../services/api';
 const DEFAULT_SETTINGS = {
   styleBible: `• Page ratio is A4.
 • Speech and thinking bubbles should be contained in the panel and not spill over the edges of the panel.
-• Black & white only. Human-drawn underground horror comic. Rough ink on paper.
+• Black & white only. Human-drawn underground noir comic. Rough ink on paper.
 • Uneven line weight, occasional wobble.
 • Visible pencil under-sketch lines.
 • Messy cross-hatching (inconsistent spacing/direction).
@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS = {
 
 IMPORTANT
 Keep it looking like a human-drawn comic page, not glossy AI.
-No photorealism. No hyper-detail. No horror gore.`,
+No photorealism. No hyper-detail. No noir gore.`,
 
   cameraInks: `Bold silhouettes and strong negative space.
 Slightly imperfect anatomy and perspective (human-made).
@@ -30,11 +30,6 @@ Hand-drawn panel borders, slightly wobbly.
 Keep lighting high-contrast with clear shadow shapes (no gradients).`,
 
   characters: [],
-
-  textLettering: `Hand-lettered captions (not a font), slightly uneven baseline.
-Spanish captions exactly as written.
-Captions should always appear inside the panels.
-All text must be perfectly spelled Spanish. If unsure, leave the caption box blank.`,
 
   globalDoNot: `Do NOT draw rounded corners.
 Do NOT draw an outer page border or white frame.
@@ -47,11 +42,7 @@ No digital polish.
 No extra panels beyond the layout.
 No inset panels.
 No split panels.
-No decorative borders that look like panels.`,
-
-  firstPageTemplate: `PAGE 1 ONLY — This is the first page of the comic. Set the scene and introduce the story.`,
-
-  otherPagesTemplate: `Continue the story from the previous page. Maintain character consistency.`
+No decorative borders that look like panels.`
 };
 
 function ComicEditor() {
@@ -64,7 +55,7 @@ function ComicEditor() {
   const [settingsTab, setSettingsTab] = useState('style');
   const [saving, setSaving] = useState(false);
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
-
+  
   useEffect(() => {
     loadComic();
   }, [id]);
@@ -171,9 +162,7 @@ function ComicEditor() {
     { id: 'style', label: 'Style Bible' },
     { id: 'camera', label: 'Camera & Inks' },
     { id: 'characters', label: 'Characters' },
-    { id: 'text', label: 'Text & Lettering' },
-    { id: 'donot', label: 'Do Not / Negatives' },
-    { id: 'templates', label: 'Page Templates' }
+    { id: 'donot', label: 'Do Not / Negatives' }
   ];
 
   return (
@@ -218,6 +207,34 @@ function ComicEditor() {
       {activeTab === 'pages' && (
         <div>
           <div className="page-grid">
+            {/* Cover */}
+            <div
+              className="page-thumbnail"
+              style={{ border: '2px solid #e94560' }}
+              onClick={() => navigate(`/comic/${id}/cover`)}
+            >
+              {comic.cover?.image ? (
+                <img
+                  src={`http://localhost:3001${comic.cover.image}`}
+                  alt="Cover"
+                />
+              ) : (
+                <div style={{
+                  aspectRatio: '2/3',
+                  background: '#f5f5f5',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#666'
+                }}>
+                  No Image
+                </div>
+              )}
+              <p style={{ fontWeight: 'bold', color: '#e94560' }}>Cover</p>
+            </div>
+
+            {/* Regular Pages */}
             {comic.pages.map((page) => (
               <div
                 key={page.id}
@@ -232,7 +249,7 @@ function ComicEditor() {
                 ) : (
                   <div style={{
                     aspectRatio: '2/3',
-                    background: '#0f3460',
+                    background: '#f5f5f5',
                     borderRadius: '4px',
                     display: 'flex',
                     alignItems: 'center',
@@ -248,10 +265,6 @@ function ComicEditor() {
                 </small>
               </div>
             ))}
-
-            {comic.pages.length === 0 && (
-              <p style={{ color: '#888' }}>No pages yet. Click "Add Page" to start.</p>
-            )}
           </div>
         </div>
       )}
@@ -448,31 +461,6 @@ function ComicEditor() {
               </div>
             )}
 
-            {settingsTab === 'text' && (
-              <div>
-                <h2 style={{ marginBottom: '0.5rem' }}>Text & Lettering</h2>
-                <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                  Rules for captions, speech bubbles, and text styling
-                </p>
-                <textarea
-                  value={settings.textLettering}
-                  onChange={(e) => updateSetting('textLettering', e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: '200px',
-                    padding: '1rem',
-                    borderRadius: '4px',
-                    border: '1px solid #16213e',
-                    background: '#1a1a2e',
-                    color: '#fff',
-                    fontSize: '0.9rem',
-                    fontFamily: 'monospace',
-                    resize: 'vertical'
-                  }}
-                />
-              </div>
-            )}
-
             {settingsTab === 'donot' && (
               <div>
                 <h2 style={{ marginBottom: '1rem' }}>Global Do Not</h2>
@@ -514,53 +502,7 @@ function ComicEditor() {
               </div>
             )}
 
-            {settingsTab === 'templates' && (
-              <div>
-                <h2 style={{ marginBottom: '0.5rem' }}>First Page Template</h2>
-                <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                  Special instructions for Page 1 only
-                </p>
-                <textarea
-                  value={settings.firstPageTemplate}
-                  onChange={(e) => updateSetting('firstPageTemplate', e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: '150px',
-                    padding: '1rem',
-                    borderRadius: '4px',
-                    border: '1px solid #16213e',
-                    background: '#1a1a2e',
-                    color: '#fff',
-                    fontSize: '0.9rem',
-                    fontFamily: 'monospace',
-                    resize: 'vertical',
-                    marginBottom: '1.5rem'
-                  }}
-                />
-
-                <h2 style={{ marginBottom: '0.5rem' }}>Other Pages Template</h2>
-                <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                  Instructions for pages 2 and onwards
-                </p>
-                <textarea
-                  value={settings.otherPagesTemplate}
-                  onChange={(e) => updateSetting('otherPagesTemplate', e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: '150px',
-                    padding: '1rem',
-                    borderRadius: '4px',
-                    border: '1px solid #16213e',
-                    background: '#1a1a2e',
-                    color: '#fff',
-                    fontSize: '0.9rem',
-                    fontFamily: 'monospace',
-                    resize: 'vertical'
-                  }}
-                />
-              </div>
-            )}
-          </div>
+            </div>
         </div>
       )}
     </div>

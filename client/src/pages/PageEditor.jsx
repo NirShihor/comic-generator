@@ -188,7 +188,7 @@ function generateLayoutDescription(panels) {
   return `EXACTLY ${count} panels:\n${descriptions.join('\n')}`;
 }
 
-function PageEditor() {
+function PageEditor({ isCover = false }) {
   const { id, pageId } = useParams();
   const [comic, setComic] = useState(null);
   const [page, setPage] = useState(null);
@@ -213,6 +213,30 @@ function PageEditor() {
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   const [generationError, setGenerationError] = useState(null);
   const [additionalInstructions, setAdditionalInstructions] = useState('');
+  const [showPagePreview, setShowPagePreview] = useState(false);
+
+  // Sidebar tab state
+  const [sidebarTab, setSidebarTab] = useState('panels'); // 'panels', 'prompts', 'generate'
+
+  // Prompt settings (editable copy from comic - persists across pages)
+  const [promptSettings, setPromptSettings] = useState({
+    styleBible: '',
+    cameraInks: '',
+    characters: [],
+    globalDoNot: '',
+    hardNegatives: ''
+  });
+  const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
+
+  // Editor mode and bubble state
+  const [editorMode, setEditorMode] = useState('layout'); // 'layout' or 'bubbles'
+  const [bubbles, setBubbles] = useState([]);
+  const [selectedBubbleId, setSelectedBubbleId] = useState(null);
+  const [isDraggingBubble, setIsDraggingBubble] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isResizingBubble, setIsResizingBubble] = useState(false);
+  const [resizeCorner, setResizeCorner] = useState(null);
+  const [isAddingBubble, setIsAddingBubble] = useState(false);
 
   const canvasRef = useRef(null);
 
@@ -222,12 +246,33 @@ function PageEditor() {
 
   useEffect(() => {
     loadComic();
-  }, [id, pageId]);
+  }, [id, pageId, isCover]);
 
   const loadComic = async () => {
     try {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
+
+      if (isCover) {
+        // Create a virtual "page" for the cover
+        const coverPage = {
+          id: 'cover',
+          pageNumber: 0,
+          masterImage: response.data.cover?.image || '',
+          panels: [{
+            id: 'cover-panel-1',
+            panelOrder: 1,
+            tapZone: { x: 0, y: 0, width: 1, height: 1 },
+            content: '',
+            bubbles: []
+          }]
+        };
+        setPage(coverPage);
+        setPanels(coverPage.panels);
+        setPanelsComputed(true);
+        return;
+      }
+
       const currentPage = response.data.pages.find(p => p.id === pageId);
       setPage(currentPage);
       if (currentPage?.lines) {
@@ -251,8 +296,59 @@ function PageEditor() {
         setPanels(currentPage.panels);
         setPanelsComputed(true);
       }
+      if (currentPage?.bubbles) {
+        setBubbles(currentPage.bubbles);
+      }
+      // Load prompt settings from comic
+      if (response.data.promptSettings) {
+        setPromptSettings(prev => ({ ...prev, ...response.data.promptSettings }));
+      }
     } catch (error) {
       console.error('Failed to load comic:', error);
+    }
+  };
+
+  // Update a prompt setting field
+  const updatePromptSetting = (key, value) => {
+    setPromptSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  // Character management
+  const addCharacter = () => {
+    if (!newCharacter.name.trim()) return;
+    setPromptSettings(prev => ({
+      ...prev,
+      characters: [...(prev.characters || []), { ...newCharacter, id: Date.now() }]
+    }));
+    setNewCharacter({ name: '', description: '' });
+  };
+
+  const removeCharacter = (charId) => {
+    setPromptSettings(prev => ({
+      ...prev,
+      characters: prev.characters.filter(c => c.id !== charId)
+    }));
+  };
+
+  const updateCharacter = (charId, field, value) => {
+    setPromptSettings(prev => ({
+      ...prev,
+      characters: prev.characters.map(c =>
+        c.id === charId ? { ...c, [field]: value } : c
+      )
+    }));
+  };
+
+  // Save prompt settings to comic
+  const savePromptSettings = async () => {
+    try {
+      const updatedComic = { ...comic, promptSettings };
+      await api.put(`/comics/${id}`, updatedComic);
+      setComic(updatedComic);
+      alert('Prompt settings saved!');
+    } catch (error) {
+      console.error('Failed to save prompt settings:', error);
+      alert('Failed to save prompt settings');
     }
   };
 
@@ -436,6 +532,324 @@ function PageEditor() {
     setPanelsComputed(false);
   };
 
+  // Bubble handlers
+  const [isDraggingTail, setIsDraggingTail] = useState(false);
+
+  // Available handwritten fonts
+  const BUBBLE_FONTS = [
+    { id: 'bangers', name: 'Bangers', family: "'Bangers', cursive" },
+    { id: 'permanent-marker', name: 'Marker', family: "'Permanent Marker', cursive" },
+    { id: 'patrick-hand', name: 'Patrick', family: "'Patrick Hand', cursive" },
+    { id: 'caveat', name: 'Caveat', family: "'Caveat', cursive" },
+    { id: 'indie-flower', name: 'Indie', family: "'Indie Flower', cursive" },
+    { id: 'comic-neue', name: 'Comic', family: "'Comic Neue', cursive" }
+  ];
+
+  const addBubble = (coords) => {
+    const newBubble = {
+      id: `bubble-${Date.now()}`,
+      x: coords.x,
+      y: coords.y,
+      width: 0.2,
+      height: 0.1,
+      type: 'speech', // 'speech', 'thought', 'narration'
+      fontId: 'bangers', // default font
+      fontSize: 16,
+      italic: false,
+      uppercase: true, // default to uppercase for comic style
+      bgColor: '#ffffff',
+      textColor: '#000000',
+      cornerRadius: 20, // 0 = square, 50 = very round
+      // Tail position relative to bubble center (as offset in percentage of canvas)
+      tailX: 0.03, // tip offset from bubble center
+      tailY: 0.08,  // tip offset from bubble center (positive = below)
+      tailBaseX: 0.5, // where tail joins bubble (0 = left edge, 1 = right edge)
+      tailSide: 'bottom', // which side tail connects: 'top', 'bottom', 'left', 'right'
+      tailWidth: 0.06, // width of tail base as percentage of canvas
+      showTail: true,
+      // Language learning data
+      sentences: [{
+        id: `sentence-${Date.now()}`,
+        text: '',
+        translation: '',
+        audioUrl: '',
+        words: []
+      }]
+    };
+    setBubbles(prev => [...prev, newBubble]);
+    setSelectedBubbleId(newBubble.id);
+  };
+
+  // Get display text from sentences
+  const getBubbleDisplayText = (bubble) => {
+    if (!bubble.sentences || bubble.sentences.length === 0) return '';
+    return bubble.sentences.map(s => s.text).join(' ');
+  };
+
+  // Sentence management
+  const addSentence = (bubbleId) => {
+    setBubbles(prev => prev.map(b => {
+      if (b.id !== bubbleId) return b;
+      return {
+        ...b,
+        sentences: [...(b.sentences || []), {
+          id: `sentence-${Date.now()}`,
+          text: '',
+          translation: '',
+          audioUrl: '',
+          words: []
+        }]
+      };
+    }));
+  };
+
+  const updateSentence = (bubbleId, sentenceId, updates) => {
+    setBubbles(prev => prev.map(b => {
+      if (b.id !== bubbleId) return b;
+      return {
+        ...b,
+        sentences: (b.sentences || []).map(s =>
+          s.id === sentenceId ? { ...s, ...updates } : s
+        )
+      };
+    }));
+  };
+
+  const removeSentence = (bubbleId, sentenceId) => {
+    setBubbles(prev => prev.map(b => {
+      if (b.id !== bubbleId) return b;
+      return {
+        ...b,
+        sentences: (b.sentences || []).filter(s => s.id !== sentenceId)
+      };
+    }));
+  };
+
+  // Word management
+  const addWord = (bubbleId, sentenceId) => {
+    setBubbles(prev => prev.map(b => {
+      if (b.id !== bubbleId) return b;
+      return {
+        ...b,
+        sentences: (b.sentences || []).map(s => {
+          if (s.id !== sentenceId) return s;
+          return {
+            ...s,
+            words: [...(s.words || []), {
+              id: `word-${Date.now()}`,
+              text: '',
+              meaning: '',
+              baseForm: ''
+            }]
+          };
+        })
+      };
+    }));
+  };
+
+  const updateWord = (bubbleId, sentenceId, wordId, updates) => {
+    setBubbles(prev => prev.map(b => {
+      if (b.id !== bubbleId) return b;
+      return {
+        ...b,
+        sentences: (b.sentences || []).map(s => {
+          if (s.id !== sentenceId) return s;
+          return {
+            ...s,
+            words: (s.words || []).map(w =>
+              w.id === wordId ? { ...w, ...updates } : w
+            )
+          };
+        })
+      };
+    }));
+  };
+
+  const removeWord = (bubbleId, sentenceId, wordId) => {
+    setBubbles(prev => prev.map(b => {
+      if (b.id !== bubbleId) return b;
+      return {
+        ...b,
+        sentences: (b.sentences || []).map(s => {
+          if (s.id !== sentenceId) return s;
+          return {
+            ...s,
+            words: (s.words || []).filter(w => w.id !== wordId)
+          };
+        })
+      };
+    }));
+  };
+
+  const updateBubble = (bubbleId, updates) => {
+    setBubbles(prev => prev.map(b =>
+      b.id === bubbleId ? { ...b, ...updates } : b
+    ));
+  };
+
+  const deleteBubble = (bubbleId) => {
+    setBubbles(prev => prev.filter(b => b.id !== bubbleId));
+    if (selectedBubbleId === bubbleId) {
+      setSelectedBubbleId(null);
+    }
+  };
+
+  const handleBubbleMouseDown = (e, bubble) => {
+    e.stopPropagation();
+    const coords = getRelativeCoords(e);
+    if (!coords) return;
+
+    setSelectedBubbleId(bubble.id);
+    setIsDraggingBubble(true);
+    setDragOffset({
+      x: coords.x - bubble.x,
+      y: coords.y - bubble.y
+    });
+  };
+
+  const handleResizeMouseDown = (e, bubble, corner) => {
+    e.stopPropagation();
+    setSelectedBubbleId(bubble.id);
+    setIsResizingBubble(true);
+    setResizeCorner(corner);
+  };
+
+  const [isDraggingTailBase, setIsDraggingTailBase] = useState(false);
+
+  const handleTailMouseDown = (e, bubble) => {
+    e.stopPropagation();
+    setSelectedBubbleId(bubble.id);
+    setIsDraggingTail(true);
+  };
+
+  const handleTailBaseMouseDown = (e, bubble) => {
+    e.stopPropagation();
+    setSelectedBubbleId(bubble.id);
+    setIsDraggingTailBase(true);
+  };
+
+  const handleCanvasMouseDown = (e) => {
+    if (editorMode === 'bubbles') {
+      // Only add bubble if in "adding bubble" mode and clicking on empty space
+      if (isAddingBubble && !e.target.dataset.bubbleId && !e.target.dataset.resizeHandle) {
+        const coords = getRelativeCoords(e);
+        if (coords) {
+          addBubble(coords);
+          setIsAddingBubble(false); // Exit adding mode after placing bubble
+        }
+      } else if (!e.target.dataset.bubbleId && !e.target.dataset.resizeHandle) {
+        // Clicking on empty space deselects current bubble
+        setSelectedBubbleId(null);
+      }
+    } else {
+      handleMouseDown(e);
+    }
+  };
+
+  const handleCanvasMouseMove = (e) => {
+    if (editorMode === 'bubbles') {
+      const coords = getRelativeCoords(e);
+      if (!coords) return;
+
+      if (isDraggingBubble && selectedBubbleId) {
+        updateBubble(selectedBubbleId, {
+          x: Math.max(0, Math.min(1, coords.x - dragOffset.x)),
+          y: Math.max(0, Math.min(1, coords.y - dragOffset.y))
+        });
+      } else if (isResizingBubble && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          let newWidth = bubble.width;
+          let newHeight = bubble.height;
+          let newX = bubble.x;
+          let newY = bubble.y;
+
+          if (resizeCorner.includes('right')) {
+            newWidth = Math.max(0.05, coords.x - bubble.x);
+          }
+          if (resizeCorner.includes('left')) {
+            newWidth = Math.max(0.05, bubble.x + bubble.width - coords.x);
+            newX = coords.x;
+          }
+          if (resizeCorner.includes('bottom')) {
+            newHeight = Math.max(0.03, coords.y - bubble.y);
+          }
+          if (resizeCorner.includes('top')) {
+            newHeight = Math.max(0.03, bubble.y + bubble.height - coords.y);
+            newY = coords.y;
+          }
+
+          updateBubble(selectedBubbleId, {
+            x: newX,
+            y: newY,
+            width: newWidth,
+            height: newHeight
+          });
+        }
+      } else if (isDraggingTail && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          // Calculate tail position relative to bubble center
+          const bubbleCenterX = bubble.x + bubble.width / 2;
+          const bubbleCenterY = bubble.y + bubble.height / 2;
+          updateBubble(selectedBubbleId, {
+            tailX: coords.x - bubbleCenterX,
+            tailY: coords.y - bubbleCenterY
+          });
+        }
+      } else if (isDraggingTailBase && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          // Calculate which side of the bubble we're closest to
+          const bubbleCenterX = bubble.x + bubble.width / 2;
+          const bubbleCenterY = bubble.y + bubble.height / 2;
+
+          // Relative position from bubble center
+          const relX = coords.x - bubbleCenterX;
+          const relY = coords.y - bubbleCenterY;
+
+          // Determine which side based on angle
+          const angle = Math.atan2(relY, relX);
+          let tailSide, tailBaseX;
+
+          if (angle > -Math.PI/4 && angle <= Math.PI/4) {
+            // Right side
+            tailSide = 'right';
+            tailBaseX = Math.max(0.1, Math.min(0.9, (coords.y - bubble.y) / bubble.height));
+          } else if (angle > Math.PI/4 && angle <= 3*Math.PI/4) {
+            // Bottom side
+            tailSide = 'bottom';
+            tailBaseX = Math.max(0.1, Math.min(0.9, (coords.x - bubble.x) / bubble.width));
+          } else if (angle > -3*Math.PI/4 && angle <= -Math.PI/4) {
+            // Top side
+            tailSide = 'top';
+            tailBaseX = Math.max(0.1, Math.min(0.9, (coords.x - bubble.x) / bubble.width));
+          } else {
+            // Left side
+            tailSide = 'left';
+            tailBaseX = Math.max(0.1, Math.min(0.9, (coords.y - bubble.y) / bubble.height));
+          }
+
+          updateBubble(selectedBubbleId, { tailSide, tailBaseX });
+        }
+      }
+    } else {
+      handleMouseMove(e);
+    }
+  };
+
+  const handleCanvasMouseUp = () => {
+    if (editorMode === 'bubbles') {
+      setIsDraggingBubble(false);
+      setIsResizingBubble(false);
+      setResizeCorner(null);
+      setIsDraggingTail(false);
+      setIsDraggingTailBase(false);
+    } else {
+      handleMouseUp();
+    }
+  };
+
   const computePanels = () => {
     const newPanels = computePanelsFromLines(lines, pageId);
     const panelsWithContent = newPanels.map((newPanel, idx) => {
@@ -478,6 +892,15 @@ function PageEditor() {
 
   const savePage = async () => {
     try {
+      if (isCover) {
+        // Save cover
+        await api.put(`/comics/${id}/cover`, {
+          image: page.masterImage
+        });
+        alert('Cover saved!');
+        return;
+      }
+
       let panelsToSave = panels;
       if (!panelsComputed) {
         panelsToSave = computePanelsFromLines(lines, pageId);
@@ -490,7 +913,8 @@ function PageEditor() {
       updatedComic.pages[pageIndex] = {
         ...page,
         lines,
-        panels: panelsToSave
+        panels: panelsToSave,
+        bubbles
       };
 
       await api.put(`/comics/${id}`, updatedComic);
@@ -503,37 +927,6 @@ function PageEditor() {
     }
   };
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('image', file);
-
-    try {
-      const uploadResponse = await api.post('/images/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      await api.post('/images/save-to-project', {
-        comicId: id,
-        filename: uploadResponse.data.filename,
-        imageType: 'page',
-        pageNumber: page.pageNumber
-      });
-
-      const updatedComic = { ...comic };
-      const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
-      updatedComic.pages[pageIndex].masterImage = `/projects/${id}/images/${id}_p${page.pageNumber}.png`;
-
-      await api.put(`/comics/${id}`, updatedComic);
-      setComic(updatedComic);
-      setPage(updatedComic.pages[pageIndex]);
-    } catch (error) {
-      console.error('Failed to upload image:', error);
-    }
-  };
-
   const clearAllLines = () => {
     setLines([]);
     setPanels([]);
@@ -543,9 +936,7 @@ function PageEditor() {
 
   // Build the full prompt for image generation
   const buildFullPrompt = () => {
-    const settings = comic.promptSettings || {};
-    const isFirstPage = page.pageNumber === 1;
-
+    const settings = promptSettings;
     let prompt = '';
 
     // Style Bible
@@ -571,11 +962,6 @@ function PageEditor() {
       prompt += '\n';
     }
 
-    // Text / Lettering
-    if (settings.textLettering) {
-      prompt += `TEXT / LETTERING\n${settings.textLettering}\n\n`;
-    }
-
     // Global Do Not
     if (settings.globalDoNot) {
       prompt += `GLOBAL DO NOT\n${settings.globalDoNot}\n\n`;
@@ -586,23 +972,19 @@ function PageEditor() {
       prompt += `HARD NEGATIVES\n${settings.hardNegatives}\n\n`;
     }
 
-    // Page-specific template
-    if (isFirstPage && settings.firstPageTemplate) {
-      prompt += `PAGE 1 INSTRUCTIONS\n${settings.firstPageTemplate}\n\n`;
-    } else if (!isFirstPage && settings.otherPagesTemplate) {
-      prompt += `PAGE ${page.pageNumber} INSTRUCTIONS\n${settings.otherPagesTemplate}\n\n`;
-    }
-
     // Panel Content
-    prompt += `PAGE ${page.pageNumber} — PANEL CONTENT\n\n`;
+    prompt += `${isCover ? 'COVER' : `PAGE ${page.pageNumber}`} — PANEL CONTENT\n\n`;
     panels.forEach((panel, i) => {
       prompt += `Panel ${i + 1}:\n${panel.content || '(No content specified)'}\n\n`;
     });
 
     // Additional instructions
     if (additionalInstructions.trim()) {
-      prompt += `ADDITIONAL INSTRUCTIONS:\n${additionalInstructions}\n`;
+      prompt += `ADDITIONAL INSTRUCTIONS:\n${additionalInstructions}\n\n`;
     }
+
+    // Critical: fill entire canvas
+    prompt += `CRITICAL: The artwork MUST fill the ENTIRE canvas edge-to-edge. No margins, no borders, no white space around the edges. The panels should extend to all four edges of the image.`;
 
     return prompt;
   };
@@ -622,7 +1004,7 @@ function PageEditor() {
 
       const response = await api.post('/images/generate-page', {
         prompt,
-        size: '1024x1536' // Portrait for comic pages
+        size: '1024x1536' // Portrait for comic pages (GPT image supported size)
       });
 
       setGeneratedImage({
@@ -655,7 +1037,12 @@ function PageEditor() {
 
       await api.put(`/comics/${id}`, updatedComic);
       setComic(updatedComic);
-      setPage(updatedComic.pages[pageIndex]);
+      // Create a local copy with cache-buster for immediate display refresh
+      const pageWithCacheBuster = {
+        ...updatedComic.pages[pageIndex],
+        masterImage: updatedComic.pages[pageIndex].masterImage + `?t=${Date.now()}`
+      };
+      setPage(pageWithCacheBuster);
       alert('Image saved to page!');
     } catch (error) {
       console.error('Failed to save image:', error);
@@ -707,64 +1094,98 @@ function PageEditor() {
           <Link to={`/comic/${id}`} style={{ color: '#888', textDecoration: 'none', marginBottom: '0.5rem', display: 'block' }}>
             ← Back to {comic.title}
           </Link>
-          <h1>Page {page.pageNumber}</h1>
+          <h1>{isCover ? 'Cover' : `Page ${page.pageNumber}`}</h1>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-            Upload Image
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              style={{ display: 'none' }}
-            />
-          </label>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowPagePreview(true)}
+            disabled={!page.masterImage}
+            style={{ opacity: page.masterImage ? 1 : 0.5 }}
+          >
+            Preview
+          </button>
           <button className="btn btn-primary" onClick={savePage}>
-            Save Page
+            {isCover ? 'Save Cover' : 'Save Page'}
           </button>
         </div>
       </div>
 
-      <div className="panel-editor">
-        <div style={{ flex: 1 }}>
-          {/* Toolbar */}
-          <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ color: '#888', fontSize: '0.85rem' }}>
-              Draw lines by dragging | Drag lines to reposition
-            </span>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
-              {selectedLineIndex !== null && (
-                <button
-                  className="btn"
-                  onClick={deleteSelectedLine}
-                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#c0392b' }}
-                >
-                  Delete Line
-                </button>
-              )}
-              <button
-                className="btn btn-secondary"
-                onClick={clearAllLines}
-                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-              >
-                Clear All
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={computePanels}
-                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-              >
-                Compute Panels
-              </button>
-            </div>
-          </div>
+      {/* Mode Toggle - hide for cover */}
+      {!isCover && (
+      <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+        <button
+          className={`btn ${editorMode === 'layout' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setEditorMode('layout')}
+          style={{ padding: '0.5rem 1rem' }}
+        >
+          Layout Mode
+        </button>
+        <button
+          className={`btn ${editorMode === 'bubbles' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setEditorMode('bubbles')}
+          style={{ padding: '0.5rem 1rem' }}
+        >
+          Bubbles Mode
+        </button>
+      </div>
+      )}
 
+      {/* Toolbar - hide for cover */}
+      {!isCover && (
+      <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ color: '#888', fontSize: '0.85rem' }}>
+          {editorMode === 'layout'
+            ? 'Draw lines by dragging | Drag lines to reposition'
+            : isAddingBubble
+              ? 'Click on canvas to place bubble'
+              : 'Drag to reposition | Select to edit'}
+        </span>
+        {editorMode === 'bubbles' && (
+          <button
+            className={`btn ${isAddingBubble ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setIsAddingBubble(!isAddingBubble)}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+          >
+            {isAddingBubble ? 'Cancel' : '+ Add Bubble'}
+          </button>
+        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+          {selectedLineIndex !== null && (
+            <button
+              className="btn"
+              onClick={deleteSelectedLine}
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#c0392b' }}
+            >
+              Delete Line
+            </button>
+          )}
+          <button
+            className="btn btn-secondary"
+            onClick={clearAllLines}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+          >
+            Clear All
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={computePanels}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+          >
+            Compute Panels
+          </button>
+        </div>
+      </div>
+      )}
+
+      <div className="panel-editor">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           {/* Canvas */}
           <div
             ref={canvasRef}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
             onMouseLeave={() => {
               if (isDrawing) {
                 setIsDrawing(false);
@@ -775,19 +1196,42 @@ function PageEditor() {
                 setIsDragging(false);
                 setDragLineIndex(null);
               }
+              if (isDraggingBubble) {
+                setIsDraggingBubble(false);
+              }
+              if (isResizingBubble) {
+                setIsResizingBubble(false);
+                setResizeCorner(null);
+              }
+              if (isDraggingTail) {
+                setIsDraggingTail(false);
+              }
+              if (isDraggingTailBase) {
+                setIsDraggingTailBase(false);
+              }
             }}
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
-              background: page.masterImage ? 'transparent' : '#1a1a2e',
-              border: '2px solid #16213e',
+              background: page.masterImage ? 'transparent' : '#f5f5f5',
+              border: '2px solid #ddd',
               borderRadius: '4px',
               position: 'relative',
-              cursor: isDragging ? 'grabbing' : 'crosshair',
+              cursor: isDragging ? 'grabbing' : (editorMode === 'bubbles' ? (isAddingBubble ? 'crosshair' : 'default') : 'crosshair'),
               overflow: 'hidden',
               userSelect: 'none'
             }}
           >
+            {/* SVG filter for hand-drawn bubble effect */}
+            <svg width="0" height="0" style={{ position: 'absolute' }}>
+              <defs>
+                <filter id="roughEdge" x="-5%" y="-5%" width="110%" height="110%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="noise" />
+                  <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+                </filter>
+              </defs>
+            </svg>
+
             {/* Background image */}
             {page.masterImage && (
               <img
@@ -814,7 +1258,7 @@ function PageEditor() {
                   top: 0,
                   bottom: 0,
                   width: '1px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: 'rgba(0,0,0,0.1)',
                   pointerEvents: 'none'
                 }}
               />
@@ -828,7 +1272,7 @@ function PageEditor() {
                   left: 0,
                   right: 0,
                   height: '1px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: 'rgba(0,0,0,0.1)',
                   pointerEvents: 'none'
                 }}
               />
@@ -949,8 +1393,429 @@ function PageEditor() {
               />
             )}
 
+            {/* Speech Bubbles */}
+            {bubbles.map((bubble) => {
+              // Calculate tail endpoint position in canvas coordinates
+              const bubbleCenterX = bubble.x + bubble.width / 2;
+              const bubbleCenterY = bubble.y + bubble.height / 2;
+              const tailEndX = bubbleCenterX + (bubble.tailX || 0);
+              const tailEndY = bubbleCenterY + (bubble.tailY || 0);
+
+              // Calculate angle and length of tail for SVG
+              const tailDx = (bubble.tailX || 0) * CANVAS_WIDTH;
+              const tailDy = (bubble.tailY || 0) * CANVAS_HEIGHT;
+
+              return (
+                <div key={bubble.id}>
+                  {/* SVG Tail (rendered behind bubble) - Speech bubble */}
+                  {bubble.type === 'speech' && bubble.showTail !== false && (() => {
+                    const tailBasePos = bubble.tailBaseX ?? 0.5;
+                    const tailWidthVal = bubble.tailWidth ?? 0.06;
+                    const tailSide = bubble.tailSide || 'bottom';
+
+                    let baseX, baseY, base1X, base1Y, base2X, base2Y;
+                    const halfWidth = (tailWidthVal * CANVAS_WIDTH) / 2;
+
+                    if (tailSide === 'bottom') {
+                      baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
+                      baseY = (bubble.y + bubble.height) * CANVAS_HEIGHT;
+                      base1X = baseX - halfWidth; base1Y = baseY;
+                      base2X = baseX + halfWidth; base2Y = baseY;
+                    } else if (tailSide === 'top') {
+                      baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
+                      baseY = bubble.y * CANVAS_HEIGHT;
+                      base1X = baseX - halfWidth; base1Y = baseY;
+                      base2X = baseX + halfWidth; base2Y = baseY;
+                    } else if (tailSide === 'left') {
+                      baseX = bubble.x * CANVAS_WIDTH;
+                      baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
+                      base1X = baseX; base1Y = baseY - halfWidth;
+                      base2X = baseX; base2Y = baseY + halfWidth;
+                    } else { // right
+                      baseX = (bubble.x + bubble.width) * CANVAS_WIDTH;
+                      baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
+                      base1X = baseX; base1Y = baseY - halfWidth;
+                      base2X = baseX; base2Y = baseY + halfWidth;
+                    }
+
+                    const tipX = tailEndX * CANVAS_WIDTH;
+                    const tipY = tailEndY * CANVAS_HEIGHT;
+
+                    // Calculate curl direction based on tip position relative to base
+                    const dx = tipX - baseX;
+                    const dy = tipY - baseY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // Determine curl direction (perpendicular to tail direction)
+                    // Curl towards the side where the tip is pointing
+                    let curlAmount = distance * 0.25; // How much the curve bends
+                    let perpX, perpY;
+
+                    if (tailSide === 'bottom' || tailSide === 'top') {
+                      // For vertical sides, curl left or right based on horizontal position
+                      perpX = dx > 0 ? curlAmount : -curlAmount;
+                      perpY = 0;
+                    } else {
+                      // For horizontal sides, curl up or down based on vertical position
+                      perpX = 0;
+                      perpY = dy > 0 ? curlAmount : -curlAmount;
+                    }
+
+                    // Control points for the bezier curves (creates the curl)
+                    const midX = (baseX + tipX) / 2;
+                    const midY = (baseY + tipY) / 2;
+
+                    // Curved path with quadratic bezier - one side curves more for the curl effect
+                    const ctrl1X = midX + perpX * 0.5;
+                    const ctrl1Y = midY + perpY * 0.5;
+                    const ctrl2X = midX + perpX * 1.2;
+                    const ctrl2Y = midY + perpY * 1.2;
+
+                    // Closed path for fill (includes the base line internally)
+                    const fillPath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y} Z`;
+
+                    // Open path for stroke (no base line - just the two curved sides)
+                    const strokePath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y}`;
+
+                    const borderColor = bubble.borderColor || '#000';
+                    const borderWidth = bubble.borderWidth ?? 2.5;
+
+                    return (
+                      <svg
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: CANVAS_WIDTH,
+                          height: CANVAS_HEIGHT,
+                          pointerEvents: 'none',
+                          zIndex: 49,
+                          overflow: 'visible'
+                        }}
+                        viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
+                      >
+                        <defs>
+                          <filter id={`roughTail-${bubble.id}`} x="-10%" y="-10%" width="120%" height="120%">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+                          </filter>
+                        </defs>
+                        {/* Fill path (closed) */}
+                        <path
+                          d={fillPath}
+                          fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
+                          stroke="none"
+                          filter={`url(#roughTail-${bubble.id})`}
+                        />
+                        {/* Stroke path (open - no base line) */}
+                        {!bubble.noBorder && (
+                          <path
+                            d={strokePath}
+                            fill="none"
+                            stroke={borderColor}
+                            strokeWidth={borderWidth}
+                            strokeLinecap="round"
+                            filter={`url(#roughTail-${bubble.id})`}
+                          />
+                        )}
+                      </svg>
+                    );
+                  })()}
+
+                  {/* Thought bubble trail (ooo circles) */}
+                  {bubble.type === 'thought' && bubble.showTail !== false && (() => {
+                    const tailBasePos = bubble.tailBaseX ?? 0.5;
+                    const tailSide = bubble.tailSide || 'bottom';
+
+                    // Calculate start position based on which side the trail connects to
+                    let startX, startY;
+                    if (tailSide === 'bottom') {
+                      startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
+                      startY = (bubble.y + bubble.height) * CANVAS_HEIGHT;
+                    } else if (tailSide === 'top') {
+                      startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
+                      startY = bubble.y * CANVAS_HEIGHT;
+                    } else if (tailSide === 'left') {
+                      startX = bubble.x * CANVAS_WIDTH;
+                      startY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
+                    } else { // right
+                      startX = (bubble.x + bubble.width) * CANVAS_WIDTH;
+                      startY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
+                    }
+
+                    // End at tail tip position
+                    const tipX = tailEndX * CANVAS_WIDTH;
+                    const tipY = tailEndY * CANVAS_HEIGHT;
+
+                    // Calculate curl for the trail (similar to speech tail)
+                    const dx = tipX - startX;
+                    const dy = tipY - startY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // Determine curl direction perpendicular to the tail direction
+                    let curlAmount = Math.min(distance * 0.3, 30);
+                    let perpX, perpY;
+                    if (tailSide === 'bottom' || tailSide === 'top') {
+                      perpX = dx > 0 ? curlAmount : -curlAmount;
+                      perpY = 0;
+                    } else {
+                      perpX = 0;
+                      perpY = dy > 0 ? curlAmount : -curlAmount;
+                    }
+
+                    // Control point for quadratic bezier curve
+                    const ctrlX = (startX + tipX) / 2 + perpX;
+                    const ctrlY = (startY + tipY) / 2 + perpY;
+
+                    // Create 3 circles along the curved path using quadratic bezier interpolation
+                    const circles = [];
+                    const numCircles = 3;
+                    const spacing = 18;
+
+                    for (let i = 0; i < numCircles; i++) {
+                      // Calculate t parameter for this circle (fixed distance along curve approximation)
+                      const targetDist = (i + 1) * spacing;
+                      const t = Math.min(targetDist / Math.max(distance, 1), 0.9);
+
+                      // Quadratic bezier: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+                      const oneMinusT = 1 - t;
+                      const cx = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * ctrlX + t * t * tipX;
+                      const cy = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * ctrlY + t * t * tipY;
+
+                      const radius = 7 - (i * 2); // 7, 5, 3
+                      circles.push({ cx, cy, radius });
+                    }
+
+                    const borderColor = bubble.borderColor || '#000';
+                    const borderWidth = bubble.borderWidth ?? 2;
+
+                    return (
+                      <svg
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: CANVAS_WIDTH,
+                          height: CANVAS_HEIGHT,
+                          pointerEvents: 'none',
+                          zIndex: 49,
+                          overflow: 'visible'
+                        }}
+                        viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
+                      >
+                        <defs>
+                          <filter id={`roughCircles-${bubble.id}`} x="-20%" y="-20%" width="140%" height="140%">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+                          </filter>
+                        </defs>
+                        {circles.map((circle, i) => (
+                          <circle
+                            key={i}
+                            cx={circle.cx}
+                            cy={circle.cy}
+                            r={circle.radius}
+                            fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
+                            stroke={bubble.noBorder ? 'none' : borderColor}
+                            strokeWidth={borderWidth}
+                            filter={`url(#roughCircles-${bubble.id})`}
+                          />
+                        ))}
+                      </svg>
+                    );
+                  })()}
+
+                  {/* Bubble body - hand-drawn style */}
+                  <div
+                    data-bubble-id={bubble.id}
+                    onMouseDown={(e) => handleBubbleMouseDown(e, bubble)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedBubbleId(bubble.id);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: `${bubble.x * 100}%`,
+                      top: `${bubble.y * 100}%`,
+                      width: `${bubble.width * 100}%`,
+                      height: `${bubble.height * 100}%`,
+                      background: bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')),
+                      border: selectedBubbleId === bubble.id ? '3px solid #00ff00' : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`),
+                      borderRadius: bubble.type === 'thought'
+                        ? `${bubble.cornerRadius ?? 50}%`
+                        : `${bubble.cornerRadius || 8}px`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '6px 8px',
+                      boxSizing: 'border-box',
+                      cursor: editorMode === 'bubbles' ? (isDraggingBubble ? 'grabbing' : 'grab') : 'default',
+                      zIndex: 50,
+                      boxShadow: selectedBubbleId === bubble.id ? '0 0 10px rgba(0,255,0,0.5)' : 'none',
+                      // Hand-drawn effect with slight rotation and rough filter
+                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2}deg)`,
+                      filter: 'url(#roughEdge)'
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                        fontSize: `${bubble.fontSize}px`,
+                        fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                        fontStyle: bubble.italic ? 'italic' : 'normal',
+                        color: bubble.textColor || '#000000',
+                        textAlign: bubble.textAlign || 'center',
+                        width: '100%',
+                        wordBreak: 'break-word',
+                        lineHeight: 1.3,
+                        letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                        textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                        pointerEvents: 'none',
+                        userSelect: 'none',
+                        // Slight counter-rotation to keep text readable
+                        transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2)}deg)`
+                      }}
+                    >
+                      {getBubbleDisplayText(bubble) || (editorMode === 'bubbles' ? '...' : '')}
+                    </span>
+
+                    {/* Resize handles (only in bubble mode and when selected) */}
+                    {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (
+                      <>
+                        <div
+                          data-resize-handle="true"
+                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-right')}
+                          style={{
+                            position: 'absolute',
+                            right: -4,
+                            bottom: -4,
+                            width: 8,
+                            height: 8,
+                            background: '#00ff00',
+                            cursor: 'nwse-resize',
+                            borderRadius: '50%'
+                          }}
+                        />
+                        <div
+                          data-resize-handle="true"
+                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-left')}
+                          style={{
+                            position: 'absolute',
+                            left: -4,
+                            bottom: -4,
+                            width: 8,
+                            height: 8,
+                            background: '#00ff00',
+                            cursor: 'nesw-resize',
+                            borderRadius: '50%'
+                          }}
+                        />
+                        <div
+                          data-resize-handle="true"
+                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-right')}
+                          style={{
+                            position: 'absolute',
+                            right: -4,
+                            top: -4,
+                            width: 8,
+                            height: 8,
+                            background: '#00ff00',
+                            cursor: 'nesw-resize',
+                            borderRadius: '50%'
+                          }}
+                        />
+                        <div
+                          data-resize-handle="true"
+                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-left')}
+                          style={{
+                            position: 'absolute',
+                            left: -4,
+                            top: -4,
+                            width: 8,
+                            height: 8,
+                            background: '#00ff00',
+                            cursor: 'nwse-resize',
+                            borderRadius: '50%'
+                          }}
+                        />
+                      </>
+                    )}
+                  </div>
+
+                  {/* Draggable tail tip handle (orange - for tip position) */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (bubble.type === 'speech' || bubble.type === 'thought') && bubble.showTail !== false && (
+                    <div
+                      data-tail-handle="true"
+                      onMouseDown={(e) => handleTailMouseDown(e, bubble)}
+                      style={{
+                        position: 'absolute',
+                        left: `${tailEndX * 100}%`,
+                        top: `${tailEndY * 100}%`,
+                        width: 12,
+                        height: 12,
+                        background: '#ff6600',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'move',
+                        zIndex: 60
+                      }}
+                      title="Drag to move tail tip"
+                    />
+                  )}
+
+                  {/* Draggable tail base handle (blue - for base position on bubble) */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (bubble.type === 'speech' || bubble.type === 'thought') && bubble.showTail !== false && (() => {
+                    const tailBasePos = bubble.tailBaseX ?? 0.5;
+                    const tailSide = bubble.tailSide || 'bottom';
+
+                    // Calculate handle position based on side
+                    let handleLeft, handleTop, cursorStyle;
+                    if (tailSide === 'bottom') {
+                      handleLeft = (bubble.x + bubble.width * tailBasePos) * 100;
+                      handleTop = (bubble.y + bubble.height) * 100;
+                      cursorStyle = 'ew-resize';
+                    } else if (tailSide === 'top') {
+                      handleLeft = (bubble.x + bubble.width * tailBasePos) * 100;
+                      handleTop = bubble.y * 100;
+                      cursorStyle = 'ew-resize';
+                    } else if (tailSide === 'left') {
+                      handleLeft = bubble.x * 100;
+                      handleTop = (bubble.y + bubble.height * tailBasePos) * 100;
+                      cursorStyle = 'ns-resize';
+                    } else { // right
+                      handleLeft = (bubble.x + bubble.width) * 100;
+                      handleTop = (bubble.y + bubble.height * tailBasePos) * 100;
+                      cursorStyle = 'ns-resize';
+                    }
+
+                    return (
+                      <div
+                        data-tail-base-handle="true"
+                        onMouseDown={(e) => handleTailBaseMouseDown(e, bubble)}
+                        style={{
+                          position: 'absolute',
+                          left: `${handleLeft}%`,
+                          top: `${handleTop}%`,
+                          width: 14,
+                          height: 14,
+                          background: '#0088ff',
+                          border: '2px solid #fff',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          cursor: cursorStyle,
+                          zIndex: 60
+                        }}
+                        title="Drag to move tail base"
+                      />
+                    );
+                  })()}
+                </div>
+              );
+            })}
+
             {/* Instructions */}
-            {lines.length === 0 && (
+            {editorMode === 'layout' && lines.length === 0 && (
               <div style={{
                 position: 'absolute',
                 inset: 0,
@@ -970,6 +1835,27 @@ function PageEditor() {
                 </p>
               </div>
             )}
+
+            {editorMode === 'bubbles' && bubbles.length === 0 && (
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#666',
+                textAlign: 'center',
+                padding: '2rem',
+                pointerEvents: 'none'
+              }}>
+                <p style={{ marginBottom: '0.5rem', fontSize: '1.1rem' }}>Click "+ Add Bubble" to start</p>
+                <p style={{ fontSize: '0.9rem' }}>Then click on the canvas to place it</p>
+                <p style={{ fontSize: '0.85rem', marginTop: '1rem', color: '#555' }}>
+                  Select a bubble to edit its text
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Line count */}
@@ -984,12 +1870,12 @@ function PageEditor() {
 
           {/* Layout Preview */}
           {panelsComputed && (
-            <div style={{ marginTop: '1rem', padding: '1rem', background: '#0f3460', borderRadius: '8px' }}>
-              <h3 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: '#888' }}>Layout Description:</h3>
+            <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}>
+              <h3 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: '#666' }}>Layout Description:</h3>
               <pre style={{
                 fontSize: '0.85rem',
                 whiteSpace: 'pre-wrap',
-                color: '#fff',
+                color: '#333',
                 margin: 0
               }}>
                 {layoutDescription}
@@ -1000,13 +1886,65 @@ function PageEditor() {
 
         {/* Sidebar */}
         <div className="sidebar">
-          <h2>Panels {panelsComputed ? `(${panels.length})` : ''}</h2>
+          {/* Sidebar Tabs */}
+          <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem', borderBottom: '2px solid #ddd', paddingBottom: '0.5rem' }}>
+            <button
+              onClick={() => setSidebarTab('panels')}
+              style={{
+                padding: '0.5rem 1rem',
+                background: sidebarTab === 'panels' ? '#e94560' : '#fff',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                color: sidebarTab === 'panels' ? '#fff' : '#333',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: sidebarTab === 'panels' ? 'bold' : 'normal'
+              }}
+            >
+              Panels
+            </button>
+            <button
+              onClick={() => setSidebarTab('prompts')}
+              style={{
+                padding: '0.5rem 1rem',
+                background: sidebarTab === 'prompts' ? '#e94560' : '#fff',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                color: sidebarTab === 'prompts' ? '#fff' : '#333',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: sidebarTab === 'prompts' ? 'bold' : 'normal'
+              }}
+            >
+              Prompts
+            </button>
+            <button
+              onClick={() => setSidebarTab('generate')}
+              style={{
+                padding: '0.5rem 1rem',
+                background: sidebarTab === 'generate' ? '#e94560' : '#fff',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                color: sidebarTab === 'generate' ? '#fff' : '#333',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: sidebarTab === 'generate' ? 'bold' : 'normal'
+              }}
+            >
+              Generate
+            </button>
+          </div>
 
-          {!panelsComputed && (
-            <p style={{ color: '#888', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              Draw divider lines, then click "Compute Panels"
-            </p>
-          )}
+          {/* PANELS TAB */}
+          {sidebarTab === 'panels' && (
+            <>
+              <h2>Panels {panelsComputed ? `(${panels.length})` : ''}</h2>
+
+              {!panelsComputed && (
+                <p style={{ color: '#888', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                  Draw divider lines, then click "Compute Panels"
+                </p>
+              )}
 
           {panelsComputed && panels.map((panel, i) => (
             <div
@@ -1043,10 +1981,10 @@ function PageEditor() {
                   style={{
                     padding: '2px 6px',
                     fontSize: '0.7rem',
-                    background: i === 0 ? '#333' : '#16213e',
+                    background: i === 0 ? '#ccc' : '#e94560',
                     border: 'none',
                     borderRadius: '3px',
-                    color: i === 0 ? '#666' : '#fff',
+                    color: i === 0 ? '#999' : '#fff',
                     cursor: i === 0 ? 'default' : 'pointer'
                   }}
                 >
@@ -1058,10 +1996,10 @@ function PageEditor() {
                   style={{
                     padding: '2px 6px',
                     fontSize: '0.7rem',
-                    background: i === panels.length - 1 ? '#333' : '#16213e',
+                    background: i === panels.length - 1 ? '#ccc' : '#e94560',
                     border: 'none',
                     borderRadius: '3px',
-                    color: i === panels.length - 1 ? '#666' : '#fff',
+                    color: i === panels.length - 1 ? '#999' : '#fff',
                     cursor: i === panels.length - 1 ? 'default' : 'pointer'
                   }}
                 >
@@ -1071,12 +2009,12 @@ function PageEditor() {
             </div>
           ))}
 
-          {selectedPanelData && (
-            <div style={{ marginTop: '1rem', padding: '1rem', background: '#0f3460', borderRadius: '8px' }}>
-              <h3 style={{ marginBottom: '0.5rem' }}>
+          {selectedPanelData && editorMode === 'layout' && (
+            <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}>
+              <h3 style={{ marginBottom: '0.5rem', color: '#333' }}>
                 Panel {panels.findIndex(p => p.id === selectedPanel) + 1} Content
               </h3>
-              <p style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.5rem' }}>
+              <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.5rem' }}>
                 Describe what happens in this panel
               </p>
               <textarea
@@ -1088,9 +2026,9 @@ function PageEditor() {
                   minHeight: '120px',
                   padding: '0.5rem',
                   borderRadius: '4px',
-                  border: '1px solid #16213e',
-                  background: '#1a1a2e',
-                  color: '#fff',
+                  border: '1px solid #ddd',
+                  background: '#f9f9f9',
+                  color: '#333',
                   fontSize: '0.85rem',
                   resize: 'vertical'
                 }}
@@ -1098,133 +2036,1138 @@ function PageEditor() {
             </div>
           )}
 
-          {/* Image Generation Section */}
-          {panelsComputed && panels.length > 0 && (
-            <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#1a1a2e', borderRadius: '8px', border: '1px solid #16213e' }}>
-              <h3 style={{ marginBottom: '1rem' }}>Generate Page Image</h3>
+          {/* Bubble Editing Section */}
+          {editorMode === 'bubbles' && (
+            <div style={{ marginTop: '1rem' }}>
+              <h3 style={{ marginBottom: '0.5rem' }}>Bubbles ({bubbles.length})</h3>
 
-              {/* Additional Instructions */}
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ fontSize: '0.85rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
-                  Additional Instructions (optional):
+              {bubbles.length === 0 && (
+                <p style={{ color: '#888', fontSize: '0.9rem' }}>
+                  Click on the canvas to add a speech bubble
+                </p>
+              )}
+
+              {bubbles.map((bubble, i) => (
+                <div
+                  key={bubble.id}
+                  onClick={() => setSelectedBubbleId(bubble.id)}
+                  style={{
+                    padding: '0.75rem',
+                    background: selectedBubbleId === bubble.id ? '#e8f4fc' : '#fff',
+                    borderRadius: '8px',
+                    marginBottom: '0.5rem',
+                    border: selectedBubbleId === bubble.id ? '2px solid #e94560' : '1px solid #ddd',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontWeight: 'bold' }}>Bubble {i + 1}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteBubble(bubble.id); }}
+                      style={{
+                        padding: '0.2rem 0.5rem',
+                        background: '#c0392b',
+                        border: 'none',
+                        borderRadius: '4px',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem'
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+
+                  {selectedBubbleId === bubble.id && (
+                    <>
+                      {/* Bubble Type */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                          Type:
+                        </label>
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          {['speech', 'thought', 'narration'].map(type => (
+                            <button
+                              key={type}
+                              onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { type }); }}
+                              style={{
+                                padding: '0.3rem 0.6rem',
+                                background: bubble.type === type ? '#e94560' : '#ddd',
+                                border: 'none',
+                                borderRadius: '4px',
+                                color: bubble.type === type ? '#fff' : '#333',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                                textTransform: 'capitalize'
+                              }}
+                            >
+                              {type}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Font Selector */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                          Font:
+                        </label>
+                        <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                          {BUBBLE_FONTS.map(font => (
+                            <button
+                              key={font.id}
+                              onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { fontId: font.id }); }}
+                              style={{
+                                padding: '0.3rem 0.5rem',
+                                background: (bubble.fontId || 'bangers') === font.id ? '#e94560' : '#ddd',
+                                border: 'none',
+                                borderRadius: '4px',
+                                color: (bubble.fontId || 'bangers') === font.id ? '#fff' : '#333',
+                                cursor: 'pointer',
+                                fontSize: '0.7rem',
+                                fontFamily: font.family
+                              }}
+                            >
+                              {font.name}
+                            </button>
+                          ))}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { italic: !bubble.italic }); }}
+                            style={{
+                              padding: '0.3rem 0.6rem',
+                              background: bubble.italic ? '#e94560' : '#ddd',
+                              border: 'none',
+                              borderRadius: '4px',
+                              color: bubble.italic ? '#fff' : '#333',
+                              cursor: 'pointer',
+                              fontSize: '0.75rem',
+                              fontStyle: 'italic',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            I
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { uppercase: !(bubble.uppercase !== false) }); }}
+                            style={{
+                              padding: '0.3rem 0.5rem',
+                              background: bubble.uppercase !== false ? '#e94560' : '#ddd',
+                              border: 'none',
+                              borderRadius: '4px',
+                              color: bubble.uppercase !== false ? '#fff' : '#333',
+                              cursor: 'pointer',
+                              fontSize: '0.7rem',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            AA
+                          </button>
+                          <span style={{ borderLeft: '1px solid #ccc', height: '20px', margin: '0 0.25rem' }} />
+                          {['left', 'center', 'right'].map((align) => (
+                            <button
+                              key={align}
+                              onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { textAlign: align }); }}
+                              style={{
+                                padding: '0.3rem 0.5rem',
+                                background: (bubble.textAlign || 'center') === align ? '#e94560' : '#ddd',
+                                border: 'none',
+                                borderRadius: '4px',
+                                color: (bubble.textAlign || 'center') === align ? '#fff' : '#333',
+                                cursor: 'pointer',
+                                fontSize: '0.7rem'
+                              }}
+                              title={`Align ${align}`}
+                            >
+                              {align === 'left' ? '⫷' : align === 'center' ? '⫶' : '⫸'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Colors */}
+                      <div style={{ marginBottom: '0.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginBottom: '0.2rem' }}>
+                            Background
+                          </label>
+                          <input
+                            type="color"
+                            value={bubble.bgColor || '#ffffff'}
+                            onChange={(e) => updateBubble(bubble.id, { bgColor: e.target.value, bgTransparent: false })}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={bubble.bgTransparent}
+                            style={{
+                              width: '40px',
+                              height: '28px',
+                              border: '1px solid #ccc',
+                              borderRadius: '4px',
+                              cursor: bubble.bgTransparent ? 'not-allowed' : 'pointer',
+                              opacity: bubble.bgTransparent ? 0.4 : 1
+                            }}
+                          />
+                        </div>
+                        <label style={{ fontSize: '0.75rem', color: '#666', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={bubble.bgTransparent || false}
+                            onChange={(e) => updateBubble(bubble.id, { bgTransparent: e.target.checked })}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          No fill
+                        </label>
+                        <label style={{ fontSize: '0.75rem', color: '#666', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={bubble.noBorder || false}
+                            onChange={(e) => updateBubble(bubble.id, { noBorder: e.target.checked })}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          No border
+                        </label>
+                        <div style={{ opacity: bubble.noBorder ? 0.4 : 1 }}>
+                          <label style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginBottom: '0.2rem' }}>
+                            Border
+                          </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <input
+                              type="color"
+                              value={bubble.borderColor || '#000000'}
+                              onChange={(e) => updateBubble(bubble.id, { borderColor: e.target.value })}
+                              onClick={(e) => e.stopPropagation()}
+                              disabled={bubble.noBorder}
+                              style={{ width: '32px', height: '24px', border: '1px solid #ccc', borderRadius: '4px', cursor: bubble.noBorder ? 'not-allowed' : 'pointer' }}
+                            />
+                            <input
+                              type="range"
+                              min="1"
+                              max="6"
+                              step="0.5"
+                              value={bubble.borderWidth ?? 2.5}
+                              onChange={(e) => updateBubble(bubble.id, { borderWidth: parseFloat(e.target.value) })}
+                              onClick={(e) => e.stopPropagation()}
+                              disabled={bubble.noBorder}
+                              style={{ width: '50px', cursor: bubble.noBorder ? 'not-allowed' : 'pointer' }}
+                            />
+                            <span style={{ fontSize: '0.7rem', color: '#888', minWidth: '20px' }}>{bubble.borderWidth ?? 2.5}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginBottom: '0.2rem' }}>
+                            Text
+                          </label>
+                          <input
+                            type="color"
+                            value={bubble.textColor || '#000000'}
+                            onChange={(e) => updateBubble(bubble.id, { textColor: e.target.value })}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ width: '40px', height: '28px', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Sentences */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#666', display: 'block', marginBottom: '0.25rem' }}>
+                          Sentences ({(bubble.sentences || []).length}):
+                        </label>
+
+                        {(bubble.sentences || []).map((sentence, sIdx) => (
+                          <div key={sentence.id} style={{
+                            background: '#f5f5f5',
+                            borderRadius: '4px',
+                            padding: '0.5rem',
+                            marginBottom: '0.5rem',
+                            border: '1px solid #ddd'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#888' }}>Sentence {sIdx + 1}</span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); removeSentence(bubble.id, sentence.id); }}
+                                style={{
+                                  padding: '0.15rem 0.4rem',
+                                  background: '#c0392b',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  color: '#fff',
+                                  cursor: 'pointer',
+                                  fontSize: '0.7rem'
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={sentence.text}
+                              onChange={(e) => updateSentence(bubble.id, sentence.id, { text: e.target.value })}
+                              onClick={(e) => e.stopPropagation()}
+                              placeholder="Text (Spanish)"
+                              style={{
+                                width: '100%',
+                                padding: '0.4rem',
+                                borderRadius: '3px',
+                                border: '1px solid #ccc',
+                                background: '#fff',
+                                color: '#333',
+                                fontSize: '0.85rem',
+                                marginBottom: '0.25rem'
+                              }}
+                            />
+                            <input
+                              type="text"
+                              value={sentence.translation}
+                              onChange={(e) => updateSentence(bubble.id, sentence.id, { translation: e.target.value })}
+                              onClick={(e) => e.stopPropagation()}
+                              placeholder="Translation (English)"
+                              style={{
+                                width: '100%',
+                                padding: '0.4rem',
+                                borderRadius: '3px',
+                                border: '1px solid #ccc',
+                                background: '#fff',
+                                color: '#333',
+                                fontSize: '0.85rem',
+                                marginBottom: '0.25rem'
+                              }}
+                            />
+
+                            {/* Words */}
+                            <div style={{ marginTop: '0.25rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#888' }}>Words ({(sentence.words || []).length})</span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); addWord(bubble.id, sentence.id); }}
+                                  style={{
+                                    padding: '0.15rem 0.4rem',
+                                    background: '#27ae60',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    fontSize: '0.65rem'
+                                  }}
+                                >
+                                  + Word
+                                </button>
+                              </div>
+
+                              {(sentence.words || []).map((word, wIdx) => (
+                                <div key={word.id} style={{
+                                  display: 'flex',
+                                  gap: '0.25rem',
+                                  marginBottom: '0.25rem',
+                                  alignItems: 'center'
+                                }}>
+                                  <input
+                                    type="text"
+                                    value={word.text}
+                                    onChange={(e) => updateWord(bubble.id, sentence.id, word.id, { text: e.target.value })}
+                                    onClick={(e) => e.stopPropagation()}
+                                    placeholder="Word"
+                                    style={{
+                                      flex: 1,
+                                      padding: '0.25rem',
+                                      borderRadius: '2px',
+                                      border: '1px solid #ccc',
+                                      fontSize: '0.75rem'
+                                    }}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={word.meaning}
+                                    onChange={(e) => updateWord(bubble.id, sentence.id, word.id, { meaning: e.target.value })}
+                                    onClick={(e) => e.stopPropagation()}
+                                    placeholder="Meaning"
+                                    style={{
+                                      flex: 1,
+                                      padding: '0.25rem',
+                                      borderRadius: '2px',
+                                      border: '1px solid #ccc',
+                                      fontSize: '0.75rem'
+                                    }}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={word.baseForm}
+                                    onChange={(e) => updateWord(bubble.id, sentence.id, word.id, { baseForm: e.target.value })}
+                                    onClick={(e) => e.stopPropagation()}
+                                    placeholder="Base"
+                                    style={{
+                                      flex: 1,
+                                      padding: '0.25rem',
+                                      borderRadius: '2px',
+                                      border: '1px solid #ccc',
+                                      fontSize: '0.75rem'
+                                    }}
+                                  />
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); removeWord(bubble.id, sentence.id, word.id); }}
+                                    style={{
+                                      padding: '0.15rem 0.3rem',
+                                      background: '#c0392b',
+                                      border: 'none',
+                                      borderRadius: '2px',
+                                      color: '#fff',
+                                      cursor: 'pointer',
+                                      fontSize: '0.65rem'
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+
+                        <button
+                          onClick={(e) => { e.stopPropagation(); addSentence(bubble.id); }}
+                          style={{
+                            padding: '0.3rem 0.6rem',
+                            background: '#3498db',
+                            border: 'none',
+                            borderRadius: '3px',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            width: '100%'
+                          }}
+                        >
+                          + Add Sentence
+                        </button>
+                      </div>
+
+                      {/* Font Size */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                          Font Size: {bubble.fontSize}px
+                        </label>
+                        <input
+                          type="range"
+                          min="10"
+                          max="32"
+                          value={bubble.fontSize}
+                          onChange={(e) => updateBubble(bubble.id, { fontSize: parseInt(e.target.value) })}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+
+                      {/* Corner Radius (shape) */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                          Shape: {bubble.type === 'thought'
+                            ? `${bubble.cornerRadius ?? 50}% (20=rounded rect, 50=oval)`
+                            : `${bubble.cornerRadius || 8}px (0=square, 50=round)`}
+                        </label>
+                        <input
+                          type="range"
+                          min={bubble.type === 'thought' ? 20 : 0}
+                          max="50"
+                          value={bubble.type === 'thought' ? (bubble.cornerRadius ?? 50) : (bubble.cornerRadius || 8)}
+                          onChange={(e) => updateBubble(bubble.id, { cornerRadius: parseInt(e.target.value) })}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+
+                      {/* Show/Hide Tail (for speech and thought bubbles) */}
+                      {(bubble.type === 'speech' || bubble.type === 'thought') && (
+                        <div style={{ marginBottom: '0.5rem' }}>
+                          <label style={{ fontSize: '0.8rem', color: '#888', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <input
+                              type="checkbox"
+                              checked={bubble.showTail !== false}
+                              onChange={(e) => updateBubble(bubble.id, { showTail: e.target.checked })}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            Show {bubble.type === 'thought' ? 'bubbles' : 'tail'}
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Tail Width (for speech bubbles) */}
+                      {bubble.type === 'speech' && bubble.showTail !== false && (
+                        <div style={{ marginBottom: '0.5rem' }}>
+                          <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                            Tail Width: {Math.round((bubble.tailWidth ?? 0.06) * 100)}%
+                          </label>
+                          <input
+                            type="range"
+                            min="2"
+                            max="15"
+                            value={Math.round((bubble.tailWidth ?? 0.06) * 100)}
+                            onChange={(e) => updateBubble(bubble.id, { tailWidth: parseInt(e.target.value) / 100 })}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ width: '100%' }}
+                          />
+                          <p style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.25rem' }}>
+                            Drag: <span style={{ color: '#ff6600' }}>orange</span> = tip, <span style={{ color: '#0088ff' }}>blue</span> = base position
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+            </>
+          )}
+
+          {/* PROMPTS TAB */}
+          {sidebarTab === 'prompts' && (
+            <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2 style={{ color: '#333' }}>Prompt Settings</h2>
+                <button
+                  className="btn btn-primary"
+                  onClick={savePromptSettings}
+                  style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+                >
+                  Save Settings
+                </button>
+              </div>
+
+              {/* Style Bible */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+                  Style Bible
                 </label>
                 <textarea
-                  value={additionalInstructions}
-                  onChange={(e) => setAdditionalInstructions(e.target.value)}
-                  placeholder="Any extra instructions for this specific generation..."
+                  value={promptSettings.styleBible || ''}
+                  onChange={(e) => updatePromptSetting('styleBible', e.target.value)}
+                  placeholder="Visual style instructions..."
                   style={{
                     width: '100%',
-                    minHeight: '60px',
-                    padding: '0.5rem',
+                    minHeight: '150px',
+                    padding: '0.75rem',
                     borderRadius: '4px',
-                    border: '1px solid #16213e',
-                    background: '#0f3460',
-                    color: '#fff',
-                    fontSize: '0.85rem',
+                    border: '1px solid #ccc',
+                    background: '#fff',
+                    color: '#333',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
                     resize: 'vertical'
                   }}
                 />
               </div>
 
-              {/* Buttons */}
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowPromptPreview(!showPromptPreview)}
-                  style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                >
-                  {showPromptPreview ? 'Hide Prompt' : 'Preview Prompt'}
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={generatePageImage}
-                  disabled={isGenerating}
-                  style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                >
-                  {isGenerating ? 'Generating...' : 'Generate Image'}
-                </button>
+              {/* Camera + Inks */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+                  Camera + Inks
+                </label>
+                <textarea
+                  value={promptSettings.cameraInks || ''}
+                  onChange={(e) => updatePromptSetting('cameraInks', e.target.value)}
+                  placeholder="Lighting, composition, ink style..."
+                  style={{
+                    width: '100%',
+                    minHeight: '100px',
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    background: '#fff',
+                    color: '#333',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                    resize: 'vertical'
+                  }}
+                />
               </div>
 
-              {/* Prompt Preview */}
-              {showPromptPreview && (
-                <div style={{ marginTop: '1rem' }}>
-                  <h4 style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.5rem' }}>Full Prompt:</h4>
-                  <pre style={{
-                    background: '#0f3460',
-                    padding: '1rem',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    whiteSpace: 'pre-wrap',
-                    maxHeight: '300px',
-                    overflow: 'auto',
-                    color: '#ccc'
-                  }}>
-                    {buildFullPrompt()}
-                  </pre>
-                </div>
-              )}
+              {/* Characters */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+                  Characters ({(promptSettings.characters || []).length})
+                </label>
 
-              {/* Error */}
-              {generationError && (
-                <div style={{
-                  marginTop: '1rem',
-                  padding: '0.75rem',
-                  background: 'rgba(192, 57, 43, 0.2)',
-                  border: '1px solid #c0392b',
-                  borderRadius: '4px',
-                  color: '#e74c3c',
-                  fontSize: '0.85rem'
-                }}>
-                  Error: {generationError}
-                </div>
-              )}
+                {(promptSettings.characters || []).map((char) => (
+                  <div key={char.id} style={{ background: '#fff', borderRadius: '4px', padding: '0.75rem', marginBottom: '0.75rem', border: '1px solid #ccc' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <input
+                        type="text"
+                        value={char.name}
+                        onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
+                        placeholder="Name"
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem',
+                          borderRadius: '3px',
+                          border: '1px solid #ccc',
+                          background: '#fff',
+                          color: '#333',
+                          fontSize: '0.9rem',
+                          fontWeight: 'bold'
+                        }}
+                      />
+                      <button
+                        onClick={() => removeCharacter(char.id)}
+                        style={{ padding: '0.5rem 0.75rem', background: '#c0392b', border: 'none', borderRadius: '3px', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <textarea
+                      value={char.description}
+                      onChange={(e) => updateCharacter(char.id, 'description', e.target.value)}
+                      placeholder="Description (age, build, features, clothing...)"
+                      style={{
+                        width: '100%',
+                        minHeight: '80px',
+                        padding: '0.5rem',
+                        borderRadius: '3px',
+                        border: '1px solid #ccc',
+                        background: '#fff',
+                        color: '#333',
+                        fontSize: '0.85rem',
+                        fontFamily: 'monospace',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                ))}
 
-              {/* Generated Image */}
-              {generatedImage && (
-                <div style={{ marginTop: '1rem' }}>
-                  <h4 style={{ marginBottom: '0.5rem' }}>Generated Image:</h4>
-                  <img
-                    src={`http://localhost:3001${generatedImage.path}`}
-                    alt="Generated page"
+                {/* Add new character */}
+                <div style={{ background: '#f9f9f9', borderRadius: '4px', padding: '0.75rem', border: '2px dashed #ccc' }}>
+                  <input
+                    type="text"
+                    value={newCharacter.name}
+                    onChange={(e) => setNewCharacter(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="New character name"
                     style={{
                       width: '100%',
-                      borderRadius: '4px',
-                      border: '1px solid #16213e'
+                      padding: '0.5rem',
+                      borderRadius: '3px',
+                      border: '1px solid #ccc',
+                      background: '#fff',
+                      color: '#333',
+                      fontSize: '0.9rem',
+                      marginBottom: '0.5rem'
                     }}
                   />
-                  <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                    <button
-                      className="btn btn-primary"
-                      onClick={saveGeneratedImage}
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                    >
-                      Save as Page Image
-                    </button>
+                  <textarea
+                    value={newCharacter.description}
+                    onChange={(e) => setNewCharacter(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Description..."
+                    style={{
+                      width: '100%',
+                      minHeight: '60px',
+                      padding: '0.5rem',
+                      borderRadius: '3px',
+                      border: '1px solid #ccc',
+                      background: '#fff',
+                      color: '#333',
+                      fontSize: '0.85rem',
+                      marginBottom: '0.5rem',
+                      resize: 'vertical'
+                    }}
+                  />
+                  <button
+                    onClick={addCharacter}
+                    style={{ padding: '0.5rem 1rem', background: '#27ae60', border: 'none', borderRadius: '3px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
+                  >
+                    + Add Character
+                  </button>
+                </div>
+              </div>
+
+              {/* Panel Contents */}
+              {!isCover && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+                  Panel Contents ({panels.length})
+                </label>
+                {panels.length === 0 ? (
+                  <p style={{ color: '#888', fontSize: '0.85rem' }}>
+                    Compute panels first to add content
+                  </p>
+                ) : (
+                  panels.map((panel, i) => (
+                    <div key={panel.id} style={{ marginBottom: '0.75rem' }}>
+                      <label style={{ fontSize: '0.85rem', color: '#666', display: 'block', marginBottom: '0.25rem' }}>
+                        Panel {i + 1}
+                      </label>
+                      <textarea
+                        value={panel.content || ''}
+                        onChange={(e) => updatePanelContent(panel.id, e.target.value)}
+                        placeholder={`Describe what happens in panel ${i + 1}...`}
+                        style={{
+                          width: '100%',
+                          minHeight: '80px',
+                          padding: '0.5rem',
+                          borderRadius: '4px',
+                          border: '1px solid #ccc',
+                          background: '#fff',
+                          color: '#333',
+                          fontSize: '0.85rem',
+                          resize: 'vertical'
+                        }}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+              )}
+
+              {/* Global Do Not */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+                  Global Do Not
+                </label>
+                <textarea
+                  value={promptSettings.globalDoNot || ''}
+                  onChange={(e) => updatePromptSetting('globalDoNot', e.target.value)}
+                  placeholder="Things to avoid..."
+                  style={{
+                    width: '100%',
+                    minHeight: '80px',
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    background: '#fff',
+                    color: '#333',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              {/* Hard Negatives */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+                  Hard Negatives
+                </label>
+                <textarea
+                  value={promptSettings.hardNegatives || ''}
+                  onChange={(e) => updatePromptSetting('hardNegatives', e.target.value)}
+                  placeholder="Strict negatives..."
+                  style={{
+                    width: '100%',
+                    minHeight: '80px',
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    background: '#fff',
+                    color: '#333',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              </div>
+          )}
+
+          {/* GENERATE TAB */}
+          {sidebarTab === 'generate' && (
+            <div>
+              <h2 style={{ marginBottom: '1rem' }}>Generate Page Image</h2>
+
+              {!panelsComputed || panels.length === 0 ? (
+                <p style={{ color: '#888', fontSize: '0.9rem' }}>
+                  Please compute panels first (switch to Panels tab and click "Compute Panels")
+                </p>
+              ) : (
+                <>
+                  {/* Panel Content Summary */}
+                  <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#fff', borderRadius: '4px', border: '1px solid #ddd' }}>
+                    <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Panel Content:</h4>
+                    {panels.map((panel, i) => (
+                      <div key={panel.id} style={{ fontSize: '0.8rem', marginBottom: '0.25rem' }}>
+                        <strong>Panel {i + 1}:</strong> {panel.content ? panel.content.substring(0, 50) + '...' : <span style={{ color: '#666' }}>(empty)</span>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Additional Instructions */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ fontSize: '0.85rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                      Additional Instructions (optional):
+                    </label>
+                    <textarea
+                      value={additionalInstructions}
+                      onChange={(e) => setAdditionalInstructions(e.target.value)}
+                      placeholder="Any extra instructions for this specific generation..."
+                      style={{
+                        width: '100%',
+                        minHeight: '60px',
+                        padding: '0.5rem',
+                        borderRadius: '4px',
+                        border: '1px solid #ddd',
+                        background: '#f9f9f9',
+                        color: '#333',
+                        fontSize: '0.85rem',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+
+                  {/* Buttons */}
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
                     <button
                       className="btn btn-secondary"
+                      onClick={() => setShowPromptPreview(!showPromptPreview)}
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                    >
+                      {showPromptPreview ? 'Hide Prompt' : 'Preview Prompt'}
+                    </button>
+                    <button
+                      className="btn btn-primary"
                       onClick={generatePageImage}
                       disabled={isGenerating}
                       style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                     >
-                      Regenerate
+                      {isGenerating ? 'Generating...' : 'Generate Image'}
                     </button>
                   </div>
-                  {generatedImage.revisedPrompt && (
-                    <details style={{ marginTop: '0.5rem' }}>
-                      <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#888' }}>
-                        DALL-E's revised prompt
-                      </summary>
-                      <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
-                        {generatedImage.revisedPrompt}
-                      </p>
-                    </details>
+
+                  {/* Prompt Preview */}
+                  {showPromptPreview && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Full Prompt:</h4>
+                      <pre style={{
+                        background: '#f9f9f9',
+                        padding: '1rem',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        whiteSpace: 'pre-wrap',
+                        maxHeight: '300px',
+                        overflow: 'auto',
+                        color: '#333',
+                        border: '1px solid #ddd'
+                      }}>
+                        {buildFullPrompt()}
+                      </pre>
+                    </div>
                   )}
-                </div>
+
+                  {/* Error */}
+                  {generationError && (
+                    <div style={{
+                      marginBottom: '1rem',
+                      padding: '0.75rem',
+                      background: 'rgba(192, 57, 43, 0.2)',
+                      border: '1px solid #c0392b',
+                      borderRadius: '4px',
+                      color: '#e74c3c',
+                      fontSize: '0.85rem'
+                    }}>
+                      Error: {generationError}
+                    </div>
+                  )}
+
+                  {/* Generated Image */}
+                  {generatedImage && (
+                    <div>
+                      <h4 style={{ marginBottom: '0.5rem' }}>Generated Image:</h4>
+                      <img
+                        src={`http://localhost:3001${generatedImage.path}`}
+                        alt="Generated page"
+                        style={{
+                          width: '100%',
+                          borderRadius: '4px',
+                          border: '1px solid #ddd'
+                        }}
+                      />
+                      <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          className="btn btn-primary"
+                          onClick={saveGeneratedImage}
+                          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                        >
+                          Save as Page Image
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={generatePageImage}
+                          disabled={isGenerating}
+                          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                        >
+                          Regenerate
+                        </button>
+                      </div>
+                      {generatedImage.revisedPrompt && (
+                        <details style={{ marginTop: '0.5rem' }}>
+                          <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#888' }}>
+                            DALL-E's revised prompt
+                          </summary>
+                          <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
+                            {generatedImage.revisedPrompt}
+                          </p>
+                        </details>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Page Preview Modal */}
+      {showPagePreview && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '2rem'
+          }}
+          onClick={() => setShowPagePreview(false)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              maxWidth: '90vw',
+              maxHeight: '90vh'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setShowPagePreview(false)}
+              style={{
+                position: 'absolute',
+                top: -40,
+                right: 0,
+                background: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '0.5rem 1rem',
+                cursor: 'pointer',
+                fontSize: '0.9rem'
+              }}
+            >
+              Close Preview
+            </button>
+
+            {/* Preview Canvas */}
+            <div
+              style={{
+                position: 'relative',
+                width: CANVAS_WIDTH,
+                height: CANVAS_HEIGHT,
+                background: '#fff',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* Background image */}
+              {page.masterImage && (
+                <img
+                  src={`http://localhost:3001${page.masterImage}`}
+                  alt="Page preview"
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                />
+              )}
+
+              {/* SVG filter for hand-drawn effect */}
+              <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                  <filter id="roughEdgePreview" x="-5%" y="-5%" width="110%" height="110%">
+                    <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="noise" />
+                    <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+                  </filter>
+                </defs>
+              </svg>
+
+              {/* Render bubbles */}
+              {bubbles.map((bubble) => {
+                const bubbleCenterX = bubble.x + bubble.width / 2;
+                const bubbleCenterY = bubble.y + bubble.height / 2;
+                const tailEndX = bubbleCenterX + (bubble.tailX || 0);
+                const tailEndY = bubbleCenterY + (bubble.tailY || 0);
+
+                return (
+                  <div key={bubble.id}>
+                    {/* Speech bubble tail */}
+                    {bubble.type === 'speech' && bubble.showTail !== false && (() => {
+                      const tailBasePos = bubble.tailBaseX ?? 0.5;
+                      const tailWidthVal = bubble.tailWidth ?? 0.06;
+                      const tailSide = bubble.tailSide || 'bottom';
+                      const halfWidth = (tailWidthVal * CANVAS_WIDTH) / 2;
+
+                      let baseX, baseY, base1X, base1Y, base2X, base2Y;
+                      if (tailSide === 'bottom') {
+                        baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
+                        baseY = (bubble.y + bubble.height) * CANVAS_HEIGHT;
+                        base1X = baseX - halfWidth; base1Y = baseY;
+                        base2X = baseX + halfWidth; base2Y = baseY;
+                      } else if (tailSide === 'top') {
+                        baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
+                        baseY = bubble.y * CANVAS_HEIGHT;
+                        base1X = baseX - halfWidth; base1Y = baseY;
+                        base2X = baseX + halfWidth; base2Y = baseY;
+                      } else if (tailSide === 'left') {
+                        baseX = bubble.x * CANVAS_WIDTH;
+                        baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
+                        base1X = baseX; base1Y = baseY - halfWidth;
+                        base2X = baseX; base2Y = baseY + halfWidth;
+                      } else {
+                        baseX = (bubble.x + bubble.width) * CANVAS_WIDTH;
+                        baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
+                        base1X = baseX; base1Y = baseY - halfWidth;
+                        base2X = baseX; base2Y = baseY + halfWidth;
+                      }
+
+                      const tipX = tailEndX * CANVAS_WIDTH;
+                      const tipY = tailEndY * CANVAS_HEIGHT;
+                      const dx = tipX - baseX;
+                      const dy = tipY - baseY;
+                      const distance = Math.sqrt(dx * dx + dy * dy);
+                      let curlAmount = distance * 0.25;
+                      let perpX = 0, perpY = 0;
+                      if (tailSide === 'bottom' || tailSide === 'top') {
+                        perpX = dx > 0 ? curlAmount : -curlAmount;
+                      } else {
+                        perpY = dy > 0 ? curlAmount : -curlAmount;
+                      }
+                      const midX = (baseX + tipX) / 2;
+                      const midY = (baseY + tipY) / 2;
+                      const ctrl1X = midX + perpX * 0.5;
+                      const ctrl1Y = midY + perpY * 0.5;
+                      const ctrl2X = midX + perpX * 1.2;
+                      const ctrl2Y = midY + perpY * 1.2;
+                      const fillPath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y} Z`;
+                      const strokePath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y}`;
+                      const borderColor = bubble.borderColor || '#000';
+                      const borderWidth = bubble.borderWidth ?? 2.5;
+
+                      return (
+                        <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 49, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
+                          <defs>
+                            <filter id={`roughTailPreview-${bubble.id}`} x="-10%" y="-10%" width="120%" height="120%">
+                              <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
+                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+                            </filter>
+                          </defs>
+                          <path d={fillPath} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke="none" filter={`url(#roughTailPreview-${bubble.id})`} />
+                          {!bubble.noBorder && <path d={strokePath} fill="none" stroke={borderColor} strokeWidth={borderWidth} strokeLinecap="round" filter={`url(#roughTailPreview-${bubble.id})`} />}
+                        </svg>
+                      );
+                    })()}
+
+                    {/* Thought bubble trail */}
+                    {bubble.type === 'thought' && bubble.showTail !== false && (() => {
+                      const tailBasePos = bubble.tailBaseX ?? 0.5;
+                      const tailSide = bubble.tailSide || 'bottom';
+                      let startX, startY;
+                      if (tailSide === 'bottom') {
+                        startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
+                        startY = (bubble.y + bubble.height) * CANVAS_HEIGHT;
+                      } else if (tailSide === 'top') {
+                        startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
+                        startY = bubble.y * CANVAS_HEIGHT;
+                      } else if (tailSide === 'left') {
+                        startX = bubble.x * CANVAS_WIDTH;
+                        startY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
+                      } else {
+                        startX = (bubble.x + bubble.width) * CANVAS_WIDTH;
+                        startY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
+                      }
+                      const tipX = tailEndX * CANVAS_WIDTH;
+                      const tipY = tailEndY * CANVAS_HEIGHT;
+                      const dx = tipX - startX;
+                      const dy = tipY - startY;
+                      const distance = Math.sqrt(dx * dx + dy * dy);
+                      let curlAmount = Math.min(distance * 0.3, 30);
+                      let perpX = 0, perpY = 0;
+                      if (tailSide === 'bottom' || tailSide === 'top') {
+                        perpX = dx > 0 ? curlAmount : -curlAmount;
+                      } else {
+                        perpY = dy > 0 ? curlAmount : -curlAmount;
+                      }
+                      const ctrlX = (startX + tipX) / 2 + perpX;
+                      const ctrlY = (startY + tipY) / 2 + perpY;
+                      const circles = [];
+                      for (let i = 0; i < 3; i++) {
+                        const t = Math.min(((i + 1) * 18) / Math.max(distance, 1), 0.9);
+                        const oneMinusT = 1 - t;
+                        const cx = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * ctrlX + t * t * tipX;
+                        const cy = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * ctrlY + t * t * tipY;
+                        circles.push({ cx, cy, radius: 7 - (i * 2) });
+                      }
+                      const borderColor = bubble.borderColor || '#000';
+                      const borderWidth = bubble.borderWidth ?? 2;
+
+                      return (
+                        <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 49, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
+                          <defs>
+                            <filter id={`roughCirclesPreview-${bubble.id}`} x="-20%" y="-20%" width="140%" height="140%">
+                              <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="noise" />
+                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+                            </filter>
+                          </defs>
+                          {circles.map((circle, i) => (
+                            <circle key={i} cx={circle.cx} cy={circle.cy} r={circle.radius} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke={bubble.noBorder ? 'none' : borderColor} strokeWidth={borderWidth} filter={`url(#roughCirclesPreview-${bubble.id})`} />
+                          ))}
+                        </svg>
+                      );
+                    })()}
+
+                    {/* Bubble body */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: `${bubble.x * 100}%`,
+                        top: `${bubble.y * 100}%`,
+                        width: `${bubble.width * 100}%`,
+                        height: `${bubble.height * 100}%`,
+                        background: bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')),
+                        border: bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`,
+                        borderRadius: bubble.type === 'thought' ? `${bubble.cornerRadius ?? 50}%` : `${bubble.cornerRadius || 8}px`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '6px 8px',
+                        boxSizing: 'border-box',
+                        zIndex: 50,
+                        transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2}deg)`,
+                        filter: 'url(#roughEdgePreview)'
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                          fontSize: `${bubble.fontSize}px`,
+                          fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                          fontStyle: bubble.italic ? 'italic' : 'normal',
+                          color: bubble.textColor || '#000000',
+                          textAlign: bubble.textAlign || 'center',
+                          width: '100%',
+                          wordBreak: 'break-word',
+                          lineHeight: 1.3,
+                          letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                          textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                          transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2)}deg)`
+                        }}
+                      >
+                        {getBubbleDisplayText(bubble)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
