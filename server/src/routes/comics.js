@@ -363,51 +363,198 @@ router.put('/:id/cover', async (req, res) => {
   }
 });
 
-// Export comic in iOS app format
+// Export comic in iOS app format (JSON only)
 router.get('/:id/export', async (req, res) => {
   try {
     const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
     const content = await fs.readFile(filePath, 'utf-8');
     const comic = JSON.parse(content);
+    const comicSlug = sanitizeTitle(comic.title);
 
     // Transform to iOS app format
-    const exportedComic = {
-      id: comic.id,
-      title: comic.title,
-      description: comic.description,
-      coverImage: comic.cover?.image || '',
-      level: comic.level,
-      totalPages: comic.pages.length,
-      estimatedMinutes: comic.pages.length * 2,
-      language: comic.language || 'es',
-      targetLanguage: comic.targetLanguage || 'en',
-      version: '1.0',
-      pages: comic.pages.map(page => ({
-        id: page.id,
-        pageNumber: page.pageNumber,
-        masterImage: page.masterImage,
-        panels: page.panels.map(panel => ({
-          id: panel.id,
-          artworkImage: panel.artworkImage,
-          panelOrder: panel.panelOrder,
+    const exportedComic = transformToReaderFormat(comic, comicSlug);
+    res.json(exportedComic);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Full export with files to a target directory
+router.post('/:id/export-full', async (req, res) => {
+  try {
+    const { targetDir } = req.body;
+    const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
+    const content = await fs.readFile(filePath, 'utf-8');
+    const comic = JSON.parse(content);
+    const comicSlug = sanitizeTitle(comic.title);
+
+    // Create export directory structure
+    const exportDir = targetDir || path.join(PROJECTS_DIR, req.params.id, 'export', comicSlug);
+    const imagesDir = path.join(exportDir, 'images');
+    const audioDir = path.join(exportDir, 'audio');
+
+    await fs.mkdir(imagesDir, { recursive: true });
+    await fs.mkdir(audioDir, { recursive: true });
+
+    // Transform to reader format
+    const exportedComic = transformToReaderFormat(comic, comicSlug);
+
+    // Copy images
+    const copiedImages = [];
+    const projectImagesDir = path.join(PROJECTS_DIR, req.params.id, 'images');
+
+    // Copy cover image
+    if (comic.cover?.masterImage) {
+      const coverSourcePath = path.join(__dirname, '../..', comic.cover.masterImage);
+      const coverDestPath = path.join(imagesDir, `${comicSlug}_cover.png`);
+      try {
+        await fs.copyFile(coverSourcePath, coverDestPath);
+        copiedImages.push(`${comicSlug}_cover.png`);
+      } catch (e) {
+        console.log('Cover image not found:', coverSourcePath);
+      }
+    }
+
+    // Copy page images and create panel crops
+    for (const page of comic.pages) {
+      if (page.masterImage) {
+        const pageNum = page.pageNumber;
+        const sourceImagePath = path.join(__dirname, '../..', page.masterImage);
+
+        // Copy master page image
+        const masterDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}.png`);
+        try {
+          await fs.copyFile(sourceImagePath, masterDestPath);
+          copiedImages.push(`${comicSlug}_p${pageNum}.png`);
+
+          // Get image dimensions for cropping
+          const metadata = await sharp(sourceImagePath).metadata();
+          const imgWidth = metadata.width;
+          const imgHeight = metadata.height;
+
+          // Create panel crops (scenes)
+          for (const panel of page.panels || []) {
+            const panelNum = panel.panelOrder;
+            const sceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}.png`);
+            const cropped = await cropAndSaveScene(
+              sourceImagePath,
+              sceneDestPath,
+              panel.tapZone,
+              imgWidth,
+              imgHeight
+            );
+            if (cropped) {
+              copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}.png`);
+            }
+          }
+        } catch (e) {
+          console.log('Page image not found:', sourceImagePath);
+        }
+      }
+    }
+
+    // Write comic.json
+    const comicJsonPath = path.join(exportDir, 'comic.json');
+    await fs.writeFile(comicJsonPath, JSON.stringify(exportedComic, null, 2));
+
+    res.json({
+      success: true,
+      exportDir,
+      comicJson: comicJsonPath,
+      copiedImages,
+      message: `Exported to ${exportDir}`
+    });
+  } catch (error) {
+    console.error('Export error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to transform comic to reader format
+function transformToReaderFormat(comic, comicSlug) {
+  let wordCounter = 1;
+  let sentenceCounter = 1;
+  let bubbleCounter = 1;
+
+  const pages = [];
+
+  // Add cover page if exists
+  if (comic.cover?.masterImage) {
+    pages.push({
+      id: `${comicSlug}-page-cover`,
+      pageNumber: 1,
+      masterImage: `${comicSlug}_cover`,
+      panels: [{
+        id: `${comicSlug}-panel-cover`,
+        artworkImage: `${comicSlug}_cover`,
+        panelOrder: 1,
+        tapZone: { x: 0, y: 0, width: 1, height: 1 },
+        bubbles: (comic.cover.bubbles || []).map(bubble => {
+          const bubbleId = `${comicSlug}-bubble-cover-${bubbleCounter++}`;
+          return {
+            id: bubbleId,
+            type: bubble.type || 'narration',
+            position: {
+              x: bubble.x,
+              y: bubble.y,
+              width: bubble.width,
+              height: bubble.height
+            },
+            sentences: (bubble.sentences || []).map(sentence => {
+              const sentenceId = `${comicSlug}-s${sentenceCounter++}`;
+              return {
+                id: sentenceId,
+                text: sentence.text || '',
+                translation: sentence.translation || '',
+                audioUrl: `${comicSlug}_cover`,
+                words: (sentence.words || []).map(word => ({
+                  id: `${comicSlug}-w${wordCounter++}`,
+                  text: word.text || '',
+                  meaning: word.meaning || '',
+                  baseForm: word.baseForm || word.text || ''
+                }))
+              };
+            })
+          };
+        })
+      }]
+    });
+  }
+
+  // Add content pages
+  for (const page of comic.pages) {
+    const pageNum = pages.length + 1;
+    const exportedPage = {
+      id: `${comicSlug}-page-${page.pageNumber}`,
+      pageNumber: pageNum,
+      masterImage: `${comicSlug}_p${page.pageNumber}`,
+      panels: (page.panels || []).map(panel => {
+        const panelNum = panel.panelOrder;
+
+        // Filter bubbles that belong to this panel
+        const panelBubbles = (page.bubbles || []).filter(bubble => {
+          const bubbleCenterX = bubble.x + (bubble.width || 0) / 2;
+          const bubbleCenterY = bubble.y + (bubble.height || 0) / 2;
+          return bubbleCenterX >= panel.tapZone.x &&
+                 bubbleCenterX <= panel.tapZone.x + panel.tapZone.width &&
+                 bubbleCenterY >= panel.tapZone.y &&
+                 bubbleCenterY <= panel.tapZone.y + panel.tapZone.height;
+        });
+
+        return {
+          id: `${comicSlug}-panel-${page.pageNumber}-${panelNum}`,
+          artworkImage: `${comicSlug}_p${page.pageNumber}_s${panelNum}`,
+          panelOrder: panelNum,
           tapZone: {
             x: panel.tapZone.x,
             y: panel.tapZone.y,
             width: panel.tapZone.width,
             height: panel.tapZone.height
           },
-          // Bubbles now come from page.bubbles, filtered by panel tapZone
-          bubbles: (page.bubbles || [])
-            .filter(bubble => {
-              // Check if bubble center is within this panel's tapZone
-              const bubbleCenterX = bubble.x + (bubble.width || 0) / 2;
-              const bubbleCenterY = bubble.y + (bubble.height || 0) / 2;
-              return bubbleCenterX >= panel.tapZone.x &&
-                     bubbleCenterX <= panel.tapZone.x + panel.tapZone.width &&
-                     bubbleCenterY >= panel.tapZone.y &&
-                     bubbleCenterY <= panel.tapZone.y + panel.tapZone.height;
-            })
-            .map(bubble => ({
+          bubbles: panelBubbles.map(bubble => {
+            const bubbleId = `${comicSlug}-bubble-${page.pageNumber}-${panelNum}-${bubbleCounter++}`;
+            return {
+              id: bubbleId,
               type: bubble.type || 'speech',
               position: {
                 x: bubble.x,
@@ -415,25 +562,43 @@ router.get('/:id/export', async (req, res) => {
                 width: bubble.width,
                 height: bubble.height
               },
-              sentences: (bubble.sentences || []).map(sentence => ({
-                text: sentence.text || '',
-                translation: sentence.translation || '',
-                audioUrl: sentence.audioUrl || '',
-                words: (sentence.words || []).map(word => ({
-                  text: word.text || '',
-                  meaning: word.meaning || '',
-                  baseForm: word.baseForm || ''
-                }))
-              }))
-            }))
-        }))
-      }))
+              sentences: (bubble.sentences || []).map((sentence, sIdx) => {
+                const sentenceId = `${comicSlug}-s${sentenceCounter++}`;
+                return {
+                  id: sentenceId,
+                  text: sentence.text || '',
+                  translation: sentence.translation || '',
+                  audioUrl: `${comicSlug}_p${page.pageNumber}_s${panelNum}`,
+                  words: (sentence.words || []).map(word => ({
+                    id: `${comicSlug}-w${wordCounter++}`,
+                    text: word.text || '',
+                    meaning: word.meaning || '',
+                    baseForm: word.baseForm || word.text || ''
+                  }))
+                };
+              })
+            };
+          })
+        };
+      })
     };
-
-    res.json(exportedComic);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    pages.push(exportedPage);
   }
-});
+
+  return {
+    id: `comic-${comicSlug}`,
+    title: comic.title,
+    description: comic.description || '',
+    coverImage: `${comicSlug}_cover`,
+    level: comic.level || 'beginner',
+    totalPages: pages.length,
+    estimatedMinutes: pages.length * 2,
+    language: comic.language || 'es',
+    targetLanguage: comic.targetLanguage || 'en',
+    version: '1.0',
+    pages,
+    reviewWords: []
+  };
+}
 
 module.exports = router;

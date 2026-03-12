@@ -55,6 +55,8 @@ function ComicEditor() {
   const [settingsTab, setSettingsTab] = useState('style');
   const [saving, setSaving] = useState(false);
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState(null);
   
   useEffect(() => {
     loadComic();
@@ -88,18 +90,33 @@ function ComicEditor() {
     }
   };
 
-  const exportComic = async () => {
+  const exportComicJson = async () => {
     try {
       const response = await api.get(`/comics/${id}/export`);
       const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${comic.id}.json`;
+      a.download = `${comic.title.toLowerCase().replace(/\s+/g, '_')}_comic.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to export comic:', error);
+      alert('Failed to export comic JSON');
+    }
+  };
+
+  const exportComicFull = async () => {
+    setExporting(true);
+    setExportResult(null);
+    try {
+      const response = await api.post(`/comics/${id}/export-full`, {});
+      setExportResult(response.data);
+    } catch (error) {
+      console.error('Failed to export comic:', error);
+      alert('Failed to export comic: ' + error.message);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -176,9 +193,6 @@ function ComicEditor() {
           <p style={{ color: '#888' }}>{comic.description}</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
-          <button className="btn btn-secondary" onClick={exportComic}>
-            Export JSON
-          </button>
           <button className="btn btn-primary" onClick={addPage}>
             + Add Page
           </button>
@@ -200,6 +214,13 @@ function ComicEditor() {
           style={{ padding: '0.6rem 1.2rem' }}
         >
           Prompt Settings
+        </button>
+        <button
+          className={`btn ${activeTab === 'export' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('export')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Export
         </button>
       </div>
 
@@ -503,6 +524,99 @@ function ComicEditor() {
             )}
 
             </div>
+        </div>
+      )}
+
+      {/* Export Tab */}
+      {activeTab === 'export' && (
+        <div style={{ maxWidth: '800px' }}>
+          <h2 style={{ marginBottom: '1rem' }}>Export for Comic Reader App</h2>
+          <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+            Export your comic in the format required by the Comic Reader iOS app.
+            This will generate the comic.json file and copy all images (master pages and panel crops).
+          </p>
+
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={exportComicJson}
+              style={{ padding: '0.75rem 1.5rem' }}
+            >
+              Download JSON Only
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={exportComicFull}
+              disabled={exporting}
+              style={{ padding: '0.75rem 1.5rem' }}
+            >
+              {exporting ? 'Exporting...' : 'Export Full Package'}
+            </button>
+          </div>
+
+          {exportResult && (
+            <div style={{
+              background: '#d4edda',
+              border: '1px solid #c3e6cb',
+              borderRadius: '8px',
+              padding: '1.5rem',
+              marginBottom: '1.5rem'
+            }}>
+              <h3 style={{ color: '#155724', marginBottom: '1rem' }}>Export Successful!</h3>
+              <p style={{ color: '#155724', marginBottom: '0.5rem' }}>
+                <strong>Location:</strong> {exportResult.exportDir}
+              </p>
+              <p style={{ color: '#155724', marginBottom: '0.5rem' }}>
+                <strong>Images copied:</strong> {exportResult.copiedImages?.length || 0}
+              </p>
+              <details style={{ marginTop: '1rem' }}>
+                <summary style={{ cursor: 'pointer', color: '#155724' }}>
+                  View copied files ({exportResult.copiedImages?.length || 0})
+                </summary>
+                <ul style={{ marginTop: '0.5rem', color: '#155724', fontSize: '0.85rem' }}>
+                  {exportResult.copiedImages?.map((img, i) => (
+                    <li key={i}>{img}</li>
+                  ))}
+                </ul>
+              </details>
+            </div>
+          )}
+
+          <div style={{
+            background: '#f8f9fa',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            padding: '1.5rem'
+          }}>
+            <h3 style={{ marginBottom: '1rem', color: '#333' }}>Export Contents</h3>
+            <ul style={{ color: '#666', lineHeight: '1.8' }}>
+              <li><strong>comic.json</strong> - Comic data in Comic Reader format (pages, panels, bubbles, sentences, words)</li>
+              <li><strong>images/</strong> - All page images and panel crops
+                <ul style={{ marginLeft: '1.5rem', marginTop: '0.5rem' }}>
+                  <li><code>{'{comic}'}_cover.png</code> - Cover image</li>
+                  <li><code>{'{comic}'}_p{'{N}'}.png</code> - Master page images</li>
+                  <li><code>{'{comic}'}_p{'{N}'}_s{'{M}'}.png</code> - Panel/scene crops</li>
+                </ul>
+              </li>
+              <li><strong>audio/</strong> - (placeholder) Audio files would go here</li>
+            </ul>
+          </div>
+
+          <div style={{
+            background: '#fff3cd',
+            border: '1px solid #ffc107',
+            borderRadius: '8px',
+            padding: '1rem',
+            marginTop: '1.5rem'
+          }}>
+            <p style={{ color: '#856404', margin: 0 }}>
+              <strong>Note:</strong> After exporting, copy the export folder to your Comic Reader app's
+              <code style={{ background: '#fff', padding: '0.2rem 0.4rem', borderRadius: '3px', margin: '0 0.3rem' }}>
+                ComicReader/BundledComics/
+              </code>
+              directory.
+            </p>
+          </div>
         </div>
       )}
     </div>
