@@ -5,6 +5,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
 const Comic = require('../models/Comic');
+const ArchivedPage = require('../models/ArchivedPage');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
@@ -187,7 +188,7 @@ router.post('/:id/pages', async (req, res) => {
     }
 
     const page = {
-      id: `${req.params.id}-page-${comic.pages.length + 1}`,
+      id: `page-${uuidv4()}`,
       pageNumber: comic.pages.length + 1,
       masterImage: '',
       dividerLines: {
@@ -607,9 +608,10 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Delete page from comic
+// Delete or archive page from comic
 router.delete('/:id/pages/:pageId', async (req, res) => {
   try {
+    const archive = req.query.archive === 'true';
     const deleteAudio = req.query.deleteAudio === 'true';
     const comic = await Comic.findOne({ id: req.params.id });
     if (!comic) {
@@ -624,7 +626,24 @@ router.delete('/:id/pages/:pageId', async (req, res) => {
     const page = comic.pages[pageIndex];
     const deletedFiles = [];
 
-    if (deleteAudio && page.bubbles) {
+    // If archiving, save to ArchivedPage collection
+    if (archive) {
+      const archivedPage = new ArchivedPage({
+        comicId: req.params.id,
+        comicTitle: comic.title,
+        pageId: page.id,
+        originalPageNumber: page.pageNumber,
+        masterImage: page.masterImage,
+        lines: page.lines,
+        dividerLines: page.dividerLines,
+        panels: page.panels,
+        bubbles: page.bubbles
+      });
+      await archivedPage.save();
+    }
+
+    // Delete audio files if requested (only when permanently deleting, not archiving)
+    if (deleteAudio && !archive && page.bubbles) {
       const audioDir = path.join(PROJECTS_DIR, req.params.id, 'audio');
       for (const bubble of page.bubbles) {
         if (bubble.sentences) {
@@ -650,8 +669,80 @@ router.delete('/:id/pages/:pageId', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Page deleted',
+      message: archive ? 'Page archived' : 'Page deleted',
+      archived: archive,
       deletedAudioFiles: deletedFiles
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get archived pages for a comic
+router.get('/:id/archived-pages', async (req, res) => {
+  try {
+    const archivedPages = await ArchivedPage.find({ comicId: req.params.id })
+      .sort({ archivedAt: -1 });
+    res.json(archivedPages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Restore an archived page
+router.post('/:id/archived-pages/:archivedPageId/restore', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const archivedPage = await ArchivedPage.findById(req.params.archivedPageId);
+    if (!archivedPage) {
+      return res.status(404).json({ error: 'Archived page not found' });
+    }
+
+    // Create new page from archived data
+    const newPageNumber = comic.pages.length + 1;
+    const restoredPage = {
+      id: archivedPage.pageId,
+      pageNumber: newPageNumber,
+      masterImage: archivedPage.masterImage,
+      lines: archivedPage.lines,
+      dividerLines: archivedPage.dividerLines,
+      panels: archivedPage.panels,
+      bubbles: archivedPage.bubbles
+    };
+
+    comic.pages.push(restoredPage);
+    await comic.save();
+
+    // Delete from archive
+    await ArchivedPage.findByIdAndDelete(req.params.archivedPageId);
+
+    res.json({
+      success: true,
+      message: 'Page restored',
+      page: restoredPage
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Permanently delete an archived page
+router.delete('/:id/archived-pages/:archivedPageId', async (req, res) => {
+  try {
+    const archivedPage = await ArchivedPage.findById(req.params.archivedPageId);
+    if (!archivedPage) {
+      return res.status(404).json({ error: 'Archived page not found' });
+    }
+
+    await ArchivedPage.findByIdAndDelete(req.params.archivedPageId);
+
+    res.json({
+      success: true,
+      message: 'Archived page permanently deleted'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

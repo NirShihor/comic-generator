@@ -57,7 +57,9 @@ function ComicEditor() {
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState(null);
-  
+  const [deleteModal, setDeleteModal] = useState({ show: false, page: null });
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     loadComic();
   }, [id]);
@@ -80,13 +82,28 @@ function ComicEditor() {
     try {
       const response = await api.post(`/comics/${id}/pages`);
       const newPage = response.data;
-      setComic({
-        ...comic,
-        pages: [...comic.pages, newPage]
-      });
+      // Reload comic to ensure fresh data
+      await loadComic();
       navigate(`/comic/${id}/page/${newPage.id}`);
     } catch (error) {
       console.error('Failed to add page:', error);
+    }
+  };
+
+  const handleDeletePage = async (archive = false) => {
+    if (!deleteModal.page) return;
+
+    setDeleting(true);
+    try {
+      await api.delete(`/comics/${id}/pages/${deleteModal.page.id}?archive=${archive}&deleteAudio=${!archive}`);
+      setDeleteModal({ show: false, page: null });
+      // Reload comic from server to ensure fresh data
+      await loadComic();
+    } catch (error) {
+      console.error('Failed to delete page:', error);
+      alert('Failed to delete page: ' + error.message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -267,6 +284,7 @@ function ComicEditor() {
               <div
                 key={page.id}
                 className="page-thumbnail"
+                style={{ position: 'relative', cursor: 'pointer' }}
                 onClick={() => navigate(`/comic/${id}/page/${page.id}`)}
               >
                 {page.masterImage ? (
@@ -291,6 +309,31 @@ function ComicEditor() {
                 <small style={{ color: '#666' }}>
                   {page.panels?.length || 0} panels
                 </small>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteModal({ show: true, page });
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    background: 'rgba(192, 57, 43, 0.9)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '24px',
+                    height: '24px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  title="Delete page"
+                >
+                  ×
+                </button>
               </div>
             ))}
           </div>
@@ -771,6 +814,93 @@ function ComicEditor() {
               <li>Copy the Voice ID from the URL or the voice settings</li>
               <li>The ID looks like: <code style={{ background: '#fff', padding: '0.2rem 0.4rem', borderRadius: '3px' }}>EXAVITQu4vr4xnSDxMaL</code></li>
             </ol>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Page Confirmation Modal */}
+      {deleteModal.show && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: '#1a1a2e',
+            borderRadius: '8px',
+            padding: '2rem',
+            maxWidth: '450px',
+            width: '90%',
+            border: '1px solid #16213e'
+          }}>
+            <h2 style={{ marginBottom: '1rem', color: '#e94560' }}>Delete Page {deleteModal.page?.pageNumber}?</h2>
+            <p style={{ marginBottom: '1.5rem', color: '#ccc', lineHeight: '1.5' }}>
+              Choose how you want to remove this page:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button
+                onClick={() => handleDeletePage(true)}
+                disabled={deleting}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: '#2980b9',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: deleting ? 'wait' : 'pointer',
+                  fontSize: '0.95rem',
+                  textAlign: 'left'
+                }}
+              >
+                <strong>Archive</strong>
+                <br />
+                <small style={{ opacity: 0.8 }}>Move to archive. Can be restored later.</small>
+              </button>
+
+              <button
+                onClick={() => handleDeletePage(false)}
+                disabled={deleting}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: '#c0392b',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: deleting ? 'wait' : 'pointer',
+                  fontSize: '0.95rem',
+                  textAlign: 'left'
+                }}
+              >
+                <strong>Delete Permanently</strong>
+                <br />
+                <small style={{ opacity: 0.8 }}>Remove forever including audio files.</small>
+              </button>
+
+              <button
+                onClick={() => setDeleteModal({ show: false, page: null })}
+                disabled={deleting}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: 'transparent',
+                  color: '#888',
+                  border: '1px solid #444',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  marginTop: '0.5rem'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
