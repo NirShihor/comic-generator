@@ -222,6 +222,13 @@ function ComicEditor() {
         >
           Export
         </button>
+        <button
+          className={`btn ${activeTab === 'voices' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('voices')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Voices ({(comic.voices || []).length})
+        </button>
       </div>
 
       {/* Pages Tab */}
@@ -616,6 +623,154 @@ function ComicEditor() {
               </code>
               directory.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Voices Tab */}
+      {activeTab === 'voices' && (
+        <div style={{ maxWidth: '800px' }}>
+          <h2 style={{ marginBottom: '1rem' }}>Voice Configuration</h2>
+          <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+            Configure character voices using ElevenLabs voice IDs. These will be available when generating audio for sentences.
+          </p>
+
+          {/* Existing voices */}
+          <div style={{ marginBottom: '2rem' }}>
+            {(comic.voices || []).length === 0 ? (
+              <p style={{ color: '#888', fontStyle: 'italic' }}>No voices configured yet. Add your first voice below.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {(comic.voices || []).map((voice, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '1rem',
+                      background: '#f8f9fa',
+                      padding: '1rem',
+                      borderRadius: '8px',
+                      border: '1px solid #ddd'
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>{voice.name}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#666', fontFamily: 'monospace' }}>{voice.voiceId}</div>
+                    </div>
+                    <button
+                      className="btn btn-danger"
+                      onClick={async () => {
+                        const updatedVoices = comic.voices.filter((_, i) => i !== idx);
+                        try {
+                          await api.put(`/comics/${id}`, { voices: updatedVoices });
+                          setComic({ ...comic, voices: updatedVoices });
+                        } catch (error) {
+                          console.error('Failed to remove voice:', error);
+                          alert('Failed to remove voice');
+                        }
+                      }}
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add new voice */}
+          <div style={{
+            background: '#e8f4fc',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #b8d4e3'
+          }}>
+            <h3 style={{ marginBottom: '1rem', color: '#2980b9' }}>Add New Voice</h3>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#666' }}>
+                  Character Name
+                </label>
+                <input
+                  type="text"
+                  id="newVoiceName"
+                  placeholder="e.g., Narrator, Javier, Diego"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    fontSize: '1rem'
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1.5 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#666' }}>
+                  ElevenLabs Voice ID
+                </label>
+                <input
+                  type="text"
+                  id="newVoiceId"
+                  placeholder="e.g., EXAVITQu4vr4xnSDxMaL"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    fontSize: '1rem',
+                    fontFamily: 'monospace'
+                  }}
+                />
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  const nameInput = document.getElementById('newVoiceName');
+                  const idInput = document.getElementById('newVoiceId');
+                  const name = nameInput.value.trim();
+                  const voiceId = idInput.value.trim();
+
+                  if (!name || !voiceId) {
+                    alert('Please enter both a name and voice ID');
+                    return;
+                  }
+
+                  const updatedVoices = [...(comic.voices || []), { name, voiceId }];
+                  try {
+                    await api.put(`/comics/${id}`, { voices: updatedVoices });
+                    setComic({ ...comic, voices: updatedVoices });
+                    nameInput.value = '';
+                    idInput.value = '';
+                  } catch (error) {
+                    console.error('Failed to add voice:', error);
+                    alert('Failed to add voice');
+                  }
+                }}
+                style={{ padding: '0.6rem 1.5rem', whiteSpace: 'nowrap' }}
+              >
+                Add Voice
+              </button>
+            </div>
+          </div>
+
+          {/* Help section */}
+          <div style={{
+            background: '#f8f9fa',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            marginTop: '1.5rem'
+          }}>
+            <h3 style={{ marginBottom: '1rem', color: '#333' }}>Finding Voice IDs</h3>
+            <ol style={{ color: '#666', lineHeight: '1.8', paddingLeft: '1.25rem' }}>
+              <li>Go to <a href="https://elevenlabs.io/app/voice-library" target="_blank" rel="noopener noreferrer" style={{ color: '#3498db' }}>ElevenLabs Voice Library</a></li>
+              <li>Find a voice you want to use</li>
+              <li>Click on the voice to open its details</li>
+              <li>Copy the Voice ID from the URL or the voice settings</li>
+              <li>The ID looks like: <code style={{ background: '#fff', padding: '0.2rem 0.4rem', borderRadius: '3px' }}>EXAVITQu4vr4xnSDxMaL</code></li>
+            </ol>
           </div>
         </div>
       )}

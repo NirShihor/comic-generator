@@ -4,11 +4,11 @@ const fs = require('fs').promises;
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
+const Comic = require('../models/Comic');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
-// Sanitize title for filenames (lowercase, replace spaces with underscores, remove special chars)
 function sanitizeTitle(title) {
   return title
     .toLowerCase()
@@ -17,10 +17,8 @@ function sanitizeTitle(title) {
     .substring(0, 50);
 }
 
-// Crop a region from an image and save it
 async function cropAndSaveScene(sourceImagePath, outputPath, region, imageWidth, imageHeight) {
   try {
-    // region is in percentage (0-1), convert to pixels
     const left = Math.round(region.x * imageWidth);
     const top = Math.round(region.y * imageHeight);
     const width = Math.round(region.width * imageWidth);
@@ -37,47 +35,31 @@ async function cropAndSaveScene(sourceImagePath, outputPath, region, imageWidth,
   }
 }
 
-// Ensure projects directory exists
-async function ensureProjectsDir() {
+async function ensureProjectDirs(comicId) {
+  const imagesDir = path.join(PROJECTS_DIR, comicId, 'images');
+  const audioDir = path.join(PROJECTS_DIR, comicId, 'audio');
+  await fs.mkdir(imagesDir, { recursive: true });
+  await fs.mkdir(audioDir, { recursive: true });
+}
+
+async function deleteFileIfExists(filePath) {
   try {
-    await fs.mkdir(PROJECTS_DIR, { recursive: true });
+    await fs.unlink(filePath);
+    return true;
   } catch (err) {
-    // Directory exists
+    return false;
   }
 }
 
-// Get all comic projects
-router.get('/', async (req, res) => {
+async function deleteDirIfExists(dirPath) {
   try {
-    await ensureProjectsDir();
-    const files = await fs.readdir(PROJECTS_DIR);
-    const comics = [];
-
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const content = await fs.readFile(path.join(PROJECTS_DIR, file), 'utf-8');
-        comics.push(JSON.parse(content));
-      }
-    }
-
-    res.json(comics);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    await fs.rm(dirPath, { recursive: true, force: true });
+    return true;
+  } catch (err) {
+    return false;
   }
-});
+}
 
-// Get single comic project
-router.get('/:id', async (req, res) => {
-  try {
-    const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
-    const content = await fs.readFile(filePath, 'utf-8');
-    res.json(JSON.parse(content));
-  } catch (error) {
-    res.status(404).json({ error: 'Comic not found' });
-  }
-});
-
-// Default prompt templates
 const getDefaultPromptTemplates = () => ({
   styleBible: `• Page ratio is A4.
 • Speech and thinking bubbles should be contained in the panel and not spill over the edges of the panel.
@@ -121,36 +103,52 @@ No split panels.
 No decorative borders that look like panels.`
 });
 
+// Get all comic projects
+router.get('/', async (req, res) => {
+  try {
+    const comics = await Comic.find().sort({ createdAt: -1 });
+    res.json(comics);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single comic project
+router.get('/:id', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+    res.json(comic);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Create new comic project
 router.post('/', async (req, res) => {
   try {
-    await ensureProjectsDir();
+    const comicId = `comic-${uuidv4().slice(0, 8)}`;
 
-    const comic = {
-      id: `comic-${uuidv4().slice(0, 8)}`,
+    const comic = new Comic({
+      id: comicId,
       title: req.body.title || 'Untitled Comic',
       description: req.body.description || '',
       level: req.body.level || 'beginner',
       language: 'es',
       targetLanguage: 'en',
       cover: {
-        image: '',        // Full cover image path
-        sceneImage: ''    // Scene image for audio/interaction
+        image: '',
+        sceneImage: ''
       },
+      voices: [],
       pages: [],
-      promptTemplates: getDefaultPromptTemplates(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+      promptTemplates: getDefaultPromptTemplates()
+    });
 
-    await fs.writeFile(
-      path.join(PROJECTS_DIR, `${comic.id}.json`),
-      JSON.stringify(comic, null, 2)
-    );
-
-    // Create comic assets folder
-    await fs.mkdir(path.join(PROJECTS_DIR, comic.id, 'images'), { recursive: true });
-    await fs.mkdir(path.join(PROJECTS_DIR, comic.id, 'audio'), { recursive: true });
+    await comic.save();
+    await ensureProjectDirs(comicId);
 
     res.json(comic);
   } catch (error) {
@@ -161,13 +159,19 @@ router.post('/', async (req, res) => {
 // Update comic project
 router.put('/:id', async (req, res) => {
   try {
-    const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
-    const comic = {
-      ...req.body,
-      updatedAt: new Date().toISOString()
-    };
+    const updateData = { ...req.body };
+    delete updateData.id; // Don't allow changing the id
 
-    await fs.writeFile(filePath, JSON.stringify(comic, null, 2));
+    const comic = await Comic.findOneAndUpdate(
+      { id: req.params.id },
+      { $set: updateData },
+      { new: true }
+    );
+
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
     res.json(comic);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -177,25 +181,25 @@ router.put('/:id', async (req, res) => {
 // Add page to comic
 router.post('/:id/pages', async (req, res) => {
   try {
-    const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
-    const content = await fs.readFile(filePath, 'utf-8');
-    const comic = JSON.parse(content);
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
 
     const page = {
       id: `${req.params.id}-page-${comic.pages.length + 1}`,
       pageNumber: comic.pages.length + 1,
       masterImage: '',
       dividerLines: {
-        horizontal: [],  // Array of y positions (0-1)
-        vertical: []     // Array of { y1, y2, x } for partial vertical lines
+        horizontal: [],
+        vertical: []
       },
-      panels: []  // Computed from dividerLines, each with tapZone and content
+      panels: []
     };
 
     comic.pages.push(page);
-    comic.updatedAt = new Date().toISOString();
+    await comic.save();
 
-    await fs.writeFile(filePath, JSON.stringify(comic, null, 2));
     res.json(page);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -205,9 +209,10 @@ router.post('/:id/pages', async (req, res) => {
 // Update page (dividerLines and panels)
 router.put('/:id/pages/:pageId', async (req, res) => {
   try {
-    const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
-    const content = await fs.readFile(filePath, 'utf-8');
-    const comic = JSON.parse(content);
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
 
     const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
     if (pageIndex === -1) {
@@ -218,20 +223,22 @@ router.put('/:id/pages/:pageId', async (req, res) => {
     const sanitizedTitle = sanitizeTitle(comic.title);
     const imagesDir = path.join(PROJECTS_DIR, req.params.id, 'images');
 
-    // Update page fields
     if (req.body.dividerLines !== undefined) {
       page.dividerLines = req.body.dividerLines;
     }
     if (req.body.panels !== undefined) {
       page.panels = req.body.panels;
     }
+    if (req.body.lines !== undefined) {
+      page.lines = req.body.lines;
+    }
+    if (req.body.bubbles !== undefined) {
+      page.bubbles = req.body.bubbles;
+    }
     if (req.body.masterImage !== undefined) {
-      const oldMasterImage = page.masterImage;
       page.masterImage = req.body.masterImage;
 
-      // If we have a new master image and panels, generate scene images
       if (req.body.masterImage && req.body.panels && req.body.panels.length > 0) {
-        // Get the source image path
         let sourceImagePath;
         if (req.body.masterImage.startsWith('/uploads/')) {
           sourceImagePath = path.join(UPLOADS_DIR, req.body.masterImage.replace('/uploads/', ''));
@@ -241,24 +248,21 @@ router.put('/:id/pages/:pageId', async (req, res) => {
 
         if (sourceImagePath) {
           try {
-            // Get image dimensions
+            await ensureProjectDirs(req.params.id);
             const metadata = await sharp(sourceImagePath).metadata();
             const imageWidth = metadata.width;
             const imageHeight = metadata.height;
 
-            // Rename and copy master image with proper naming
             const pageFilename = `${sanitizedTitle}_p${page.pageNumber}.png`;
             const pageImagePath = path.join(imagesDir, pageFilename);
             await fs.copyFile(sourceImagePath, pageImagePath);
             page.masterImage = `/projects/${req.params.id}/images/${pageFilename}`;
 
-            // Generate scene images for each panel
             for (let i = 0; i < req.body.panels.length; i++) {
               const panel = req.body.panels[i];
               const sceneFilename = `${sanitizedTitle}_p${page.pageNumber}_s${i + 1}.png`;
               const sceneImagePath = path.join(imagesDir, sceneFilename);
 
-              // Panel tapZone contains x, y, width, height as percentages (0-1)
               await cropAndSaveScene(
                 sourceImagePath,
                 sceneImagePath,
@@ -267,7 +271,6 @@ router.put('/:id/pages/:pageId', async (req, res) => {
                 imageHeight
               );
 
-              // Update panel with scene image path
               page.panels[i].artworkImage = `/projects/${req.params.id}/images/${sceneFilename}`;
             }
 
@@ -279,21 +282,20 @@ router.put('/:id/pages/:pageId', async (req, res) => {
       }
     }
 
-    comic.updatedAt = new Date().toISOString();
-
-    await fs.writeFile(filePath, JSON.stringify(comic, null, 2));
+    await comic.save();
     res.json(page);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Legacy: Update page panels (tap zones) - keep for backwards compatibility
+// Legacy: Update page panels (tap zones)
 router.put('/:id/pages/:pageId/panels', async (req, res) => {
   try {
-    const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
-    const content = await fs.readFile(filePath, 'utf-8');
-    const comic = JSON.parse(content);
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
 
     const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
     if (pageIndex === -1) {
@@ -301,9 +303,8 @@ router.put('/:id/pages/:pageId/panels', async (req, res) => {
     }
 
     comic.pages[pageIndex].panels = req.body.panels;
-    comic.updatedAt = new Date().toISOString();
+    await comic.save();
 
-    await fs.writeFile(filePath, JSON.stringify(comic, null, 2));
     res.json(comic.pages[pageIndex]);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -313,20 +314,19 @@ router.put('/:id/pages/:pageId/panels', async (req, res) => {
 // Update cover image
 router.put('/:id/cover', async (req, res) => {
   try {
-    const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
-    const content = await fs.readFile(filePath, 'utf-8');
-    const comic = JSON.parse(content);
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
 
     const sanitizedTitle = sanitizeTitle(comic.title);
     const imagesDir = path.join(PROJECTS_DIR, req.params.id, 'images');
 
-    // Initialize cover if it doesn't exist
     if (!comic.cover) {
       comic.cover = { image: '', sceneImage: '' };
     }
 
     if (req.body.image) {
-      // Get the source image path
       let sourceImagePath;
       if (req.body.image.startsWith('/uploads/')) {
         sourceImagePath = path.join(UPLOADS_DIR, req.body.image.replace('/uploads/', ''));
@@ -336,13 +336,13 @@ router.put('/:id/cover', async (req, res) => {
 
       if (sourceImagePath) {
         try {
-          // Save cover with proper naming
+          await ensureProjectDirs(req.params.id);
+
           const coverFilename = `${sanitizedTitle}_cover.png`;
           const coverImagePath = path.join(imagesDir, coverFilename);
           await fs.copyFile(sourceImagePath, coverImagePath);
           comic.cover.image = `/projects/${req.params.id}/images/${coverFilename}`;
 
-          // Also save as scene (cover has one scene - the whole cover)
           const coverSceneFilename = `${sanitizedTitle}_cover_s1.png`;
           const coverSceneImagePath = path.join(imagesDir, coverSceneFilename);
           await fs.copyFile(sourceImagePath, coverSceneImagePath);
@@ -355,8 +355,7 @@ router.put('/:id/cover', async (req, res) => {
       }
     }
 
-    comic.updatedAt = new Date().toISOString();
-    await fs.writeFile(filePath, JSON.stringify(comic, null, 2));
+    await comic.save();
     res.json(comic.cover);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -366,13 +365,13 @@ router.put('/:id/cover', async (req, res) => {
 // Export comic in iOS app format (JSON only)
 router.get('/:id/export', async (req, res) => {
   try {
-    const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
-    const content = await fs.readFile(filePath, 'utf-8');
-    const comic = JSON.parse(content);
-    const comicSlug = sanitizeTitle(comic.title);
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
 
-    // Transform to iOS app format
-    const exportedComic = transformToReaderFormat(comic, comicSlug);
+    const comicSlug = sanitizeTitle(comic.title);
+    const exportedComic = transformToReaderFormat(comic.toObject(), comicSlug);
     res.json(exportedComic);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -383,12 +382,14 @@ router.get('/:id/export', async (req, res) => {
 router.post('/:id/export-full', async (req, res) => {
   try {
     const { targetDir } = req.body;
-    const filePath = path.join(PROJECTS_DIR, `${req.params.id}.json`);
-    const content = await fs.readFile(filePath, 'utf-8');
-    const comic = JSON.parse(content);
-    const comicSlug = sanitizeTitle(comic.title);
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
 
-    // Create export directory structure
+    const comicObj = comic.toObject();
+    const comicSlug = sanitizeTitle(comicObj.title);
+
     const exportDir = targetDir || path.join(PROJECTS_DIR, req.params.id, 'export', comicSlug);
     const imagesDir = path.join(exportDir, 'images');
     const audioDir = path.join(exportDir, 'audio');
@@ -396,16 +397,12 @@ router.post('/:id/export-full', async (req, res) => {
     await fs.mkdir(imagesDir, { recursive: true });
     await fs.mkdir(audioDir, { recursive: true });
 
-    // Transform to reader format
-    const exportedComic = transformToReaderFormat(comic, comicSlug);
+    const exportedComic = transformToReaderFormat(comicObj, comicSlug);
 
-    // Copy images
     const copiedImages = [];
-    const projectImagesDir = path.join(PROJECTS_DIR, req.params.id, 'images');
 
-    // Copy cover image
-    if (comic.cover?.masterImage) {
-      const coverSourcePath = path.join(__dirname, '../..', comic.cover.masterImage);
+    if (comicObj.cover?.masterImage) {
+      const coverSourcePath = path.join(__dirname, '../..', comicObj.cover.masterImage);
       const coverDestPath = path.join(imagesDir, `${comicSlug}_cover.png`);
       try {
         await fs.copyFile(coverSourcePath, coverDestPath);
@@ -415,24 +412,20 @@ router.post('/:id/export-full', async (req, res) => {
       }
     }
 
-    // Copy page images and create panel crops
-    for (const page of comic.pages) {
+    for (const page of comicObj.pages) {
       if (page.masterImage) {
         const pageNum = page.pageNumber;
         const sourceImagePath = path.join(__dirname, '../..', page.masterImage);
 
-        // Copy master page image
         const masterDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}.png`);
         try {
           await fs.copyFile(sourceImagePath, masterDestPath);
           copiedImages.push(`${comicSlug}_p${pageNum}.png`);
 
-          // Get image dimensions for cropping
           const metadata = await sharp(sourceImagePath).metadata();
           const imgWidth = metadata.width;
           const imgHeight = metadata.height;
 
-          // Create panel crops (scenes)
           for (const panel of page.panels || []) {
             const panelNum = panel.panelOrder;
             const sceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}.png`);
@@ -453,7 +446,6 @@ router.post('/:id/export-full', async (req, res) => {
       }
     }
 
-    // Write comic.json
     const comicJsonPath = path.join(exportDir, 'comic.json');
     await fs.writeFile(comicJsonPath, JSON.stringify(exportedComic, null, 2));
 
@@ -470,7 +462,6 @@ router.post('/:id/export-full', async (req, res) => {
   }
 });
 
-// Helper function to transform comic to reader format
 function transformToReaderFormat(comic, comicSlug) {
   let wordCounter = 1;
   let sentenceCounter = 1;
@@ -478,7 +469,6 @@ function transformToReaderFormat(comic, comicSlug) {
 
   const pages = [];
 
-  // Add cover page if exists
   if (comic.cover?.masterImage) {
     pages.push({
       id: `${comicSlug}-page-cover`,
@@ -521,7 +511,6 @@ function transformToReaderFormat(comic, comicSlug) {
     });
   }
 
-  // Add content pages
   for (const page of comic.pages) {
     const pageNum = pages.length + 1;
     const exportedPage = {
@@ -531,7 +520,6 @@ function transformToReaderFormat(comic, comicSlug) {
       panels: (page.panels || []).map(panel => {
         const panelNum = panel.panelOrder;
 
-        // Filter bubbles that belong to this panel
         const panelBubbles = (page.bubbles || []).filter(bubble => {
           const bubbleCenterX = bubble.x + (bubble.width || 0) / 2;
           const bubbleCenterY = bubble.y + (bubble.height || 0) / 2;
@@ -600,5 +588,155 @@ function transformToReaderFormat(comic, comicSlug) {
     reviewWords: []
   };
 }
+
+// Delete entire comic and all associated files
+router.delete('/:id', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const comicDir = path.join(PROJECTS_DIR, req.params.id);
+    await deleteDirIfExists(comicDir);
+    await Comic.deleteOne({ id: req.params.id });
+
+    res.json({ success: true, message: 'Comic deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete page from comic
+router.delete('/:id/pages/:pageId', async (req, res) => {
+  try {
+    const deleteAudio = req.query.deleteAudio === 'true';
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
+    if (pageIndex === -1) {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+
+    const page = comic.pages[pageIndex];
+    const deletedFiles = [];
+
+    if (deleteAudio && page.bubbles) {
+      const audioDir = path.join(PROJECTS_DIR, req.params.id, 'audio');
+      for (const bubble of page.bubbles) {
+        if (bubble.sentences) {
+          for (const sentence of bubble.sentences) {
+            if (sentence.audioUrl) {
+              const audioPath = path.join(audioDir, path.basename(sentence.audioUrl));
+              if (await deleteFileIfExists(audioPath)) {
+                deletedFiles.push(sentence.audioUrl);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    comic.pages.splice(pageIndex, 1);
+
+    comic.pages.forEach((p, idx) => {
+      p.pageNumber = idx + 1;
+    });
+
+    await comic.save();
+
+    res.json({
+      success: true,
+      message: 'Page deleted',
+      deletedAudioFiles: deletedFiles
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete bubble from page
+router.delete('/:id/pages/:pageId/bubbles/:bubbleId', async (req, res) => {
+  try {
+    const deleteAudio = req.query.deleteAudio === 'true';
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
+    if (pageIndex === -1) {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+
+    const page = comic.pages[pageIndex];
+    const bubbleIndex = (page.bubbles || []).findIndex(b => b.id === req.params.bubbleId);
+    if (bubbleIndex === -1) {
+      return res.status(404).json({ error: 'Bubble not found' });
+    }
+
+    const bubble = page.bubbles[bubbleIndex];
+    const deletedFiles = [];
+
+    if (deleteAudio && bubble.sentences) {
+      const audioDir = path.join(PROJECTS_DIR, req.params.id, 'audio');
+      for (const sentence of bubble.sentences) {
+        if (sentence.audioUrl) {
+          const audioPath = path.join(audioDir, path.basename(sentence.audioUrl));
+          if (await deleteFileIfExists(audioPath)) {
+            deletedFiles.push(sentence.audioUrl);
+          }
+        }
+      }
+    }
+
+    page.bubbles.splice(bubbleIndex, 1);
+    await comic.save();
+
+    res.json({
+      success: true,
+      message: 'Bubble deleted',
+      deletedAudioFiles: deletedFiles
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete panel from page
+router.delete('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
+    if (pageIndex === -1) {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+
+    const page = comic.pages[pageIndex];
+    const panelIndex = (page.panels || []).findIndex(p => p.id === req.params.panelId);
+    if (panelIndex === -1) {
+      return res.status(404).json({ error: 'Panel not found' });
+    }
+
+    page.panels.splice(panelIndex, 1);
+
+    page.panels.forEach((p, idx) => {
+      p.panelOrder = idx + 1;
+    });
+
+    await comic.save();
+
+    res.json({ success: true, message: 'Panel deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports = router;

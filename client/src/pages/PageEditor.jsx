@@ -2,6 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 
+// Strip audio enhancement tags like [sighs], [pause], [ominous, slowly] and quotation marks from text
+function stripAudioTags(text) {
+  if (!text) return text;
+  return text.replace(/\[[^\]]+\]/g, '').replace(/["]/g, '').replace(/\s+/g, ' ').trim();
+}
+
 // Check if a line exists between two adjacent cells
 function hasLineBetween(lines, cell1, cell2, direction) {
   if (direction === 'horizontal') {
@@ -215,6 +221,22 @@ function PageEditor({ isCover = false }) {
   const [additionalInstructions, setAdditionalInstructions] = useState('');
   const [showPagePreview, setShowPagePreview] = useState(false);
 
+  // Audio generation state (voices come from comic.voices)
+  const [selectedVoiceId, setSelectedVoiceId] = useState('');
+  const [audioModel, setAudioModel] = useState('eleven_v3');
+  const [audioSettings, setAudioSettings] = useState({
+    stability: 0.5,
+    similarity_boost: 0.75,
+    style: 0.0,
+    speed: 1.0
+  });
+  const [audioPreview, setAudioPreview] = useState({}); // { [sentenceId]: { url, base64, isPlaying } }
+  const [generatingAudio, setGeneratingAudio] = useState({}); // { [sentenceId]: true/false }
+  const [enhancingText, setEnhancingText] = useState({}); // { [sentenceId]: true/false }
+  const [translatingText, setTranslatingText] = useState({}); // { [sentenceId]: true/false }
+  const [translateInput, setTranslateInput] = useState({}); // { [sentenceId]: 'english text' }
+  const audioRef = useRef(null);
+
   // Sidebar tab state
   const [sidebarTab, setSidebarTab] = useState('panels'); // 'panels', 'prompts', 'generate'
 
@@ -248,6 +270,154 @@ function PageEditor({ isCover = false }) {
     loadComic();
   }, [id, pageId, isCover]);
 
+  // Audio generation functions (voices come from comic.voices configured in ComicEditor)
+  const generateAudio = async (bubbleId, sentenceId, text) => {
+    if (!text || !selectedVoiceId) {
+      alert('Please enter text and select a voice');
+      return;
+    }
+
+    setGeneratingAudio(prev => ({ ...prev, [sentenceId]: true }));
+
+    try {
+      const response = await api.post('/audio/generate', {
+        text,
+        voice_id: selectedVoiceId,
+        model_id: audioModel,
+        ...audioSettings
+      });
+
+      setAudioPreview(prev => ({
+        ...prev,
+        [sentenceId]: {
+          url: `http://localhost:3001${response.data.path}`,
+          base64: response.data.base64,
+          filename: response.data.filename,
+          isPlaying: false
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to generate audio:', error);
+      alert('Failed to generate audio: ' + error.message);
+    } finally {
+      setGeneratingAudio(prev => ({ ...prev, [sentenceId]: false }));
+    }
+  };
+
+  const enhanceText = async (bubbleId, sentenceId, text) => {
+    if (!text) return;
+
+    setEnhancingText(prev => ({ ...prev, [sentenceId]: true }));
+
+    try {
+      const bubble = bubbles.find(b => b.id === bubbleId);
+      const context = bubble?.type === 'thought' ? 'This is an internal thought' :
+                      bubble?.type === 'narration' ? 'This is narration text' :
+                      'This is dialogue speech';
+
+      const response = await api.post('/audio/enhance', { text, context });
+
+      // Update the sentence with enhanced text
+      updateSentence(bubbleId, sentenceId, { text: response.data.enhanced });
+    } catch (error) {
+      console.error('Failed to enhance text:', error);
+      alert('Failed to enhance text: ' + error.message);
+    } finally {
+      setEnhancingText(prev => ({ ...prev, [sentenceId]: false }));
+    }
+  };
+
+  const translateText = async (bubbleId, sentenceId, englishText) => {
+    if (!englishText) return;
+
+    setTranslatingText(prev => ({ ...prev, [sentenceId]: true }));
+
+    try {
+      const response = await api.post('/audio/translate', {
+        text: englishText,
+        fromLanguage: 'en',
+        toLanguage: comic?.language || 'es'
+      });
+
+      // Update the sentence with translated text and English as translation
+      updateSentence(bubbleId, sentenceId, {
+        text: response.data.translated,
+        translation: englishText
+      });
+
+      // Clear the translate input
+      setTranslateInput(prev => ({ ...prev, [sentenceId]: '' }));
+    } catch (error) {
+      console.error('Failed to translate text:', error);
+      alert('Failed to translate: ' + error.message);
+    } finally {
+      setTranslatingText(prev => ({ ...prev, [sentenceId]: false }));
+    }
+  };
+
+  const playAudio = (sentenceId) => {
+    const preview = audioPreview[sentenceId];
+    if (!preview) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    const audio = new Audio(`data:audio/mpeg;base64,${preview.base64}`);
+    audioRef.current = audio;
+
+    audio.onended = () => {
+      setAudioPreview(prev => ({
+        ...prev,
+        [sentenceId]: { ...prev[sentenceId], isPlaying: false }
+      }));
+    };
+
+    audio.play();
+    setAudioPreview(prev => ({
+      ...prev,
+      [sentenceId]: { ...prev[sentenceId], isPlaying: true }
+    }));
+  };
+
+  const stopAudio = (sentenceId) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setAudioPreview(prev => ({
+      ...prev,
+      [sentenceId]: { ...prev[sentenceId], isPlaying: false }
+    }));
+  };
+
+  const saveAudio = async (bubbleId, sentenceId, pageNum, panelNum) => {
+    const preview = audioPreview[sentenceId];
+    if (!preview?.filename) return;
+
+    try {
+      const audioName = `${comic.title.toLowerCase().replace(/\s+/g, '_')}_p${pageNum}_s${panelNum}`;
+      const response = await api.post('/audio/save-to-project', {
+        comicId: id,
+        filename: preview.filename,
+        audioName
+      });
+
+      // Find current sentence text and strip audio tags
+      const bubble = bubbles.find(b => b.id === bubbleId);
+      const sentence = bubble?.sentences?.find(s => s.id === sentenceId);
+      const cleanedText = sentence?.text ? stripAudioTags(sentence.text) : '';
+
+      // Update sentence with audio URL and cleaned text
+      updateSentence(bubbleId, sentenceId, { audioUrl: audioName, text: cleanedText });
+
+      alert('Audio saved successfully!');
+    } catch (error) {
+      console.error('Failed to save audio:', error);
+      alert('Failed to save audio: ' + error.message);
+    }
+  };
+
   const loadComic = async () => {
     try {
       const response = await api.get(`/comics/${id}`);
@@ -273,7 +443,12 @@ function PageEditor({ isCover = false }) {
         return;
       }
 
-      const currentPage = response.data.pages.find(p => p.id === pageId);
+      const pages = response.data.pages || [];
+      const currentPage = pages.find(p => p.id === pageId);
+      if (!currentPage) {
+        console.error('Page not found:', pageId);
+        return;
+      }
       setPage(currentPage);
       if (currentPage?.lines) {
         setLines(currentPage.lines);
@@ -459,7 +634,7 @@ function PageEditor({ isCover = false }) {
     setDrawEnd(snappedCoords);
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (overrideEndCoords = null) => {
     // Stop dragging
     if (isDragging) {
       setIsDragging(false);
@@ -467,13 +642,15 @@ function PageEditor({ isCover = false }) {
       return;
     }
 
-    if (!isDrawing || !drawStart || !drawEnd) {
+    const endCoords = overrideEndCoords || drawEnd;
+
+    if (!isDrawing || !drawStart || !endCoords) {
       setIsDrawing(false);
       return;
     }
 
-    const dx = Math.abs(drawEnd.x - drawStart.x);
-    const dy = Math.abs(drawEnd.y - drawStart.y);
+    const dx = Math.abs(endCoords.x - drawStart.x);
+    const dy = Math.abs(endCoords.y - drawStart.y);
 
     // Minimum drag distance
     if (dx < 0.02 && dy < 0.02) {
@@ -486,27 +663,27 @@ function PageEditor({ isCover = false }) {
     let newLine;
     if (dx > dy) {
       // Horizontal line
-      const y = (drawStart.y + drawEnd.y) / 2;
+      const y = (drawStart.y + endCoords.y) / 2;
       const snapPoints = getSnapPoints();
       const snappedY = snapToNearest(y, snapPoints.y);
 
       newLine = {
         type: 'horizontal',
         y: snappedY,
-        x1: Math.min(drawStart.x, drawEnd.x),
-        x2: Math.max(drawStart.x, drawEnd.x)
+        x1: Math.min(drawStart.x, endCoords.x),
+        x2: Math.max(drawStart.x, endCoords.x)
       };
     } else {
       // Vertical line
-      const x = (drawStart.x + drawEnd.x) / 2;
+      const x = (drawStart.x + endCoords.x) / 2;
       const snapPoints = getSnapPoints();
       const snappedX = snapToNearest(x, snapPoints.x);
 
       newLine = {
         type: 'vertical',
         x: snappedX,
-        y1: Math.min(drawStart.y, drawEnd.y),
-        y2: Math.max(drawStart.y, drawEnd.y)
+        y1: Math.min(drawStart.y, endCoords.y),
+        y2: Math.max(drawStart.y, endCoords.y)
       };
     }
 
@@ -553,10 +730,10 @@ function PageEditor({ isCover = false }) {
       width: 0.2,
       height: 0.1,
       type: 'speech', // 'speech', 'thought', 'narration'
-      fontId: 'bangers', // default font
-      fontSize: 16,
+      fontId: 'patrick-hand', // default font
+      fontSize: 15,
       italic: false,
-      uppercase: true, // default to uppercase for comic style
+      uppercase: false, // default to lowercase
       bgColor: '#ffffff',
       textColor: '#000000',
       cornerRadius: 20, // 0 = square, 50 = very round
@@ -565,8 +742,20 @@ function PageEditor({ isCover = false }) {
       tailY: 0.08,  // tip offset from bubble center (positive = below)
       tailBaseX: 0.5, // where tail joins bubble (0 = left edge, 1 = right edge)
       tailSide: 'bottom', // which side tail connects: 'top', 'bottom', 'left', 'right'
-      tailWidth: 0.06, // width of tail base as percentage of canvas
+      tailWidth: 0.25, // width of tail base as percentage of bubble width
       showTail: true,
+      // Rotation (for speech bubbles - rotates the whole bubble+tail)
+      rotation: 0, // degrees, 0 = tail at bottom
+      tailLength: 0.35, // length of tail relative to bubble height
+      tailCurve: 0, // tail angle: -1 = far left, 0 = center, +1 = far right
+      tailBend: 0, // tail curvature: -1 = bend left, 0 = straight, +1 = bend right
+      textAngle: 0, // rotation angle for text inside bubble
+      isSoundEffect: false, // if true, this is a sound effect (no TTS audio)
+      // Tail curve control points (offset from midpoint of each edge)
+      tailCtrl1X: 0,
+      tailCtrl1Y: 0,
+      tailCtrl2X: 0,
+      tailCtrl2Y: 0,
       // Language learning data
       sentences: [{
         id: `sentence-${Date.now()}`,
@@ -715,6 +904,9 @@ function PageEditor({ isCover = false }) {
   };
 
   const [isDraggingTailBase, setIsDraggingTailBase] = useState(false);
+  const [isDraggingTailCtrl1, setIsDraggingTailCtrl1] = useState(false);
+  const [isDraggingTailCtrl2, setIsDraggingTailCtrl2] = useState(false);
+  const [isDraggingRotation, setIsDraggingRotation] = useState(false);
 
   const handleTailMouseDown = (e, bubble) => {
     e.stopPropagation();
@@ -726,6 +918,24 @@ function PageEditor({ isCover = false }) {
     e.stopPropagation();
     setSelectedBubbleId(bubble.id);
     setIsDraggingTailBase(true);
+  };
+
+  const handleTailCtrl1MouseDown = (e, bubble) => {
+    e.stopPropagation();
+    setSelectedBubbleId(bubble.id);
+    setIsDraggingTailCtrl1(true);
+  };
+
+  const handleTailCtrl2MouseDown = (e, bubble) => {
+    e.stopPropagation();
+    setSelectedBubbleId(bubble.id);
+    setIsDraggingTailCtrl2(true);
+  };
+
+  const handleRotationMouseDown = (e, bubble) => {
+    e.stopPropagation();
+    setSelectedBubbleId(bubble.id);
+    setIsDraggingRotation(true);
   };
 
   const handleCanvasMouseDown = (e) => {
@@ -832,6 +1042,97 @@ function PageEditor({ isCover = false }) {
 
           updateBubble(selectedBubbleId, { tailSide, tailBaseX });
         }
+      } else if (isDraggingTailCtrl1 && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          // Control point is an offset from the midpoint between base1 and tip
+          // Calculate current base1 and tip positions
+          const tailBasePos = bubble.tailBaseX ?? 0.5;
+          const tailSide = bubble.tailSide || 'bottom';
+          const tailWidth = bubble.tailWidth ?? 0.10;
+          const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
+
+          let base1X, base1Y;
+          if (tailSide === 'bottom') {
+            base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
+            base1Y = bubble.y + bubble.height;
+          } else if (tailSide === 'top') {
+            base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
+            base1Y = bubble.y;
+          } else if (tailSide === 'left') {
+            base1X = bubble.x;
+            base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
+          } else {
+            base1X = bubble.x + bubble.width;
+            base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
+          }
+
+          const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
+          const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
+
+          // Midpoint between base1 and tip
+          const midX = (base1X + tipX) / 2;
+          const midY = (base1Y + tipY) / 2;
+
+          // Control point offset is mouse position minus midpoint
+          updateBubble(selectedBubbleId, {
+            tailCtrl1X: coords.x - midX,
+            tailCtrl1Y: coords.y - midY
+          });
+        }
+      } else if (isDraggingTailCtrl2 && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          // Control point is an offset from the midpoint between base2 and tip
+          const tailBasePos = bubble.tailBaseX ?? 0.5;
+          const tailSide = bubble.tailSide || 'bottom';
+          const tailWidth = bubble.tailWidth ?? 0.10;
+          const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
+
+          let base2X, base2Y;
+          if (tailSide === 'bottom') {
+            base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
+            base2Y = bubble.y + bubble.height;
+          } else if (tailSide === 'top') {
+            base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
+            base2Y = bubble.y;
+          } else if (tailSide === 'left') {
+            base2X = bubble.x;
+            base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
+          } else {
+            base2X = bubble.x + bubble.width;
+            base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
+          }
+
+          const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
+          const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
+
+          // Midpoint between base2 and tip
+          const midX = (base2X + tipX) / 2;
+          const midY = (base2Y + tipY) / 2;
+
+          // Control point offset is mouse position minus midpoint
+          updateBubble(selectedBubbleId, {
+            tailCtrl2X: coords.x - midX,
+            tailCtrl2Y: coords.y - midY
+          });
+        }
+      } else if (isDraggingRotation && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          // Calculate angle from bubble center to mouse position
+          const cx = bubble.x + bubble.width / 2;
+          const cy = bubble.y + bubble.height / 2;
+          const dx = coords.x - cx;
+          const dy = coords.y - cy;
+          // Calculate angle in degrees (0 = bottom, clockwise positive)
+          let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+          // Normalize to 0-360
+          if (angle < 0) angle += 360;
+          updateBubble(selectedBubbleId, {
+            rotation: angle
+          });
+        }
       }
     } else {
       handleMouseMove(e);
@@ -845,6 +1146,9 @@ function PageEditor({ isCover = false }) {
       setResizeCorner(null);
       setIsDraggingTail(false);
       setIsDraggingTailBase(false);
+      setIsDraggingTailCtrl1(false);
+      setIsDraggingTailCtrl2(false);
+      setIsDraggingRotation(false);
     } else {
       handleMouseUp();
     }
@@ -908,7 +1212,7 @@ function PageEditor({ isCover = false }) {
         setPanelsComputed(true);
       }
 
-      const updatedComic = { ...comic };
+      const updatedComic = { ...comic, promptSettings };
       const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
       updatedComic.pages[pageIndex] = {
         ...page,
@@ -1186,11 +1490,18 @@ function PageEditor({ isCover = false }) {
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
-            onMouseLeave={() => {
-              if (isDrawing) {
-                setIsDrawing(false);
-                setDrawStart(null);
-                setDrawEnd(null);
+            onMouseLeave={(e) => {
+              if (isDrawing && drawStart) {
+                // Finish the line at the edge instead of canceling
+                const rect = canvasRef.current.getBoundingClientRect();
+                const rawX = (e.clientX - rect.left) / rect.width;
+                const rawY = (e.clientY - rect.top) / rect.height;
+                // Clamp to canvas boundaries
+                const clampedX = Math.max(0, Math.min(1, rawX));
+                const clampedY = Math.max(0, Math.min(1, rawY));
+                // Pass clamped coordinates directly to handleMouseUp
+                handleMouseUp({ x: clampedX, y: clampedY });
+                return;
               }
               if (isDragging) {
                 setIsDragging(false);
@@ -1208,6 +1519,12 @@ function PageEditor({ isCover = false }) {
               }
               if (isDraggingTailBase) {
                 setIsDraggingTailBase(false);
+              }
+              if (isDraggingTailCtrl1) {
+                setIsDraggingTailCtrl1(false);
+              }
+              if (isDraggingTailCtrl2) {
+                setIsDraggingTailCtrl2(false);
               }
             }}
             style={{
@@ -1366,7 +1683,7 @@ function PageEditor({ isCover = false }) {
                   width: `${(previewLine.x2 - previewLine.x1) * 100}%`,
                   top: `${previewLine.y * 100}%`,
                   height: '4px',
-                  background: '#ffff00',
+                  background: '#444444',
                   transform: 'translateY(-50%)',
                   zIndex: 30,
                   opacity: 0.8,
@@ -1383,7 +1700,7 @@ function PageEditor({ isCover = false }) {
                   top: `${previewLine.y1 * 100}%`,
                   height: `${(previewLine.y2 - previewLine.y1) * 100}%`,
                   width: '4px',
-                  background: '#ffff00',
+                  background: '#444444',
                   transform: 'translateX(-50%)',
                   zIndex: 30,
                   opacity: 0.8,
@@ -1407,78 +1724,75 @@ function PageEditor({ isCover = false }) {
 
               return (
                 <div key={bubble.id}>
-                  {/* SVG Tail (rendered behind bubble) - Speech bubble */}
+                  {/* Unified Speech Bubble with integrated tail */}
                   {bubble.type === 'speech' && bubble.showTail !== false && (() => {
-                    const tailBasePos = bubble.tailBaseX ?? 0.5;
-                    const tailWidthVal = bubble.tailWidth ?? 0.06;
-                    const tailSide = bubble.tailSide || 'bottom';
+                    // Bubble dimensions in pixels
+                    const bx = bubble.x * CANVAS_WIDTH;
+                    const by = bubble.y * CANVAS_HEIGHT;
+                    const bw = bubble.width * CANVAS_WIDTH;
+                    const bh = bubble.height * CANVAS_HEIGHT;
+                    const r = Math.min(bubble.cornerRadius || 8, bw / 2, bh / 2);
+                    const borderWidthVal = bubble.borderWidth ?? 2.5;
+                    const borderColorVal = bubble.borderColor || '#000';
 
-                    let baseX, baseY, base1X, base1Y, base2X, base2Y;
-                    const halfWidth = (tailWidthVal * CANVAS_WIDTH) / 2;
+                    // Bubble center (pivot point for rotation)
+                    const cx = bx + bw / 2;
+                    const cy = by + bh / 2;
 
-                    if (tailSide === 'bottom') {
-                      baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                      baseY = (bubble.y + bubble.height) * CANVAS_HEIGHT;
-                      base1X = baseX - halfWidth; base1Y = baseY;
-                      base2X = baseX + halfWidth; base2Y = baseY;
-                    } else if (tailSide === 'top') {
-                      baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                      baseY = bubble.y * CANVAS_HEIGHT;
-                      base1X = baseX - halfWidth; base1Y = baseY;
-                      base2X = baseX + halfWidth; base2Y = baseY;
-                    } else if (tailSide === 'left') {
-                      baseX = bubble.x * CANVAS_WIDTH;
-                      baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                      base1X = baseX; base1Y = baseY - halfWidth;
-                      base2X = baseX; base2Y = baseY + halfWidth;
-                    } else { // right
-                      baseX = (bubble.x + bubble.width) * CANVAS_WIDTH;
-                      baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                      base1X = baseX; base1Y = baseY - halfWidth;
-                      base2X = baseX; base2Y = baseY + halfWidth;
-                    }
+                    // Rotation angle for the whole bubble
+                    const rotation = bubble.rotation ?? 0; // degrees
 
-                    const tipX = tailEndX * CANVAS_WIDTH;
-                    const tipY = tailEndY * CANVAS_HEIGHT;
+                    // Tail properties
+                    const tailWidth = (bubble.tailWidth ?? 0.25) * bw; // wide tail base
+                    const halfTailWidth = tailWidth / 2;
+                    const tailLength = (bubble.tailLength ?? 0.35) * bh;
 
-                    // Calculate curl direction based on tip position relative to base
-                    const dx = tipX - baseX;
-                    const dy = tipY - baseY;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    // Tail angle: negative = left, 0 = straight, positive = right
+                    const tailCurve = bubble.tailCurve ?? 0;
+                    const angleOffset = tailCurve * tailLength * 1.5; // horizontal offset for angle (widened range)
 
-                    // Determine curl direction (perpendicular to tail direction)
-                    // Curl towards the side where the tip is pointing
-                    let curlAmount = distance * 0.25; // How much the curve bends
-                    let perpX, perpY;
+                    // Tail bend: negative = bend left, 0 = straight, positive = bend right
+                    const tailBend = bubble.tailBend ?? 0;
+                    const bendOffset = tailBend * tailLength * 0.8; // how much the middle of tail bends
 
-                    if (tailSide === 'bottom' || tailSide === 'top') {
-                      // For vertical sides, curl left or right based on horizontal position
-                      perpX = dx > 0 ? curlAmount : -curlAmount;
-                      perpY = 0;
-                    } else {
-                      // For horizontal sides, curl up or down based on vertical position
-                      perpX = 0;
-                      perpY = dy > 0 ? curlAmount : -curlAmount;
-                    }
+                    // Tail tip position (below bubble center, offset by angle)
+                    const tipX = cx + angleOffset;
+                    const tipY = by + bh + tailLength;
 
-                    // Control points for the bezier curves (creates the curl)
-                    const midX = (baseX + tipX) / 2;
-                    const midY = (baseY + tipY) / 2;
+                    // Control points for smooth bezier curves - bend affects the middle of the tail
+                    const ctrl1X = cx + halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                    const ctrl1Y = by + bh + tailLength * 0.5;
+                    const ctrl2X = cx - halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                    const ctrl2Y = by + bh + tailLength * 0.5;
 
-                    // Curved path with quadratic bezier - one side curves more for the curl effect
-                    const ctrl1X = midX + perpX * 0.5;
-                    const ctrl1Y = midY + perpY * 0.5;
-                    const ctrl2X = midX + perpX * 1.2;
-                    const ctrl2Y = midY + perpY * 1.2;
+                    // Build unified path with smooth tail integration
+                    // Path goes clockwise from top-left
+                    const path = `
+                      M ${bx + r} ${by}
+                      L ${bx + bw - r} ${by}
+                      A ${r} ${r} 0 0 1 ${bx + bw} ${by + r}
+                      L ${bx + bw} ${by + bh - r}
+                      A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh}
+                      L ${cx + halfTailWidth} ${by + bh}
+                      C ${ctrl1X} ${ctrl1Y},
+                        ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                        ${tipX} ${tipY}
+                      C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                        ${ctrl2X} ${ctrl2Y},
+                        ${cx - halfTailWidth} ${by + bh}
+                      L ${bx + r} ${by + bh}
+                      A ${r} ${r} 0 0 1 ${bx} ${by + bh - r}
+                      L ${bx} ${by + r}
+                      A ${r} ${r} 0 0 1 ${bx + r} ${by}
+                      Z
+                    `;
 
-                    // Closed path for fill (includes the base line internally)
-                    const fillPath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y} Z`;
-
-                    // Open path for stroke (no base line - just the two curved sides)
-                    const strokePath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y}`;
-
-                    const borderColor = bubble.borderColor || '#000';
-                    const borderWidth = bubble.borderWidth ?? 2.5;
+                    // Calculate rotated tip position for the indicator line
+                    const rotRad = rotation * Math.PI / 180;
+                    const relTipX = angleOffset;
+                    const relTipY = bh / 2 + tailLength;
+                    const rotatedTipX = cx + relTipX * Math.cos(rotRad) - relTipY * Math.sin(rotRad);
+                    const rotatedTipY = cy + relTipX * Math.sin(rotRad) + relTipY * Math.cos(rotRad);
 
                     return (
                       <svg
@@ -1488,39 +1802,161 @@ function PageEditor({ isCover = false }) {
                           top: 0,
                           width: CANVAS_WIDTH,
                           height: CANVAS_HEIGHT,
-                          pointerEvents: 'none',
-                          zIndex: 49,
-                          overflow: 'visible'
+                          zIndex: 50,
+                          overflow: 'visible',
+                          pointerEvents: 'none'
                         }}
                         viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
                       >
                         <defs>
-                          <filter id={`roughTail-${bubble.id}`} x="-10%" y="-10%" width="120%" height="120%">
+                          <filter id={`roughBubble-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
                             <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
-                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
                           </filter>
                         </defs>
-                        {/* Fill path (closed) */}
-                        <path
-                          d={fillPath}
-                          fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
-                          stroke="none"
-                          filter={`url(#roughTail-${bubble.id})`}
-                        />
-                        {/* Stroke path (open - no base line) */}
-                        {!bubble.noBorder && (
+                        {/* Unified bubble + tail shape with rotation around center */}
+                        <g
+                          transform={`rotate(${rotation} ${cx} ${cy})`}
+                          data-bubble-id={bubble.id}
+                          onMouseDown={(e) => handleBubbleMouseDown(e, bubble)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBubbleId(bubble.id);
+                            setEditorMode('bubbles');
+                          }}
+                          style={{ pointerEvents: 'auto', cursor: editorMode === 'bubbles' ? (isDraggingBubble ? 'grabbing' : 'grab') : 'default' }}
+                        >
                           <path
-                            d={strokePath}
-                            fill="none"
-                            stroke={borderColor}
-                            strokeWidth={borderWidth}
-                            strokeLinecap="round"
-                            filter={`url(#roughTail-${bubble.id})`}
+                            d={path}
+                            fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
+                            stroke={selectedBubbleId === bubble.id ? '#00ff00' : (bubble.noBorder ? 'none' : borderColorVal)}
+                            strokeWidth={selectedBubbleId === bubble.id ? 3 : borderWidthVal}
+                            strokeLinejoin="round"
+                            filter={`url(#roughBubble-${bubble.id})`}
+                          />
+                        </g>
+                        {/* Visual indicator line from center to tip (only when selected) */}
+                        {selectedBubbleId === bubble.id && editorMode === 'bubbles' && (
+                          <line
+                            x1={cx}
+                            y1={cy}
+                            x2={rotatedTipX}
+                            y2={rotatedTipY}
+                            stroke="#ff6600"
+                            strokeWidth={2}
+                            strokeDasharray="4,4"
+                            opacity={0.7}
                           />
                         )}
+                        {/* Text inside bubble (not rotated - stays readable) */}
+                        <foreignObject x={bx} y={by} width={bw} height={bh}>
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '6px 8px',
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                                fontSize: `${bubble.fontSize}px`,
+                                fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                                fontStyle: bubble.italic ? 'italic' : 'normal',
+                                color: bubble.textColor || '#000000',
+                                textAlign: bubble.textAlign || 'center',
+                                width: '100%',
+                                wordBreak: 'break-word',
+                                lineHeight: 1.3,
+                                letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                                textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                                pointerEvents: 'none',
+                                userSelect: 'none',
+                                transform: `rotate(${bubble.textAngle ?? 0}deg)`,
+                                display: 'inline-block'
+                              }}
+                            >
+                              {getBubbleDisplayText(bubble) || (editorMode === 'bubbles' ? '...' : '')}
+                            </span>
+                          </div>
+                        </foreignObject>
                       </svg>
                     );
                   })()}
+
+                  {/* Resize handles for speech bubbles with tail */}
+                  {bubble.type === 'speech' && bubble.showTail !== false && editorMode === 'bubbles' && selectedBubbleId === bubble.id && (
+                    <>
+                      <div
+                        data-resize-handle="true"
+                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-right')}
+                        style={{
+                          position: 'absolute',
+                          left: `${(bubble.x + bubble.width) * 100}%`,
+                          top: `${(bubble.y + bubble.height) * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00ff00',
+                          cursor: 'nwse-resize',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: 60
+                        }}
+                      />
+                      <div
+                        data-resize-handle="true"
+                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-left')}
+                        style={{
+                          position: 'absolute',
+                          left: `${bubble.x * 100}%`,
+                          top: `${(bubble.y + bubble.height) * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00ff00',
+                          cursor: 'nesw-resize',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: 60
+                        }}
+                      />
+                      <div
+                        data-resize-handle="true"
+                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-right')}
+                        style={{
+                          position: 'absolute',
+                          left: `${(bubble.x + bubble.width) * 100}%`,
+                          top: `${bubble.y * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00ff00',
+                          cursor: 'nesw-resize',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: 60
+                        }}
+                      />
+                      <div
+                        data-resize-handle="true"
+                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-left')}
+                        style={{
+                          position: 'absolute',
+                          left: `${bubble.x * 100}%`,
+                          top: `${bubble.y * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00ff00',
+                          cursor: 'nwse-resize',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: 60
+                        }}
+                      />
+                    </>
+                  )}
 
                   {/* Thought bubble trail (ooo circles) */}
                   {bubble.type === 'thought' && bubble.showTail !== false && (() => {
@@ -1625,13 +2061,15 @@ function PageEditor({ isCover = false }) {
                     );
                   })()}
 
-                  {/* Bubble body - hand-drawn style */}
+                  {/* Bubble body - hand-drawn style (for non-speech or speech without tail) */}
+                  {!(bubble.type === 'speech' && bubble.showTail !== false) && (
                   <div
                     data-bubble-id={bubble.id}
                     onMouseDown={(e) => handleBubbleMouseDown(e, bubble)}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedBubbleId(bubble.id);
+                      setEditorMode('bubbles');
                     }}
                     style={{
                       position: 'absolute',
@@ -1672,8 +2110,9 @@ function PageEditor({ isCover = false }) {
                         textTransform: bubble.uppercase ? 'uppercase' : 'none',
                         pointerEvents: 'none',
                         userSelect: 'none',
-                        // Slight counter-rotation to keep text readable
-                        transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2)}deg)`
+                        // Counter-rotation for hand-drawn effect + user text angle
+                        transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) + (bubble.textAngle ?? 0)}deg)`,
+                        display: 'inline-block'
                       }}
                     >
                       {getBubbleDisplayText(bubble) || (editorMode === 'bubbles' ? '...' : '')}
@@ -1741,9 +2180,10 @@ function PageEditor({ isCover = false }) {
                       </>
                     )}
                   </div>
+                  )}
 
-                  {/* Draggable tail tip handle (orange - for tip position) */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (bubble.type === 'speech' || bubble.type === 'thought') && bubble.showTail !== false && (
+                  {/* Draggable tail tip handle (orange - for tip position) - only for thought bubbles */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (
                     <div
                       data-tail-handle="true"
                       onMouseDown={(e) => handleTailMouseDown(e, bubble)}
@@ -1764,8 +2204,40 @@ function PageEditor({ isCover = false }) {
                     />
                   )}
 
-                  {/* Draggable tail base handle (blue - for base position on bubble) */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (bubble.type === 'speech' || bubble.type === 'thought') && bubble.showTail !== false && (() => {
+                  {/* Rotation handle (orange - for rotating speech bubble) */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'speech' && bubble.showTail !== false && (() => {
+                    const rotation = bubble.rotation ?? 0;
+                    const rotRad = (rotation - 90) * Math.PI / 180; // -90 so 0 degrees = bottom
+                    const cx = bubble.x + bubble.width / 2;
+                    const cy = bubble.y + bubble.height / 2;
+                    const handleDistance = bubble.height / 2 + (bubble.tailLength ?? 0.35) * bubble.height + 0.02;
+                    const handleX = cx + Math.cos(rotRad) * handleDistance;
+                    const handleY = cy + Math.sin(rotRad) * handleDistance;
+
+                    return (
+                      <div
+                        data-rotation-handle="true"
+                        onMouseDown={(e) => handleRotationMouseDown(e, bubble)}
+                        style={{
+                          position: 'absolute',
+                          left: `${handleX * 100}%`,
+                          top: `${handleY * 100}%`,
+                          width: 14,
+                          height: 14,
+                          background: '#ff6600',
+                          border: '2px solid #fff',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          cursor: 'grab',
+                          zIndex: 60
+                        }}
+                        title="Drag to rotate bubble"
+                      />
+                    );
+                  })()}
+
+                  {/* Draggable tail base handle (blue - for base position on bubble) - only for thought bubbles */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (() => {
                     const tailBasePos = bubble.tailBaseX ?? 0.5;
                     const tailSide = bubble.tailSide || 'bottom';
 
@@ -1807,6 +2279,112 @@ function PageEditor({ isCover = false }) {
                           zIndex: 60
                         }}
                         title="Drag to move tail base"
+                      />
+                    );
+                  })()}
+
+                  {/* Draggable tail curve control point 1 (green - for left side curve) - only for thought bubbles */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (() => {
+                    const tailBasePos = bubble.tailBaseX ?? 0.5;
+                    const tailSide = bubble.tailSide || 'bottom';
+                    const tailWidth = bubble.tailWidth ?? 0.10;
+                    const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
+
+                    let base1X, base1Y;
+                    if (tailSide === 'bottom') {
+                      base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
+                      base1Y = bubble.y + bubble.height;
+                    } else if (tailSide === 'top') {
+                      base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
+                      base1Y = bubble.y;
+                    } else if (tailSide === 'left') {
+                      base1X = bubble.x;
+                      base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
+                    } else {
+                      base1X = bubble.x + bubble.width;
+                      base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
+                    }
+
+                    const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
+                    const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
+
+                    // Control point position = midpoint + offset
+                    const midX = (base1X + tipX) / 2;
+                    const midY = (base1Y + tipY) / 2;
+                    const ctrlX = midX + (bubble.tailCtrl1X || 0.02);
+                    const ctrlY = midY + (bubble.tailCtrl1Y || 0.02);
+
+                    return (
+                      <div
+                        data-tail-ctrl1-handle="true"
+                        onMouseDown={(e) => handleTailCtrl1MouseDown(e, bubble)}
+                        style={{
+                          position: 'absolute',
+                          left: `${ctrlX * 100}%`,
+                          top: `${ctrlY * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00cc66',
+                          border: '2px solid #fff',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          cursor: 'move',
+                          zIndex: 61
+                        }}
+                        title="Drag to curve left side of tail"
+                      />
+                    );
+                  })()}
+
+                  {/* Draggable tail curve control point 2 (purple - for right side curve) - only for thought bubbles */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (() => {
+                    const tailBasePos = bubble.tailBaseX ?? 0.5;
+                    const tailSide = bubble.tailSide || 'bottom';
+                    const tailWidth = bubble.tailWidth ?? 0.10;
+                    const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
+
+                    let base2X, base2Y;
+                    if (tailSide === 'bottom') {
+                      base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
+                      base2Y = bubble.y + bubble.height;
+                    } else if (tailSide === 'top') {
+                      base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
+                      base2Y = bubble.y;
+                    } else if (tailSide === 'left') {
+                      base2X = bubble.x;
+                      base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
+                    } else {
+                      base2X = bubble.x + bubble.width;
+                      base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
+                    }
+
+                    const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
+                    const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
+
+                    // Control point position = midpoint + offset
+                    const midX = (base2X + tipX) / 2;
+                    const midY = (base2Y + tipY) / 2;
+                    const ctrlX = midX + (bubble.tailCtrl2X || -0.02);
+                    const ctrlY = midY + (bubble.tailCtrl2Y || 0.02);
+
+                    return (
+                      <div
+                        data-tail-ctrl2-handle="true"
+                        onMouseDown={(e) => handleTailCtrl2MouseDown(e, bubble)}
+                        style={{
+                          position: 'absolute',
+                          left: `${ctrlX * 100}%`,
+                          top: `${ctrlY * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#9933ff',
+                          border: '2px solid #fff',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          cursor: 'move',
+                          zIndex: 61
+                        }}
+                        title="Drag to curve right side of tail"
                       />
                     );
                   })()}
@@ -1937,7 +2515,7 @@ function PageEditor({ isCover = false }) {
 
           {/* PANELS TAB */}
           {sidebarTab === 'panels' && (
-            <>
+            <div style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
               <h2>Panels {panelsComputed ? `(${panels.length})` : ''}</h2>
 
               {!panelsComputed && (
@@ -2297,6 +2875,52 @@ function PageEditor({ isCover = false }) {
                               </button>
                             </div>
 
+                            {/* Translate from English */}
+                            <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.25rem' }}>
+                              <input
+                                type="text"
+                                value={translateInput[sentence.id] || ''}
+                                onChange={(e) => setTranslateInput(prev => ({ ...prev, [sentence.id]: e.target.value }))}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && translateInput[sentence.id]) {
+                                    e.preventDefault();
+                                    translateText(bubble.id, sentence.id, translateInput[sentence.id]);
+                                  }
+                                }}
+                                placeholder="Type in English..."
+                                style={{
+                                  flex: 1,
+                                  padding: '0.4rem',
+                                  borderRadius: '3px',
+                                  border: '1px solid #27ae60',
+                                  background: '#e8f8f0',
+                                  color: '#333',
+                                  fontSize: '0.85rem'
+                                }}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  translateText(bubble.id, sentence.id, translateInput[sentence.id]);
+                                }}
+                                disabled={translatingText[sentence.id] || !translateInput[sentence.id]}
+                                style={{
+                                  padding: '0.4rem 0.6rem',
+                                  fontSize: '0.75rem',
+                                  background: translatingText[sentence.id] ? '#95a5a6' : '#27ae60',
+                                  color: '#fff',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: translatingText[sentence.id] ? 'wait' : 'pointer',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title="Translate English to Spanish"
+                              >
+                                {translatingText[sentence.id] ? '...' : 'Translate'}
+                              </button>
+                            </div>
+
                             <input
                               type="text"
                               value={sentence.text}
@@ -2331,6 +2955,155 @@ function PageEditor({ isCover = false }) {
                                 marginBottom: '0.25rem'
                               }}
                             />
+
+                            {/* Audio Generation */}
+                            <div style={{
+                              background: '#e8f4f8',
+                              borderRadius: '4px',
+                              padding: '0.5rem',
+                              marginBottom: '0.25rem',
+                              border: '1px solid #b8d4e3'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#2980b9', fontWeight: 'bold' }}>Audio</span>
+                                {sentence.audioUrl && (
+                                  <span style={{ fontSize: '0.65rem', color: '#27ae60' }}>Saved</span>
+                                )}
+                              </div>
+
+                              {/* Voice selector (collapsed by default, shown when needed) */}
+                              {(comic.voices || []).length === 0 ? (
+                                <p style={{ fontSize: '0.7rem', color: '#e74c3c', margin: '0 0 0.4rem 0' }}>
+                                  No voices configured. Go to Comic Editor → Voices tab to add voices.
+                                </p>
+                              ) : (
+                                <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                                  <select
+                                    value={selectedVoiceId}
+                                    onChange={(e) => { e.stopPropagation(); setSelectedVoiceId(e.target.value); }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      flex: 1,
+                                      minWidth: '100px',
+                                      padding: '0.25rem',
+                                      fontSize: '0.7rem',
+                                      borderRadius: '3px',
+                                      border: '1px solid #ccc'
+                                    }}
+                                  >
+                                    <option value="">Select voice...</option>
+                                    {(comic.voices || []).map(voice => (
+                                      <option key={voice.voiceId} value={voice.voiceId}>
+                                        {voice.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <select
+                                    value={audioModel}
+                                    onChange={(e) => { e.stopPropagation(); setAudioModel(e.target.value); }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      padding: '0.25rem',
+                                      fontSize: '0.7rem',
+                                      borderRadius: '3px',
+                                      border: '1px solid #ccc'
+                                    }}
+                                  >
+                                    <option value="eleven_v3">V3 (Best)</option>
+                                    <option value="eleven_multilingual_v2">Multilingual V2</option>
+                                    <option value="eleven_turbo_v2_5">Turbo V2.5</option>
+                                  </select>
+                                </div>
+                              )}
+
+                              {/* Action buttons */}
+                              <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    enhanceText(bubble.id, sentence.id, sentence.text);
+                                  }}
+                                  disabled={enhancingText[sentence.id] || !sentence.text}
+                                  style={{
+                                    padding: '0.25rem 0.5rem',
+                                    fontSize: '0.65rem',
+                                    background: enhancingText[sentence.id] ? '#95a5a6' : '#9b59b6',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: enhancingText[sentence.id] ? 'wait' : 'pointer'
+                                  }}
+                                  title="Add audio tags like [excited], [whispers] to enhance delivery"
+                                >
+                                  {enhancingText[sentence.id] ? '...' : 'Enhance'}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    generateAudio(bubble.id, sentence.id, sentence.text);
+                                  }}
+                                  disabled={generatingAudio[sentence.id] || !sentence.text || !selectedVoiceId}
+                                  style={{
+                                    padding: '0.25rem 0.5rem',
+                                    fontSize: '0.65rem',
+                                    background: generatingAudio[sentence.id] ? '#95a5a6' : '#3498db',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: generatingAudio[sentence.id] ? 'wait' : 'pointer'
+                                  }}
+                                >
+                                  {generatingAudio[sentence.id] ? 'Generating...' : 'Generate'}
+                                </button>
+
+                                {audioPreview[sentence.id] && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        audioPreview[sentence.id]?.isPlaying
+                                          ? stopAudio(sentence.id)
+                                          : playAudio(sentence.id);
+                                      }}
+                                      style={{
+                                        padding: '0.25rem 0.5rem',
+                                        fontSize: '0.65rem',
+                                        background: audioPreview[sentence.id]?.isPlaying ? '#e74c3c' : '#2ecc71',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      {audioPreview[sentence.id]?.isPlaying ? 'Stop' : 'Play'}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const panelIdx = panels.findIndex(p => {
+                                          const cx = bubble.x + bubble.width / 2;
+                                          const cy = bubble.y + bubble.height / 2;
+                                          return cx >= p.tapZone.x && cx <= p.tapZone.x + p.tapZone.width &&
+                                                 cy >= p.tapZone.y && cy <= p.tapZone.y + p.tapZone.height;
+                                        });
+                                        saveAudio(bubble.id, sentence.id, page.pageNumber, panelIdx + 1);
+                                      }}
+                                      style={{
+                                        padding: '0.25rem 0.5rem',
+                                        fontSize: '0.65rem',
+                                        background: '#27ae60',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      Save
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
 
                             {/* Words */}
                             <div style={{ marginTop: '0.25rem' }}>
@@ -2487,33 +3260,131 @@ function PageEditor({ isCover = false }) {
                         </div>
                       )}
 
-                      {/* Tail Width (for speech bubbles) */}
-                      {bubble.type === 'speech' && bubble.showTail !== false && (
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
-                            Tail Width: {Math.round((bubble.tailWidth ?? 0.06) * 100)}%
-                          </label>
+                      {/* Sound effect (no audio) */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#888', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <input
-                            type="range"
-                            min="2"
-                            max="15"
-                            value={Math.round((bubble.tailWidth ?? 0.06) * 100)}
-                            onChange={(e) => updateBubble(bubble.id, { tailWidth: parseInt(e.target.value) / 100 })}
+                            type="checkbox"
+                            checked={bubble.isSoundEffect || false}
+                            onChange={(e) => updateBubble(bubble.id, { isSoundEffect: e.target.checked })}
                             onClick={(e) => e.stopPropagation()}
-                            style={{ width: '100%' }}
                           />
-                          <p style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.25rem' }}>
-                            Drag: <span style={{ color: '#ff6600' }}>orange</span> = tip, <span style={{ color: '#0088ff' }}>blue</span> = base position
+                          Sound effect (no audio)
+                        </label>
+                        {bubble.isSoundEffect && (
+                          <p style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.25rem', marginLeft: '1.5rem' }}>
+                            Text like CREAK, BANG, etc. - won't generate TTS
                           </p>
-                        </div>
+                        )}
+                      </div>
+
+                      {/* Tail Controls (for speech bubbles) */}
+                      {bubble.type === 'speech' && bubble.showTail !== false && (
+                        <>
+                          {/* Bubble Angle */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Bubble Angle: {Math.round(bubble.rotation ?? 0)}°
+                            </label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="360"
+                              value={Math.round(bubble.rotation ?? 0)}
+                              onChange={(e) => updateBubble(bubble.id, { rotation: parseInt(e.target.value) })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tail Length */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Length: {Math.round((bubble.tailLength ?? 0.35) * 100)}%
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="100"
+                              value={Math.round((bubble.tailLength ?? 0.35) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailLength: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tail Width */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Width: {Math.round((bubble.tailWidth ?? 0.25) * 100)}%
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="50"
+                              value={Math.round((bubble.tailWidth ?? 0.25) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailWidth: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tail Angle */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Angle: {Math.round((bubble.tailCurve ?? 0) * 100)}% {(bubble.tailCurve ?? 0) > 0 ? '(right)' : (bubble.tailCurve ?? 0) < 0 ? '(left)' : '(center)'}
+                            </label>
+                            <input
+                              type="range"
+                              min="-100"
+                              max="100"
+                              value={Math.round((bubble.tailCurve ?? 0) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailCurve: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tail Bend */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Bend: {Math.round((bubble.tailBend ?? 0) * 100)}% {(bubble.tailBend ?? 0) > 0 ? '(right)' : (bubble.tailBend ?? 0) < 0 ? '(left)' : '(straight)'}
+                            </label>
+                            <input
+                              type="range"
+                              min="-100"
+                              max="100"
+                              value={Math.round((bubble.tailBend ?? 0) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailBend: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </>
                       )}
+
+                      {/* Text Angle (for all bubble types) */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                          Text Angle: {bubble.textAngle ?? 0}°
+                        </label>
+                        <input
+                          type="range"
+                          min="-45"
+                          max="45"
+                          value={bubble.textAngle ?? 0}
+                          onChange={(e) => updateBubble(bubble.id, { textAngle: parseInt(e.target.value) })}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
                     </>
                   )}
                 </div>
               ))}
             </div>
           )}
-            </>
+            </div>
           )}
 
           {/* PROMPTS TAB */}
@@ -2996,69 +3867,91 @@ function PageEditor({ isCover = false }) {
 
                 return (
                   <div key={bubble.id}>
-                    {/* Speech bubble tail */}
+                    {/* Unified Speech Bubble with integrated tail (preview) */}
                     {bubble.type === 'speech' && bubble.showTail !== false && (() => {
-                      const tailBasePos = bubble.tailBaseX ?? 0.5;
-                      const tailWidthVal = bubble.tailWidth ?? 0.06;
-                      const tailSide = bubble.tailSide || 'bottom';
-                      const halfWidth = (tailWidthVal * CANVAS_WIDTH) / 2;
+                      const bx = bubble.x * CANVAS_WIDTH;
+                      const by = bubble.y * CANVAS_HEIGHT;
+                      const bw = bubble.width * CANVAS_WIDTH;
+                      const bh = bubble.height * CANVAS_HEIGHT;
+                      const r = Math.min(bubble.cornerRadius || 8, bw / 2, bh / 2);
+                      const borderWidthVal = bubble.borderWidth ?? 2.5;
+                      const borderColorVal = bubble.borderColor || '#000';
+                      const cx = bx + bw / 2;
+                      const cy = by + bh / 2;
+                      const rotation = bubble.rotation ?? 0;
+                      const tailWidth = (bubble.tailWidth ?? 0.25) * bw;
+                      const halfTailWidth = tailWidth / 2;
+                      const tailLength = (bubble.tailLength ?? 0.35) * bh;
+                      const tailCurve = bubble.tailCurve ?? 0;
+                      const angleOffset = tailCurve * tailLength * 1.5;
+                      const tailBend = bubble.tailBend ?? 0;
+                      const bendOffset = tailBend * tailLength * 0.8;
+                      const tipX = cx + angleOffset;
+                      const tipY = by + bh + tailLength;
+                      const ctrl1X = cx + halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                      const ctrl1Y = by + bh + tailLength * 0.5;
+                      const ctrl2X = cx - halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                      const ctrl2Y = by + bh + tailLength * 0.5;
 
-                      let baseX, baseY, base1X, base1Y, base2X, base2Y;
-                      if (tailSide === 'bottom') {
-                        baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                        baseY = (bubble.y + bubble.height) * CANVAS_HEIGHT;
-                        base1X = baseX - halfWidth; base1Y = baseY;
-                        base2X = baseX + halfWidth; base2Y = baseY;
-                      } else if (tailSide === 'top') {
-                        baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                        baseY = bubble.y * CANVAS_HEIGHT;
-                        base1X = baseX - halfWidth; base1Y = baseY;
-                        base2X = baseX + halfWidth; base2Y = baseY;
-                      } else if (tailSide === 'left') {
-                        baseX = bubble.x * CANVAS_WIDTH;
-                        baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                        base1X = baseX; base1Y = baseY - halfWidth;
-                        base2X = baseX; base2Y = baseY + halfWidth;
-                      } else {
-                        baseX = (bubble.x + bubble.width) * CANVAS_WIDTH;
-                        baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                        base1X = baseX; base1Y = baseY - halfWidth;
-                        base2X = baseX; base2Y = baseY + halfWidth;
-                      }
-
-                      const tipX = tailEndX * CANVAS_WIDTH;
-                      const tipY = tailEndY * CANVAS_HEIGHT;
-                      const dx = tipX - baseX;
-                      const dy = tipY - baseY;
-                      const distance = Math.sqrt(dx * dx + dy * dy);
-                      let curlAmount = distance * 0.25;
-                      let perpX = 0, perpY = 0;
-                      if (tailSide === 'bottom' || tailSide === 'top') {
-                        perpX = dx > 0 ? curlAmount : -curlAmount;
-                      } else {
-                        perpY = dy > 0 ? curlAmount : -curlAmount;
-                      }
-                      const midX = (baseX + tipX) / 2;
-                      const midY = (baseY + tipY) / 2;
-                      const ctrl1X = midX + perpX * 0.5;
-                      const ctrl1Y = midY + perpY * 0.5;
-                      const ctrl2X = midX + perpX * 1.2;
-                      const ctrl2Y = midY + perpY * 1.2;
-                      const fillPath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y} Z`;
-                      const strokePath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y}`;
-                      const borderColor = bubble.borderColor || '#000';
-                      const borderWidth = bubble.borderWidth ?? 2.5;
+                      const path = `
+                        M ${bx + r} ${by}
+                        L ${bx + bw - r} ${by}
+                        A ${r} ${r} 0 0 1 ${bx + bw} ${by + r}
+                        L ${bx + bw} ${by + bh - r}
+                        A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh}
+                        L ${cx + halfTailWidth} ${by + bh}
+                        C ${ctrl1X} ${ctrl1Y},
+                          ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                          ${tipX} ${tipY}
+                        C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                          ${ctrl2X} ${ctrl2Y},
+                          ${cx - halfTailWidth} ${by + bh}
+                        L ${bx + r} ${by + bh}
+                        A ${r} ${r} 0 0 1 ${bx} ${by + bh - r}
+                        L ${bx} ${by + r}
+                        A ${r} ${r} 0 0 1 ${bx + r} ${by}
+                        Z
+                      `;
 
                       return (
-                        <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 49, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
+                        <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 50, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
                           <defs>
-                            <filter id={`roughTailPreview-${bubble.id}`} x="-10%" y="-10%" width="120%" height="120%">
+                            <filter id={`roughBubblePreview-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
                               <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
-                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
                             </filter>
                           </defs>
-                          <path d={fillPath} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke="none" filter={`url(#roughTailPreview-${bubble.id})`} />
-                          {!bubble.noBorder && <path d={strokePath} fill="none" stroke={borderColor} strokeWidth={borderWidth} strokeLinecap="round" filter={`url(#roughTailPreview-${bubble.id})`} />}
+                          <g transform={`rotate(${rotation} ${cx} ${cy})`}>
+                            <path
+                              d={path}
+                              fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
+                              stroke={bubble.noBorder ? 'none' : borderColorVal}
+                              strokeWidth={borderWidthVal}
+                              strokeLinejoin="round"
+                              filter={`url(#roughBubblePreview-${bubble.id})`}
+                            />
+                          </g>
+                          <foreignObject x={bx} y={by} width={bw} height={bh}>
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px 8px', boxSizing: 'border-box' }}>
+                              <span style={{
+                                fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                                fontSize: `${bubble.fontSize}px`,
+                                fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                                fontStyle: bubble.italic ? 'italic' : 'normal',
+                                color: bubble.textColor || '#000000',
+                                textAlign: bubble.textAlign || 'center',
+                                width: '100%',
+                                wordBreak: 'break-word',
+                                lineHeight: 1.3,
+                                letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                                textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                                transform: `rotate(${bubble.textAngle ?? 0}deg)`,
+                                display: 'inline-block'
+                              }}>
+                                {getBubbleDisplayText(bubble)}
+                              </span>
+                            </div>
+                          </foreignObject>
                         </svg>
                       );
                     })()}
@@ -3121,7 +4014,8 @@ function PageEditor({ isCover = false }) {
                       );
                     })()}
 
-                    {/* Bubble body */}
+                    {/* Bubble body (for non-speech or speech without tail) */}
+                    {!(bubble.type === 'speech' && bubble.showTail !== false) && (
                     <div
                       style={{
                         position: 'absolute',
@@ -3155,12 +4049,14 @@ function PageEditor({ isCover = false }) {
                           lineHeight: 1.3,
                           letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
                           textTransform: bubble.uppercase ? 'uppercase' : 'none',
-                          transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2)}deg)`
+                          transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) + (bubble.textAngle ?? 0)}deg)`,
+                          display: 'inline-block'
                         }}
                       >
                         {getBubbleDisplayText(bubble)}
                       </span>
                     </div>
+                    )}
                   </div>
                 );
               })}
