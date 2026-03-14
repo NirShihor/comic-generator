@@ -183,8 +183,12 @@ function generateLayoutDescription(panels) {
   const descriptions = panels.map((panel, i) => {
     const { x, y, width, height } = panel.tapZone;
 
-    const vPos = y < 0.4 ? 'top' : y < 0.7 ? 'middle' : 'bottom';
-    const hPos = x < 0.4 ? 'left' : x < 0.7 ? 'center' : 'right';
+    // Use center point for position detection
+    const centerY = y + height / 2;
+    const centerX = x + width / 2;
+
+    const vPos = centerY < 0.33 ? 'top' : centerY < 0.67 ? 'middle' : 'bottom';
+    const hPos = centerX < 0.33 ? 'left' : centerX < 0.67 ? 'center' : 'right';
     const widthDesc = width > 0.9 ? 'full-width' : width > 0.6 ? 'wide' : 'half-width';
     const heightDesc = height > 0.6 ? 'tall' : height > 0.4 ? 'half-height' : 'short';
 
@@ -219,6 +223,8 @@ function PageEditor({ isCover = false }) {
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   const [generationError, setGenerationError] = useState(null);
   const [additionalInstructions, setAdditionalInstructions] = useState('');
+  const [customPrompt, setCustomPrompt] = useState(''); // For manual prompt override
+  const [useCustomPrompt, setUseCustomPrompt] = useState(false);
   const [showPagePreview, setShowPagePreview] = useState(false);
 
   // Audio generation state (voices come from comic.voices)
@@ -1303,7 +1309,7 @@ function PageEditor({ isCover = false }) {
     setGenerationError(null);
 
     try {
-      const prompt = buildFullPrompt();
+      const prompt = useCustomPrompt && customPrompt ? customPrompt : buildFullPrompt();
       console.log('Generating with prompt:', prompt);
 
       const response = await api.post('/images/generate-page', {
@@ -1312,8 +1318,7 @@ function PageEditor({ isCover = false }) {
       });
 
       setGeneratedImage({
-        path: response.data.path,
-        revisedPrompt: response.data.revisedPrompt
+        path: response.data.path
       });
     } catch (error) {
       console.error('Generation failed:', error);
@@ -3700,20 +3705,71 @@ function PageEditor({ isCover = false }) {
                   {/* Prompt Preview */}
                   {showPromptPreview && (
                     <div style={{ marginBottom: '1rem' }}>
-                      <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Full Prompt:</h4>
-                      <pre style={{
-                        background: '#f9f9f9',
-                        padding: '1rem',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
-                        whiteSpace: 'pre-wrap',
-                        maxHeight: '300px',
-                        overflow: 'auto',
-                        color: '#333',
-                        border: '1px solid #ddd'
-                      }}>
-                        {buildFullPrompt()}
-                      </pre>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <h4 style={{ fontSize: '0.85rem', color: '#666', margin: 0 }}>Full Prompt:</h4>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#666' }}>
+                          <input
+                            type="checkbox"
+                            checked={useCustomPrompt}
+                            onChange={(e) => {
+                              setUseCustomPrompt(e.target.checked);
+                              if (e.target.checked && !customPrompt) {
+                                setCustomPrompt(buildFullPrompt());
+                              }
+                            }}
+                          />
+                          Edit manually
+                        </label>
+                      </div>
+                      {useCustomPrompt ? (
+                        <>
+                          <textarea
+                            value={customPrompt}
+                            onChange={(e) => setCustomPrompt(e.target.value)}
+                            style={{
+                              width: '100%',
+                              minHeight: '300px',
+                              padding: '1rem',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontFamily: 'monospace',
+                              color: '#333',
+                              border: '1px solid #27ae60',
+                              background: '#f0fff0',
+                              resize: 'vertical'
+                            }}
+                          />
+                          <button
+                            onClick={() => setCustomPrompt(buildFullPrompt())}
+                            style={{
+                              marginTop: '0.5rem',
+                              padding: '0.4rem 0.8rem',
+                              fontSize: '0.75rem',
+                              background: '#95a5a6',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Reset to Generated
+                          </button>
+                        </>
+                      ) : (
+                        <pre style={{
+                          background: '#f9f9f9',
+                          padding: '1rem',
+                          borderRadius: '4px',
+                          fontSize: '0.75rem',
+                          whiteSpace: 'pre-wrap',
+                          maxHeight: '300px',
+                          overflow: 'auto',
+                          color: '#333',
+                          border: '1px solid #ddd'
+                        }}>
+                          {buildFullPrompt()}
+                        </pre>
+                      )}
                     </div>
                   )}
 
@@ -3762,16 +3818,6 @@ function PageEditor({ isCover = false }) {
                           Regenerate
                         </button>
                       </div>
-                      {generatedImage.revisedPrompt && (
-                        <details style={{ marginTop: '0.5rem' }}>
-                          <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#888' }}>
-                            DALL-E's revised prompt
-                          </summary>
-                          <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
-                            {generatedImage.revisedPrompt}
-                          </p>
-                        </details>
-                      )}
                     </div>
                   )}
                 </>

@@ -3,46 +3,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 
 const DEFAULT_SETTINGS = {
-  styleBible: `• Page ratio is A4.
-• Speech and thinking bubbles should be contained in the panel and not spill over the edges of the panel.
-• Black & white only. Human-drawn underground noir comic. Rough ink on paper.
-• Uneven line weight, occasional wobble.
-• Visible pencil under-sketch lines.
-• Messy cross-hatching (inconsistent spacing/direction).
-• Heavy contrast.
-• Slight line wobble (human-made feel)
-• Flat black shadows with imperfect fills (tiny white pinholes).
-• Light paper grain only.
-• Subtle ink texture only.
-• No blotchy grey stains.
-• No circular mottling.
-• No sponge-like texture.
-• No hyperrealism
-• No digital polish look
-
-IMPORTANT
-Keep it looking like a human-drawn comic page, not glossy AI.
-No photorealism. No hyper-detail. No noir gore.`,
-
-  cameraInks: `Bold silhouettes and strong negative space.
-Slightly imperfect anatomy and perspective (human-made).
-Hand-drawn panel borders, slightly wobbly.
-Keep lighting high-contrast with clear shadow shapes (no gradients).`,
-
+  styleBible: '',
+  cameraInks: '',
   characters: [],
-
-  globalDoNot: `Do NOT draw rounded corners.
-Do NOT draw an outer page border or white frame.
-Do NOT show a page on a background (no table/photo/scan framing).
-No vignette, no drop shadow.
-The artwork itself is the page, filling the entire canvas edge-to-edge (only a tiny safe margin).`,
-
-  hardNegatives: `No clean vector lines.
-No digital polish.
-No extra panels beyond the layout.
-No inset panels.
-No split panels.
-No decorative borders that look like panels.`
+  globalDoNot: '',
+  hardNegatives: ''
 };
 
 function ComicEditor() {
@@ -69,7 +34,15 @@ function ComicEditor() {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
       if (response.data.promptSettings) {
-        setSettings({ ...DEFAULT_SETTINGS, ...response.data.promptSettings });
+        const loadedSettings = { ...DEFAULT_SETTINGS, ...response.data.promptSettings };
+        // Ensure characters have IDs (for backwards compatibility)
+        if (loadedSettings.characters) {
+          loadedSettings.characters = loadedSettings.characters.map((char, idx) => ({
+            ...char,
+            id: char.id || `char-${Date.now()}-${idx}`
+          }));
+        }
+        setSettings(loadedSettings);
       }
     } catch (error) {
       console.error('Failed to load comic:', error);
@@ -163,23 +136,23 @@ function ComicEditor() {
     if (!newCharacter.name.trim()) return;
     setSettings(prev => ({
       ...prev,
-      characters: [...prev.characters, { ...newCharacter, id: Date.now() }]
+      characters: [...prev.characters, { ...newCharacter, id: `char-${Date.now()}` }]
     }));
     setNewCharacter({ name: '', description: '' });
   };
 
-  const removeCharacter = (charId) => {
+  const removeCharacter = (index) => {
     setSettings(prev => ({
       ...prev,
-      characters: prev.characters.filter(c => c.id !== charId)
+      characters: prev.characters.filter((_, i) => i !== index)
     }));
   };
 
-  const updateCharacter = (charId, field, value) => {
+  const updateCharacter = (index, field, value) => {
     setSettings(prev => ({
       ...prev,
-      characters: prev.characters.map(c =>
-        c.id === charId ? { ...c, [field]: value } : c
+      characters: prev.characters.map((c, i) =>
+        i === index ? { ...c, [field]: value } : c
       )
     }));
   };
@@ -424,9 +397,9 @@ function ComicEditor() {
                   Define characters to maintain consistency across pages
                 </p>
 
-                {settings.characters.map((char) => (
+                {settings.characters.map((char, index) => (
                   <div
-                    key={char.id}
+                    key={char.id || `fallback-${index}`}
                     style={{
                       background: '#1a1a2e',
                       borderRadius: '8px',
@@ -438,7 +411,7 @@ function ComicEditor() {
                       <input
                         type="text"
                         value={char.name}
-                        onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
+                        onChange={(e) => updateCharacter(index, 'name', e.target.value)}
                         placeholder="Character name"
                         style={{
                           padding: '0.5rem',
@@ -453,7 +426,7 @@ function ComicEditor() {
                         }}
                       />
                       <button
-                        onClick={() => removeCharacter(char.id)}
+                        onClick={() => removeCharacter(index)}
                         style={{
                           padding: '0.4rem 0.8rem',
                           background: '#c0392b',
@@ -469,7 +442,7 @@ function ComicEditor() {
                     </div>
                     <textarea
                       value={char.description}
-                      onChange={(e) => updateCharacter(char.id, 'description', e.target.value)}
+                      onChange={(e) => updateCharacter(index, 'description', e.target.value)}
                       placeholder="Character description (gender, age, build, face anchors, hair, clothing, props, condition...)"
                       style={{
                         width: '100%',

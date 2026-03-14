@@ -103,6 +103,7 @@ const PageSchema = new mongoose.Schema({
 
 // Character Schema (for prompt templates)
 const CharacterSchema = new mongoose.Schema({
+  id: String,
   name: String,
   description: String
 }, { _id: false });

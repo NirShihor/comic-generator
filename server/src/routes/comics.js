@@ -62,46 +62,11 @@ async function deleteDirIfExists(dirPath) {
 }
 
 const getDefaultPromptTemplates = () => ({
-  styleBible: `• Page ratio is A4.
-• Speech and thinking bubbles should be contained in the panel and not spill over the edges of the panel.
-• Black & white only. Human-drawn underground noir comic. Rough ink on paper.
-• Uneven line weight, occasional wobble.
-• Visible pencil under-sketch lines.
-• Messy cross-hatching (inconsistent spacing/direction).
-• Heavy contrast.
-• Slight line wobble (human-made feel)
-• Flat black shadows with imperfect fills (tiny white pinholes).
-• Light paper grain only.
-• Subtle ink texture only.
-• No blotchy grey stains.
-• No circular mottling.
-• No sponge-like texture.
-• No hyperrealism
-• No digital polish look
-
-IMPORTANT
-Keep it looking like a human-drawn comic page, not glossy AI.
-No photorealism. No hyper-detail. No noir gore.`,
-
-  cameraInks: `Bold silhouettes and strong negative space.
-Slightly imperfect anatomy and perspective (human-made).
-Hand-drawn panel borders, slightly wobbly.
-Keep lighting high-contrast with clear shadow shapes (no gradients).`,
-
+  styleBible: '',
+  cameraInks: '',
   characters: [],
-
-  globalDoNot: `Do NOT draw rounded corners.
-Do NOT draw an outer page border or white frame.
-Do NOT show a page on a background (no table/photo/scan framing).
-No vignette, no drop shadow.
-The artwork itself is the page, filling the entire canvas edge-to-edge (only a tiny safe margin).`,
-
-  hardNegatives: `No clean vector lines.
-No digital polish.
-No extra panels beyond the layout.
-No inset panels.
-No split panels.
-No decorative borders that look like panels.`
+  globalDoNot: '',
+  hardNegatives: ''
 });
 
 // Get all comic projects

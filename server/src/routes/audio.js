@@ -115,7 +115,7 @@ Rules:
       : `Enhance this text for TTS: "${text}"`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -312,7 +312,7 @@ router.post('/translate', async (req, res) => {
     const toLang = languageNames[toLanguage] || toLanguage;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4',
       messages: [
         {
           role: 'system',
