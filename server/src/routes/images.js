@@ -139,6 +139,68 @@ router.post('/generate-page', async (req, res) => {
   }
 });
 
+// Generate single panel image
+router.post('/generate-panel', async (req, res) => {
+  try {
+    const { prompt, panelId, aspectRatio = 'square' } = req.body;
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({
+        error: 'OpenAI API key not configured. Add OPENAI_API_KEY to .env file.'
+      });
+    }
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+
+    // Choose size based on aspect ratio
+    // OpenAI gpt-image-1 supports: 1024x1024, 1024x1536, 1536x1024
+    let size = '1024x1024'; // default square
+    if (aspectRatio === 'portrait') {
+      size = '1024x1536';
+    } else if (aspectRatio === 'landscape') {
+      size = '1536x1024';
+    }
+
+    console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${prompt.length}`);
+
+    const response = await openai.images.generate({
+      model: 'gpt-image-1',
+      prompt: prompt,
+      n: 1,
+      size: size,
+      quality: 'high'
+    });
+
+    const imageData = response.data[0];
+    let buffer;
+
+    if (imageData.b64_json) {
+      buffer = Buffer.from(imageData.b64_json, 'base64');
+    } else if (imageData.url) {
+      const imageResponse = await fetch(imageData.url);
+      const arrayBuffer = await imageResponse.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    }
+
+    const filename = `panel-${panelId}-${uuidv4()}.png`;
+    const filePath = path.join(__dirname, '../../uploads', filename);
+    await fs.writeFile(filePath, buffer);
+
+    console.log(`Panel ${panelId} generated: ${filename}`);
+
+    res.json({
+      panelId,
+      filename,
+      path: `/uploads/${filename}`
+    });
+  } catch (error) {
+    console.error('Panel generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Save image to comic project
 router.post('/save-to-project', async (req, res) => {
   try {

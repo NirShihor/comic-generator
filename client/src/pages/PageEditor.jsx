@@ -246,6 +246,12 @@ function PageEditor({ isCover = false }) {
   const [customLayoutDescription, setCustomLayoutDescription] = useState(''); // For manual layout description override
   const [showPagePreview, setShowPagePreview] = useState(false);
 
+  // Panel-by-panel generation state
+  const [panelImages, setPanelImages] = useState({}); // { [panelId]: { path, generating, error } }
+  const [generatingAllPanels, setGeneratingAllPanels] = useState(false);
+  const [showCompositePreview, setShowCompositePreview] = useState(false);
+  const compositeCanvasRef = useRef(null);
+
   // Audio generation state (voices come from comic.voices)
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [audioModel, setAudioModel] = useState('eleven_v3');
@@ -1402,6 +1408,369 @@ function PageEditor({ isCover = false }) {
     return prompt;
   };
 
+  // Build prompt for a single panel
+  const buildPanelPrompt = (panel, panelIndex) => {
+    const settings = promptSettings;
+    let prompt = '';
+
+    // Style Bible
+    if (settings.styleBible) {
+      prompt += `🎨 STYLE BIBLE\n${settings.styleBible}\n\n`;
+    }
+
+    // Camera & Inks
+    if (settings.cameraInks) {
+      prompt += `CAMERA + INKS\n${settings.cameraInks}\n\n`;
+    }
+
+    // Character Bible
+    if (settings.characters && settings.characters.length > 0) {
+      prompt += `CHARACTER BIBLE (MAINTAIN CONSISTENCY)\n`;
+      settings.characters.forEach(char => {
+        prompt += `\nCharacter: ${char.name}\n${char.description}\n`;
+      });
+      prompt += '\n';
+    }
+
+    // Global Do Not
+    if (settings.globalDoNot) {
+      prompt += `GLOBAL DO NOT\n${settings.globalDoNot}\n\n`;
+    }
+
+    // Hard Negatives
+    if (settings.hardNegatives) {
+      prompt += `HARD NEGATIVES\n${settings.hardNegatives}\n\n`;
+    }
+
+    // Single panel content
+    prompt += `SINGLE PANEL IMAGE\n\n`;
+    prompt += `This is Panel ${panelIndex + 1} of ${panels.length} on ${isCover ? 'the COVER' : `PAGE ${page.pageNumber}`}.\n\n`;
+    prompt += `Panel Content:\n${panel.content || '(No content specified)'}\n\n`;
+
+    // Additional instructions
+    if (additionalInstructions.trim()) {
+      prompt += `ADDITIONAL INSTRUCTIONS:\n${additionalInstructions}\n\n`;
+    }
+
+    // Critical: fill entire canvas, no panel borders
+    prompt += `CRITICAL: This is a SINGLE PANEL illustration. The artwork MUST fill the ENTIRE canvas edge-to-edge. No panel borders, no margins, no white space around the edges. Do NOT draw panel frames or gutters - this single image will be placed into a panel frame by the app.`;
+
+    return prompt;
+  };
+
+  // Determine aspect ratio based on panel dimensions
+  const getPanelAspectRatio = (panel) => {
+    const { width, height } = panel.tapZone;
+    const ratio = width / height;
+    if (ratio > 1.3) return 'landscape';
+    if (ratio < 0.77) return 'portrait';
+    return 'square';
+  };
+
+  // Generate a single panel image
+  const generatePanelImage = async (panel, panelIndex) => {
+    if (!panel.content?.trim()) {
+      alert(`Panel ${panelIndex + 1} has no content. Please add content first.`);
+      return;
+    }
+
+    setPanelImages(prev => ({
+      ...prev,
+      [panel.id]: { ...prev[panel.id], generating: true, error: null }
+    }));
+
+    try {
+      const prompt = buildPanelPrompt(panel, panelIndex);
+      const aspectRatio = getPanelAspectRatio(panel);
+
+      console.log(`Generating panel ${panelIndex + 1} (${panel.id}), aspect: ${aspectRatio}`);
+
+      const response = await api.post('/images/generate-panel', {
+        prompt,
+        panelId: panel.id,
+        aspectRatio
+      });
+
+      setPanelImages(prev => ({
+        ...prev,
+        [panel.id]: {
+          path: response.data.path,
+          generating: false,
+          error: null
+        }
+      }));
+
+      console.log(`Panel ${panelIndex + 1} generated:`, response.data.path);
+    } catch (error) {
+      console.error(`Panel ${panelIndex + 1} generation failed:`, error);
+      setPanelImages(prev => ({
+        ...prev,
+        [panel.id]: {
+          ...prev[panel.id],
+          generating: false,
+          error: error.response?.data?.error || error.message
+        }
+      }));
+    }
+  };
+
+  // Generate all panels sequentially
+  const generateAllPanels = async () => {
+    const panelsWithContent = panels.filter(p => p.content?.trim());
+    if (panelsWithContent.length === 0) {
+      alert('No panels have content. Please add content to at least one panel.');
+      return;
+    }
+
+    setGeneratingAllPanels(true);
+
+    for (let i = 0; i < panels.length; i++) {
+      const panel = panels[i];
+      if (panel.content?.trim()) {
+        await generatePanelImage(panel, i);
+      }
+    }
+
+    setGeneratingAllPanels(false);
+  };
+
+  // Composite all panel images onto a single canvas
+  const compositePageFromPanels = async () => {
+    const canvas = compositeCanvasRef.current;
+    if (!canvas) return null;
+
+    const ctx = canvas.getContext('2d');
+    const canvasWidth = 1024;
+    const canvasHeight = 1536;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+
+    // Gutter size in pixels (thicker margin between panels)
+    const gutterSize = 16;
+
+    // Load and draw each panel image
+    const loadImage = (src) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    };
+
+    // First, load all images and sample their edge colors
+    const loadedImages = [];
+    let totalR = 0, totalG = 0, totalB = 0, sampleCount = 0;
+
+    for (const panel of panels) {
+      const panelData = panelImages[panel.id];
+      if (panelData?.path) {
+        try {
+          const img = await loadImage(`http://localhost:3001${panelData.path}`);
+          loadedImages.push({ panel, img });
+
+          // Sample colors from image edges using a temp canvas
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = img.width;
+          tempCanvas.height = img.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(img, 0, 0);
+
+          // Sample from edges (top, bottom, left, right strips)
+          const sampleEdge = (sx, sy, sw, sh) => {
+            try {
+              const data = tempCtx.getImageData(sx, sy, sw, sh).data;
+              for (let i = 0; i < data.length; i += 4) {
+                totalR += data[i];
+                totalG += data[i + 1];
+                totalB += data[i + 2];
+                sampleCount++;
+              }
+            } catch (e) { /* ignore */ }
+          };
+
+          const edgeWidth = 10;
+          sampleEdge(0, 0, img.width, edgeWidth); // top
+          sampleEdge(0, img.height - edgeWidth, img.width, edgeWidth); // bottom
+          sampleEdge(0, 0, edgeWidth, img.height); // left
+          sampleEdge(img.width - edgeWidth, 0, edgeWidth, img.height); // right
+        } catch (error) {
+          console.error(`Failed to load panel image for ${panel.id}:`, error);
+        }
+      }
+    }
+
+    // Calculate average color and create a light tint for gutters
+    let gutterColor = '#e8e8e8'; // fallback light grey
+    if (sampleCount > 0) {
+      const avgR = Math.round(totalR / sampleCount);
+      const avgG = Math.round(totalG / sampleCount);
+      const avgB = Math.round(totalB / sampleCount);
+
+      // Create a lighter tint (blend with white, 70% towards white)
+      const tintFactor = 0.7;
+      const tintR = Math.round(avgR + (255 - avgR) * tintFactor);
+      const tintG = Math.round(avgG + (255 - avgG) * tintFactor);
+      const tintB = Math.round(avgB + (255 - avgB) * tintFactor);
+
+      gutterColor = `rgb(${tintR}, ${tintG}, ${tintB})`;
+    }
+
+    // Fill background with the blended gutter color
+    ctx.fillStyle = gutterColor;
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // Now draw all the loaded images
+    for (const { panel, img } of loadedImages) {
+      const { x, y, width, height } = panel.tapZone;
+
+      // Calculate pixel positions
+      const px = x * canvasWidth;
+      const py = y * canvasHeight;
+      const pw = width * canvasWidth;
+      const ph = height * canvasHeight;
+
+      // Apply gutter insets - shrink panel by half gutter on each side
+      const inset = gutterSize / 2;
+      const adjustedX = px + (x > 0 ? inset : 0);
+      const adjustedY = py + (y > 0 ? inset : 0);
+      const adjustedW = pw - (x > 0 ? inset : 0) - (x + width < 1 ? inset : 0);
+      const adjustedH = ph - (y > 0 ? inset : 0) - (y + height < 1 ? inset : 0);
+
+      // Draw the image, scaling to fit the adjusted panel area
+      ctx.drawImage(img, adjustedX, adjustedY, adjustedW, adjustedH);
+    }
+
+    // Helper function to draw a wobbly/hand-drawn line
+    const drawWobblyLine = (x1, y1, x2, y2) => {
+      const segments = 12; // Number of segments for the wobble
+      const wobbleAmount = 1.5; // Max pixels of wobble
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+
+      for (let i = 1; i <= segments; i++) {
+        const t = i / segments;
+        const x = x1 + (x2 - x1) * t;
+        const y = y1 + (y2 - y1) * t;
+
+        // Add random wobble perpendicular to the line direction
+        const wobbleX = (Math.random() - 0.5) * wobbleAmount * 2;
+        const wobbleY = (Math.random() - 0.5) * wobbleAmount * 2;
+
+        if (i === segments) {
+          // End at exact position
+          ctx.lineTo(x2, y2);
+        } else {
+          ctx.lineTo(x + wobbleX, y + wobbleY);
+        }
+      }
+      ctx.stroke();
+    };
+
+    // Calculate border color (darker shade from sampled colors)
+    let borderColor = '#1a1a1a'; // fallback dark
+    if (sampleCount > 0) {
+      const avgR = Math.round(totalR / sampleCount);
+      const avgG = Math.round(totalG / sampleCount);
+      const avgB = Math.round(totalB / sampleCount);
+
+      // Create a darker shade (blend towards black, 80% towards black)
+      const darkFactor = 0.8;
+      const darkR = Math.round(avgR * (1 - darkFactor));
+      const darkG = Math.round(avgG * (1 - darkFactor));
+      const darkB = Math.round(avgB * (1 - darkFactor));
+
+      borderColor = `rgb(${darkR}, ${darkG}, ${darkB})`;
+    }
+
+    // Draw hand-drawn style panel borders
+    ctx.strokeStyle = borderColor;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    for (const panel of panels) {
+      const { x, y, width, height } = panel.tapZone;
+      const px = x * canvasWidth;
+      const py = y * canvasHeight;
+      const pw = width * canvasWidth;
+      const ph = height * canvasHeight;
+
+      // Apply same gutter insets for border
+      const inset = gutterSize / 2;
+      const adjustedX = px + (x > 0 ? inset : 0);
+      const adjustedY = py + (y > 0 ? inset : 0);
+      const adjustedW = pw - (x > 0 ? inset : 0) - (x + width < 1 ? inset : 0);
+      const adjustedH = ph - (y > 0 ? inset : 0) - (y + height < 1 ? inset : 0);
+
+      // Draw multiple passes for thicker, more organic look
+      for (let pass = 0; pass < 3; pass++) {
+        ctx.lineWidth = 2 + Math.random() * 1.5;
+
+        // Top edge
+        drawWobblyLine(adjustedX, adjustedY, adjustedX + adjustedW, adjustedY);
+        // Right edge
+        drawWobblyLine(adjustedX + adjustedW, adjustedY, adjustedX + adjustedW, adjustedY + adjustedH);
+        // Bottom edge
+        drawWobblyLine(adjustedX + adjustedW, adjustedY + adjustedH, adjustedX, adjustedY + adjustedH);
+        // Left edge
+        drawWobblyLine(adjustedX, adjustedY + adjustedH, adjustedX, adjustedY);
+      }
+    }
+
+    return canvas.toDataURL('image/png');
+  };
+
+  // Save composited image
+  const saveCompositedImage = async () => {
+    const dataUrl = await compositePageFromPanels();
+    if (!dataUrl) {
+      alert('Failed to composite image');
+      return;
+    }
+
+    try {
+      // Convert data URL to blob and upload
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      const formData = new FormData();
+      formData.append('image', blob, `composited-${pageId}.png`);
+
+      const uploadResponse = await api.post('/images/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      // Save to project
+      await api.post('/images/save-to-project', {
+        comicId: id,
+        filename: uploadResponse.data.filename,
+        imageType: 'page',
+        pageNumber: page.pageNumber
+      });
+
+      // Update comic and page data
+      const imagePath = `/projects/${id}/images/${id}_p${page.pageNumber}.png`;
+
+      const updatedComic = { ...comic };
+      const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+      updatedComic.pages[pageIndex].masterImage = imagePath;
+
+      // Save to database
+      await api.put(`/comics/${id}`, updatedComic);
+      setComic(updatedComic);
+
+      // Update local page state with cache-buster for immediate display refresh
+      setPage(prev => ({ ...prev, masterImage: `${imagePath}?t=${Date.now()}` }));
+
+      alert('Composited page saved to project!');
+    } catch (error) {
+      console.error('Failed to save composited image:', error);
+      alert('Failed to save composited image: ' + error.message);
+    }
+  };
+
   const generatePageImage = async () => {
     if (!panelsComputed || panels.length === 0) {
       alert('Please compute panels and add content first.');
@@ -2099,25 +2468,68 @@ function PageEditor({ isCover = false }) {
 
                     // Build unified path with smooth tail integration
                     // Path goes clockwise from top-left
-                    const path = `
-                      M ${bx + r} ${by}
-                      L ${bx + bw - r} ${by}
-                      A ${r} ${r} 0 0 1 ${bx + bw} ${by + r}
-                      L ${bx + bw} ${by + bh - r}
-                      A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh}
-                      L ${cx + halfTailWidth} ${by + bh}
-                      C ${ctrl1X} ${ctrl1Y},
-                        ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
-                        ${tipX} ${tipY}
-                      C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
-                        ${ctrl2X} ${ctrl2Y},
-                        ${cx - halfTailWidth} ${by + bh}
-                      L ${bx + r} ${by + bh}
-                      A ${r} ${r} 0 0 1 ${bx} ${by + bh - r}
-                      L ${bx} ${by + r}
-                      A ${r} ${r} 0 0 1 ${bx + r} ${by}
-                      Z
-                    `;
+
+                    // For round bubbles, we need to calculate where the tail connects on the curved edge
+                    // The tail base should connect smoothly to the ellipse/rounded rect
+                    const isVeryRound = r >= Math.min(bw, bh) * 0.4;
+
+                    // Clamp tail base positions to stay within the flat portion of the bottom edge
+                    const tailRightX = Math.min(cx + halfTailWidth, bx + bw - r - 2);
+                    const tailLeftX = Math.max(cx - halfTailWidth, bx + r + 2);
+
+                    // For very round bubbles, use quadratic curves to blend tail into the ellipse
+                    let path;
+                    if (isVeryRound) {
+                      // For round bubbles, connect tail with smooth curves that follow the ellipse curvature
+                      // Calculate angle on ellipse where tail connects
+                      const ellipseRx = bw / 2;
+                      const ellipseRy = bh / 2;
+
+                      // Tail connects at bottom, slightly offset from center
+                      const tailConnectRight = Math.min(halfTailWidth, ellipseRx * 0.6);
+                      const tailConnectLeft = Math.min(halfTailWidth, ellipseRx * 0.6);
+
+                      // Y position on ellipse at tail connection points
+                      const yOffsetRight = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectRight / ellipseRx, 2));
+                      const yOffsetLeft = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectLeft / ellipseRx, 2));
+
+                      const connectRightY = cy + yOffsetRight;
+                      const connectLeftY = cy + yOffsetLeft;
+
+                      path = `
+                        M ${cx} ${by}
+                        A ${ellipseRx} ${ellipseRy} 0 0 1 ${cx + tailConnectRight} ${connectRightY}
+                        C ${cx + tailConnectRight} ${connectRightY + tailLength * 0.2},
+                          ${ctrl1X} ${ctrl1Y},
+                          ${tipX} ${tipY}
+                        C ${ctrl2X} ${ctrl2Y},
+                          ${cx - tailConnectLeft} ${connectLeftY + tailLength * 0.2},
+                          ${cx - tailConnectLeft} ${connectLeftY}
+                        A ${ellipseRx} ${ellipseRy} 0 1 1 ${cx} ${by}
+                        Z
+                      `;
+                    } else {
+                      // Standard rounded rectangle with tail
+                      path = `
+                        M ${bx + r} ${by}
+                        L ${bx + bw - r} ${by}
+                        A ${r} ${r} 0 0 1 ${bx + bw} ${by + r}
+                        L ${bx + bw} ${by + bh - r}
+                        A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh}
+                        L ${tailRightX} ${by + bh}
+                        C ${ctrl1X} ${ctrl1Y},
+                          ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                          ${tipX} ${tipY}
+                        C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                          ${ctrl2X} ${ctrl2Y},
+                          ${tailLeftX} ${by + bh}
+                        L ${bx + r} ${by + bh}
+                        A ${r} ${r} 0 0 1 ${bx} ${by + bh - r}
+                        L ${bx} ${by + r}
+                        A ${r} ${r} 0 0 1 ${bx + r} ${by}
+                        Z
+                      `;
+                    }
 
                     // Calculate rotated tip position for the indicator line
                     const rotRad = rotation * Math.PI / 180;
@@ -3939,10 +4351,30 @@ function PageEditor({ isCover = false }) {
                   </p>
                 ) : (
                   panels.map((panel, i) => (
-                    <div key={panel.id} style={{ marginBottom: '0.75rem' }}>
-                      <label style={{ fontSize: '0.85rem', color: '#666', display: 'block', marginBottom: '0.25rem' }}>
-                        Panel {i + 1}
-                      </label>
+                    <div key={panel.id} style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>
+                          Panel {i + 1}
+                          <span style={{ fontWeight: 'normal', marginLeft: '0.5rem', color: '#999' }}>
+                            ({(panel.tapZone.width * 100).toFixed(0)}% × {(panel.tapZone.height * 100).toFixed(0)}%)
+                          </span>
+                        </label>
+                        <button
+                          onClick={() => generatePanelImage(panel, i)}
+                          disabled={panelImages[panel.id]?.generating || !panel.content?.trim()}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '0.75rem',
+                            background: panelImages[panel.id]?.generating ? '#95a5a6' : panel.content?.trim() ? '#27ae60' : '#ccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: panelImages[panel.id]?.generating || !panel.content?.trim() ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {panelImages[panel.id]?.generating ? '⏳ Generating...' : '🎨 Generate Panel'}
+                        </button>
+                      </div>
                       <textarea
                         value={panel.content || ''}
                         onChange={(e) => updatePanelContent(panel.id, e.target.value)}
@@ -3959,6 +4391,27 @@ function PageEditor({ isCover = false }) {
                           resize: 'vertical'
                         }}
                       />
+                      {/* Panel image preview */}
+                      {panelImages[panel.id]?.path && (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <img
+                            src={`http://localhost:3001${panelImages[panel.id].path}`}
+                            alt={`Panel ${i + 1}`}
+                            style={{
+                              width: '100%',
+                              maxHeight: '150px',
+                              objectFit: 'contain',
+                              borderRadius: '4px',
+                              border: '1px solid #ddd'
+                            }}
+                          />
+                        </div>
+                      )}
+                      {panelImages[panel.id]?.error && (
+                        <p style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                          Error: {panelImages[panel.id].error}
+                        </p>
+                      )}
                     </div>
                   ))
                 )}
@@ -4078,142 +4531,300 @@ function PageEditor({ isCover = false }) {
                     />
                   </div>
 
-                  {/* Buttons */}
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => setShowPromptPreview(!showPromptPreview)}
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                    >
-                      {showPromptPreview ? 'Hide Prompt' : 'Preview Prompt'}
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={generatePageImage}
-                      disabled={isGenerating}
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                    >
-                      {isGenerating ? 'Generating...' : 'Generate Image'}
-                    </button>
+                  {/* Generation Mode Tabs */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <button
+                        onClick={() => setShowCompositePreview(false)}
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem',
+                          fontSize: '0.8rem',
+                          background: !showCompositePreview ? '#e94560' : '#ddd',
+                          color: !showCompositePreview ? 'white' : '#666',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Full Page (Single Image)
+                      </button>
+                      <button
+                        onClick={() => setShowCompositePreview(true)}
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem',
+                          fontSize: '0.8rem',
+                          background: showCompositePreview ? '#e94560' : '#ddd',
+                          color: showCompositePreview ? 'white' : '#666',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Panel by Panel
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Prompt Preview */}
-                  {showPromptPreview && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <h4 style={{ fontSize: '0.85rem', color: '#666', margin: 0 }}>Full Prompt:</h4>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#666' }}>
-                          <input
-                            type="checkbox"
-                            checked={useCustomPrompt}
-                            onChange={(e) => {
-                              setUseCustomPrompt(e.target.checked);
-                              if (e.target.checked && !customPrompt) {
-                                setCustomPrompt(buildFullPrompt());
-                              }
-                            }}
-                          />
-                          Edit manually
-                        </label>
-                      </div>
-                      {useCustomPrompt ? (
-                        <>
-                          <textarea
-                            value={customPrompt}
-                            onChange={(e) => setCustomPrompt(e.target.value)}
-                            style={{
-                              width: '100%',
-                              minHeight: '300px',
-                              padding: '1rem',
-                              borderRadius: '4px',
-                              fontSize: '0.75rem',
-                              fontFamily: 'monospace',
-                              color: '#333',
-                              border: '1px solid #27ae60',
-                              background: '#f0fff0',
-                              resize: 'vertical'
-                            }}
-                          />
-                          <button
-                            onClick={() => setCustomPrompt(buildFullPrompt())}
-                            style={{
-                              marginTop: '0.5rem',
-                              padding: '0.4rem 0.8rem',
-                              fontSize: '0.75rem',
-                              background: '#95a5a6',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Reset to Generated
-                          </button>
-                        </>
-                      ) : (
-                        <pre style={{
-                          background: '#f9f9f9',
-                          padding: '1rem',
-                          borderRadius: '4px',
-                          fontSize: '0.75rem',
-                          whiteSpace: 'pre-wrap',
-                          maxHeight: '300px',
-                          overflow: 'auto',
-                          color: '#333',
-                          border: '1px solid #ddd'
-                        }}>
-                          {buildFullPrompt()}
-                        </pre>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Error */}
-                  {generationError && (
-                    <div style={{
-                      marginBottom: '1rem',
-                      padding: '0.75rem',
-                      background: 'rgba(192, 57, 43, 0.2)',
-                      border: '1px solid #c0392b',
-                      borderRadius: '4px',
-                      color: '#e74c3c',
-                      fontSize: '0.85rem'
-                    }}>
-                      Error: {generationError}
-                    </div>
-                  )}
-
-                  {/* Generated Image */}
-                  {generatedImage && (
-                    <div>
-                      <h4 style={{ marginBottom: '0.5rem' }}>Generated Image:</h4>
-                      <img
-                        src={`http://localhost:3001${generatedImage.path}`}
-                        alt="Generated page"
-                        style={{
-                          width: '100%',
-                          borderRadius: '4px',
-                          border: '1px solid #ddd'
-                        }}
-                      />
-                      <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                        <button
-                          className="btn btn-primary"
-                          onClick={saveGeneratedImage}
-                          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                        >
-                          Save as Page Image
-                        </button>
+                  {/* Full Page Mode */}
+                  {!showCompositePreview && (
+                    <>
+                      {/* Buttons */}
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
                         <button
                           className="btn btn-secondary"
+                          onClick={() => setShowPromptPreview(!showPromptPreview)}
+                          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                        >
+                          {showPromptPreview ? 'Hide Prompt' : 'Preview Prompt'}
+                        </button>
+                        <button
+                          className="btn btn-primary"
                           onClick={generatePageImage}
                           disabled={isGenerating}
                           style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                         >
-                          Regenerate
+                          {isGenerating ? 'Generating...' : 'Generate Full Page'}
                         </button>
                       </div>
+                    </>
+                  )}
+
+                  {/* Panel by Panel Mode */}
+                  {showCompositePreview && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
+                        Generate each panel separately for better layout control. Individual panel images will be composited into the final page.
+                      </p>
+
+                      {/* Panel Generation Status */}
+                      <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#f9f9f9', borderRadius: '4px' }}>
+                        {panels.map((panel, i) => {
+                          const panelData = panelImages[panel.id];
+                          return (
+                            <div key={panel.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', fontSize: '0.8rem' }}>
+                              <span style={{ width: '60px' }}>Panel {i + 1}:</span>
+                              {panelData?.generating ? (
+                                <span style={{ color: '#f39c12' }}>Generating...</span>
+                              ) : panelData?.path ? (
+                                <span style={{ color: '#27ae60' }}>Ready</span>
+                              ) : panelData?.error ? (
+                                <span style={{ color: '#e74c3c' }}>Error</span>
+                              ) : panel.content?.trim() ? (
+                                <span style={{ color: '#666' }}>Pending</span>
+                              ) : (
+                                <span style={{ color: '#999' }}>No content</span>
+                              )}
+                              <button
+                                onClick={() => generatePanelImage(panel, i)}
+                                disabled={panelData?.generating || !panel.content?.trim()}
+                                style={{
+                                  marginLeft: 'auto',
+                                  padding: '0.15rem 0.4rem',
+                                  fontSize: '0.7rem',
+                                  background: panelData?.generating ? '#95a5a6' : '#3498db',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: panelData?.generating || !panel.content?.trim() ? 'not-allowed' : 'pointer'
+                                }}
+                              >
+                                {panelData?.path ? 'Regenerate' : 'Generate'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Batch Generate Button */}
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                        <button
+                          onClick={generateAllPanels}
+                          disabled={generatingAllPanels || panels.every(p => !p.content?.trim())}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            fontSize: '0.85rem',
+                            background: generatingAllPanels ? '#95a5a6' : '#27ae60',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: generatingAllPanels || panels.every(p => !p.content?.trim()) ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {generatingAllPanels ? 'Generating All...' : 'Generate All Panels'}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await compositePageFromPanels();
+                          }}
+                          disabled={!panels.some(p => panelImages[p.id]?.path)}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            fontSize: '0.85rem',
+                            background: panels.some(p => panelImages[p.id]?.path) ? '#9b59b6' : '#ccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: panels.some(p => panelImages[p.id]?.path) ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          Preview Composite
+                        </button>
+                        <button
+                          onClick={saveCompositedImage}
+                          disabled={!panels.some(p => panelImages[p.id]?.path)}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            fontSize: '0.85rem',
+                            background: panels.some(p => panelImages[p.id]?.path) ? '#e94560' : '#ccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: panels.some(p => panelImages[p.id]?.path) ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          Save Composite as Page
+                        </button>
+                      </div>
+
+                      {/* Composite Canvas */}
+                      <canvas
+                        ref={compositeCanvasRef}
+                        style={{
+                          width: '100%',
+                          maxHeight: '400px',
+                          objectFit: 'contain',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          background: '#fff'
+                        }}
+                      />
                     </div>
+                  )}
+
+                  {/* Full Page Mode: Prompt Preview, Error, Generated Image */}
+                  {!showCompositePreview && (
+                    <>
+                      {/* Prompt Preview */}
+                      {showPromptPreview && (
+                        <div style={{ marginBottom: '1rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <h4 style={{ fontSize: '0.85rem', color: '#666', margin: 0 }}>Full Prompt:</h4>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#666' }}>
+                              <input
+                                type="checkbox"
+                                checked={useCustomPrompt}
+                                onChange={(e) => {
+                                  setUseCustomPrompt(e.target.checked);
+                                  if (e.target.checked && !customPrompt) {
+                                    setCustomPrompt(buildFullPrompt());
+                                  }
+                                }}
+                              />
+                              Edit manually
+                            </label>
+                          </div>
+                          {useCustomPrompt ? (
+                            <>
+                              <textarea
+                                value={customPrompt}
+                                onChange={(e) => setCustomPrompt(e.target.value)}
+                                style={{
+                                  width: '100%',
+                                  minHeight: '300px',
+                                  padding: '1rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.75rem',
+                                  fontFamily: 'monospace',
+                                  color: '#333',
+                                  border: '1px solid #27ae60',
+                                  background: '#f0fff0',
+                                  resize: 'vertical'
+                                }}
+                              />
+                              <button
+                                onClick={() => setCustomPrompt(buildFullPrompt())}
+                                style={{
+                                  marginTop: '0.5rem',
+                                  padding: '0.4rem 0.8rem',
+                                  fontSize: '0.75rem',
+                                  background: '#95a5a6',
+                                  color: '#fff',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Reset to Generated
+                              </button>
+                            </>
+                          ) : (
+                            <pre style={{
+                              background: '#f9f9f9',
+                              padding: '1rem',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              whiteSpace: 'pre-wrap',
+                              maxHeight: '300px',
+                              overflow: 'auto',
+                              color: '#333',
+                              border: '1px solid #ddd'
+                            }}>
+                              {buildFullPrompt()}
+                            </pre>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Error */}
+                      {generationError && (
+                        <div style={{
+                          marginBottom: '1rem',
+                          padding: '0.75rem',
+                          background: 'rgba(192, 57, 43, 0.2)',
+                          border: '1px solid #c0392b',
+                          borderRadius: '4px',
+                          color: '#e74c3c',
+                          fontSize: '0.85rem'
+                        }}>
+                          Error: {generationError}
+                        </div>
+                      )}
+
+                      {/* Generated Image */}
+                      {generatedImage && (
+                        <div>
+                          <h4 style={{ marginBottom: '0.5rem' }}>Generated Image:</h4>
+                          <img
+                            src={`http://localhost:3001${generatedImage.path}`}
+                            alt="Generated page"
+                            style={{
+                              width: '100%',
+                              borderRadius: '4px',
+                              border: '1px solid #ddd'
+                            }}
+                          />
+                          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              className="btn btn-primary"
+                              onClick={saveGeneratedImage}
+                              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                            >
+                              Save as Page Image
+                            </button>
+                            <button
+                              className="btn btn-secondary"
+                              onClick={generatePageImage}
+                              disabled={isGenerating}
+                              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                            >
+                              Regenerate
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -4504,25 +5115,54 @@ function PageEditor({ isCover = false }) {
                       const ctrl2X = cx - halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
                       const ctrl2Y = by + bh + tailLength * 0.5;
 
-                      const path = `
-                        M ${bx + r} ${by}
-                        L ${bx + bw - r} ${by}
-                        A ${r} ${r} 0 0 1 ${bx + bw} ${by + r}
-                        L ${bx + bw} ${by + bh - r}
-                        A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh}
-                        L ${cx + halfTailWidth} ${by + bh}
-                        C ${ctrl1X} ${ctrl1Y},
-                          ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
-                          ${tipX} ${tipY}
-                        C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
-                          ${ctrl2X} ${ctrl2Y},
-                          ${cx - halfTailWidth} ${by + bh}
-                        L ${bx + r} ${by + bh}
-                        A ${r} ${r} 0 0 1 ${bx} ${by + bh - r}
-                        L ${bx} ${by + r}
-                        A ${r} ${r} 0 0 1 ${bx + r} ${by}
-                        Z
-                      `;
+                      const isVeryRound = r >= Math.min(bw, bh) * 0.4;
+                      const tailRightX = Math.min(cx + halfTailWidth, bx + bw - r - 2);
+                      const tailLeftX = Math.max(cx - halfTailWidth, bx + r + 2);
+
+                      let path;
+                      if (isVeryRound) {
+                        const ellipseRx = bw / 2;
+                        const ellipseRy = bh / 2;
+                        const tailConnectRight = Math.min(halfTailWidth, ellipseRx * 0.6);
+                        const tailConnectLeft = Math.min(halfTailWidth, ellipseRx * 0.6);
+                        const yOffsetRight = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectRight / ellipseRx, 2));
+                        const yOffsetLeft = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectLeft / ellipseRx, 2));
+                        const connectRightY = cy + yOffsetRight;
+                        const connectLeftY = cy + yOffsetLeft;
+
+                        path = `
+                          M ${cx} ${by}
+                          A ${ellipseRx} ${ellipseRy} 0 0 1 ${cx + tailConnectRight} ${connectRightY}
+                          C ${cx + tailConnectRight} ${connectRightY + tailLength * 0.2},
+                            ${ctrl1X} ${ctrl1Y},
+                            ${tipX} ${tipY}
+                          C ${ctrl2X} ${ctrl2Y},
+                            ${cx - tailConnectLeft} ${connectLeftY + tailLength * 0.2},
+                            ${cx - tailConnectLeft} ${connectLeftY}
+                          A ${ellipseRx} ${ellipseRy} 0 1 1 ${cx} ${by}
+                          Z
+                        `;
+                      } else {
+                        path = `
+                          M ${bx + r} ${by}
+                          L ${bx + bw - r} ${by}
+                          A ${r} ${r} 0 0 1 ${bx + bw} ${by + r}
+                          L ${bx + bw} ${by + bh - r}
+                          A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh}
+                          L ${tailRightX} ${by + bh}
+                          C ${ctrl1X} ${ctrl1Y},
+                            ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                            ${tipX} ${tipY}
+                          C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                            ${ctrl2X} ${ctrl2Y},
+                            ${tailLeftX} ${by + bh}
+                          L ${bx + r} ${by + bh}
+                          A ${r} ${r} 0 0 1 ${bx} ${by + bh - r}
+                          L ${bx} ${by + r}
+                          A ${r} ${r} 0 0 1 ${bx + r} ${by}
+                          Z
+                        `;
+                      }
 
                       return (
                         <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 50, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
