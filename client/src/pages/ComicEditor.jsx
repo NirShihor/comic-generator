@@ -753,6 +753,12 @@ function ComicEditor() {
                     return;
                   }
 
+                  // Check for duplicate voice ID
+                  if ((comic.voices || []).some(v => v.voiceId === voiceId)) {
+                    alert('This voice ID is already added');
+                    return;
+                  }
+
                   const updatedVoices = [...(comic.voices || []), { name, voiceId }];
                   try {
                     await api.put(`/comics/${id}`, { voices: updatedVoices });

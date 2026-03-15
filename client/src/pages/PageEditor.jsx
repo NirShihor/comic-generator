@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 
@@ -138,13 +138,29 @@ function computePanelsFromLines(lines, pageId) {
   const panels = [];
   let panelIndex = 1;
 
-  // Sort groups by their top-left position for consistent ordering
+  // Sort groups using comic reading order (left column first, then right)
+  // When panels overlap vertically, read left-to-right (same row)
+  // When they don't overlap, read top-to-bottom
   const sortedGroups = Object.values(groups).sort((a, b) => {
     const aMinY = Math.min(...a.map(c => c.y1));
+    const aMaxY = Math.max(...a.map(c => c.y2));
     const bMinY = Math.min(...b.map(c => c.y1));
-    if (Math.abs(aMinY - bMinY) > 0.01) return aMinY - bMinY;
+    const bMaxY = Math.max(...b.map(c => c.y2));
     const aMinX = Math.min(...a.map(c => c.x1));
     const bMinX = Math.min(...b.map(c => c.x1));
+
+    // Check if panels overlap vertically
+    const yOverlap = Math.min(aMaxY, bMaxY) - Math.max(aMinY, bMinY);
+    const minHeight = Math.min(aMaxY - aMinY, bMaxY - bMinY);
+
+    // If significant vertical overlap (>50% of smaller panel), sort by X (left to right)
+    // This ensures left column is read before right column when they share vertical space
+    if (yOverlap > minHeight * 0.5) {
+      return aMinX - bMinX;
+    }
+
+    // Otherwise, sort by Y (top to bottom), then X
+    if (Math.abs(aMinY - bMinY) > 0.01) return aMinY - bMinY;
     return aMinX - bMinX;
   });
 
@@ -190,7 +206,7 @@ function generateLayoutDescription(panels) {
     const vPos = centerY < 0.33 ? 'top' : centerY < 0.67 ? 'middle' : 'bottom';
     const hPos = centerX < 0.33 ? 'left' : centerX < 0.67 ? 'center' : 'right';
     const widthDesc = width > 0.9 ? 'full-width' : width > 0.6 ? 'wide' : 'half-width';
-    const heightDesc = height > 0.6 ? 'tall' : height > 0.4 ? 'half-height' : 'short';
+    const heightDesc = height > 0.6 ? 'full-length' : height > 0.4 ? 'half-length' : 'third-length';
 
     return `Panel ${i + 1} = ${vPos}-${hPos}, ${widthDesc}, ${heightDesc}`;
   });
@@ -216,6 +232,8 @@ function PageEditor({ isCover = false }) {
   // Dragging state
   const [isDragging, setIsDragging] = useState(false);
   const [dragLineIndex, setDragLineIndex] = useState(null);
+  const [isDraggingEndpoint, setIsDraggingEndpoint] = useState(false);
+  const [dragEndpoint, setDragEndpoint] = useState(null); // 'start' or 'end'
 
   // Image generation state
   const [generatedImage, setGeneratedImage] = useState(null);
@@ -225,6 +243,7 @@ function PageEditor({ isCover = false }) {
   const [additionalInstructions, setAdditionalInstructions] = useState('');
   const [customPrompt, setCustomPrompt] = useState(''); // For manual prompt override
   const [useCustomPrompt, setUseCustomPrompt] = useState(false);
+  const [customLayoutDescription, setCustomLayoutDescription] = useState(''); // For manual layout description override
   const [showPagePreview, setShowPagePreview] = useState(false);
 
   // Audio generation state (voices come from comic.voices)
@@ -242,6 +261,51 @@ function PageEditor({ isCover = false }) {
   const [translatingText, setTranslatingText] = useState({}); // { [sentenceId]: true/false }
   const [translateInput, setTranslateInput] = useState({}); // { [sentenceId]: 'english text' }
   const audioRef = useRef(null);
+
+  // ChatGPT panel state - persist in localStorage
+  const [chatMessages, setChatMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`comic-chat-${id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Filter out any messages that might have old image data
+        return parsed.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          hadImages: msg.hadImages
+        }));
+      }
+      return [];
+    } catch (e) {
+      console.warn('Failed to load chat from localStorage:', e);
+      localStorage.removeItem(`comic-chat-${id}`);
+      return [];
+    }
+  });
+  const [chatInput, setChatInput] = useState('');
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [chatImages, setChatImages] = useState([]); // Images to send with next message
+  const chatFileInputRef = useRef(null);
+  const chatMessagesEndRef = useRef(null);
+  const chatMessagesRef = useRef(chatMessages); // Backup ref to prevent state loss
+
+  // Save chat messages to localStorage when they change (without images to avoid quota issues)
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      // Strip image data to avoid localStorage quota issues
+      const messagesWithoutImages = chatMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        hadImages: msg.images && msg.images.length > 0 // Just note that there were images
+      }));
+      try {
+        localStorage.setItem(`comic-chat-${id}`, JSON.stringify(messagesWithoutImages));
+      } catch (e) {
+        console.warn('Failed to save chat to localStorage:', e);
+      }
+    }
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages, id]);
 
   // Sidebar tab state
   const [sidebarTab, setSidebarTab] = useState('panels'); // 'panels', 'prompts', 'generate'
@@ -606,6 +670,37 @@ function PageEditor({ isCover = false }) {
     const coords = getRelativeCoords(e);
     if (!coords) return;
 
+    // Handle endpoint dragging (extend/shorten lines)
+    if (isDraggingEndpoint && dragLineIndex !== null && dragEndpoint) {
+      const snapPoints = getSnapPoints();
+
+      setLines(prev => prev.map((l, i) => {
+        if (i !== dragLineIndex) return l;
+
+        if (l.type === 'horizontal') {
+          // Horizontal line: drag x1 or x2
+          const snappedX = snapToNearest(coords.x, snapPoints.x);
+          const clampedX = Math.max(0, Math.min(1, snappedX));
+          if (dragEndpoint === 'start') {
+            return { ...l, x1: Math.min(clampedX, l.x2 - 0.05) };
+          } else {
+            return { ...l, x2: Math.max(clampedX, l.x1 + 0.05) };
+          }
+        } else {
+          // Vertical line: drag y1 or y2
+          const snappedY = snapToNearest(coords.y, snapPoints.y);
+          const clampedY = Math.max(0, Math.min(1, snappedY));
+          if (dragEndpoint === 'start') {
+            return { ...l, y1: Math.min(clampedY, l.y2 - 0.05) };
+          } else {
+            return { ...l, y2: Math.max(clampedY, l.y1 + 0.05) };
+          }
+        }
+      }));
+      setPanelsComputed(false);
+      return;
+    }
+
     // Handle line dragging
     if (isDragging && dragLineIndex !== null) {
       const line = lines[dragLineIndex];
@@ -641,6 +736,14 @@ function PageEditor({ isCover = false }) {
   };
 
   const handleMouseUp = (overrideEndCoords = null) => {
+    // Stop endpoint dragging
+    if (isDraggingEndpoint) {
+      setIsDraggingEndpoint(false);
+      setDragLineIndex(null);
+      setDragEndpoint(null);
+      return;
+    }
+
     // Stop dragging
     if (isDragging) {
       setIsDragging(false);
@@ -1254,8 +1357,8 @@ function PageEditor({ isCover = false }) {
       prompt += `🎨 STYLE BIBLE\n${settings.styleBible}\n\n`;
     }
 
-    // Page Layout
-    const layout = generateLayoutDescription(panels);
+    // Page Layout (use custom if set, otherwise auto-generate)
+    const layout = customLayoutDescription || generateLayoutDescription(panels);
     prompt += `CRITICAL PAGE SHAPE:\n${layout}\n\n`;
 
     // Camera & Inks
@@ -1359,6 +1462,120 @@ function PageEditor({ isCover = false }) {
     }
   };
 
+  // ChatGPT functions
+  const scrollToBottomOfChat = () => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() && chatImages.length === 0) return;
+
+    const userMessage = {
+      role: 'user',
+      content: chatInput,
+      images: chatImages.map(img => img.preview)
+    };
+
+    // Update both state and ref
+    const newMessages = [...chatMessagesRef.current, userMessage];
+    chatMessagesRef.current = newMessages;
+    setChatMessages(newMessages);
+
+    const messageText = chatInput;
+    setChatInput('');
+    const imagesToSend = [...chatImages];
+    setChatImages([]);
+    setIsSendingChat(true);
+
+    try {
+      const response = await api.post('/chat/message', {
+        messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        images: imagesToSend.map(img => img.base64)
+      });
+
+      console.log('Chat API response:', response.data);
+
+      const assistantMessage = {
+        role: 'assistant',
+        content: response.data.message
+      };
+
+      console.log('Assistant message created:', assistantMessage);
+
+      // Update both state and ref with assistant response
+      const messagesWithResponse = [...chatMessagesRef.current, assistantMessage];
+      console.log('Messages with response:', messagesWithResponse);
+      chatMessagesRef.current = messagesWithResponse;
+      setChatMessages(messagesWithResponse);
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage = {
+        role: 'assistant',
+        content: `Error: ${error.response?.data?.error || error.message}`
+      };
+      const messagesWithError = [...chatMessagesRef.current, errorMessage];
+      chatMessagesRef.current = messagesWithError;
+      setChatMessages(messagesWithError);
+    } finally {
+      setIsSendingChat(false);
+      setTimeout(scrollToBottomOfChat, 100);
+    }
+  };
+
+  const handleChatFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target.result.split(',')[1];
+        setChatImages(prev => [...prev, {
+          preview: event.target.result,
+          base64,
+          name: file.name
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const uploadGeneratedImageToChat = async () => {
+    if (!generatedImage?.path) {
+      alert('No generated image to upload');
+      return;
+    }
+
+    try {
+      // Fetch the generated image and convert to base64
+      const response = await fetch(`http://localhost:3001${generatedImage.path}`);
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target.result.split(',')[1];
+        setChatImages(prev => [...prev, {
+          preview: event.target.result,
+          base64,
+          name: 'generated-page.png'
+        }]);
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      console.error('Failed to upload generated image:', error);
+      alert('Failed to upload image');
+    }
+  };
+
+  const removeChatImage = (index) => {
+    setChatImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const clearChat = () => {
+    chatMessagesRef.current = [];
+    setChatMessages([]);
+    setChatImages([]);
+    localStorage.removeItem(`comic-chat-${id}`);
+  };
+
   // Preview line while drawing
   const getPreviewLine = () => {
     if (!isDrawing || !drawStart || !drawEnd) return null;
@@ -1432,7 +1649,10 @@ function PageEditor({ isCover = false }) {
         </button>
         <button
           className={`btn ${editorMode === 'bubbles' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setEditorMode('bubbles')}
+          onClick={() => {
+            setEditorMode('bubbles');
+            setSidebarTab('panels');
+          }}
           style={{ padding: '0.5rem 1rem' }}
         >
           Bubbles Mode
@@ -1511,6 +1731,11 @@ function PageEditor({ isCover = false }) {
               if (isDragging) {
                 setIsDragging(false);
                 setDragLineIndex(null);
+              }
+              if (isDraggingEndpoint) {
+                setIsDraggingEndpoint(false);
+                setDragLineIndex(null);
+                setDragEndpoint(null);
               }
               if (isDraggingBubble) {
                 setIsDraggingBubble(false);
@@ -1636,47 +1861,149 @@ function PageEditor({ isCover = false }) {
               </div>
             ))}
 
-            {/* Drawn lines */}
+            {/* Drawn lines with endpoint handles */}
             {lines.map((line, i) => (
-              line.type === 'horizontal' ? (
-                <div
-                  key={`line-${i}`}
-                  data-line-index={i}
-                  onMouseDown={(e) => handleLineMouseDown(e, i)}
-                  style={{
-                    position: 'absolute',
-                    left: `${line.x1 * 100}%`,
-                    width: `${(line.x2 - line.x1) * 100}%`,
-                    top: `${line.y * 100}%`,
-                    height: '8px',
-                    background: selectedLineIndex === i ? '#00ff00' : '#e94560',
-                    cursor: isDragging && dragLineIndex === i ? 'grabbing' : 'ns-resize',
-                    transform: 'translateY(-50%)',
-                    zIndex: 20,
-                    boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-                    borderRadius: '2px'
-                  }}
-                />
-              ) : (
-                <div
-                  key={`line-${i}`}
-                  data-line-index={i}
-                  onMouseDown={(e) => handleLineMouseDown(e, i)}
-                  style={{
-                    position: 'absolute',
-                    left: `${line.x * 100}%`,
-                    top: `${line.y1 * 100}%`,
-                    height: `${(line.y2 - line.y1) * 100}%`,
-                    width: '8px',
-                    background: selectedLineIndex === i ? '#00ff00' : '#3498db',
-                    cursor: isDragging && dragLineIndex === i ? 'grabbing' : 'ew-resize',
-                    transform: 'translateX(-50%)',
-                    zIndex: 20,
-                    boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-                    borderRadius: '2px'
-                  }}
-                />
-              )
+              <React.Fragment key={`line-${i}`}>
+                {line.type === 'horizontal' ? (
+                  <>
+                    {/* Horizontal line */}
+                    <div
+                      data-line-index={i}
+                      onMouseDown={(e) => handleLineMouseDown(e, i)}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x1 * 100}%`,
+                        width: `${(line.x2 - line.x1) * 100}%`,
+                        top: `${line.y * 100}%`,
+                        height: '8px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#e94560',
+                        cursor: isDragging && dragLineIndex === i ? 'grabbing' : 'ns-resize',
+                        transform: 'translateY(-50%)',
+                        zIndex: 20,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)',
+                        borderRadius: '2px'
+                      }}
+                    />
+                    {/* Left endpoint handle */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setIsDraggingEndpoint(true);
+                        setDragLineIndex(i);
+                        setDragEndpoint('start');
+                        setSelectedLineIndex(i);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x1 * 100}%`,
+                        top: `${line.y * 100}%`,
+                        width: '14px',
+                        height: '14px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#e94560',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'ew-resize',
+                        zIndex: 25,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)'
+                      }}
+                    />
+                    {/* Right endpoint handle */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setIsDraggingEndpoint(true);
+                        setDragLineIndex(i);
+                        setDragEndpoint('end');
+                        setSelectedLineIndex(i);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x2 * 100}%`,
+                        top: `${line.y * 100}%`,
+                        width: '14px',
+                        height: '14px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#e94560',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'ew-resize',
+                        zIndex: 25,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)'
+                      }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {/* Vertical line */}
+                    <div
+                      data-line-index={i}
+                      onMouseDown={(e) => handleLineMouseDown(e, i)}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x * 100}%`,
+                        top: `${line.y1 * 100}%`,
+                        height: `${(line.y2 - line.y1) * 100}%`,
+                        width: '8px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#3498db',
+                        cursor: isDragging && dragLineIndex === i ? 'grabbing' : 'ew-resize',
+                        transform: 'translateX(-50%)',
+                        zIndex: 20,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)',
+                        borderRadius: '2px'
+                      }}
+                    />
+                    {/* Top endpoint handle */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setIsDraggingEndpoint(true);
+                        setDragLineIndex(i);
+                        setDragEndpoint('start');
+                        setSelectedLineIndex(i);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x * 100}%`,
+                        top: `${line.y1 * 100}%`,
+                        width: '14px',
+                        height: '14px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#3498db',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'ns-resize',
+                        zIndex: 25,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)'
+                      }}
+                    />
+                    {/* Bottom endpoint handle */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setIsDraggingEndpoint(true);
+                        setDragLineIndex(i);
+                        setDragEndpoint('end');
+                        setSelectedLineIndex(i);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x * 100}%`,
+                        top: `${line.y2 * 100}%`,
+                        width: '14px',
+                        height: '14px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#3498db',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'ns-resize',
+                        zIndex: 25,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)'
+                      }}
+                    />
+                  </>
+                )}
+              </React.Fragment>
             ))}
 
             {/* Preview line */}
@@ -2453,16 +2780,66 @@ function PageEditor({ isCover = false }) {
 
           {/* Layout Preview */}
           {panelsComputed && (
-            <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}>
-              <h3 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: '#666' }}>Layout Description:</h3>
-              <pre style={{
-                fontSize: '0.85rem',
-                whiteSpace: 'pre-wrap',
-                color: '#333',
-                margin: 0
-              }}>
-                {layoutDescription}
-              </pre>
+            <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff', borderRadius: '8px', border: '1px solid #ddd', width: '400px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>Layout Description:</h3>
+                {customLayoutDescription && (
+                  <button
+                    onClick={() => setCustomLayoutDescription('')}
+                    style={{
+                      padding: '0.2rem 0.5rem',
+                      fontSize: '0.7rem',
+                      background: '#95a5a6',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '3px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Reset to Auto
+                  </button>
+                )}
+              </div>
+              <textarea
+                value={customLayoutDescription || layoutDescription}
+                onChange={(e) => setCustomLayoutDescription(e.target.value)}
+                style={{
+                  width: '100%',
+                  minHeight: '100px',
+                  fontSize: '0.85rem',
+                  fontFamily: 'monospace',
+                  padding: '0.5rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  resize: 'vertical',
+                  background: customLayoutDescription ? '#fffbeb' : '#f9f9f9'
+                }}
+                placeholder="Edit layout description..."
+              />
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center' }}>
+                {customLayoutDescription && (
+                  <small style={{ color: '#e67e22', fontSize: '0.75rem' }}>Custom layout description (yellow background)</small>
+                )}
+                <button
+                  onClick={() => {
+                    // Regenerate the prompt with current layout description
+                    setCustomPrompt(buildFullPrompt());
+                    setUseCustomPrompt(true);
+                  }}
+                  style={{
+                    marginLeft: 'auto',
+                    padding: '0.3rem 0.6rem',
+                    fontSize: '0.75rem',
+                    background: '#3498db',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Update Prompt
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -2997,8 +3374,8 @@ function PageEditor({ isCover = false }) {
                                     }}
                                   >
                                     <option value="">Select voice...</option>
-                                    {(comic.voices || []).map(voice => (
-                                      <option key={voice.voiceId} value={voice.voiceId}>
+                                    {(comic.voices || []).map((voice, idx) => (
+                                      <option key={`${voice.voiceId}-${idx}`} value={voice.voiceId}>
                                         {voice.name}
                                       </option>
                                     ))}
@@ -3237,12 +3614,12 @@ function PageEditor({ isCover = false }) {
                         <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
                           Shape: {bubble.type === 'thought'
                             ? `${bubble.cornerRadius ?? 50}% (20=rounded rect, 50=oval)`
-                            : `${bubble.cornerRadius || 8}px (0=square, 50=round)`}
+                            : `${bubble.cornerRadius || 8}px (0=square, 200=round)`}
                         </label>
                         <input
                           type="range"
                           min={bubble.type === 'thought' ? 20 : 0}
-                          max="50"
+                          max={bubble.type === 'thought' ? 50 : 200}
                           value={bubble.type === 'thought' ? (bubble.cornerRadius ?? 50) : (bubble.cornerRadius || 8)}
                           onChange={(e) => updateBubble(bubble.id, { cornerRadius: parseInt(e.target.value) })}
                           onClick={(e) => e.stopPropagation()}
@@ -3636,6 +4013,24 @@ function PageEditor({ isCover = false }) {
                 />
               </div>
 
+              {/* Update Prompt Button */}
+              <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f4fc', borderRadius: '8px', border: '1px solid #b8d4e3' }}>
+                <p style={{ fontSize: '0.85rem', color: '#555', marginBottom: '0.75rem' }}>
+                  After editing panel descriptions or settings, click below to regenerate the compiled prompt:
+                </p>
+                <button
+                  onClick={() => {
+                    setCustomPrompt(buildFullPrompt());
+                    setUseCustomPrompt(true);
+                    setSidebarTab('generate');
+                  }}
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '0.75rem' }}
+                >
+                  Update & View Compiled Prompt
+                </button>
+              </div>
+
               </div>
           )}
 
@@ -3824,6 +4219,176 @@ function PageEditor({ isCover = false }) {
               )}
             </div>
           )}
+        </div>
+
+        {/* ChatGPT Panel */}
+        <div className="chat-panel">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', color: '#333' }}>ChatGPT</h3>
+            <button
+              onClick={clearChat}
+              style={{
+                padding: '0.25rem 0.5rem',
+                fontSize: '0.7rem',
+                background: '#95a5a6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              Clear
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div className="chat-messages">
+            {chatMessages.length === 0 && (
+              <div style={{ color: '#888', fontSize: '0.85rem', textAlign: 'center', padding: '2rem 1rem' }}>
+                <p>Start a conversation with ChatGPT</p>
+                <p style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>You can upload images or share your generated page</p>
+              </div>
+            )}
+            {chatMessages.map((msg, idx) => (
+              <div key={idx} className={`chat-message ${msg.role}`}>
+                {msg.images && msg.images.length > 0 && (
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    {msg.images.map((img, imgIdx) => (
+                      <img key={imgIdx} src={img} alt="Uploaded" style={{ maxHeight: '100px' }} />
+                    ))}
+                  </div>
+                )}
+                <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content || '[No content]'}</div>
+              </div>
+            ))}
+            {isSendingChat && (
+              <div className="chat-message assistant" style={{ fontStyle: 'italic' }}>
+                Thinking...
+              </div>
+            )}
+            <div ref={chatMessagesEndRef} />
+          </div>
+
+          {/* Pending images */}
+          {chatImages.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              {chatImages.map((img, idx) => (
+                <div key={idx} style={{ position: 'relative' }}>
+                  <img src={img.preview} alt={img.name} style={{ height: '50px', borderRadius: '4px', border: '1px solid #ddd' }} />
+                  <button
+                    onClick={() => removeChatImage(idx)}
+                    style={{
+                      position: 'absolute',
+                      top: '-5px',
+                      right: '-5px',
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: '#c0392b',
+                      color: '#fff',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Input area */}
+          <div className="chat-input-area">
+            <textarea
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  sendChatMessage();
+                }
+              }}
+              placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+              rows={3}
+              disabled={isSendingChat}
+            />
+            <div className="chat-buttons">
+              <button
+                onClick={sendChatMessage}
+                disabled={isSendingChat || (!chatInput.trim() && chatImages.length === 0)}
+                style={{
+                  padding: '0.4rem 1rem',
+                  background: isSendingChat ? '#95a5a6' : '#e94560',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isSendingChat ? 'wait' : 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                {isSendingChat ? 'Sending...' : 'Send'}
+              </button>
+              <input
+                type="file"
+                ref={chatFileInputRef}
+                onChange={handleChatFileUpload}
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+              />
+              <button
+                onClick={() => chatFileInputRef.current?.click()}
+                disabled={isSendingChat}
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  background: '#3498db',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Upload Image
+              </button>
+              <button
+                onClick={uploadGeneratedImageToChat}
+                disabled={isSendingChat || !generatedImage?.path}
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  background: generatedImage?.path ? '#27ae60' : '#95a5a6',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: generatedImage?.path ? 'pointer' : 'not-allowed',
+                  fontSize: '0.85rem'
+                }}
+                title={generatedImage?.path ? 'Add generated image to chat' : 'Generate an image first'}
+              >
+                Add Generated
+              </button>
+              <button
+                onClick={() => setChatInput(prev => prev + (prev ? '\n\n' : '') + buildFullPrompt())}
+                disabled={isSendingChat}
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  background: '#9b59b6',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+                title="Add the full prompt to chat input"
+              >
+                Add Prompt
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

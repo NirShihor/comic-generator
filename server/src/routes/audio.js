@@ -120,7 +120,7 @@ Rules:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      max_tokens: 500,
+      max_completion_tokens: 500,
       temperature: 0.7
     });
 
@@ -320,7 +320,7 @@ router.post('/translate', async (req, res) => {
         },
         { role: 'user', content: text }
       ],
-      max_tokens: 500,
+      max_completion_tokens: 500,
       temperature: 0.3
     });
 

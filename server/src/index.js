@@ -8,6 +8,7 @@ const connectDB = require('./config/database');
 const comicRoutes = require('./routes/comics');
 const imageRoutes = require('./routes/images');
 const audioRoutes = require('./routes/audio');
+const chatRoutes = require('./routes/chat');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -28,6 +29,7 @@ app.use('/projects', express.static(path.join(__dirname, '../projects')));
 app.use('/api/comics', comicRoutes);
 app.use('/api/images', imageRoutes);
 app.use('/api/audio', audioRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
