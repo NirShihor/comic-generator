@@ -297,6 +297,10 @@ router.put('/:id/cover', async (req, res) => {
       comic.cover.prompt = req.body.prompt;
     }
 
+    if (req.body.bubbles !== undefined) {
+      comic.cover.bubbles = req.body.bubbles;
+    }
+
     if (req.body.image) {
       let sourceImagePath;
       if (req.body.image.startsWith('/uploads/')) {
@@ -371,9 +375,12 @@ router.post('/:id/export-full', async (req, res) => {
     const exportedComic = transformToReaderFormat(comicObj, comicSlug);
 
     const copiedImages = [];
+    const copiedAudio = [];
+    const projectAudioDir = path.join(PROJECTS_DIR, req.params.id, 'audio');
 
-    if (comicObj.cover?.masterImage) {
-      const coverSourcePath = path.join(__dirname, '../..', comicObj.cover.masterImage);
+    if (comicObj.cover?.image) {
+      const cleanCoverImage = comicObj.cover.image.split('?')[0];
+      const coverSourcePath = path.join(__dirname, '../..', cleanCoverImage);
       const coverDestPath = path.join(imagesDir, `${comicSlug}_cover.png`);
       try {
         await fs.copyFile(coverSourcePath, coverDestPath);
@@ -386,7 +393,8 @@ router.post('/:id/export-full', async (req, res) => {
     for (const page of comicObj.pages) {
       if (page.masterImage) {
         const pageNum = page.pageNumber;
-        const sourceImagePath = path.join(__dirname, '../..', page.masterImage);
+        const cleanMasterImage = page.masterImage.split('?')[0];
+        const sourceImagePath = path.join(__dirname, '../..', cleanMasterImage);
 
         const masterDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}.png`);
         try {
@@ -417,6 +425,27 @@ router.post('/:id/export-full', async (req, res) => {
       }
     }
 
+    // Copy audio files
+    const allBubbles = [
+      ...(comicObj.cover?.bubbles || []),
+      ...(comicObj.pages || []).flatMap(p => p.bubbles || [])
+    ];
+    for (const bubble of allBubbles) {
+      for (const sentence of bubble.sentences || []) {
+        if (sentence.audioUrl) {
+          const audioFilename = `${sentence.audioUrl}.mp3`;
+          const audioSourcePath = path.join(projectAudioDir, audioFilename);
+          const audioDestPath = path.join(audioDir, audioFilename);
+          try {
+            await fs.copyFile(audioSourcePath, audioDestPath);
+            copiedAudio.push(audioFilename);
+          } catch (e) {
+            console.log('Audio file not found:', audioSourcePath);
+          }
+        }
+      }
+    }
+
     const comicJsonPath = path.join(exportDir, 'comic.json');
     await fs.writeFile(comicJsonPath, JSON.stringify(exportedComic, null, 2));
 
@@ -425,6 +454,7 @@ router.post('/:id/export-full', async (req, res) => {
       exportDir,
       comicJson: comicJsonPath,
       copiedImages,
+      copiedAudio,
       message: `Exported to ${exportDir}`
     });
   } catch (error) {
@@ -440,7 +470,7 @@ function transformToReaderFormat(comic, comicSlug) {
 
   const pages = [];
 
-  if (comic.cover?.masterImage) {
+  if (comic.cover?.image) {
     pages.push({
       id: `${comicSlug}-page-cover`,
       pageNumber: 1,
@@ -467,12 +497,14 @@ function transformToReaderFormat(comic, comicSlug) {
                 id: sentenceId,
                 text: sentence.text || '',
                 translation: sentence.translation || '',
-                audioUrl: `${comicSlug}_cover`,
+                audioUrl: sentence.audioUrl || '',
                 words: (sentence.words || []).map(word => ({
                   id: `${comicSlug}-w${wordCounter++}`,
                   text: word.text || '',
                   meaning: word.meaning || '',
-                  baseForm: word.baseForm || word.text || ''
+                  baseForm: word.baseForm || word.text || '',
+                  ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
+                  ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs })
                 }))
               };
             })
@@ -527,7 +559,7 @@ function transformToReaderFormat(comic, comicSlug) {
                   id: sentenceId,
                   text: sentence.text || '',
                   translation: sentence.translation || '',
-                  audioUrl: `${comicSlug}_p${page.pageNumber}_s${panelNum}`,
+                  audioUrl: sentence.audioUrl || '',
                   words: (sentence.words || []).map(word => ({
                     id: `${comicSlug}-w${wordCounter++}`,
                     text: word.text || '',

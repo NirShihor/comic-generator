@@ -5,7 +5,9 @@ const WordSchema = new mongoose.Schema({
   id: String,
   text: String,
   meaning: String,
-  baseForm: String
+  baseForm: String,
+  startTimeMs: Number,
+  endTimeMs: Number
 }, { _id: false });
 
 // Sentence Schema (nested in Bubble)
@@ -42,6 +44,7 @@ const BubbleSchema = new mongoose.Schema({
   tailBend: Number, // Tail curvature: negative = bend left, positive = bend right
   textAngle: Number, // Rotation angle for text inside bubble
   isSoundEffect: Boolean, // If true, this is a sound effect text (no TTS audio)
+  locked: Boolean,
   // Styling
   bgColor: String,
   bgTransparent: Boolean,
@@ -125,7 +128,8 @@ const ComicSchema = new mongoose.Schema({
   cover: {
     image: String,
     sceneImage: String,
-    prompt: String
+    prompt: String,
+    bubbles: [BubbleSchema]
   },
   voices: [VoiceSchema],
   promptTemplates: {

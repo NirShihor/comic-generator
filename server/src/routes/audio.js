@@ -181,13 +181,12 @@ router.post('/generate', async (req, res) => {
     }
 
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voice_id}/with-timestamps`,
       {
         method: 'POST',
         headers: {
           'xi-api-key': process.env.ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-          'Accept': 'audio/mpeg'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       }
@@ -199,26 +198,62 @@ router.post('/generate', async (req, res) => {
       throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
     }
 
-    // Get audio as buffer
-    const audioBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(audioBuffer);
+    const data = await response.json();
+    const buffer = Buffer.from(data.audio_base64, 'base64');
 
     // Save to temp file
     const filename = `audio-${uuidv4()}.mp3`;
     const filePath = path.join(UPLOADS_DIR, filename);
     await fs.writeFile(filePath, buffer);
 
-    // Also return base64 for immediate playback
-    const base64Audio = buffer.toString('base64');
+    // Convert character-level alignment to word-level timestamps
+    let wordTimestamps = [];
+    const alignment = data.normalized_alignment || data.alignment;
+    if (alignment && alignment.characters) {
+      const chars = alignment.characters;
+      const starts = alignment.character_start_times_seconds;
+      const ends = alignment.character_end_times_seconds;
+
+      let wordStart = null;
+      let currentWord = '';
+
+      for (let i = 0; i < chars.length; i++) {
+        const ch = chars[i];
+        if (ch === ' ' || ch === '\n' || ch === '\t') {
+          if (currentWord) {
+            wordTimestamps.push({
+              word: currentWord,
+              startMs: Math.round(wordStart * 1000),
+              endMs: Math.round(ends[i - 1] * 1000)
+            });
+            currentWord = '';
+            wordStart = null;
+          }
+        } else {
+          if (wordStart === null) wordStart = starts[i];
+          currentWord += ch;
+        }
+      }
+      if (currentWord) {
+        wordTimestamps.push({
+          word: currentWord,
+          startMs: Math.round(wordStart * 1000),
+          endMs: Math.round(ends[chars.length - 1] * 1000)
+        });
+      }
+    }
+
+    console.log(`Generated ${wordTimestamps.length} word timestamps`);
 
     res.json({
       filename,
       path: `/uploads/${filename}`,
-      base64: base64Audio,
+      base64: data.audio_base64,
       mimeType: 'audio/mpeg',
       text,
       voice_id,
-      model_id
+      model_id,
+      wordTimestamps
     });
   } catch (error) {
     console.error('Failed to generate audio:', error);

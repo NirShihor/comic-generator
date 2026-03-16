@@ -91,4 +91,82 @@ router.post('/message', async (req, res) => {
   }
 });
 
+// Word lookup - get text, meaning, and baseForm for a clicked word or phrase
+router.post('/word-lookup', async (req, res) => {
+  try {
+    const { selectedText, sentenceText, sentenceTranslation, sourceLanguage = 'es', targetLanguage = 'en' } = req.body;
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    }
+
+    if (!selectedText || !sentenceText) {
+      return res.status(400).json({ error: 'selectedText and sentenceText are required' });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const languageNames = {
+      en: 'English', es: 'Spanish', fr: 'French', de: 'German',
+      it: 'Italian', pt: 'Portuguese', ja: 'Japanese', ko: 'Korean', zh: 'Chinese'
+    };
+
+    const sourceLang = languageNames[sourceLanguage] || sourceLanguage;
+    const targetLang = languageNames[targetLanguage] || targetLanguage;
+
+    const isSourceLanguage = sentenceText.includes(selectedText);
+
+    let prompt;
+    if (isSourceLanguage) {
+      prompt = `The ${sourceLang} sentence is: "${sentenceText}"
+The ${targetLang} translation is: "${sentenceTranslation || ''}"
+
+The user clicked on: "${selectedText}" (from the ${sourceLang} sentence)
+
+Return a JSON object with:
+- "text": the ${sourceLang} word/phrase exactly as it appears in the sentence (with any punctuation)
+- "meaning": the ${targetLang} meaning of this word/phrase in this context
+- "baseForm": the dictionary/base form of the ${sourceLang} word (lowercase, no punctuation). For verbs use the infinitive, for nouns use the singular, for adjectives use the masculine singular.
+
+Return ONLY the JSON object, no other text.`;
+    } else {
+      prompt = `The ${sourceLang} sentence is: "${sentenceText}"
+The ${targetLang} translation is: "${sentenceTranslation || ''}"
+
+The user clicked on: "${selectedText}" (from the ${targetLang} translation)
+
+Find the corresponding ${sourceLang} word(s) in the original sentence.
+
+Return a JSON object with:
+- "text": the corresponding ${sourceLang} word/phrase as it appears in the sentence (with any punctuation)
+- "meaning": the ${targetLang} meaning (which should include or relate to "${selectedText}")
+- "baseForm": the dictionary/base form of the ${sourceLang} word (lowercase, no punctuation). For verbs use the infinitive, for nouns use the singular, for adjectives use the masculine singular.
+
+Return ONLY the JSON object, no other text.`;
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a precise language assistant. Always respond with valid JSON only.' },
+        { role: 'user', content: prompt }
+      ],
+      max_completion_tokens: 200,
+      temperature: 0.2
+    });
+
+    const responseText = completion.choices[0].message.content.trim();
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return res.status(500).json({ error: 'Failed to parse word lookup response' });
+    }
+
+    const wordData = JSON.parse(jsonMatch[0]);
+    res.json(wordData);
+  } catch (error) {
+    console.error('Word lookup error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
