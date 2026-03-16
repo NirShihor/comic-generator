@@ -370,7 +370,8 @@ function PageEditor({ isCover = false }) {
           url: `http://localhost:3001${response.data.path}`,
           base64: response.data.base64,
           filename: response.data.filename,
-          isPlaying: false
+          isPlaying: false,
+          wordTimestamps: response.data.wordTimestamps || []
         }
       }));
     } catch (error) {
@@ -485,8 +486,31 @@ function PageEditor({ isCover = false }) {
       const sentence = bubble?.sentences?.find(s => s.id === sentenceId);
       const cleanedText = sentence?.text ? stripAudioTags(sentence.text) : '';
 
-      // Update sentence with audio URL and cleaned text
-      updateSentence(bubbleId, sentenceId, { audioUrl: audioName, text: cleanedText });
+      // Build word list from timestamps - every spoken word gets an entry
+      const timestamps = preview.wordTimestamps || [];
+      const existingWords = sentence?.words || [];
+      const allWords = timestamps.map(t => {
+        const normalised = t.word.toLowerCase().replace(/[.,!?;:"""''¿¡]/g, '');
+        const existing = existingWords.find(w =>
+          (w.text || '').toLowerCase().replace(/[.,!?;:"""''¿¡]/g, '') === normalised
+        );
+        return {
+          id: existing?.id || `word-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          text: existing?.text || t.word,
+          meaning: existing?.meaning || '',
+          baseForm: existing?.baseForm || '',
+          startTimeMs: t.startMs,
+          endTimeMs: t.endMs
+        };
+      });
+
+      setBubbles(prev => prev.map(b => {
+        if (b.id !== bubbleId) return b;
+        return { ...b, sentences: (b.sentences || []).map(s => {
+          if (s.id !== sentenceId) return s;
+          return { ...s, audioUrl: audioName, text: cleanedText, words: allWords.length > 0 ? allWords : existingWords };
+        })};
+      }));
 
       alert('Audio saved successfully!');
     } catch (error) {
@@ -992,6 +1016,45 @@ function PageEditor({ isCover = false }) {
     }));
   };
 
+  const [lookingUpWord, setLookingUpWord] = useState({});
+
+  const wordLookup = async (bubbleId, sentenceId, selectedText, sentenceText, sentenceTranslation) => {
+    const lookupKey = `${sentenceId}-${selectedText}`;
+    setLookingUpWord(prev => ({ ...prev, [lookupKey]: true }));
+    try {
+      const response = await api.post('/chat/word-lookup', {
+        selectedText,
+        sentenceText,
+        sentenceTranslation,
+        sourceLanguage: comic?.language || 'es',
+        targetLanguage: comic?.targetLanguage || 'en'
+      });
+      setBubbles(prev => prev.map(b => {
+        if (b.id !== bubbleId) return b;
+        return {
+          ...b,
+          sentences: (b.sentences || []).map(s => {
+            if (s.id !== sentenceId) return s;
+            return {
+              ...s,
+              words: [...(s.words || []), {
+                id: `word-${Date.now()}`,
+                text: response.data.text || selectedText,
+                meaning: response.data.meaning || '',
+                baseForm: response.data.baseForm || ''
+              }]
+            };
+          })
+        };
+      }));
+    } catch (error) {
+      console.error('Word lookup failed:', error);
+      alert('Word lookup failed: ' + error.message);
+    } finally {
+      setLookingUpWord(prev => ({ ...prev, [lookupKey]: false }));
+    }
+  };
+
   const updateBubble = (bubbleId, updates) => {
     setBubbles(prev => prev.map(b =>
       b.id === bubbleId ? { ...b, ...updates } : b
@@ -1011,6 +1074,7 @@ function PageEditor({ isCover = false }) {
     if (!coords) return;
 
     setSelectedBubbleId(bubble.id);
+    if (bubble.locked) return;
     setIsDraggingBubble(true);
     setDragOffset({
       x: coords.x - bubble.x,
@@ -1021,6 +1085,7 @@ function PageEditor({ isCover = false }) {
   const handleResizeMouseDown = (e, bubble, corner) => {
     e.stopPropagation();
     setSelectedBubbleId(bubble.id);
+    if (bubble.locked) return;
     setIsResizingBubble(true);
     setResizeCorner(corner);
   };
@@ -1033,30 +1098,35 @@ function PageEditor({ isCover = false }) {
   const handleTailMouseDown = (e, bubble) => {
     e.stopPropagation();
     setSelectedBubbleId(bubble.id);
+    if (bubble.locked) return;
     setIsDraggingTail(true);
   };
 
   const handleTailBaseMouseDown = (e, bubble) => {
     e.stopPropagation();
     setSelectedBubbleId(bubble.id);
+    if (bubble.locked) return;
     setIsDraggingTailBase(true);
   };
 
   const handleTailCtrl1MouseDown = (e, bubble) => {
     e.stopPropagation();
     setSelectedBubbleId(bubble.id);
+    if (bubble.locked) return;
     setIsDraggingTailCtrl1(true);
   };
 
   const handleTailCtrl2MouseDown = (e, bubble) => {
     e.stopPropagation();
     setSelectedBubbleId(bubble.id);
+    if (bubble.locked) return;
     setIsDraggingTailCtrl2(true);
   };
 
   const handleRotationMouseDown = (e, bubble) => {
     e.stopPropagation();
     setSelectedBubbleId(bubble.id);
+    if (bubble.locked) return;
     setIsDraggingRotation(true);
   };
 
@@ -2673,7 +2743,7 @@ function PageEditor({ isCover = false }) {
                             setSelectedBubbleId(bubble.id);
                             setEditorMode('bubbles');
                           }}
-                          style={{ pointerEvents: 'auto', cursor: editorMode === 'bubbles' ? (isDraggingBubble ? 'grabbing' : 'grab') : 'default' }}
+                          style={{ pointerEvents: 'auto', cursor: editorMode === 'bubbles' ? (bubble.locked ? 'default' : (isDraggingBubble ? 'grabbing' : 'grab')) : 'default' }}
                         >
                           <path
                             d={path}
@@ -2936,7 +3006,7 @@ function PageEditor({ isCover = false }) {
                       justifyContent: 'center',
                       padding: '6px 8px',
                       boxSizing: 'border-box',
-                      cursor: editorMode === 'bubbles' ? (isDraggingBubble ? 'grabbing' : 'grab') : 'default',
+                      cursor: editorMode === 'bubbles' ? (bubble.locked ? 'default' : (isDraggingBubble ? 'grabbing' : 'grab')) : 'default',
                       zIndex: 50,
                       boxShadow: selectedBubbleId === bubble.id ? '0 0 10px rgba(0,255,0,0.5)' : 'none',
                       // Hand-drawn effect with slight rotation and rough filter
@@ -3538,21 +3608,37 @@ function PageEditor({ isCover = false }) {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 'bold' }}>Bubble {i + 1}</span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteBubble(bubble.id); }}
-                      style={{
-                        padding: '0.2rem 0.5rem',
-                        background: '#c0392b',
-                        border: 'none',
-                        borderRadius: '4px',
-                        color: '#fff',
-                        cursor: 'pointer',
-                        fontSize: '0.75rem'
-                      }}
-                    >
-                      Delete
-                    </button>
+                    <span style={{ fontWeight: 'bold' }}>Bubble {i + 1} {bubble.locked ? '(locked)' : ''}</span>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { locked: !bubble.locked }); }}
+                        style={{
+                          padding: '0.2rem 0.5rem',
+                          background: bubble.locked ? '#e67e22' : '#95a5a6',
+                          border: 'none',
+                          borderRadius: '4px',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem'
+                        }}
+                      >
+                        {bubble.locked ? 'Unlock' : 'Lock'}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteBubble(bubble.id); }}
+                        style={{
+                          padding: '0.2rem 0.5rem',
+                          background: '#c0392b',
+                          border: 'none',
+                          borderRadius: '4px',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem'
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
 
                   {selectedBubbleId === bubble.id && (
@@ -4020,16 +4106,95 @@ function PageEditor({ isCover = false }) {
                                     fontSize: '0.65rem'
                                   }}
                                 >
-                                  + Word
+                                  + Manual
                                 </button>
                               </div>
+
+                              {/* Clickable words - Spanish */}
+                              {sentence.text && (
+                                <div style={{ marginBottom: '0.3rem', padding: '0.3rem', background: '#fff8e1', borderRadius: '3px', border: '1px solid #ffe082' }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <span style={{ fontSize: '0.6rem', color: '#f57f17', display: 'block', marginBottom: '0.15rem' }}>Click word or select phrase:</span>
+                                  <span style={{ fontSize: '0.75rem', lineHeight: '1.6' }}
+                                    onMouseUp={(e) => {
+                                      const selection = window.getSelection();
+                                      const selected = selection?.toString().trim();
+                                      if (selected && selected.length > 0 && selected.includes(' ')) {
+                                        wordLookup(bubble.id, sentence.id, selected, sentence.text, sentence.translation);
+                                        selection.removeAllRanges();
+                                      }
+                                    }}
+                                  >
+                                    {sentence.text.split(/(\s+)/).map((part, i) => {
+                                      if (/^\s+$/.test(part)) return <span key={i}>{part}</span>;
+                                      const isLooking = lookingUpWord[`${sentence.id}-${part}`];
+                                      return (
+                                        <span
+                                          key={i}
+                                          onClick={() => wordLookup(bubble.id, sentence.id, part, sentence.text, sentence.translation)}
+                                          style={{
+                                            cursor: isLooking ? 'wait' : 'pointer',
+                                            color: '#e65100',
+                                            borderBottom: '1px dashed #ffab40',
+                                            padding: '0 1px',
+                                            opacity: isLooking ? 0.5 : 1
+                                          }}
+                                        >
+                                          {part}
+                                        </span>
+                                      );
+                                    })}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Clickable words - English */}
+                              {sentence.translation && (
+                                <div style={{ marginBottom: '0.3rem', padding: '0.3rem', background: '#e8f5e9', borderRadius: '3px', border: '1px solid #a5d6a7' }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <span style={{ fontSize: '0.6rem', color: '#2e7d32', display: 'block', marginBottom: '0.15rem' }}>Click word or select phrase:</span>
+                                  <span style={{ fontSize: '0.75rem', lineHeight: '1.6' }}
+                                    onMouseUp={(e) => {
+                                      const selection = window.getSelection();
+                                      const selected = selection?.toString().trim();
+                                      if (selected && selected.length > 0 && selected.includes(' ')) {
+                                        wordLookup(bubble.id, sentence.id, selected, sentence.text, sentence.translation);
+                                        selection.removeAllRanges();
+                                      }
+                                    }}
+                                  >
+                                    {sentence.translation.split(/(\s+)/).map((part, i) => {
+                                      if (/^\s+$/.test(part)) return <span key={i}>{part}</span>;
+                                      const isLooking = lookingUpWord[`${sentence.id}-${part}`];
+                                      return (
+                                        <span
+                                          key={i}
+                                          onClick={() => wordLookup(bubble.id, sentence.id, part, sentence.text, sentence.translation)}
+                                          style={{
+                                            cursor: isLooking ? 'wait' : 'pointer',
+                                            color: '#1b5e20',
+                                            borderBottom: '1px dashed #66bb6a',
+                                            padding: '0 1px',
+                                            opacity: isLooking ? 0.5 : 1
+                                          }}
+                                        >
+                                          {part}
+                                        </span>
+                                      );
+                                    })}
+                                  </span>
+                                </div>
+                              )}
 
                               {(sentence.words || []).map((word, wIdx) => (
                                 <div key={word.id} style={{
                                   display: 'flex',
                                   gap: '0.25rem',
                                   marginBottom: '0.25rem',
-                                  alignItems: 'center'
+                                  alignItems: 'center',
+                                  minWidth: 0
                                 }}>
                                   <input
                                     type="text"
@@ -4039,6 +4204,7 @@ function PageEditor({ isCover = false }) {
                                     placeholder="Word"
                                     style={{
                                       flex: 1,
+                                      minWidth: 0,
                                       padding: '0.25rem',
                                       borderRadius: '2px',
                                       border: '1px solid #ccc',
@@ -4053,6 +4219,7 @@ function PageEditor({ isCover = false }) {
                                     placeholder="Meaning"
                                     style={{
                                       flex: 1,
+                                      minWidth: 0,
                                       padding: '0.25rem',
                                       borderRadius: '2px',
                                       border: '1px solid #ccc',
@@ -4067,6 +4234,7 @@ function PageEditor({ isCover = false }) {
                                     placeholder="Base"
                                     style={{
                                       flex: 1,
+                                      minWidth: 0,
                                       padding: '0.25rem',
                                       borderRadius: '2px',
                                       border: '1px solid #ccc',
@@ -4077,12 +4245,14 @@ function PageEditor({ isCover = false }) {
                                     onClick={(e) => { e.stopPropagation(); removeWord(bubble.id, sentence.id, word.id); }}
                                     style={{
                                       padding: '0.15rem 0.3rem',
+                                      marginRight: '0.25rem',
                                       background: '#c0392b',
                                       border: 'none',
                                       borderRadius: '2px',
                                       color: '#fff',
                                       cursor: 'pointer',
-                                      fontSize: '0.65rem'
+                                      fontSize: '0.65rem',
+                                      flexShrink: 0
                                     }}
                                   >
                                     ×
