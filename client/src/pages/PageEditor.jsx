@@ -517,6 +517,9 @@ function PageEditor({ isCover = false }) {
         setPage(coverPage);
         setPanels(coverPage.panels);
         setPanelsComputed(true);
+        if (response.data.cover?.bubbles) {
+          setBubbles(response.data.cover.bubbles);
+        }
         if (response.data.promptSettings) {
           setPromptSettings(prev => ({ ...prev, ...response.data.promptSettings }));
         }
@@ -1316,11 +1319,12 @@ function PageEditor({ isCover = false }) {
   const savePage = async () => {
     try {
       if (isCover) {
-        // Save cover with prompt
+        // Save cover with prompt and bubbles
         const coverPrompt = panels[0]?.content || '';
         await api.put(`/comics/${id}/cover`, {
           image: page.masterImage,
-          prompt: coverPrompt
+          prompt: coverPrompt,
+          bubbles
         });
         alert('Cover saved!');
         return;

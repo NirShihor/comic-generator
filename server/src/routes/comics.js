@@ -297,6 +297,10 @@ router.put('/:id/cover', async (req, res) => {
       comic.cover.prompt = req.body.prompt;
     }
 
+    if (req.body.bubbles !== undefined) {
+      comic.cover.bubbles = req.body.bubbles;
+    }
+
     if (req.body.image) {
       let sourceImagePath;
       if (req.body.image.startsWith('/uploads/')) {
