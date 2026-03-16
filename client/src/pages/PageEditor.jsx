@@ -247,7 +247,8 @@ function PageEditor({ isCover = false }) {
   const [showPagePreview, setShowPagePreview] = useState(false);
 
   // Panel-by-panel generation state
-  const [panelImages, setPanelImages] = useState({}); // { [panelId]: { path, generating, error } }
+  // Each panel can have: { path, generating, error, fitMode: 'stretch'|'crop', cropX: 0, cropY: 0, zoom: 1 }
+  const [panelImages, setPanelImages] = useState({});
   const [generatingAllPanels, setGeneratingAllPanels] = useState(false);
   const [showCompositePreview, setShowCompositePreview] = useState(false);
   const compositeCanvasRef = useRef(null);
@@ -327,7 +328,7 @@ function PageEditor({ isCover = false }) {
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
 
   // Editor mode and bubble state
-  const [editorMode, setEditorMode] = useState('layout'); // 'layout' or 'bubbles'
+  const [editorMode, setEditorMode] = useState(isCover ? 'bubbles' : 'layout'); // 'layout' or 'bubbles'
   const [bubbles, setBubbles] = useState([]);
   const [selectedBubbleId, setSelectedBubbleId] = useState(null);
   const [isDraggingBubble, setIsDraggingBubble] = useState(false);
@@ -509,13 +510,16 @@ function PageEditor({ isCover = false }) {
             id: 'cover-panel-1',
             panelOrder: 1,
             tapZone: { x: 0, y: 0, width: 1, height: 1 },
-            content: '',
+            content: response.data.cover?.prompt || '',
             bubbles: []
           }]
         };
         setPage(coverPage);
         setPanels(coverPage.panels);
         setPanelsComputed(true);
+        if (response.data.promptSettings) {
+          setPromptSettings(prev => ({ ...prev, ...response.data.promptSettings }));
+        }
         return;
       }
 
@@ -1312,9 +1316,11 @@ function PageEditor({ isCover = false }) {
   const savePage = async () => {
     try {
       if (isCover) {
-        // Save cover
+        // Save cover with prompt
+        const coverPrompt = panels[0]?.content || '';
         await api.put(`/comics/${id}/cover`, {
-          image: page.masterImage
+          image: page.masterImage,
+          prompt: coverPrompt
         });
         alert('Cover saved!');
         return;
@@ -1452,8 +1458,15 @@ function PageEditor({ isCover = false }) {
       prompt += `ADDITIONAL INSTRUCTIONS:\n${additionalInstructions}\n\n`;
     }
 
-    // Critical: fill entire canvas, no panel borders
-    prompt += `CRITICAL: This is a SINGLE PANEL illustration. The artwork MUST fill the ENTIRE canvas edge-to-edge. No panel borders, no margins, no white space around the edges. Do NOT draw panel frames or gutters - this single image will be placed into a panel frame by the app.`;
+    // Critical: fill entire canvas, absolutely no borders
+    prompt += `CRITICAL REQUIREMENTS:
+- This is a SINGLE PANEL illustration, NOT a comic page.
+- The artwork MUST fill the ENTIRE canvas edge-to-edge with NO borders.
+- Do NOT draw any panel borders, frames, outlines, or edges around the image.
+- Do NOT add any margins, gutters, or white/black space around the edges.
+- Do NOT draw rectangular frames or box outlines.
+- The image content should extend all the way to every edge of the canvas.
+- This image will be cropped and placed into a panel frame by the app - any borders you draw will create ugly double-borders.`;
 
     return prompt;
   };
@@ -1494,9 +1507,14 @@ function PageEditor({ isCover = false }) {
       setPanelImages(prev => ({
         ...prev,
         [panel.id]: {
+          ...prev[panel.id], // Preserve existing fitMode and crop settings
           path: response.data.path,
           generating: false,
-          error: null
+          error: null,
+          fitMode: prev[panel.id]?.fitMode || 'stretch',
+          cropX: prev[panel.id]?.cropX ?? 0,
+          cropY: prev[panel.id]?.cropY ?? 0,
+          zoom: prev[panel.id]?.zoom ?? 1
         }
       }));
 
@@ -1523,14 +1541,23 @@ function PageEditor({ isCover = false }) {
     }
 
     setGeneratingAllPanels(true);
+    console.log(`Starting generation of ${panelsWithContent.length} panels...`);
 
     for (let i = 0; i < panels.length; i++) {
       const panel = panels[i];
       if (panel.content?.trim()) {
-        await generatePanelImage(panel, i);
+        console.log(`Generating panel ${i + 1} of ${panels.length}...`);
+        try {
+          await generatePanelImage(panel, i);
+          console.log(`Panel ${i + 1} complete.`);
+        } catch (error) {
+          console.error(`Panel ${i + 1} failed:`, error);
+          // Continue with next panel even if this one fails
+        }
       }
     }
 
+    console.log('All panels generation complete.');
     setGeneratingAllPanels(false);
   };
 
@@ -1545,8 +1572,10 @@ function PageEditor({ isCover = false }) {
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
 
-    // Gutter size in pixels (thicker margin between panels)
+    // Gutter size in pixels (margin between panels)
     const gutterSize = 16;
+    // Outer margin for the entire page
+    const outerMargin = 12;
 
     // Load and draw each panel image
     const loadImage = (src) => {
@@ -1624,6 +1653,11 @@ function PageEditor({ isCover = false }) {
     // Now draw all the loaded images
     for (const { panel, img } of loadedImages) {
       const { x, y, width, height } = panel.tapZone;
+      const panelData = panelImages[panel.id];
+      const fitMode = panelData?.fitMode || 'stretch';
+      const cropX = panelData?.cropX ?? 0; // -1 to 1 (left to right)
+      const cropY = panelData?.cropY ?? 0; // -1 to 1 (top to bottom)
+      const zoom = panelData?.zoom ?? 1; // 1 = 100%, >1 = zoom in
 
       // Calculate pixel positions
       const px = x * canvasWidth;
@@ -1631,15 +1665,65 @@ function PageEditor({ isCover = false }) {
       const pw = width * canvasWidth;
       const ph = height * canvasHeight;
 
-      // Apply gutter insets - shrink panel by half gutter on each side
+      // Apply gutter insets and outer margin
       const inset = gutterSize / 2;
-      const adjustedX = px + (x > 0 ? inset : 0);
-      const adjustedY = py + (y > 0 ? inset : 0);
-      const adjustedW = pw - (x > 0 ? inset : 0) - (x + width < 1 ? inset : 0);
-      const adjustedH = ph - (y > 0 ? inset : 0) - (y + height < 1 ? inset : 0);
+      // Left edge: outer margin if at page edge, half gutter if internal
+      const leftInset = x > 0.01 ? inset : outerMargin;
+      // Top edge: outer margin if at page edge, half gutter if internal
+      const topInset = y > 0.01 ? inset : outerMargin;
+      // Right edge: outer margin if at page edge, half gutter if internal
+      const rightInset = x + width < 0.99 ? inset : outerMargin;
+      // Bottom edge: outer margin if at page edge, half gutter if internal
+      const bottomInset = y + height < 0.99 ? inset : outerMargin;
 
-      // Draw the image, scaling to fit the adjusted panel area
-      ctx.drawImage(img, adjustedX, adjustedY, adjustedW, adjustedH);
+      const adjustedX = px + leftInset;
+      const adjustedY = py + topInset;
+      const adjustedW = pw - leftInset - rightInset;
+      const adjustedH = ph - topInset - bottomInset;
+
+      // Trim percentage off each edge to remove AI-generated borders
+      const edgeTrim = 0.03; // 3% off each edge
+      const trimX = img.width * edgeTrim;
+      const trimY = img.height * edgeTrim;
+      const trimmedW = img.width - (trimX * 2);
+      const trimmedH = img.height - (trimY * 2);
+
+      if (fitMode === 'crop') {
+        // Crop mode: preserve aspect ratio, cover the panel, and allow repositioning + zoom
+        const imgAspect = trimmedW / trimmedH;
+        const panelAspect = adjustedW / adjustedH;
+
+        // Calculate base source dimensions (minimum to cover the panel)
+        let baseSourceW, baseSourceH;
+
+        if (imgAspect > panelAspect) {
+          // Image is wider - base on height for cover
+          baseSourceH = trimmedH;
+          baseSourceW = trimmedH * panelAspect;
+        } else {
+          // Image is taller - base on width for cover
+          baseSourceW = trimmedW;
+          baseSourceH = trimmedW / panelAspect;
+        }
+
+        // Apply zoom (zoom > 1 = zoom in = smaller source area)
+        const sourceW = baseSourceW / zoom;
+        const sourceH = baseSourceH / zoom;
+
+        // Calculate max offsets (how much we can pan around) within trimmed area
+        const maxOffsetX = Math.max(0, trimmedW - sourceW);
+        const maxOffsetY = Math.max(0, trimmedH - sourceH);
+
+        // Position based on cropX/cropY (-1 to 1), offset by trim
+        const sourceX = trimX + (maxOffsetX / 2) * (1 + cropX);
+        const sourceY = trimY + (maxOffsetY / 2) * (1 + cropY);
+
+        // Draw cropped portion of the image
+        ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, adjustedX, adjustedY, adjustedW, adjustedH);
+      } else {
+        // Stretch mode: scale to fit exactly (may distort), but trim edges
+        ctx.drawImage(img, trimX, trimY, trimmedW, trimmedH, adjustedX, adjustedY, adjustedW, adjustedH);
+      }
     }
 
     // Helper function to draw a wobbly/hand-drawn line
@@ -1697,12 +1781,17 @@ function PageEditor({ isCover = false }) {
       const pw = width * canvasWidth;
       const ph = height * canvasHeight;
 
-      // Apply same gutter insets for border
+      // Apply same gutter insets and outer margin for border
       const inset = gutterSize / 2;
-      const adjustedX = px + (x > 0 ? inset : 0);
-      const adjustedY = py + (y > 0 ? inset : 0);
-      const adjustedW = pw - (x > 0 ? inset : 0) - (x + width < 1 ? inset : 0);
-      const adjustedH = ph - (y > 0 ? inset : 0) - (y + height < 1 ? inset : 0);
+      const leftInset = x > 0.01 ? inset : outerMargin;
+      const topInset = y > 0.01 ? inset : outerMargin;
+      const rightInset = x + width < 0.99 ? inset : outerMargin;
+      const bottomInset = y + height < 0.99 ? inset : outerMargin;
+
+      const adjustedX = px + leftInset;
+      const adjustedY = py + topInset;
+      const adjustedW = pw - leftInset - rightInset;
+      const adjustedH = ph - topInset - bottomInset;
 
       // Draw multiple passes for thicker, more organic look
       for (let pass = 0; pass < 3; pass++) {
@@ -1805,12 +1894,23 @@ function PageEditor({ isCover = false }) {
 
     try {
       const filename = generatedImage.path.split('/').pop();
-      await api.post('/images/save-to-project', {
+      const saveResponse = await api.post('/images/save-to-project', {
         comicId: id,
         filename,
-        imageType: 'page',
+        imageType: isCover ? 'cover' : 'page',
         pageNumber: page.pageNumber
       });
+
+      if (isCover) {
+        const savedPath = saveResponse.data.path;
+        const coverPrompt = panels[0]?.content || '';
+        const updatedCover = { ...comic.cover, image: savedPath, prompt: coverPrompt };
+        await api.put(`/comics/${id}`, { cover: updatedCover });
+        setComic(prev => ({ ...prev, cover: updatedCover }));
+        setPage(prev => ({ ...prev, masterImage: savedPath + `?t=${Date.now()}` }));
+        alert('Image saved to cover!');
+        return;
+      }
 
       const updatedComic = { ...comic };
       const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
@@ -1818,7 +1918,6 @@ function PageEditor({ isCover = false }) {
 
       await api.put(`/comics/${id}`, updatedComic);
       setComic(updatedComic);
-      // Create a local copy with cache-buster for immediate display refresh
       const pageWithCacheBuster = {
         ...updatedComic.pages[pageIndex],
         masterImage: updatedComic.pages[pageIndex].masterImage + `?t=${Date.now()}`
@@ -2029,15 +2128,16 @@ function PageEditor({ isCover = false }) {
       </div>
       )}
 
-      {/* Toolbar - hide for cover */}
-      {!isCover && (
+      {/* Toolbar */}
       <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ color: '#888', fontSize: '0.85rem' }}>
-          {editorMode === 'layout'
-            ? 'Draw lines by dragging | Drag lines to reposition'
-            : isAddingBubble
-              ? 'Click on canvas to place bubble'
-              : 'Drag to reposition | Select to edit'}
+          {isCover
+            ? (isAddingBubble ? 'Click on canvas to place bubble' : 'Add bubbles for title text')
+            : editorMode === 'layout'
+              ? 'Draw lines by dragging | Drag lines to reposition'
+              : isAddingBubble
+                ? 'Click on canvas to place bubble'
+                : 'Drag to reposition | Select to edit'}
         </span>
         {editorMode === 'bubbles' && (
           <button
@@ -2048,6 +2148,7 @@ function PageEditor({ isCover = false }) {
             {isAddingBubble ? 'Cancel' : '+ Add Bubble'}
           </button>
         )}
+        {!isCover && (
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
           {selectedLineIndex !== null && (
             <button
@@ -2073,8 +2174,8 @@ function PageEditor({ isCover = false }) {
             Compute Panels
           </button>
         </div>
+        )}
       </div>
-      )}
 
       <div className="panel-editor">
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -4339,7 +4440,39 @@ function PageEditor({ isCover = false }) {
                 </div>
               </div>
 
-              {/* Panel Contents */}
+              {/* Cover Content - show for cover only */}
+              {isCover && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+                  Cover Content
+                </label>
+                <textarea
+                  value={panels[0]?.content || ''}
+                  onChange={(e) => {
+                    const updated = [...panels];
+                    if (updated[0]) {
+                      updated[0] = { ...updated[0], content: e.target.value };
+                      setPanels(updated);
+                    }
+                  }}
+                  placeholder="Describe the cover image (characters, scene, composition, text/title placement...)"
+                  style={{
+                    width: '100%',
+                    minHeight: '150px',
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    background: '#fff',
+                    color: '#333',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+              )}
+
+              {/* Panel Contents - show for regular pages */}
               {!isCover && (
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
@@ -4490,20 +4623,22 @@ function PageEditor({ isCover = false }) {
           {/* GENERATE TAB */}
           {sidebarTab === 'generate' && (
             <div>
-              <h2 style={{ marginBottom: '1rem' }}>Generate Page Image</h2>
+              <h2 style={{ marginBottom: '1rem' }}>Generate {isCover ? 'Cover' : 'Page'} Image</h2>
 
               {!panelsComputed || panels.length === 0 ? (
                 <p style={{ color: '#888', fontSize: '0.9rem' }}>
-                  Please compute panels first (switch to Panels tab and click "Compute Panels")
+                  {isCover
+                    ? 'Add cover content in the Prompts tab first'
+                    : 'Please compute panels first (switch to Panels tab and click "Compute Panels")'}
                 </p>
               ) : (
                 <>
                   {/* Panel Content Summary */}
                   <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#fff', borderRadius: '4px', border: '1px solid #ddd' }}>
-                    <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Panel Content:</h4>
+                    <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>{isCover ? 'Cover' : 'Panel'} Content:</h4>
                     {panels.map((panel, i) => (
                       <div key={panel.id} style={{ fontSize: '0.8rem', marginBottom: '0.25rem' }}>
-                        <strong>Panel {i + 1}:</strong> {panel.content ? panel.content.substring(0, 50) + '...' : <span style={{ color: '#666' }}>(empty)</span>}
+                        <strong>{isCover ? 'Cover' : `Panel ${i + 1}`}:</strong> {panel.content ? panel.content.substring(0, 50) + '...' : <span style={{ color: '#666' }}>(empty)</span>}
                       </div>
                     ))}
                   </div>
@@ -4531,7 +4666,8 @@ function PageEditor({ isCover = false }) {
                     />
                   </div>
 
-                  {/* Generation Mode Tabs */}
+                  {/* Generation Mode Tabs - hide for cover (only one panel) */}
+                  {!isCover && (
                   <div style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
                       <button
@@ -4566,6 +4702,7 @@ function PageEditor({ isCover = false }) {
                       </button>
                     </div>
                   </div>
+                  )}
 
                   {/* Full Page Mode */}
                   {!showCompositePreview && (
@@ -4700,6 +4837,152 @@ function PageEditor({ isCover = false }) {
                           background: '#fff'
                         }}
                       />
+
+                      {/* Crop Controls for each panel */}
+                      {panels.some(p => panelImages[p.id]?.path) && (
+                        <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#f9f9f9', borderRadius: '4px', border: '1px solid #eee' }}>
+                          <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Panel Fit & Position</h4>
+                          {panels.map((panel, i) => {
+                            const panelData = panelImages[panel.id];
+                            if (!panelData?.path) return null;
+
+                            return (
+                              <div key={panel.id} style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#fff', borderRadius: '4px', border: '1px solid #ddd' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#333', minWidth: '55px' }}>Panel {i + 1}</span>
+                                  <button
+                                    onClick={() => {
+                                      setPanelImages(prev => ({
+                                        ...prev,
+                                        [panel.id]: { ...prev[panel.id], fitMode: 'stretch' }
+                                      }));
+                                      setTimeout(() => compositePageFromPanels(), 50);
+                                    }}
+                                    style={{
+                                      padding: '0.2rem 0.5rem',
+                                      fontSize: '0.7rem',
+                                      background: (panelData?.fitMode || 'stretch') === 'stretch' ? '#3498db' : '#ddd',
+                                      color: (panelData?.fitMode || 'stretch') === 'stretch' ? 'white' : '#666',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    Stretch
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setPanelImages(prev => ({
+                                        ...prev,
+                                        [panel.id]: { ...prev[panel.id], fitMode: 'crop', cropX: prev[panel.id]?.cropX ?? 0, cropY: prev[panel.id]?.cropY ?? 0, zoom: prev[panel.id]?.zoom ?? 1 }
+                                      }));
+                                      setTimeout(() => compositePageFromPanels(), 50);
+                                    }}
+                                    style={{
+                                      padding: '0.2rem 0.5rem',
+                                      fontSize: '0.7rem',
+                                      background: panelData?.fitMode === 'crop' ? '#3498db' : '#ddd',
+                                      color: panelData?.fitMode === 'crop' ? 'white' : '#666',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    Crop
+                                  </button>
+                                </div>
+                                {/* Crop position sliders - only show when in crop mode */}
+                                {panelData?.fitMode === 'crop' && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <span style={{ fontSize: '0.7rem', color: '#666', width: '55px' }}>Horizontal:</span>
+                                      <input
+                                        type="range"
+                                        min="-100"
+                                        max="100"
+                                        value={(panelData?.cropX ?? 0) * 100}
+                                        onChange={(e) => {
+                                          setPanelImages(prev => ({
+                                            ...prev,
+                                            [panel.id]: { ...prev[panel.id], cropX: parseInt(e.target.value) / 100 }
+                                          }));
+                                          setTimeout(() => compositePageFromPanels(), 50);
+                                        }}
+                                        style={{ flex: 1 }}
+                                      />
+                                      <span style={{ fontSize: '0.65rem', color: '#999', width: '35px' }}>
+                                        {Math.round((panelData?.cropX ?? 0) * 100)}%
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <span style={{ fontSize: '0.7rem', color: '#666', width: '55px' }}>Vertical:</span>
+                                      <input
+                                        type="range"
+                                        min="-100"
+                                        max="100"
+                                        value={(panelData?.cropY ?? 0) * 100}
+                                        onChange={(e) => {
+                                          setPanelImages(prev => ({
+                                            ...prev,
+                                            [panel.id]: { ...prev[panel.id], cropY: parseInt(e.target.value) / 100 }
+                                          }));
+                                          setTimeout(() => compositePageFromPanels(), 50);
+                                        }}
+                                        style={{ flex: 1 }}
+                                      />
+                                      <span style={{ fontSize: '0.65rem', color: '#999', width: '35px' }}>
+                                        {Math.round((panelData?.cropY ?? 0) * 100)}%
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <span style={{ fontSize: '0.7rem', color: '#666', width: '55px' }}>Zoom:</span>
+                                      <input
+                                        type="range"
+                                        min="100"
+                                        max="300"
+                                        step="10"
+                                        value={(panelData?.zoom ?? 1) * 100}
+                                        onChange={(e) => {
+                                          setPanelImages(prev => ({
+                                            ...prev,
+                                            [panel.id]: { ...prev[panel.id], zoom: parseInt(e.target.value) / 100 }
+                                          }));
+                                          setTimeout(() => compositePageFromPanels(), 50);
+                                        }}
+                                        style={{ flex: 1 }}
+                                      />
+                                      <span style={{ fontSize: '0.65rem', color: '#999', width: '35px' }}>
+                                        {Math.round((panelData?.zoom ?? 1) * 100)}%
+                                      </span>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        setPanelImages(prev => ({
+                                          ...prev,
+                                          [panel.id]: { ...prev[panel.id], cropX: 0, cropY: 0, zoom: 1 }
+                                        }));
+                                        setTimeout(() => compositePageFromPanels(), 50);
+                                      }}
+                                      style={{
+                                        padding: '0.15rem 0.4rem',
+                                        fontSize: '0.65rem',
+                                        background: '#95a5a6',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        alignSelf: 'flex-start'
+                                      }}
+                                    >
+                                      Reset All
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
 

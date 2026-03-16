@@ -124,7 +124,8 @@ const ComicSchema = new mongoose.Schema({
   targetLanguage: { type: String, default: 'en' },
   cover: {
     image: String,
-    sceneImage: String
+    sceneImage: String,
+    prompt: String
   },
   voices: [VoiceSchema],
   promptTemplates: {

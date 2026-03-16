@@ -289,7 +289,12 @@ router.put('/:id/cover', async (req, res) => {
     const imagesDir = path.join(PROJECTS_DIR, req.params.id, 'images');
 
     if (!comic.cover) {
-      comic.cover = { image: '', sceneImage: '' };
+      comic.cover = { image: '', sceneImage: '', prompt: '' };
+    }
+
+    // Save the cover prompt if provided
+    if (req.body.prompt !== undefined) {
+      comic.cover.prompt = req.body.prompt;
     }
 
     if (req.body.image) {
