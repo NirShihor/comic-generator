@@ -5,8 +5,28 @@ import api from '../services/api';
 function ComicList() {
   const [comics, setComics] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [comicToDelete, setComicToDelete] = useState(null);
   const [newComic, setNewComic] = useState({ title: '', description: '', level: 'beginner' });
   const navigate = useNavigate();
+
+  const handleDeleteClick = (e, comic) => {
+    e.stopPropagation();
+    setComicToDelete(comic);
+    setShowDeleteModal(true);
+  };
+
+  const deleteComic = async () => {
+    if (!comicToDelete) return;
+    try {
+      await api.delete(`/comics/${comicToDelete.id}`);
+      setComics(comics.filter(c => c.id !== comicToDelete.id));
+      setShowDeleteModal(false);
+      setComicToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete comic:', error);
+    }
+  };
 
   useEffect(() => {
     loadComics();
@@ -52,7 +72,25 @@ function ComicList() {
             key={comic.id}
             className="comic-card"
             onClick={() => navigate(`/comic/${comic.id}`)}
+            style={{ position: 'relative' }}
           >
+            <button
+              onClick={(e) => handleDeleteClick(e, comic)}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                background: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '4px 8px',
+                fontSize: '0.75rem',
+                cursor: 'pointer'
+              }}
+            >
+              Delete
+            </button>
             <h3>{comic.title}</h3>
             <p>{comic.description || 'No description'}</p>
             <p style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
@@ -109,6 +147,30 @@ function ComicList() {
               </button>
               <button className="btn btn-primary" onClick={createComic}>
                 Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && comicToDelete && (
+        <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Delete Comic</h2>
+            <p>Are you sure you want to delete "{comicToDelete.title}"?</p>
+            <p style={{ color: '#dc3545', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+              This will permanently delete all pages, images, and audio files.
+            </p>
+            <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+              <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn"
+                style={{ background: '#dc3545', color: 'white' }}
+                onClick={deleteComic}
+              >
+                Delete
               </button>
             </div>
           </div>

@@ -1,6 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
+
+// Strip audio enhancement tags like [sighs], [pause], [ominous, slowly] and quotation marks from text
+function stripAudioTags(text) {
+  if (!text) return text;
+  return text.replace(/\[[^\]]+\]/g, '').replace(/["]/g, '').replace(/\s+/g, ' ').trim();
+}
 
 // Check if a line exists between two adjacent cells
 function hasLineBetween(lines, cell1, cell2, direction) {
@@ -132,13 +138,29 @@ function computePanelsFromLines(lines, pageId) {
   const panels = [];
   let panelIndex = 1;
 
-  // Sort groups by their top-left position for consistent ordering
+  // Sort groups using comic reading order (left column first, then right)
+  // When panels overlap vertically, read left-to-right (same row)
+  // When they don't overlap, read top-to-bottom
   const sortedGroups = Object.values(groups).sort((a, b) => {
     const aMinY = Math.min(...a.map(c => c.y1));
+    const aMaxY = Math.max(...a.map(c => c.y2));
     const bMinY = Math.min(...b.map(c => c.y1));
-    if (Math.abs(aMinY - bMinY) > 0.01) return aMinY - bMinY;
+    const bMaxY = Math.max(...b.map(c => c.y2));
     const aMinX = Math.min(...a.map(c => c.x1));
     const bMinX = Math.min(...b.map(c => c.x1));
+
+    // Check if panels overlap vertically
+    const yOverlap = Math.min(aMaxY, bMaxY) - Math.max(aMinY, bMinY);
+    const minHeight = Math.min(aMaxY - aMinY, bMaxY - bMinY);
+
+    // If significant vertical overlap (>50% of smaller panel), sort by X (left to right)
+    // This ensures left column is read before right column when they share vertical space
+    if (yOverlap > minHeight * 0.5) {
+      return aMinX - bMinX;
+    }
+
+    // Otherwise, sort by Y (top to bottom), then X
+    if (Math.abs(aMinY - bMinY) > 0.01) return aMinY - bMinY;
     return aMinX - bMinX;
   });
 
@@ -177,10 +199,14 @@ function generateLayoutDescription(panels) {
   const descriptions = panels.map((panel, i) => {
     const { x, y, width, height } = panel.tapZone;
 
-    const vPos = y < 0.4 ? 'top' : y < 0.7 ? 'middle' : 'bottom';
-    const hPos = x < 0.4 ? 'left' : x < 0.7 ? 'center' : 'right';
+    // Use center point for position detection
+    const centerY = y + height / 2;
+    const centerX = x + width / 2;
+
+    const vPos = centerY < 0.33 ? 'top' : centerY < 0.67 ? 'middle' : 'bottom';
+    const hPos = centerX < 0.33 ? 'left' : centerX < 0.67 ? 'center' : 'right';
     const widthDesc = width > 0.9 ? 'full-width' : width > 0.6 ? 'wide' : 'half-width';
-    const heightDesc = height > 0.6 ? 'tall' : height > 0.4 ? 'half-height' : 'short';
+    const heightDesc = height > 0.6 ? 'full-length' : height > 0.4 ? 'half-length' : 'third-length';
 
     return `Panel ${i + 1} = ${vPos}-${hPos}, ${widthDesc}, ${heightDesc}`;
   });
@@ -206,6 +232,8 @@ function PageEditor({ isCover = false }) {
   // Dragging state
   const [isDragging, setIsDragging] = useState(false);
   const [dragLineIndex, setDragLineIndex] = useState(null);
+  const [isDraggingEndpoint, setIsDraggingEndpoint] = useState(false);
+  const [dragEndpoint, setDragEndpoint] = useState(null); // 'start' or 'end'
 
   // Image generation state
   const [generatedImage, setGeneratedImage] = useState(null);
@@ -213,7 +241,78 @@ function PageEditor({ isCover = false }) {
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   const [generationError, setGenerationError] = useState(null);
   const [additionalInstructions, setAdditionalInstructions] = useState('');
+  const [customPrompt, setCustomPrompt] = useState(''); // For manual prompt override
+  const [useCustomPrompt, setUseCustomPrompt] = useState(false);
+  const [customLayoutDescription, setCustomLayoutDescription] = useState(''); // For manual layout description override
   const [showPagePreview, setShowPagePreview] = useState(false);
+
+  // Panel-by-panel generation state
+  // Each panel can have: { path, generating, error, fitMode: 'stretch'|'crop', cropX: 0, cropY: 0, zoom: 1 }
+  const [panelImages, setPanelImages] = useState({});
+  const [generatingAllPanels, setGeneratingAllPanels] = useState(false);
+  const [showCompositePreview, setShowCompositePreview] = useState(false);
+  const compositeCanvasRef = useRef(null);
+
+  // Audio generation state (voices come from comic.voices)
+  const [selectedVoiceId, setSelectedVoiceId] = useState('');
+  const [audioModel, setAudioModel] = useState('eleven_v3');
+  const [audioSettings, setAudioSettings] = useState({
+    stability: 0.5,
+    similarity_boost: 0.75,
+    style: 0.0,
+    speed: 1.0
+  });
+  const [audioPreview, setAudioPreview] = useState({}); // { [sentenceId]: { url, base64, isPlaying } }
+  const [generatingAudio, setGeneratingAudio] = useState({}); // { [sentenceId]: true/false }
+  const [enhancingText, setEnhancingText] = useState({}); // { [sentenceId]: true/false }
+  const [translatingText, setTranslatingText] = useState({}); // { [sentenceId]: true/false }
+  const [translateInput, setTranslateInput] = useState({}); // { [sentenceId]: 'english text' }
+  const audioRef = useRef(null);
+
+  // ChatGPT panel state - persist in localStorage
+  const [chatMessages, setChatMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`comic-chat-${id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Filter out any messages that might have old image data
+        return parsed.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          hadImages: msg.hadImages
+        }));
+      }
+      return [];
+    } catch (e) {
+      console.warn('Failed to load chat from localStorage:', e);
+      localStorage.removeItem(`comic-chat-${id}`);
+      return [];
+    }
+  });
+  const [chatInput, setChatInput] = useState('');
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [chatImages, setChatImages] = useState([]); // Images to send with next message
+  const chatFileInputRef = useRef(null);
+  const chatMessagesEndRef = useRef(null);
+  const chatMessagesRef = useRef(chatMessages); // Backup ref to prevent state loss
+
+  // Save chat messages to localStorage when they change (without images to avoid quota issues)
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      // Strip image data to avoid localStorage quota issues
+      const messagesWithoutImages = chatMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        hadImages: msg.images && msg.images.length > 0 // Just note that there were images
+      }));
+      try {
+        localStorage.setItem(`comic-chat-${id}`, JSON.stringify(messagesWithoutImages));
+      } catch (e) {
+        console.warn('Failed to save chat to localStorage:', e);
+      }
+    }
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages, id]);
 
   // Sidebar tab state
   const [sidebarTab, setSidebarTab] = useState('panels'); // 'panels', 'prompts', 'generate'
@@ -229,7 +328,7 @@ function PageEditor({ isCover = false }) {
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
 
   // Editor mode and bubble state
-  const [editorMode, setEditorMode] = useState('layout'); // 'layout' or 'bubbles'
+  const [editorMode, setEditorMode] = useState(isCover ? 'bubbles' : 'layout'); // 'layout' or 'bubbles'
   const [bubbles, setBubbles] = useState([]);
   const [selectedBubbleId, setSelectedBubbleId] = useState(null);
   const [isDraggingBubble, setIsDraggingBubble] = useState(false);
@@ -248,6 +347,154 @@ function PageEditor({ isCover = false }) {
     loadComic();
   }, [id, pageId, isCover]);
 
+  // Audio generation functions (voices come from comic.voices configured in ComicEditor)
+  const generateAudio = async (bubbleId, sentenceId, text) => {
+    if (!text || !selectedVoiceId) {
+      alert('Please enter text and select a voice');
+      return;
+    }
+
+    setGeneratingAudio(prev => ({ ...prev, [sentenceId]: true }));
+
+    try {
+      const response = await api.post('/audio/generate', {
+        text,
+        voice_id: selectedVoiceId,
+        model_id: audioModel,
+        ...audioSettings
+      });
+
+      setAudioPreview(prev => ({
+        ...prev,
+        [sentenceId]: {
+          url: `http://localhost:3001${response.data.path}`,
+          base64: response.data.base64,
+          filename: response.data.filename,
+          isPlaying: false
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to generate audio:', error);
+      alert('Failed to generate audio: ' + error.message);
+    } finally {
+      setGeneratingAudio(prev => ({ ...prev, [sentenceId]: false }));
+    }
+  };
+
+  const enhanceText = async (bubbleId, sentenceId, text) => {
+    if (!text) return;
+
+    setEnhancingText(prev => ({ ...prev, [sentenceId]: true }));
+
+    try {
+      const bubble = bubbles.find(b => b.id === bubbleId);
+      const context = bubble?.type === 'thought' ? 'This is an internal thought' :
+                      bubble?.type === 'narration' ? 'This is narration text' :
+                      'This is dialogue speech';
+
+      const response = await api.post('/audio/enhance', { text, context });
+
+      // Update the sentence with enhanced text
+      updateSentence(bubbleId, sentenceId, { text: response.data.enhanced });
+    } catch (error) {
+      console.error('Failed to enhance text:', error);
+      alert('Failed to enhance text: ' + error.message);
+    } finally {
+      setEnhancingText(prev => ({ ...prev, [sentenceId]: false }));
+    }
+  };
+
+  const translateText = async (bubbleId, sentenceId, englishText) => {
+    if (!englishText) return;
+
+    setTranslatingText(prev => ({ ...prev, [sentenceId]: true }));
+
+    try {
+      const response = await api.post('/audio/translate', {
+        text: englishText,
+        fromLanguage: 'en',
+        toLanguage: comic?.language || 'es'
+      });
+
+      // Update the sentence with translated text and English as translation
+      updateSentence(bubbleId, sentenceId, {
+        text: response.data.translated,
+        translation: englishText
+      });
+
+      // Clear the translate input
+      setTranslateInput(prev => ({ ...prev, [sentenceId]: '' }));
+    } catch (error) {
+      console.error('Failed to translate text:', error);
+      alert('Failed to translate: ' + error.message);
+    } finally {
+      setTranslatingText(prev => ({ ...prev, [sentenceId]: false }));
+    }
+  };
+
+  const playAudio = (sentenceId) => {
+    const preview = audioPreview[sentenceId];
+    if (!preview) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    const audio = new Audio(`data:audio/mpeg;base64,${preview.base64}`);
+    audioRef.current = audio;
+
+    audio.onended = () => {
+      setAudioPreview(prev => ({
+        ...prev,
+        [sentenceId]: { ...prev[sentenceId], isPlaying: false }
+      }));
+    };
+
+    audio.play();
+    setAudioPreview(prev => ({
+      ...prev,
+      [sentenceId]: { ...prev[sentenceId], isPlaying: true }
+    }));
+  };
+
+  const stopAudio = (sentenceId) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setAudioPreview(prev => ({
+      ...prev,
+      [sentenceId]: { ...prev[sentenceId], isPlaying: false }
+    }));
+  };
+
+  const saveAudio = async (bubbleId, sentenceId, pageNum, panelNum) => {
+    const preview = audioPreview[sentenceId];
+    if (!preview?.filename) return;
+
+    try {
+      const audioName = `${comic.title.toLowerCase().replace(/\s+/g, '_')}_p${pageNum}_s${panelNum}`;
+      const response = await api.post('/audio/save-to-project', {
+        comicId: id,
+        filename: preview.filename,
+        audioName
+      });
+
+      // Find current sentence text and strip audio tags
+      const bubble = bubbles.find(b => b.id === bubbleId);
+      const sentence = bubble?.sentences?.find(s => s.id === sentenceId);
+      const cleanedText = sentence?.text ? stripAudioTags(sentence.text) : '';
+
+      // Update sentence with audio URL and cleaned text
+      updateSentence(bubbleId, sentenceId, { audioUrl: audioName, text: cleanedText });
+
+      alert('Audio saved successfully!');
+    } catch (error) {
+      console.error('Failed to save audio:', error);
+      alert('Failed to save audio: ' + error.message);
+    }
+  };
+
   const loadComic = async () => {
     try {
       const response = await api.get(`/comics/${id}`);
@@ -263,17 +510,25 @@ function PageEditor({ isCover = false }) {
             id: 'cover-panel-1',
             panelOrder: 1,
             tapZone: { x: 0, y: 0, width: 1, height: 1 },
-            content: '',
+            content: response.data.cover?.prompt || '',
             bubbles: []
           }]
         };
         setPage(coverPage);
         setPanels(coverPage.panels);
         setPanelsComputed(true);
+        if (response.data.promptSettings) {
+          setPromptSettings(prev => ({ ...prev, ...response.data.promptSettings }));
+        }
         return;
       }
 
-      const currentPage = response.data.pages.find(p => p.id === pageId);
+      const pages = response.data.pages || [];
+      const currentPage = pages.find(p => p.id === pageId);
+      if (!currentPage) {
+        console.error('Page not found:', pageId);
+        return;
+      }
       setPage(currentPage);
       if (currentPage?.lines) {
         setLines(currentPage.lines);
@@ -425,6 +680,37 @@ function PageEditor({ isCover = false }) {
     const coords = getRelativeCoords(e);
     if (!coords) return;
 
+    // Handle endpoint dragging (extend/shorten lines)
+    if (isDraggingEndpoint && dragLineIndex !== null && dragEndpoint) {
+      const snapPoints = getSnapPoints();
+
+      setLines(prev => prev.map((l, i) => {
+        if (i !== dragLineIndex) return l;
+
+        if (l.type === 'horizontal') {
+          // Horizontal line: drag x1 or x2
+          const snappedX = snapToNearest(coords.x, snapPoints.x);
+          const clampedX = Math.max(0, Math.min(1, snappedX));
+          if (dragEndpoint === 'start') {
+            return { ...l, x1: Math.min(clampedX, l.x2 - 0.05) };
+          } else {
+            return { ...l, x2: Math.max(clampedX, l.x1 + 0.05) };
+          }
+        } else {
+          // Vertical line: drag y1 or y2
+          const snappedY = snapToNearest(coords.y, snapPoints.y);
+          const clampedY = Math.max(0, Math.min(1, snappedY));
+          if (dragEndpoint === 'start') {
+            return { ...l, y1: Math.min(clampedY, l.y2 - 0.05) };
+          } else {
+            return { ...l, y2: Math.max(clampedY, l.y1 + 0.05) };
+          }
+        }
+      }));
+      setPanelsComputed(false);
+      return;
+    }
+
     // Handle line dragging
     if (isDragging && dragLineIndex !== null) {
       const line = lines[dragLineIndex];
@@ -459,7 +745,15 @@ function PageEditor({ isCover = false }) {
     setDrawEnd(snappedCoords);
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (overrideEndCoords = null) => {
+    // Stop endpoint dragging
+    if (isDraggingEndpoint) {
+      setIsDraggingEndpoint(false);
+      setDragLineIndex(null);
+      setDragEndpoint(null);
+      return;
+    }
+
     // Stop dragging
     if (isDragging) {
       setIsDragging(false);
@@ -467,13 +761,15 @@ function PageEditor({ isCover = false }) {
       return;
     }
 
-    if (!isDrawing || !drawStart || !drawEnd) {
+    const endCoords = overrideEndCoords || drawEnd;
+
+    if (!isDrawing || !drawStart || !endCoords) {
       setIsDrawing(false);
       return;
     }
 
-    const dx = Math.abs(drawEnd.x - drawStart.x);
-    const dy = Math.abs(drawEnd.y - drawStart.y);
+    const dx = Math.abs(endCoords.x - drawStart.x);
+    const dy = Math.abs(endCoords.y - drawStart.y);
 
     // Minimum drag distance
     if (dx < 0.02 && dy < 0.02) {
@@ -486,27 +782,27 @@ function PageEditor({ isCover = false }) {
     let newLine;
     if (dx > dy) {
       // Horizontal line
-      const y = (drawStart.y + drawEnd.y) / 2;
+      const y = (drawStart.y + endCoords.y) / 2;
       const snapPoints = getSnapPoints();
       const snappedY = snapToNearest(y, snapPoints.y);
 
       newLine = {
         type: 'horizontal',
         y: snappedY,
-        x1: Math.min(drawStart.x, drawEnd.x),
-        x2: Math.max(drawStart.x, drawEnd.x)
+        x1: Math.min(drawStart.x, endCoords.x),
+        x2: Math.max(drawStart.x, endCoords.x)
       };
     } else {
       // Vertical line
-      const x = (drawStart.x + drawEnd.x) / 2;
+      const x = (drawStart.x + endCoords.x) / 2;
       const snapPoints = getSnapPoints();
       const snappedX = snapToNearest(x, snapPoints.x);
 
       newLine = {
         type: 'vertical',
         x: snappedX,
-        y1: Math.min(drawStart.y, drawEnd.y),
-        y2: Math.max(drawStart.y, drawEnd.y)
+        y1: Math.min(drawStart.y, endCoords.y),
+        y2: Math.max(drawStart.y, endCoords.y)
       };
     }
 
@@ -553,10 +849,10 @@ function PageEditor({ isCover = false }) {
       width: 0.2,
       height: 0.1,
       type: 'speech', // 'speech', 'thought', 'narration'
-      fontId: 'bangers', // default font
-      fontSize: 16,
+      fontId: 'patrick-hand', // default font
+      fontSize: 15,
       italic: false,
-      uppercase: true, // default to uppercase for comic style
+      uppercase: false, // default to lowercase
       bgColor: '#ffffff',
       textColor: '#000000',
       cornerRadius: 20, // 0 = square, 50 = very round
@@ -565,8 +861,20 @@ function PageEditor({ isCover = false }) {
       tailY: 0.08,  // tip offset from bubble center (positive = below)
       tailBaseX: 0.5, // where tail joins bubble (0 = left edge, 1 = right edge)
       tailSide: 'bottom', // which side tail connects: 'top', 'bottom', 'left', 'right'
-      tailWidth: 0.06, // width of tail base as percentage of canvas
+      tailWidth: 0.25, // width of tail base as percentage of bubble width
       showTail: true,
+      // Rotation (for speech bubbles - rotates the whole bubble+tail)
+      rotation: 0, // degrees, 0 = tail at bottom
+      tailLength: 0.35, // length of tail relative to bubble height
+      tailCurve: 0, // tail angle: -1 = far left, 0 = center, +1 = far right
+      tailBend: 0, // tail curvature: -1 = bend left, 0 = straight, +1 = bend right
+      textAngle: 0, // rotation angle for text inside bubble
+      isSoundEffect: false, // if true, this is a sound effect (no TTS audio)
+      // Tail curve control points (offset from midpoint of each edge)
+      tailCtrl1X: 0,
+      tailCtrl1Y: 0,
+      tailCtrl2X: 0,
+      tailCtrl2Y: 0,
       // Language learning data
       sentences: [{
         id: `sentence-${Date.now()}`,
@@ -715,6 +1023,9 @@ function PageEditor({ isCover = false }) {
   };
 
   const [isDraggingTailBase, setIsDraggingTailBase] = useState(false);
+  const [isDraggingTailCtrl1, setIsDraggingTailCtrl1] = useState(false);
+  const [isDraggingTailCtrl2, setIsDraggingTailCtrl2] = useState(false);
+  const [isDraggingRotation, setIsDraggingRotation] = useState(false);
 
   const handleTailMouseDown = (e, bubble) => {
     e.stopPropagation();
@@ -726,6 +1037,24 @@ function PageEditor({ isCover = false }) {
     e.stopPropagation();
     setSelectedBubbleId(bubble.id);
     setIsDraggingTailBase(true);
+  };
+
+  const handleTailCtrl1MouseDown = (e, bubble) => {
+    e.stopPropagation();
+    setSelectedBubbleId(bubble.id);
+    setIsDraggingTailCtrl1(true);
+  };
+
+  const handleTailCtrl2MouseDown = (e, bubble) => {
+    e.stopPropagation();
+    setSelectedBubbleId(bubble.id);
+    setIsDraggingTailCtrl2(true);
+  };
+
+  const handleRotationMouseDown = (e, bubble) => {
+    e.stopPropagation();
+    setSelectedBubbleId(bubble.id);
+    setIsDraggingRotation(true);
   };
 
   const handleCanvasMouseDown = (e) => {
@@ -832,6 +1161,97 @@ function PageEditor({ isCover = false }) {
 
           updateBubble(selectedBubbleId, { tailSide, tailBaseX });
         }
+      } else if (isDraggingTailCtrl1 && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          // Control point is an offset from the midpoint between base1 and tip
+          // Calculate current base1 and tip positions
+          const tailBasePos = bubble.tailBaseX ?? 0.5;
+          const tailSide = bubble.tailSide || 'bottom';
+          const tailWidth = bubble.tailWidth ?? 0.10;
+          const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
+
+          let base1X, base1Y;
+          if (tailSide === 'bottom') {
+            base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
+            base1Y = bubble.y + bubble.height;
+          } else if (tailSide === 'top') {
+            base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
+            base1Y = bubble.y;
+          } else if (tailSide === 'left') {
+            base1X = bubble.x;
+            base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
+          } else {
+            base1X = bubble.x + bubble.width;
+            base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
+          }
+
+          const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
+          const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
+
+          // Midpoint between base1 and tip
+          const midX = (base1X + tipX) / 2;
+          const midY = (base1Y + tipY) / 2;
+
+          // Control point offset is mouse position minus midpoint
+          updateBubble(selectedBubbleId, {
+            tailCtrl1X: coords.x - midX,
+            tailCtrl1Y: coords.y - midY
+          });
+        }
+      } else if (isDraggingTailCtrl2 && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          // Control point is an offset from the midpoint between base2 and tip
+          const tailBasePos = bubble.tailBaseX ?? 0.5;
+          const tailSide = bubble.tailSide || 'bottom';
+          const tailWidth = bubble.tailWidth ?? 0.10;
+          const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
+
+          let base2X, base2Y;
+          if (tailSide === 'bottom') {
+            base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
+            base2Y = bubble.y + bubble.height;
+          } else if (tailSide === 'top') {
+            base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
+            base2Y = bubble.y;
+          } else if (tailSide === 'left') {
+            base2X = bubble.x;
+            base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
+          } else {
+            base2X = bubble.x + bubble.width;
+            base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
+          }
+
+          const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
+          const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
+
+          // Midpoint between base2 and tip
+          const midX = (base2X + tipX) / 2;
+          const midY = (base2Y + tipY) / 2;
+
+          // Control point offset is mouse position minus midpoint
+          updateBubble(selectedBubbleId, {
+            tailCtrl2X: coords.x - midX,
+            tailCtrl2Y: coords.y - midY
+          });
+        }
+      } else if (isDraggingRotation && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          // Calculate angle from bubble center to mouse position
+          const cx = bubble.x + bubble.width / 2;
+          const cy = bubble.y + bubble.height / 2;
+          const dx = coords.x - cx;
+          const dy = coords.y - cy;
+          // Calculate angle in degrees (0 = bottom, clockwise positive)
+          let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+          // Normalize to 0-360
+          if (angle < 0) angle += 360;
+          updateBubble(selectedBubbleId, {
+            rotation: angle
+          });
+        }
       }
     } else {
       handleMouseMove(e);
@@ -845,6 +1265,9 @@ function PageEditor({ isCover = false }) {
       setResizeCorner(null);
       setIsDraggingTail(false);
       setIsDraggingTailBase(false);
+      setIsDraggingTailCtrl1(false);
+      setIsDraggingTailCtrl2(false);
+      setIsDraggingRotation(false);
     } else {
       handleMouseUp();
     }
@@ -893,9 +1316,11 @@ function PageEditor({ isCover = false }) {
   const savePage = async () => {
     try {
       if (isCover) {
-        // Save cover
+        // Save cover with prompt
+        const coverPrompt = panels[0]?.content || '';
         await api.put(`/comics/${id}/cover`, {
-          image: page.masterImage
+          image: page.masterImage,
+          prompt: coverPrompt
         });
         alert('Cover saved!');
         return;
@@ -908,7 +1333,7 @@ function PageEditor({ isCover = false }) {
         setPanelsComputed(true);
       }
 
-      const updatedComic = { ...comic };
+      const updatedComic = { ...comic, promptSettings };
       const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
       updatedComic.pages[pageIndex] = {
         ...page,
@@ -944,8 +1369,8 @@ function PageEditor({ isCover = false }) {
       prompt += `🎨 STYLE BIBLE\n${settings.styleBible}\n\n`;
     }
 
-    // Page Layout
-    const layout = generateLayoutDescription(panels);
+    // Page Layout (use custom if set, otherwise auto-generate)
+    const layout = customLayoutDescription || generateLayoutDescription(panels);
     prompt += `CRITICAL PAGE SHAPE:\n${layout}\n\n`;
 
     // Camera & Inks
@@ -989,6 +1414,452 @@ function PageEditor({ isCover = false }) {
     return prompt;
   };
 
+  // Build prompt for a single panel
+  const buildPanelPrompt = (panel, panelIndex) => {
+    const settings = promptSettings;
+    let prompt = '';
+
+    // Style Bible
+    if (settings.styleBible) {
+      prompt += `🎨 STYLE BIBLE\n${settings.styleBible}\n\n`;
+    }
+
+    // Camera & Inks
+    if (settings.cameraInks) {
+      prompt += `CAMERA + INKS\n${settings.cameraInks}\n\n`;
+    }
+
+    // Character Bible
+    if (settings.characters && settings.characters.length > 0) {
+      prompt += `CHARACTER BIBLE (MAINTAIN CONSISTENCY)\n`;
+      settings.characters.forEach(char => {
+        prompt += `\nCharacter: ${char.name}\n${char.description}\n`;
+      });
+      prompt += '\n';
+    }
+
+    // Global Do Not
+    if (settings.globalDoNot) {
+      prompt += `GLOBAL DO NOT\n${settings.globalDoNot}\n\n`;
+    }
+
+    // Hard Negatives
+    if (settings.hardNegatives) {
+      prompt += `HARD NEGATIVES\n${settings.hardNegatives}\n\n`;
+    }
+
+    // Single panel content
+    prompt += `SINGLE PANEL IMAGE\n\n`;
+    prompt += `This is Panel ${panelIndex + 1} of ${panels.length} on ${isCover ? 'the COVER' : `PAGE ${page.pageNumber}`}.\n\n`;
+    prompt += `Panel Content:\n${panel.content || '(No content specified)'}\n\n`;
+
+    // Additional instructions
+    if (additionalInstructions.trim()) {
+      prompt += `ADDITIONAL INSTRUCTIONS:\n${additionalInstructions}\n\n`;
+    }
+
+    // Critical: fill entire canvas, absolutely no borders
+    prompt += `CRITICAL REQUIREMENTS:
+- This is a SINGLE PANEL illustration, NOT a comic page.
+- The artwork MUST fill the ENTIRE canvas edge-to-edge with NO borders.
+- Do NOT draw any panel borders, frames, outlines, or edges around the image.
+- Do NOT add any margins, gutters, or white/black space around the edges.
+- Do NOT draw rectangular frames or box outlines.
+- The image content should extend all the way to every edge of the canvas.
+- This image will be cropped and placed into a panel frame by the app - any borders you draw will create ugly double-borders.`;
+
+    return prompt;
+  };
+
+  // Determine aspect ratio based on panel dimensions
+  const getPanelAspectRatio = (panel) => {
+    const { width, height } = panel.tapZone;
+    const ratio = width / height;
+    if (ratio > 1.3) return 'landscape';
+    if (ratio < 0.77) return 'portrait';
+    return 'square';
+  };
+
+  // Generate a single panel image
+  const generatePanelImage = async (panel, panelIndex) => {
+    if (!panel.content?.trim()) {
+      alert(`Panel ${panelIndex + 1} has no content. Please add content first.`);
+      return;
+    }
+
+    setPanelImages(prev => ({
+      ...prev,
+      [panel.id]: { ...prev[panel.id], generating: true, error: null }
+    }));
+
+    try {
+      const prompt = buildPanelPrompt(panel, panelIndex);
+      const aspectRatio = getPanelAspectRatio(panel);
+
+      console.log(`Generating panel ${panelIndex + 1} (${panel.id}), aspect: ${aspectRatio}`);
+
+      const response = await api.post('/images/generate-panel', {
+        prompt,
+        panelId: panel.id,
+        aspectRatio
+      });
+
+      setPanelImages(prev => ({
+        ...prev,
+        [panel.id]: {
+          ...prev[panel.id], // Preserve existing fitMode and crop settings
+          path: response.data.path,
+          generating: false,
+          error: null,
+          fitMode: prev[panel.id]?.fitMode || 'stretch',
+          cropX: prev[panel.id]?.cropX ?? 0,
+          cropY: prev[panel.id]?.cropY ?? 0,
+          zoom: prev[panel.id]?.zoom ?? 1
+        }
+      }));
+
+      console.log(`Panel ${panelIndex + 1} generated:`, response.data.path);
+    } catch (error) {
+      console.error(`Panel ${panelIndex + 1} generation failed:`, error);
+      setPanelImages(prev => ({
+        ...prev,
+        [panel.id]: {
+          ...prev[panel.id],
+          generating: false,
+          error: error.response?.data?.error || error.message
+        }
+      }));
+    }
+  };
+
+  // Generate all panels sequentially
+  const generateAllPanels = async () => {
+    const panelsWithContent = panels.filter(p => p.content?.trim());
+    if (panelsWithContent.length === 0) {
+      alert('No panels have content. Please add content to at least one panel.');
+      return;
+    }
+
+    setGeneratingAllPanels(true);
+    console.log(`Starting generation of ${panelsWithContent.length} panels...`);
+
+    for (let i = 0; i < panels.length; i++) {
+      const panel = panels[i];
+      if (panel.content?.trim()) {
+        console.log(`Generating panel ${i + 1} of ${panels.length}...`);
+        try {
+          await generatePanelImage(panel, i);
+          console.log(`Panel ${i + 1} complete.`);
+        } catch (error) {
+          console.error(`Panel ${i + 1} failed:`, error);
+          // Continue with next panel even if this one fails
+        }
+      }
+    }
+
+    console.log('All panels generation complete.');
+    setGeneratingAllPanels(false);
+  };
+
+  // Composite all panel images onto a single canvas
+  const compositePageFromPanels = async () => {
+    const canvas = compositeCanvasRef.current;
+    if (!canvas) return null;
+
+    const ctx = canvas.getContext('2d');
+    const canvasWidth = 1024;
+    const canvasHeight = 1536;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+
+    // Gutter size in pixels (margin between panels)
+    const gutterSize = 16;
+    // Outer margin for the entire page
+    const outerMargin = 12;
+
+    // Load and draw each panel image
+    const loadImage = (src) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    };
+
+    // First, load all images and sample their edge colors
+    const loadedImages = [];
+    let totalR = 0, totalG = 0, totalB = 0, sampleCount = 0;
+
+    for (const panel of panels) {
+      const panelData = panelImages[panel.id];
+      if (panelData?.path) {
+        try {
+          const img = await loadImage(`http://localhost:3001${panelData.path}`);
+          loadedImages.push({ panel, img });
+
+          // Sample colors from image edges using a temp canvas
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = img.width;
+          tempCanvas.height = img.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(img, 0, 0);
+
+          // Sample from edges (top, bottom, left, right strips)
+          const sampleEdge = (sx, sy, sw, sh) => {
+            try {
+              const data = tempCtx.getImageData(sx, sy, sw, sh).data;
+              for (let i = 0; i < data.length; i += 4) {
+                totalR += data[i];
+                totalG += data[i + 1];
+                totalB += data[i + 2];
+                sampleCount++;
+              }
+            } catch (e) { /* ignore */ }
+          };
+
+          const edgeWidth = 10;
+          sampleEdge(0, 0, img.width, edgeWidth); // top
+          sampleEdge(0, img.height - edgeWidth, img.width, edgeWidth); // bottom
+          sampleEdge(0, 0, edgeWidth, img.height); // left
+          sampleEdge(img.width - edgeWidth, 0, edgeWidth, img.height); // right
+        } catch (error) {
+          console.error(`Failed to load panel image for ${panel.id}:`, error);
+        }
+      }
+    }
+
+    // Calculate average color and create a light tint for gutters
+    let gutterColor = '#e8e8e8'; // fallback light grey
+    if (sampleCount > 0) {
+      const avgR = Math.round(totalR / sampleCount);
+      const avgG = Math.round(totalG / sampleCount);
+      const avgB = Math.round(totalB / sampleCount);
+
+      // Create a lighter tint (blend with white, 70% towards white)
+      const tintFactor = 0.7;
+      const tintR = Math.round(avgR + (255 - avgR) * tintFactor);
+      const tintG = Math.round(avgG + (255 - avgG) * tintFactor);
+      const tintB = Math.round(avgB + (255 - avgB) * tintFactor);
+
+      gutterColor = `rgb(${tintR}, ${tintG}, ${tintB})`;
+    }
+
+    // Fill background with the blended gutter color
+    ctx.fillStyle = gutterColor;
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // Now draw all the loaded images
+    for (const { panel, img } of loadedImages) {
+      const { x, y, width, height } = panel.tapZone;
+      const panelData = panelImages[panel.id];
+      const fitMode = panelData?.fitMode || 'stretch';
+      const cropX = panelData?.cropX ?? 0; // -1 to 1 (left to right)
+      const cropY = panelData?.cropY ?? 0; // -1 to 1 (top to bottom)
+      const zoom = panelData?.zoom ?? 1; // 1 = 100%, >1 = zoom in
+
+      // Calculate pixel positions
+      const px = x * canvasWidth;
+      const py = y * canvasHeight;
+      const pw = width * canvasWidth;
+      const ph = height * canvasHeight;
+
+      // Apply gutter insets and outer margin
+      const inset = gutterSize / 2;
+      // Left edge: outer margin if at page edge, half gutter if internal
+      const leftInset = x > 0.01 ? inset : outerMargin;
+      // Top edge: outer margin if at page edge, half gutter if internal
+      const topInset = y > 0.01 ? inset : outerMargin;
+      // Right edge: outer margin if at page edge, half gutter if internal
+      const rightInset = x + width < 0.99 ? inset : outerMargin;
+      // Bottom edge: outer margin if at page edge, half gutter if internal
+      const bottomInset = y + height < 0.99 ? inset : outerMargin;
+
+      const adjustedX = px + leftInset;
+      const adjustedY = py + topInset;
+      const adjustedW = pw - leftInset - rightInset;
+      const adjustedH = ph - topInset - bottomInset;
+
+      // Trim percentage off each edge to remove AI-generated borders
+      const edgeTrim = 0.03; // 3% off each edge
+      const trimX = img.width * edgeTrim;
+      const trimY = img.height * edgeTrim;
+      const trimmedW = img.width - (trimX * 2);
+      const trimmedH = img.height - (trimY * 2);
+
+      if (fitMode === 'crop') {
+        // Crop mode: preserve aspect ratio, cover the panel, and allow repositioning + zoom
+        const imgAspect = trimmedW / trimmedH;
+        const panelAspect = adjustedW / adjustedH;
+
+        // Calculate base source dimensions (minimum to cover the panel)
+        let baseSourceW, baseSourceH;
+
+        if (imgAspect > panelAspect) {
+          // Image is wider - base on height for cover
+          baseSourceH = trimmedH;
+          baseSourceW = trimmedH * panelAspect;
+        } else {
+          // Image is taller - base on width for cover
+          baseSourceW = trimmedW;
+          baseSourceH = trimmedW / panelAspect;
+        }
+
+        // Apply zoom (zoom > 1 = zoom in = smaller source area)
+        const sourceW = baseSourceW / zoom;
+        const sourceH = baseSourceH / zoom;
+
+        // Calculate max offsets (how much we can pan around) within trimmed area
+        const maxOffsetX = Math.max(0, trimmedW - sourceW);
+        const maxOffsetY = Math.max(0, trimmedH - sourceH);
+
+        // Position based on cropX/cropY (-1 to 1), offset by trim
+        const sourceX = trimX + (maxOffsetX / 2) * (1 + cropX);
+        const sourceY = trimY + (maxOffsetY / 2) * (1 + cropY);
+
+        // Draw cropped portion of the image
+        ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, adjustedX, adjustedY, adjustedW, adjustedH);
+      } else {
+        // Stretch mode: scale to fit exactly (may distort), but trim edges
+        ctx.drawImage(img, trimX, trimY, trimmedW, trimmedH, adjustedX, adjustedY, adjustedW, adjustedH);
+      }
+    }
+
+    // Helper function to draw a wobbly/hand-drawn line
+    const drawWobblyLine = (x1, y1, x2, y2) => {
+      const segments = 12; // Number of segments for the wobble
+      const wobbleAmount = 1.5; // Max pixels of wobble
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+
+      for (let i = 1; i <= segments; i++) {
+        const t = i / segments;
+        const x = x1 + (x2 - x1) * t;
+        const y = y1 + (y2 - y1) * t;
+
+        // Add random wobble perpendicular to the line direction
+        const wobbleX = (Math.random() - 0.5) * wobbleAmount * 2;
+        const wobbleY = (Math.random() - 0.5) * wobbleAmount * 2;
+
+        if (i === segments) {
+          // End at exact position
+          ctx.lineTo(x2, y2);
+        } else {
+          ctx.lineTo(x + wobbleX, y + wobbleY);
+        }
+      }
+      ctx.stroke();
+    };
+
+    // Calculate border color (darker shade from sampled colors)
+    let borderColor = '#1a1a1a'; // fallback dark
+    if (sampleCount > 0) {
+      const avgR = Math.round(totalR / sampleCount);
+      const avgG = Math.round(totalG / sampleCount);
+      const avgB = Math.round(totalB / sampleCount);
+
+      // Create a darker shade (blend towards black, 80% towards black)
+      const darkFactor = 0.8;
+      const darkR = Math.round(avgR * (1 - darkFactor));
+      const darkG = Math.round(avgG * (1 - darkFactor));
+      const darkB = Math.round(avgB * (1 - darkFactor));
+
+      borderColor = `rgb(${darkR}, ${darkG}, ${darkB})`;
+    }
+
+    // Draw hand-drawn style panel borders
+    ctx.strokeStyle = borderColor;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    for (const panel of panels) {
+      const { x, y, width, height } = panel.tapZone;
+      const px = x * canvasWidth;
+      const py = y * canvasHeight;
+      const pw = width * canvasWidth;
+      const ph = height * canvasHeight;
+
+      // Apply same gutter insets and outer margin for border
+      const inset = gutterSize / 2;
+      const leftInset = x > 0.01 ? inset : outerMargin;
+      const topInset = y > 0.01 ? inset : outerMargin;
+      const rightInset = x + width < 0.99 ? inset : outerMargin;
+      const bottomInset = y + height < 0.99 ? inset : outerMargin;
+
+      const adjustedX = px + leftInset;
+      const adjustedY = py + topInset;
+      const adjustedW = pw - leftInset - rightInset;
+      const adjustedH = ph - topInset - bottomInset;
+
+      // Draw multiple passes for thicker, more organic look
+      for (let pass = 0; pass < 3; pass++) {
+        ctx.lineWidth = 2 + Math.random() * 1.5;
+
+        // Top edge
+        drawWobblyLine(adjustedX, adjustedY, adjustedX + adjustedW, adjustedY);
+        // Right edge
+        drawWobblyLine(adjustedX + adjustedW, adjustedY, adjustedX + adjustedW, adjustedY + adjustedH);
+        // Bottom edge
+        drawWobblyLine(adjustedX + adjustedW, adjustedY + adjustedH, adjustedX, adjustedY + adjustedH);
+        // Left edge
+        drawWobblyLine(adjustedX, adjustedY + adjustedH, adjustedX, adjustedY);
+      }
+    }
+
+    return canvas.toDataURL('image/png');
+  };
+
+  // Save composited image
+  const saveCompositedImage = async () => {
+    const dataUrl = await compositePageFromPanels();
+    if (!dataUrl) {
+      alert('Failed to composite image');
+      return;
+    }
+
+    try {
+      // Convert data URL to blob and upload
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      const formData = new FormData();
+      formData.append('image', blob, `composited-${pageId}.png`);
+
+      const uploadResponse = await api.post('/images/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      // Save to project
+      await api.post('/images/save-to-project', {
+        comicId: id,
+        filename: uploadResponse.data.filename,
+        imageType: 'page',
+        pageNumber: page.pageNumber
+      });
+
+      // Update comic and page data
+      const imagePath = `/projects/${id}/images/${id}_p${page.pageNumber}.png`;
+
+      const updatedComic = { ...comic };
+      const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+      updatedComic.pages[pageIndex].masterImage = imagePath;
+
+      // Save to database
+      await api.put(`/comics/${id}`, updatedComic);
+      setComic(updatedComic);
+
+      // Update local page state with cache-buster for immediate display refresh
+      setPage(prev => ({ ...prev, masterImage: `${imagePath}?t=${Date.now()}` }));
+
+      alert('Composited page saved to project!');
+    } catch (error) {
+      console.error('Failed to save composited image:', error);
+      alert('Failed to save composited image: ' + error.message);
+    }
+  };
+
   const generatePageImage = async () => {
     if (!panelsComputed || panels.length === 0) {
       alert('Please compute panels and add content first.');
@@ -999,7 +1870,7 @@ function PageEditor({ isCover = false }) {
     setGenerationError(null);
 
     try {
-      const prompt = buildFullPrompt();
+      const prompt = useCustomPrompt && customPrompt ? customPrompt : buildFullPrompt();
       console.log('Generating with prompt:', prompt);
 
       const response = await api.post('/images/generate-page', {
@@ -1008,8 +1879,7 @@ function PageEditor({ isCover = false }) {
       });
 
       setGeneratedImage({
-        path: response.data.path,
-        revisedPrompt: response.data.revisedPrompt
+        path: response.data.path
       });
     } catch (error) {
       console.error('Generation failed:', error);
@@ -1024,12 +1894,23 @@ function PageEditor({ isCover = false }) {
 
     try {
       const filename = generatedImage.path.split('/').pop();
-      await api.post('/images/save-to-project', {
+      const saveResponse = await api.post('/images/save-to-project', {
         comicId: id,
         filename,
-        imageType: 'page',
+        imageType: isCover ? 'cover' : 'page',
         pageNumber: page.pageNumber
       });
+
+      if (isCover) {
+        const savedPath = saveResponse.data.path;
+        const coverPrompt = panels[0]?.content || '';
+        const updatedCover = { ...comic.cover, image: savedPath, prompt: coverPrompt };
+        await api.put(`/comics/${id}`, { cover: updatedCover });
+        setComic(prev => ({ ...prev, cover: updatedCover }));
+        setPage(prev => ({ ...prev, masterImage: savedPath + `?t=${Date.now()}` }));
+        alert('Image saved to cover!');
+        return;
+      }
 
       const updatedComic = { ...comic };
       const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
@@ -1037,7 +1918,6 @@ function PageEditor({ isCover = false }) {
 
       await api.put(`/comics/${id}`, updatedComic);
       setComic(updatedComic);
-      // Create a local copy with cache-buster for immediate display refresh
       const pageWithCacheBuster = {
         ...updatedComic.pages[pageIndex],
         masterImage: updatedComic.pages[pageIndex].masterImage + `?t=${Date.now()}`
@@ -1048,6 +1928,120 @@ function PageEditor({ isCover = false }) {
       console.error('Failed to save image:', error);
       alert('Failed to save image');
     }
+  };
+
+  // ChatGPT functions
+  const scrollToBottomOfChat = () => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() && chatImages.length === 0) return;
+
+    const userMessage = {
+      role: 'user',
+      content: chatInput,
+      images: chatImages.map(img => img.preview)
+    };
+
+    // Update both state and ref
+    const newMessages = [...chatMessagesRef.current, userMessage];
+    chatMessagesRef.current = newMessages;
+    setChatMessages(newMessages);
+
+    const messageText = chatInput;
+    setChatInput('');
+    const imagesToSend = [...chatImages];
+    setChatImages([]);
+    setIsSendingChat(true);
+
+    try {
+      const response = await api.post('/chat/message', {
+        messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        images: imagesToSend.map(img => img.base64)
+      });
+
+      console.log('Chat API response:', response.data);
+
+      const assistantMessage = {
+        role: 'assistant',
+        content: response.data.message
+      };
+
+      console.log('Assistant message created:', assistantMessage);
+
+      // Update both state and ref with assistant response
+      const messagesWithResponse = [...chatMessagesRef.current, assistantMessage];
+      console.log('Messages with response:', messagesWithResponse);
+      chatMessagesRef.current = messagesWithResponse;
+      setChatMessages(messagesWithResponse);
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage = {
+        role: 'assistant',
+        content: `Error: ${error.response?.data?.error || error.message}`
+      };
+      const messagesWithError = [...chatMessagesRef.current, errorMessage];
+      chatMessagesRef.current = messagesWithError;
+      setChatMessages(messagesWithError);
+    } finally {
+      setIsSendingChat(false);
+      setTimeout(scrollToBottomOfChat, 100);
+    }
+  };
+
+  const handleChatFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target.result.split(',')[1];
+        setChatImages(prev => [...prev, {
+          preview: event.target.result,
+          base64,
+          name: file.name
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const uploadGeneratedImageToChat = async () => {
+    if (!generatedImage?.path) {
+      alert('No generated image to upload');
+      return;
+    }
+
+    try {
+      // Fetch the generated image and convert to base64
+      const response = await fetch(`http://localhost:3001${generatedImage.path}`);
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target.result.split(',')[1];
+        setChatImages(prev => [...prev, {
+          preview: event.target.result,
+          base64,
+          name: 'generated-page.png'
+        }]);
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      console.error('Failed to upload generated image:', error);
+      alert('Failed to upload image');
+    }
+  };
+
+  const removeChatImage = (index) => {
+    setChatImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const clearChat = () => {
+    chatMessagesRef.current = [];
+    setChatMessages([]);
+    setChatImages([]);
+    localStorage.removeItem(`comic-chat-${id}`);
   };
 
   // Preview line while drawing
@@ -1123,7 +2117,10 @@ function PageEditor({ isCover = false }) {
         </button>
         <button
           className={`btn ${editorMode === 'bubbles' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setEditorMode('bubbles')}
+          onClick={() => {
+            setEditorMode('bubbles');
+            setSidebarTab('panels');
+          }}
           style={{ padding: '0.5rem 1rem' }}
         >
           Bubbles Mode
@@ -1131,15 +2128,16 @@ function PageEditor({ isCover = false }) {
       </div>
       )}
 
-      {/* Toolbar - hide for cover */}
-      {!isCover && (
+      {/* Toolbar */}
       <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ color: '#888', fontSize: '0.85rem' }}>
-          {editorMode === 'layout'
-            ? 'Draw lines by dragging | Drag lines to reposition'
-            : isAddingBubble
-              ? 'Click on canvas to place bubble'
-              : 'Drag to reposition | Select to edit'}
+          {isCover
+            ? (isAddingBubble ? 'Click on canvas to place bubble' : 'Add bubbles for title text')
+            : editorMode === 'layout'
+              ? 'Draw lines by dragging | Drag lines to reposition'
+              : isAddingBubble
+                ? 'Click on canvas to place bubble'
+                : 'Drag to reposition | Select to edit'}
         </span>
         {editorMode === 'bubbles' && (
           <button
@@ -1150,6 +2148,7 @@ function PageEditor({ isCover = false }) {
             {isAddingBubble ? 'Cancel' : '+ Add Bubble'}
           </button>
         )}
+        {!isCover && (
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
           {selectedLineIndex !== null && (
             <button
@@ -1175,8 +2174,8 @@ function PageEditor({ isCover = false }) {
             Compute Panels
           </button>
         </div>
+        )}
       </div>
-      )}
 
       <div className="panel-editor">
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -1186,15 +2185,27 @@ function PageEditor({ isCover = false }) {
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
-            onMouseLeave={() => {
-              if (isDrawing) {
-                setIsDrawing(false);
-                setDrawStart(null);
-                setDrawEnd(null);
+            onMouseLeave={(e) => {
+              if (isDrawing && drawStart) {
+                // Finish the line at the edge instead of canceling
+                const rect = canvasRef.current.getBoundingClientRect();
+                const rawX = (e.clientX - rect.left) / rect.width;
+                const rawY = (e.clientY - rect.top) / rect.height;
+                // Clamp to canvas boundaries
+                const clampedX = Math.max(0, Math.min(1, rawX));
+                const clampedY = Math.max(0, Math.min(1, rawY));
+                // Pass clamped coordinates directly to handleMouseUp
+                handleMouseUp({ x: clampedX, y: clampedY });
+                return;
               }
               if (isDragging) {
                 setIsDragging(false);
                 setDragLineIndex(null);
+              }
+              if (isDraggingEndpoint) {
+                setIsDraggingEndpoint(false);
+                setDragLineIndex(null);
+                setDragEndpoint(null);
               }
               if (isDraggingBubble) {
                 setIsDraggingBubble(false);
@@ -1208,6 +2219,12 @@ function PageEditor({ isCover = false }) {
               }
               if (isDraggingTailBase) {
                 setIsDraggingTailBase(false);
+              }
+              if (isDraggingTailCtrl1) {
+                setIsDraggingTailCtrl1(false);
+              }
+              if (isDraggingTailCtrl2) {
+                setIsDraggingTailCtrl2(false);
               }
             }}
             style={{
@@ -1314,47 +2331,149 @@ function PageEditor({ isCover = false }) {
               </div>
             ))}
 
-            {/* Drawn lines */}
+            {/* Drawn lines with endpoint handles */}
             {lines.map((line, i) => (
-              line.type === 'horizontal' ? (
-                <div
-                  key={`line-${i}`}
-                  data-line-index={i}
-                  onMouseDown={(e) => handleLineMouseDown(e, i)}
-                  style={{
-                    position: 'absolute',
-                    left: `${line.x1 * 100}%`,
-                    width: `${(line.x2 - line.x1) * 100}%`,
-                    top: `${line.y * 100}%`,
-                    height: '8px',
-                    background: selectedLineIndex === i ? '#00ff00' : '#e94560',
-                    cursor: isDragging && dragLineIndex === i ? 'grabbing' : 'ns-resize',
-                    transform: 'translateY(-50%)',
-                    zIndex: 20,
-                    boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-                    borderRadius: '2px'
-                  }}
-                />
-              ) : (
-                <div
-                  key={`line-${i}`}
-                  data-line-index={i}
-                  onMouseDown={(e) => handleLineMouseDown(e, i)}
-                  style={{
-                    position: 'absolute',
-                    left: `${line.x * 100}%`,
-                    top: `${line.y1 * 100}%`,
-                    height: `${(line.y2 - line.y1) * 100}%`,
-                    width: '8px',
-                    background: selectedLineIndex === i ? '#00ff00' : '#3498db',
-                    cursor: isDragging && dragLineIndex === i ? 'grabbing' : 'ew-resize',
-                    transform: 'translateX(-50%)',
-                    zIndex: 20,
-                    boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-                    borderRadius: '2px'
-                  }}
-                />
-              )
+              <React.Fragment key={`line-${i}`}>
+                {line.type === 'horizontal' ? (
+                  <>
+                    {/* Horizontal line */}
+                    <div
+                      data-line-index={i}
+                      onMouseDown={(e) => handleLineMouseDown(e, i)}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x1 * 100}%`,
+                        width: `${(line.x2 - line.x1) * 100}%`,
+                        top: `${line.y * 100}%`,
+                        height: '8px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#e94560',
+                        cursor: isDragging && dragLineIndex === i ? 'grabbing' : 'ns-resize',
+                        transform: 'translateY(-50%)',
+                        zIndex: 20,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)',
+                        borderRadius: '2px'
+                      }}
+                    />
+                    {/* Left endpoint handle */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setIsDraggingEndpoint(true);
+                        setDragLineIndex(i);
+                        setDragEndpoint('start');
+                        setSelectedLineIndex(i);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x1 * 100}%`,
+                        top: `${line.y * 100}%`,
+                        width: '14px',
+                        height: '14px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#e94560',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'ew-resize',
+                        zIndex: 25,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)'
+                      }}
+                    />
+                    {/* Right endpoint handle */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setIsDraggingEndpoint(true);
+                        setDragLineIndex(i);
+                        setDragEndpoint('end');
+                        setSelectedLineIndex(i);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x2 * 100}%`,
+                        top: `${line.y * 100}%`,
+                        width: '14px',
+                        height: '14px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#e94560',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'ew-resize',
+                        zIndex: 25,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)'
+                      }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {/* Vertical line */}
+                    <div
+                      data-line-index={i}
+                      onMouseDown={(e) => handleLineMouseDown(e, i)}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x * 100}%`,
+                        top: `${line.y1 * 100}%`,
+                        height: `${(line.y2 - line.y1) * 100}%`,
+                        width: '8px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#3498db',
+                        cursor: isDragging && dragLineIndex === i ? 'grabbing' : 'ew-resize',
+                        transform: 'translateX(-50%)',
+                        zIndex: 20,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)',
+                        borderRadius: '2px'
+                      }}
+                    />
+                    {/* Top endpoint handle */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setIsDraggingEndpoint(true);
+                        setDragLineIndex(i);
+                        setDragEndpoint('start');
+                        setSelectedLineIndex(i);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x * 100}%`,
+                        top: `${line.y1 * 100}%`,
+                        width: '14px',
+                        height: '14px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#3498db',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'ns-resize',
+                        zIndex: 25,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)'
+                      }}
+                    />
+                    {/* Bottom endpoint handle */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setIsDraggingEndpoint(true);
+                        setDragLineIndex(i);
+                        setDragEndpoint('end');
+                        setSelectedLineIndex(i);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${line.x * 100}%`,
+                        top: `${line.y2 * 100}%`,
+                        width: '14px',
+                        height: '14px',
+                        background: selectedLineIndex === i ? '#00ff00' : '#3498db',
+                        border: '2px solid #fff',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'ns-resize',
+                        zIndex: 25,
+                        boxShadow: '0 0 4px rgba(0,0,0,0.5)'
+                      }}
+                    />
+                  </>
+                )}
+              </React.Fragment>
             ))}
 
             {/* Preview line */}
@@ -1366,7 +2485,7 @@ function PageEditor({ isCover = false }) {
                   width: `${(previewLine.x2 - previewLine.x1) * 100}%`,
                   top: `${previewLine.y * 100}%`,
                   height: '4px',
-                  background: '#ffff00',
+                  background: '#444444',
                   transform: 'translateY(-50%)',
                   zIndex: 30,
                   opacity: 0.8,
@@ -1383,7 +2502,7 @@ function PageEditor({ isCover = false }) {
                   top: `${previewLine.y1 * 100}%`,
                   height: `${(previewLine.y2 - previewLine.y1) * 100}%`,
                   width: '4px',
-                  background: '#ffff00',
+                  background: '#444444',
                   transform: 'translateX(-50%)',
                   zIndex: 30,
                   opacity: 0.8,
@@ -1407,78 +2526,118 @@ function PageEditor({ isCover = false }) {
 
               return (
                 <div key={bubble.id}>
-                  {/* SVG Tail (rendered behind bubble) - Speech bubble */}
+                  {/* Unified Speech Bubble with integrated tail */}
                   {bubble.type === 'speech' && bubble.showTail !== false && (() => {
-                    const tailBasePos = bubble.tailBaseX ?? 0.5;
-                    const tailWidthVal = bubble.tailWidth ?? 0.06;
-                    const tailSide = bubble.tailSide || 'bottom';
+                    // Bubble dimensions in pixels
+                    const bx = bubble.x * CANVAS_WIDTH;
+                    const by = bubble.y * CANVAS_HEIGHT;
+                    const bw = bubble.width * CANVAS_WIDTH;
+                    const bh = bubble.height * CANVAS_HEIGHT;
+                    const r = Math.min(bubble.cornerRadius || 8, bw / 2, bh / 2);
+                    const borderWidthVal = bubble.borderWidth ?? 2.5;
+                    const borderColorVal = bubble.borderColor || '#000';
 
-                    let baseX, baseY, base1X, base1Y, base2X, base2Y;
-                    const halfWidth = (tailWidthVal * CANVAS_WIDTH) / 2;
+                    // Bubble center (pivot point for rotation)
+                    const cx = bx + bw / 2;
+                    const cy = by + bh / 2;
 
-                    if (tailSide === 'bottom') {
-                      baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                      baseY = (bubble.y + bubble.height) * CANVAS_HEIGHT;
-                      base1X = baseX - halfWidth; base1Y = baseY;
-                      base2X = baseX + halfWidth; base2Y = baseY;
-                    } else if (tailSide === 'top') {
-                      baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                      baseY = bubble.y * CANVAS_HEIGHT;
-                      base1X = baseX - halfWidth; base1Y = baseY;
-                      base2X = baseX + halfWidth; base2Y = baseY;
-                    } else if (tailSide === 'left') {
-                      baseX = bubble.x * CANVAS_WIDTH;
-                      baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                      base1X = baseX; base1Y = baseY - halfWidth;
-                      base2X = baseX; base2Y = baseY + halfWidth;
-                    } else { // right
-                      baseX = (bubble.x + bubble.width) * CANVAS_WIDTH;
-                      baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                      base1X = baseX; base1Y = baseY - halfWidth;
-                      base2X = baseX; base2Y = baseY + halfWidth;
-                    }
+                    // Rotation angle for the whole bubble
+                    const rotation = bubble.rotation ?? 0; // degrees
 
-                    const tipX = tailEndX * CANVAS_WIDTH;
-                    const tipY = tailEndY * CANVAS_HEIGHT;
+                    // Tail properties
+                    const tailWidth = (bubble.tailWidth ?? 0.25) * bw; // wide tail base
+                    const halfTailWidth = tailWidth / 2;
+                    const tailLength = (bubble.tailLength ?? 0.35) * bh;
 
-                    // Calculate curl direction based on tip position relative to base
-                    const dx = tipX - baseX;
-                    const dy = tipY - baseY;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    // Tail angle: negative = left, 0 = straight, positive = right
+                    const tailCurve = bubble.tailCurve ?? 0;
+                    const angleOffset = tailCurve * tailLength * 1.5; // horizontal offset for angle (widened range)
 
-                    // Determine curl direction (perpendicular to tail direction)
-                    // Curl towards the side where the tip is pointing
-                    let curlAmount = distance * 0.25; // How much the curve bends
-                    let perpX, perpY;
+                    // Tail bend: negative = bend left, 0 = straight, positive = bend right
+                    const tailBend = bubble.tailBend ?? 0;
+                    const bendOffset = tailBend * tailLength * 0.8; // how much the middle of tail bends
 
-                    if (tailSide === 'bottom' || tailSide === 'top') {
-                      // For vertical sides, curl left or right based on horizontal position
-                      perpX = dx > 0 ? curlAmount : -curlAmount;
-                      perpY = 0;
+                    // Tail tip position (below bubble center, offset by angle)
+                    const tipX = cx + angleOffset;
+                    const tipY = by + bh + tailLength;
+
+                    // Control points for smooth bezier curves - bend affects the middle of the tail
+                    const ctrl1X = cx + halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                    const ctrl1Y = by + bh + tailLength * 0.5;
+                    const ctrl2X = cx - halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                    const ctrl2Y = by + bh + tailLength * 0.5;
+
+                    // Build unified path with smooth tail integration
+                    // Path goes clockwise from top-left
+
+                    // For round bubbles, we need to calculate where the tail connects on the curved edge
+                    // The tail base should connect smoothly to the ellipse/rounded rect
+                    const isVeryRound = r >= Math.min(bw, bh) * 0.4;
+
+                    // Clamp tail base positions to stay within the flat portion of the bottom edge
+                    const tailRightX = Math.min(cx + halfTailWidth, bx + bw - r - 2);
+                    const tailLeftX = Math.max(cx - halfTailWidth, bx + r + 2);
+
+                    // For very round bubbles, use quadratic curves to blend tail into the ellipse
+                    let path;
+                    if (isVeryRound) {
+                      // For round bubbles, connect tail with smooth curves that follow the ellipse curvature
+                      // Calculate angle on ellipse where tail connects
+                      const ellipseRx = bw / 2;
+                      const ellipseRy = bh / 2;
+
+                      // Tail connects at bottom, slightly offset from center
+                      const tailConnectRight = Math.min(halfTailWidth, ellipseRx * 0.6);
+                      const tailConnectLeft = Math.min(halfTailWidth, ellipseRx * 0.6);
+
+                      // Y position on ellipse at tail connection points
+                      const yOffsetRight = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectRight / ellipseRx, 2));
+                      const yOffsetLeft = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectLeft / ellipseRx, 2));
+
+                      const connectRightY = cy + yOffsetRight;
+                      const connectLeftY = cy + yOffsetLeft;
+
+                      path = `
+                        M ${cx} ${by}
+                        A ${ellipseRx} ${ellipseRy} 0 0 1 ${cx + tailConnectRight} ${connectRightY}
+                        C ${cx + tailConnectRight} ${connectRightY + tailLength * 0.2},
+                          ${ctrl1X} ${ctrl1Y},
+                          ${tipX} ${tipY}
+                        C ${ctrl2X} ${ctrl2Y},
+                          ${cx - tailConnectLeft} ${connectLeftY + tailLength * 0.2},
+                          ${cx - tailConnectLeft} ${connectLeftY}
+                        A ${ellipseRx} ${ellipseRy} 0 1 1 ${cx} ${by}
+                        Z
+                      `;
                     } else {
-                      // For horizontal sides, curl up or down based on vertical position
-                      perpX = 0;
-                      perpY = dy > 0 ? curlAmount : -curlAmount;
+                      // Standard rounded rectangle with tail
+                      path = `
+                        M ${bx + r} ${by}
+                        L ${bx + bw - r} ${by}
+                        A ${r} ${r} 0 0 1 ${bx + bw} ${by + r}
+                        L ${bx + bw} ${by + bh - r}
+                        A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh}
+                        L ${tailRightX} ${by + bh}
+                        C ${ctrl1X} ${ctrl1Y},
+                          ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                          ${tipX} ${tipY}
+                        C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                          ${ctrl2X} ${ctrl2Y},
+                          ${tailLeftX} ${by + bh}
+                        L ${bx + r} ${by + bh}
+                        A ${r} ${r} 0 0 1 ${bx} ${by + bh - r}
+                        L ${bx} ${by + r}
+                        A ${r} ${r} 0 0 1 ${bx + r} ${by}
+                        Z
+                      `;
                     }
 
-                    // Control points for the bezier curves (creates the curl)
-                    const midX = (baseX + tipX) / 2;
-                    const midY = (baseY + tipY) / 2;
-
-                    // Curved path with quadratic bezier - one side curves more for the curl effect
-                    const ctrl1X = midX + perpX * 0.5;
-                    const ctrl1Y = midY + perpY * 0.5;
-                    const ctrl2X = midX + perpX * 1.2;
-                    const ctrl2Y = midY + perpY * 1.2;
-
-                    // Closed path for fill (includes the base line internally)
-                    const fillPath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y} Z`;
-
-                    // Open path for stroke (no base line - just the two curved sides)
-                    const strokePath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y}`;
-
-                    const borderColor = bubble.borderColor || '#000';
-                    const borderWidth = bubble.borderWidth ?? 2.5;
+                    // Calculate rotated tip position for the indicator line
+                    const rotRad = rotation * Math.PI / 180;
+                    const relTipX = angleOffset;
+                    const relTipY = bh / 2 + tailLength;
+                    const rotatedTipX = cx + relTipX * Math.cos(rotRad) - relTipY * Math.sin(rotRad);
+                    const rotatedTipY = cy + relTipX * Math.sin(rotRad) + relTipY * Math.cos(rotRad);
 
                     return (
                       <svg
@@ -1488,39 +2647,161 @@ function PageEditor({ isCover = false }) {
                           top: 0,
                           width: CANVAS_WIDTH,
                           height: CANVAS_HEIGHT,
-                          pointerEvents: 'none',
-                          zIndex: 49,
-                          overflow: 'visible'
+                          zIndex: 50,
+                          overflow: 'visible',
+                          pointerEvents: 'none'
                         }}
                         viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
                       >
                         <defs>
-                          <filter id={`roughTail-${bubble.id}`} x="-10%" y="-10%" width="120%" height="120%">
+                          <filter id={`roughBubble-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
                             <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
-                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
                           </filter>
                         </defs>
-                        {/* Fill path (closed) */}
-                        <path
-                          d={fillPath}
-                          fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
-                          stroke="none"
-                          filter={`url(#roughTail-${bubble.id})`}
-                        />
-                        {/* Stroke path (open - no base line) */}
-                        {!bubble.noBorder && (
+                        {/* Unified bubble + tail shape with rotation around center */}
+                        <g
+                          transform={`rotate(${rotation} ${cx} ${cy})`}
+                          data-bubble-id={bubble.id}
+                          onMouseDown={(e) => handleBubbleMouseDown(e, bubble)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBubbleId(bubble.id);
+                            setEditorMode('bubbles');
+                          }}
+                          style={{ pointerEvents: 'auto', cursor: editorMode === 'bubbles' ? (isDraggingBubble ? 'grabbing' : 'grab') : 'default' }}
+                        >
                           <path
-                            d={strokePath}
-                            fill="none"
-                            stroke={borderColor}
-                            strokeWidth={borderWidth}
-                            strokeLinecap="round"
-                            filter={`url(#roughTail-${bubble.id})`}
+                            d={path}
+                            fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
+                            stroke={selectedBubbleId === bubble.id ? '#00ff00' : (bubble.noBorder ? 'none' : borderColorVal)}
+                            strokeWidth={selectedBubbleId === bubble.id ? 3 : borderWidthVal}
+                            strokeLinejoin="round"
+                            filter={`url(#roughBubble-${bubble.id})`}
+                          />
+                        </g>
+                        {/* Visual indicator line from center to tip (only when selected) */}
+                        {selectedBubbleId === bubble.id && editorMode === 'bubbles' && (
+                          <line
+                            x1={cx}
+                            y1={cy}
+                            x2={rotatedTipX}
+                            y2={rotatedTipY}
+                            stroke="#ff6600"
+                            strokeWidth={2}
+                            strokeDasharray="4,4"
+                            opacity={0.7}
                           />
                         )}
+                        {/* Text inside bubble (not rotated - stays readable) */}
+                        <foreignObject x={bx} y={by} width={bw} height={bh}>
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '6px 8px',
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                                fontSize: `${bubble.fontSize}px`,
+                                fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                                fontStyle: bubble.italic ? 'italic' : 'normal',
+                                color: bubble.textColor || '#000000',
+                                textAlign: bubble.textAlign || 'center',
+                                width: '100%',
+                                wordBreak: 'break-word',
+                                lineHeight: 1.3,
+                                letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                                textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                                pointerEvents: 'none',
+                                userSelect: 'none',
+                                transform: `rotate(${bubble.textAngle ?? 0}deg)`,
+                                display: 'inline-block'
+                              }}
+                            >
+                              {getBubbleDisplayText(bubble) || (editorMode === 'bubbles' ? '...' : '')}
+                            </span>
+                          </div>
+                        </foreignObject>
                       </svg>
                     );
                   })()}
+
+                  {/* Resize handles for speech bubbles with tail */}
+                  {bubble.type === 'speech' && bubble.showTail !== false && editorMode === 'bubbles' && selectedBubbleId === bubble.id && (
+                    <>
+                      <div
+                        data-resize-handle="true"
+                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-right')}
+                        style={{
+                          position: 'absolute',
+                          left: `${(bubble.x + bubble.width) * 100}%`,
+                          top: `${(bubble.y + bubble.height) * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00ff00',
+                          cursor: 'nwse-resize',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: 60
+                        }}
+                      />
+                      <div
+                        data-resize-handle="true"
+                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-left')}
+                        style={{
+                          position: 'absolute',
+                          left: `${bubble.x * 100}%`,
+                          top: `${(bubble.y + bubble.height) * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00ff00',
+                          cursor: 'nesw-resize',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: 60
+                        }}
+                      />
+                      <div
+                        data-resize-handle="true"
+                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-right')}
+                        style={{
+                          position: 'absolute',
+                          left: `${(bubble.x + bubble.width) * 100}%`,
+                          top: `${bubble.y * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00ff00',
+                          cursor: 'nesw-resize',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: 60
+                        }}
+                      />
+                      <div
+                        data-resize-handle="true"
+                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-left')}
+                        style={{
+                          position: 'absolute',
+                          left: `${bubble.x * 100}%`,
+                          top: `${bubble.y * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00ff00',
+                          cursor: 'nwse-resize',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: 60
+                        }}
+                      />
+                    </>
+                  )}
 
                   {/* Thought bubble trail (ooo circles) */}
                   {bubble.type === 'thought' && bubble.showTail !== false && (() => {
@@ -1625,13 +2906,15 @@ function PageEditor({ isCover = false }) {
                     );
                   })()}
 
-                  {/* Bubble body - hand-drawn style */}
+                  {/* Bubble body - hand-drawn style (for non-speech or speech without tail) */}
+                  {!(bubble.type === 'speech' && bubble.showTail !== false) && (
                   <div
                     data-bubble-id={bubble.id}
                     onMouseDown={(e) => handleBubbleMouseDown(e, bubble)}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedBubbleId(bubble.id);
+                      setEditorMode('bubbles');
                     }}
                     style={{
                       position: 'absolute',
@@ -1672,8 +2955,9 @@ function PageEditor({ isCover = false }) {
                         textTransform: bubble.uppercase ? 'uppercase' : 'none',
                         pointerEvents: 'none',
                         userSelect: 'none',
-                        // Slight counter-rotation to keep text readable
-                        transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2)}deg)`
+                        // Counter-rotation for hand-drawn effect + user text angle
+                        transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) + (bubble.textAngle ?? 0)}deg)`,
+                        display: 'inline-block'
                       }}
                     >
                       {getBubbleDisplayText(bubble) || (editorMode === 'bubbles' ? '...' : '')}
@@ -1741,9 +3025,10 @@ function PageEditor({ isCover = false }) {
                       </>
                     )}
                   </div>
+                  )}
 
-                  {/* Draggable tail tip handle (orange - for tip position) */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (bubble.type === 'speech' || bubble.type === 'thought') && bubble.showTail !== false && (
+                  {/* Draggable tail tip handle (orange - for tip position) - only for thought bubbles */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (
                     <div
                       data-tail-handle="true"
                       onMouseDown={(e) => handleTailMouseDown(e, bubble)}
@@ -1764,8 +3049,40 @@ function PageEditor({ isCover = false }) {
                     />
                   )}
 
-                  {/* Draggable tail base handle (blue - for base position on bubble) */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (bubble.type === 'speech' || bubble.type === 'thought') && bubble.showTail !== false && (() => {
+                  {/* Rotation handle (orange - for rotating speech bubble) */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'speech' && bubble.showTail !== false && (() => {
+                    const rotation = bubble.rotation ?? 0;
+                    const rotRad = (rotation - 90) * Math.PI / 180; // -90 so 0 degrees = bottom
+                    const cx = bubble.x + bubble.width / 2;
+                    const cy = bubble.y + bubble.height / 2;
+                    const handleDistance = bubble.height / 2 + (bubble.tailLength ?? 0.35) * bubble.height + 0.02;
+                    const handleX = cx + Math.cos(rotRad) * handleDistance;
+                    const handleY = cy + Math.sin(rotRad) * handleDistance;
+
+                    return (
+                      <div
+                        data-rotation-handle="true"
+                        onMouseDown={(e) => handleRotationMouseDown(e, bubble)}
+                        style={{
+                          position: 'absolute',
+                          left: `${handleX * 100}%`,
+                          top: `${handleY * 100}%`,
+                          width: 14,
+                          height: 14,
+                          background: '#ff6600',
+                          border: '2px solid #fff',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          cursor: 'grab',
+                          zIndex: 60
+                        }}
+                        title="Drag to rotate bubble"
+                      />
+                    );
+                  })()}
+
+                  {/* Draggable tail base handle (blue - for base position on bubble) - only for thought bubbles */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (() => {
                     const tailBasePos = bubble.tailBaseX ?? 0.5;
                     const tailSide = bubble.tailSide || 'bottom';
 
@@ -1807,6 +3124,112 @@ function PageEditor({ isCover = false }) {
                           zIndex: 60
                         }}
                         title="Drag to move tail base"
+                      />
+                    );
+                  })()}
+
+                  {/* Draggable tail curve control point 1 (green - for left side curve) - only for thought bubbles */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (() => {
+                    const tailBasePos = bubble.tailBaseX ?? 0.5;
+                    const tailSide = bubble.tailSide || 'bottom';
+                    const tailWidth = bubble.tailWidth ?? 0.10;
+                    const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
+
+                    let base1X, base1Y;
+                    if (tailSide === 'bottom') {
+                      base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
+                      base1Y = bubble.y + bubble.height;
+                    } else if (tailSide === 'top') {
+                      base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
+                      base1Y = bubble.y;
+                    } else if (tailSide === 'left') {
+                      base1X = bubble.x;
+                      base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
+                    } else {
+                      base1X = bubble.x + bubble.width;
+                      base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
+                    }
+
+                    const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
+                    const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
+
+                    // Control point position = midpoint + offset
+                    const midX = (base1X + tipX) / 2;
+                    const midY = (base1Y + tipY) / 2;
+                    const ctrlX = midX + (bubble.tailCtrl1X || 0.02);
+                    const ctrlY = midY + (bubble.tailCtrl1Y || 0.02);
+
+                    return (
+                      <div
+                        data-tail-ctrl1-handle="true"
+                        onMouseDown={(e) => handleTailCtrl1MouseDown(e, bubble)}
+                        style={{
+                          position: 'absolute',
+                          left: `${ctrlX * 100}%`,
+                          top: `${ctrlY * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#00cc66',
+                          border: '2px solid #fff',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          cursor: 'move',
+                          zIndex: 61
+                        }}
+                        title="Drag to curve left side of tail"
+                      />
+                    );
+                  })()}
+
+                  {/* Draggable tail curve control point 2 (purple - for right side curve) - only for thought bubbles */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (() => {
+                    const tailBasePos = bubble.tailBaseX ?? 0.5;
+                    const tailSide = bubble.tailSide || 'bottom';
+                    const tailWidth = bubble.tailWidth ?? 0.10;
+                    const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
+
+                    let base2X, base2Y;
+                    if (tailSide === 'bottom') {
+                      base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
+                      base2Y = bubble.y + bubble.height;
+                    } else if (tailSide === 'top') {
+                      base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
+                      base2Y = bubble.y;
+                    } else if (tailSide === 'left') {
+                      base2X = bubble.x;
+                      base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
+                    } else {
+                      base2X = bubble.x + bubble.width;
+                      base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
+                    }
+
+                    const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
+                    const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
+
+                    // Control point position = midpoint + offset
+                    const midX = (base2X + tipX) / 2;
+                    const midY = (base2Y + tipY) / 2;
+                    const ctrlX = midX + (bubble.tailCtrl2X || -0.02);
+                    const ctrlY = midY + (bubble.tailCtrl2Y || 0.02);
+
+                    return (
+                      <div
+                        data-tail-ctrl2-handle="true"
+                        onMouseDown={(e) => handleTailCtrl2MouseDown(e, bubble)}
+                        style={{
+                          position: 'absolute',
+                          left: `${ctrlX * 100}%`,
+                          top: `${ctrlY * 100}%`,
+                          width: 10,
+                          height: 10,
+                          background: '#9933ff',
+                          border: '2px solid #fff',
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          cursor: 'move',
+                          zIndex: 61
+                        }}
+                        title="Drag to curve right side of tail"
                       />
                     );
                   })()}
@@ -1870,16 +3293,66 @@ function PageEditor({ isCover = false }) {
 
           {/* Layout Preview */}
           {panelsComputed && (
-            <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}>
-              <h3 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: '#666' }}>Layout Description:</h3>
-              <pre style={{
-                fontSize: '0.85rem',
-                whiteSpace: 'pre-wrap',
-                color: '#333',
-                margin: 0
-              }}>
-                {layoutDescription}
-              </pre>
+            <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff', borderRadius: '8px', border: '1px solid #ddd', width: '400px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>Layout Description:</h3>
+                {customLayoutDescription && (
+                  <button
+                    onClick={() => setCustomLayoutDescription('')}
+                    style={{
+                      padding: '0.2rem 0.5rem',
+                      fontSize: '0.7rem',
+                      background: '#95a5a6',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '3px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Reset to Auto
+                  </button>
+                )}
+              </div>
+              <textarea
+                value={customLayoutDescription || layoutDescription}
+                onChange={(e) => setCustomLayoutDescription(e.target.value)}
+                style={{
+                  width: '100%',
+                  minHeight: '100px',
+                  fontSize: '0.85rem',
+                  fontFamily: 'monospace',
+                  padding: '0.5rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  resize: 'vertical',
+                  background: customLayoutDescription ? '#fffbeb' : '#f9f9f9'
+                }}
+                placeholder="Edit layout description..."
+              />
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center' }}>
+                {customLayoutDescription && (
+                  <small style={{ color: '#e67e22', fontSize: '0.75rem' }}>Custom layout description (yellow background)</small>
+                )}
+                <button
+                  onClick={() => {
+                    // Regenerate the prompt with current layout description
+                    setCustomPrompt(buildFullPrompt());
+                    setUseCustomPrompt(true);
+                  }}
+                  style={{
+                    marginLeft: 'auto',
+                    padding: '0.3rem 0.6rem',
+                    fontSize: '0.75rem',
+                    background: '#3498db',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Update Prompt
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1937,7 +3410,7 @@ function PageEditor({ isCover = false }) {
 
           {/* PANELS TAB */}
           {sidebarTab === 'panels' && (
-            <>
+            <div style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
               <h2>Panels {panelsComputed ? `(${panels.length})` : ''}</h2>
 
               {!panelsComputed && (
@@ -2297,6 +3770,52 @@ function PageEditor({ isCover = false }) {
                               </button>
                             </div>
 
+                            {/* Translate from English */}
+                            <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.25rem' }}>
+                              <input
+                                type="text"
+                                value={translateInput[sentence.id] || ''}
+                                onChange={(e) => setTranslateInput(prev => ({ ...prev, [sentence.id]: e.target.value }))}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && translateInput[sentence.id]) {
+                                    e.preventDefault();
+                                    translateText(bubble.id, sentence.id, translateInput[sentence.id]);
+                                  }
+                                }}
+                                placeholder="Type in English..."
+                                style={{
+                                  flex: 1,
+                                  padding: '0.4rem',
+                                  borderRadius: '3px',
+                                  border: '1px solid #27ae60',
+                                  background: '#e8f8f0',
+                                  color: '#333',
+                                  fontSize: '0.85rem'
+                                }}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  translateText(bubble.id, sentence.id, translateInput[sentence.id]);
+                                }}
+                                disabled={translatingText[sentence.id] || !translateInput[sentence.id]}
+                                style={{
+                                  padding: '0.4rem 0.6rem',
+                                  fontSize: '0.75rem',
+                                  background: translatingText[sentence.id] ? '#95a5a6' : '#27ae60',
+                                  color: '#fff',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: translatingText[sentence.id] ? 'wait' : 'pointer',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title="Translate English to Spanish"
+                              >
+                                {translatingText[sentence.id] ? '...' : 'Translate'}
+                              </button>
+                            </div>
+
                             <input
                               type="text"
                               value={sentence.text}
@@ -2331,6 +3850,155 @@ function PageEditor({ isCover = false }) {
                                 marginBottom: '0.25rem'
                               }}
                             />
+
+                            {/* Audio Generation */}
+                            <div style={{
+                              background: '#e8f4f8',
+                              borderRadius: '4px',
+                              padding: '0.5rem',
+                              marginBottom: '0.25rem',
+                              border: '1px solid #b8d4e3'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#2980b9', fontWeight: 'bold' }}>Audio</span>
+                                {sentence.audioUrl && (
+                                  <span style={{ fontSize: '0.65rem', color: '#27ae60' }}>Saved</span>
+                                )}
+                              </div>
+
+                              {/* Voice selector (collapsed by default, shown when needed) */}
+                              {(comic.voices || []).length === 0 ? (
+                                <p style={{ fontSize: '0.7rem', color: '#e74c3c', margin: '0 0 0.4rem 0' }}>
+                                  No voices configured. Go to Comic Editor → Voices tab to add voices.
+                                </p>
+                              ) : (
+                                <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                                  <select
+                                    value={selectedVoiceId}
+                                    onChange={(e) => { e.stopPropagation(); setSelectedVoiceId(e.target.value); }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      flex: 1,
+                                      minWidth: '100px',
+                                      padding: '0.25rem',
+                                      fontSize: '0.7rem',
+                                      borderRadius: '3px',
+                                      border: '1px solid #ccc'
+                                    }}
+                                  >
+                                    <option value="">Select voice...</option>
+                                    {(comic.voices || []).map((voice, idx) => (
+                                      <option key={`${voice.voiceId}-${idx}`} value={voice.voiceId}>
+                                        {voice.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <select
+                                    value={audioModel}
+                                    onChange={(e) => { e.stopPropagation(); setAudioModel(e.target.value); }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      padding: '0.25rem',
+                                      fontSize: '0.7rem',
+                                      borderRadius: '3px',
+                                      border: '1px solid #ccc'
+                                    }}
+                                  >
+                                    <option value="eleven_v3">V3 (Best)</option>
+                                    <option value="eleven_multilingual_v2">Multilingual V2</option>
+                                    <option value="eleven_turbo_v2_5">Turbo V2.5</option>
+                                  </select>
+                                </div>
+                              )}
+
+                              {/* Action buttons */}
+                              <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    enhanceText(bubble.id, sentence.id, sentence.text);
+                                  }}
+                                  disabled={enhancingText[sentence.id] || !sentence.text}
+                                  style={{
+                                    padding: '0.25rem 0.5rem',
+                                    fontSize: '0.65rem',
+                                    background: enhancingText[sentence.id] ? '#95a5a6' : '#9b59b6',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: enhancingText[sentence.id] ? 'wait' : 'pointer'
+                                  }}
+                                  title="Add audio tags like [excited], [whispers] to enhance delivery"
+                                >
+                                  {enhancingText[sentence.id] ? '...' : 'Enhance'}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    generateAudio(bubble.id, sentence.id, sentence.text);
+                                  }}
+                                  disabled={generatingAudio[sentence.id] || !sentence.text || !selectedVoiceId}
+                                  style={{
+                                    padding: '0.25rem 0.5rem',
+                                    fontSize: '0.65rem',
+                                    background: generatingAudio[sentence.id] ? '#95a5a6' : '#3498db',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: generatingAudio[sentence.id] ? 'wait' : 'pointer'
+                                  }}
+                                >
+                                  {generatingAudio[sentence.id] ? 'Generating...' : 'Generate'}
+                                </button>
+
+                                {audioPreview[sentence.id] && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        audioPreview[sentence.id]?.isPlaying
+                                          ? stopAudio(sentence.id)
+                                          : playAudio(sentence.id);
+                                      }}
+                                      style={{
+                                        padding: '0.25rem 0.5rem',
+                                        fontSize: '0.65rem',
+                                        background: audioPreview[sentence.id]?.isPlaying ? '#e74c3c' : '#2ecc71',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      {audioPreview[sentence.id]?.isPlaying ? 'Stop' : 'Play'}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const panelIdx = panels.findIndex(p => {
+                                          const cx = bubble.x + bubble.width / 2;
+                                          const cy = bubble.y + bubble.height / 2;
+                                          return cx >= p.tapZone.x && cx <= p.tapZone.x + p.tapZone.width &&
+                                                 cy >= p.tapZone.y && cy <= p.tapZone.y + p.tapZone.height;
+                                        });
+                                        saveAudio(bubble.id, sentence.id, page.pageNumber, panelIdx + 1);
+                                      }}
+                                      style={{
+                                        padding: '0.25rem 0.5rem',
+                                        fontSize: '0.65rem',
+                                        background: '#27ae60',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      Save
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
 
                             {/* Words */}
                             <div style={{ marginTop: '0.25rem' }}>
@@ -2459,12 +4127,12 @@ function PageEditor({ isCover = false }) {
                         <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
                           Shape: {bubble.type === 'thought'
                             ? `${bubble.cornerRadius ?? 50}% (20=rounded rect, 50=oval)`
-                            : `${bubble.cornerRadius || 8}px (0=square, 50=round)`}
+                            : `${bubble.cornerRadius || 8}px (0=square, 200=round)`}
                         </label>
                         <input
                           type="range"
                           min={bubble.type === 'thought' ? 20 : 0}
-                          max="50"
+                          max={bubble.type === 'thought' ? 50 : 200}
                           value={bubble.type === 'thought' ? (bubble.cornerRadius ?? 50) : (bubble.cornerRadius || 8)}
                           onChange={(e) => updateBubble(bubble.id, { cornerRadius: parseInt(e.target.value) })}
                           onClick={(e) => e.stopPropagation()}
@@ -2487,33 +4155,131 @@ function PageEditor({ isCover = false }) {
                         </div>
                       )}
 
-                      {/* Tail Width (for speech bubbles) */}
-                      {bubble.type === 'speech' && bubble.showTail !== false && (
-                        <div style={{ marginBottom: '0.5rem' }}>
-                          <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
-                            Tail Width: {Math.round((bubble.tailWidth ?? 0.06) * 100)}%
-                          </label>
+                      {/* Sound effect (no audio) */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#888', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <input
-                            type="range"
-                            min="2"
-                            max="15"
-                            value={Math.round((bubble.tailWidth ?? 0.06) * 100)}
-                            onChange={(e) => updateBubble(bubble.id, { tailWidth: parseInt(e.target.value) / 100 })}
+                            type="checkbox"
+                            checked={bubble.isSoundEffect || false}
+                            onChange={(e) => updateBubble(bubble.id, { isSoundEffect: e.target.checked })}
                             onClick={(e) => e.stopPropagation()}
-                            style={{ width: '100%' }}
                           />
-                          <p style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.25rem' }}>
-                            Drag: <span style={{ color: '#ff6600' }}>orange</span> = tip, <span style={{ color: '#0088ff' }}>blue</span> = base position
+                          Sound effect (no audio)
+                        </label>
+                        {bubble.isSoundEffect && (
+                          <p style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.25rem', marginLeft: '1.5rem' }}>
+                            Text like CREAK, BANG, etc. - won't generate TTS
                           </p>
-                        </div>
+                        )}
+                      </div>
+
+                      {/* Tail Controls (for speech bubbles) */}
+                      {bubble.type === 'speech' && bubble.showTail !== false && (
+                        <>
+                          {/* Bubble Angle */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Bubble Angle: {Math.round(bubble.rotation ?? 0)}°
+                            </label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="360"
+                              value={Math.round(bubble.rotation ?? 0)}
+                              onChange={(e) => updateBubble(bubble.id, { rotation: parseInt(e.target.value) })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tail Length */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Length: {Math.round((bubble.tailLength ?? 0.35) * 100)}%
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="100"
+                              value={Math.round((bubble.tailLength ?? 0.35) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailLength: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tail Width */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Width: {Math.round((bubble.tailWidth ?? 0.25) * 100)}%
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="50"
+                              value={Math.round((bubble.tailWidth ?? 0.25) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailWidth: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tail Angle */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Angle: {Math.round((bubble.tailCurve ?? 0) * 100)}% {(bubble.tailCurve ?? 0) > 0 ? '(right)' : (bubble.tailCurve ?? 0) < 0 ? '(left)' : '(center)'}
+                            </label>
+                            <input
+                              type="range"
+                              min="-100"
+                              max="100"
+                              value={Math.round((bubble.tailCurve ?? 0) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailCurve: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tail Bend */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Bend: {Math.round((bubble.tailBend ?? 0) * 100)}% {(bubble.tailBend ?? 0) > 0 ? '(right)' : (bubble.tailBend ?? 0) < 0 ? '(left)' : '(straight)'}
+                            </label>
+                            <input
+                              type="range"
+                              min="-100"
+                              max="100"
+                              value={Math.round((bubble.tailBend ?? 0) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailBend: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </>
                       )}
+
+                      {/* Text Angle (for all bubble types) */}
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                          Text Angle: {bubble.textAngle ?? 0}°
+                        </label>
+                        <input
+                          type="range"
+                          min="-45"
+                          max="45"
+                          value={bubble.textAngle ?? 0}
+                          onChange={(e) => updateBubble(bubble.id, { textAngle: parseInt(e.target.value) })}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
                     </>
                   )}
                 </div>
               ))}
             </div>
           )}
-            </>
+            </div>
           )}
 
           {/* PROMPTS TAB */}
@@ -2674,7 +4440,39 @@ function PageEditor({ isCover = false }) {
                 </div>
               </div>
 
-              {/* Panel Contents */}
+              {/* Cover Content - show for cover only */}
+              {isCover && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+                  Cover Content
+                </label>
+                <textarea
+                  value={panels[0]?.content || ''}
+                  onChange={(e) => {
+                    const updated = [...panels];
+                    if (updated[0]) {
+                      updated[0] = { ...updated[0], content: e.target.value };
+                      setPanels(updated);
+                    }
+                  }}
+                  placeholder="Describe the cover image (characters, scene, composition, text/title placement...)"
+                  style={{
+                    width: '100%',
+                    minHeight: '150px',
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    background: '#fff',
+                    color: '#333',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+              )}
+
+              {/* Panel Contents - show for regular pages */}
               {!isCover && (
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
@@ -2686,10 +4484,30 @@ function PageEditor({ isCover = false }) {
                   </p>
                 ) : (
                   panels.map((panel, i) => (
-                    <div key={panel.id} style={{ marginBottom: '0.75rem' }}>
-                      <label style={{ fontSize: '0.85rem', color: '#666', display: 'block', marginBottom: '0.25rem' }}>
-                        Panel {i + 1}
-                      </label>
+                    <div key={panel.id} style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <label style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>
+                          Panel {i + 1}
+                          <span style={{ fontWeight: 'normal', marginLeft: '0.5rem', color: '#999' }}>
+                            ({(panel.tapZone.width * 100).toFixed(0)}% × {(panel.tapZone.height * 100).toFixed(0)}%)
+                          </span>
+                        </label>
+                        <button
+                          onClick={() => generatePanelImage(panel, i)}
+                          disabled={panelImages[panel.id]?.generating || !panel.content?.trim()}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '0.75rem',
+                            background: panelImages[panel.id]?.generating ? '#95a5a6' : panel.content?.trim() ? '#27ae60' : '#ccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: panelImages[panel.id]?.generating || !panel.content?.trim() ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {panelImages[panel.id]?.generating ? '⏳ Generating...' : '🎨 Generate Panel'}
+                        </button>
+                      </div>
                       <textarea
                         value={panel.content || ''}
                         onChange={(e) => updatePanelContent(panel.id, e.target.value)}
@@ -2706,6 +4524,27 @@ function PageEditor({ isCover = false }) {
                           resize: 'vertical'
                         }}
                       />
+                      {/* Panel image preview */}
+                      {panelImages[panel.id]?.path && (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <img
+                            src={`http://localhost:3001${panelImages[panel.id].path}`}
+                            alt={`Panel ${i + 1}`}
+                            style={{
+                              width: '100%',
+                              maxHeight: '150px',
+                              objectFit: 'contain',
+                              borderRadius: '4px',
+                              border: '1px solid #ddd'
+                            }}
+                          />
+                        </div>
+                      )}
+                      {panelImages[panel.id]?.error && (
+                        <p style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                          Error: {panelImages[panel.id].error}
+                        </p>
+                      )}
                     </div>
                   ))
                 )}
@@ -2760,26 +4599,46 @@ function PageEditor({ isCover = false }) {
                 />
               </div>
 
+              {/* Update Prompt Button */}
+              <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#e8f4fc', borderRadius: '8px', border: '1px solid #b8d4e3' }}>
+                <p style={{ fontSize: '0.85rem', color: '#555', marginBottom: '0.75rem' }}>
+                  After editing panel descriptions or settings, click below to regenerate the compiled prompt:
+                </p>
+                <button
+                  onClick={() => {
+                    setCustomPrompt(buildFullPrompt());
+                    setUseCustomPrompt(true);
+                    setSidebarTab('generate');
+                  }}
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '0.75rem' }}
+                >
+                  Update & View Compiled Prompt
+                </button>
+              </div>
+
               </div>
           )}
 
           {/* GENERATE TAB */}
           {sidebarTab === 'generate' && (
             <div>
-              <h2 style={{ marginBottom: '1rem' }}>Generate Page Image</h2>
+              <h2 style={{ marginBottom: '1rem' }}>Generate {isCover ? 'Cover' : 'Page'} Image</h2>
 
               {!panelsComputed || panels.length === 0 ? (
                 <p style={{ color: '#888', fontSize: '0.9rem' }}>
-                  Please compute panels first (switch to Panels tab and click "Compute Panels")
+                  {isCover
+                    ? 'Add cover content in the Prompts tab first'
+                    : 'Please compute panels first (switch to Panels tab and click "Compute Panels")'}
                 </p>
               ) : (
                 <>
                   {/* Panel Content Summary */}
                   <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#fff', borderRadius: '4px', border: '1px solid #ddd' }}>
-                    <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Panel Content:</h4>
+                    <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>{isCover ? 'Cover' : 'Panel'} Content:</h4>
                     {panels.map((panel, i) => (
                       <div key={panel.id} style={{ fontSize: '0.8rem', marginBottom: '0.25rem' }}>
-                        <strong>Panel {i + 1}:</strong> {panel.content ? panel.content.substring(0, 50) + '...' : <span style={{ color: '#666' }}>(empty)</span>}
+                        <strong>{isCover ? 'Cover' : `Panel ${i + 1}`}:</strong> {panel.content ? panel.content.substring(0, 50) + '...' : <span style={{ color: '#666' }}>(empty)</span>}
                       </div>
                     ))}
                   </div>
@@ -2807,106 +4666,623 @@ function PageEditor({ isCover = false }) {
                     />
                   </div>
 
-                  {/* Buttons */}
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => setShowPromptPreview(!showPromptPreview)}
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                    >
-                      {showPromptPreview ? 'Hide Prompt' : 'Preview Prompt'}
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={generatePageImage}
-                      disabled={isGenerating}
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                    >
-                      {isGenerating ? 'Generating...' : 'Generate Image'}
-                    </button>
-                  </div>
-
-                  {/* Prompt Preview */}
-                  {showPromptPreview && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Full Prompt:</h4>
-                      <pre style={{
-                        background: '#f9f9f9',
-                        padding: '1rem',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
-                        whiteSpace: 'pre-wrap',
-                        maxHeight: '300px',
-                        overflow: 'auto',
-                        color: '#333',
-                        border: '1px solid #ddd'
-                      }}>
-                        {buildFullPrompt()}
-                      </pre>
-                    </div>
-                  )}
-
-                  {/* Error */}
-                  {generationError && (
-                    <div style={{
-                      marginBottom: '1rem',
-                      padding: '0.75rem',
-                      background: 'rgba(192, 57, 43, 0.2)',
-                      border: '1px solid #c0392b',
-                      borderRadius: '4px',
-                      color: '#e74c3c',
-                      fontSize: '0.85rem'
-                    }}>
-                      Error: {generationError}
-                    </div>
-                  )}
-
-                  {/* Generated Image */}
-                  {generatedImage && (
-                    <div>
-                      <h4 style={{ marginBottom: '0.5rem' }}>Generated Image:</h4>
-                      <img
-                        src={`http://localhost:3001${generatedImage.path}`}
-                        alt="Generated page"
+                  {/* Generation Mode Tabs - hide for cover (only one panel) */}
+                  {!isCover && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <button
+                        onClick={() => setShowCompositePreview(false)}
                         style={{
-                          width: '100%',
+                          flex: 1,
+                          padding: '0.5rem',
+                          fontSize: '0.8rem',
+                          background: !showCompositePreview ? '#e94560' : '#ddd',
+                          color: !showCompositePreview ? 'white' : '#666',
+                          border: 'none',
                           borderRadius: '4px',
-                          border: '1px solid #ddd'
+                          cursor: 'pointer'
                         }}
-                      />
-                      <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                        <button
-                          className="btn btn-primary"
-                          onClick={saveGeneratedImage}
-                          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                        >
-                          Save as Page Image
-                        </button>
+                      >
+                        Full Page (Single Image)
+                      </button>
+                      <button
+                        onClick={() => setShowCompositePreview(true)}
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem',
+                          fontSize: '0.8rem',
+                          background: showCompositePreview ? '#e94560' : '#ddd',
+                          color: showCompositePreview ? 'white' : '#666',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Panel by Panel
+                      </button>
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Full Page Mode */}
+                  {!showCompositePreview && (
+                    <>
+                      {/* Buttons */}
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
                         <button
                           className="btn btn-secondary"
+                          onClick={() => setShowPromptPreview(!showPromptPreview)}
+                          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                        >
+                          {showPromptPreview ? 'Hide Prompt' : 'Preview Prompt'}
+                        </button>
+                        <button
+                          className="btn btn-primary"
                           onClick={generatePageImage}
                           disabled={isGenerating}
                           style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                         >
-                          Regenerate
+                          {isGenerating ? 'Generating...' : 'Generate Full Page'}
                         </button>
                       </div>
-                      {generatedImage.revisedPrompt && (
-                        <details style={{ marginTop: '0.5rem' }}>
-                          <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#888' }}>
-                            DALL-E's revised prompt
-                          </summary>
-                          <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
-                            {generatedImage.revisedPrompt}
-                          </p>
-                        </details>
+                    </>
+                  )}
+
+                  {/* Panel by Panel Mode */}
+                  {showCompositePreview && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
+                        Generate each panel separately for better layout control. Individual panel images will be composited into the final page.
+                      </p>
+
+                      {/* Panel Generation Status */}
+                      <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#f9f9f9', borderRadius: '4px' }}>
+                        {panels.map((panel, i) => {
+                          const panelData = panelImages[panel.id];
+                          return (
+                            <div key={panel.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', fontSize: '0.8rem' }}>
+                              <span style={{ width: '60px' }}>Panel {i + 1}:</span>
+                              {panelData?.generating ? (
+                                <span style={{ color: '#f39c12' }}>Generating...</span>
+                              ) : panelData?.path ? (
+                                <span style={{ color: '#27ae60' }}>Ready</span>
+                              ) : panelData?.error ? (
+                                <span style={{ color: '#e74c3c' }}>Error</span>
+                              ) : panel.content?.trim() ? (
+                                <span style={{ color: '#666' }}>Pending</span>
+                              ) : (
+                                <span style={{ color: '#999' }}>No content</span>
+                              )}
+                              <button
+                                onClick={() => generatePanelImage(panel, i)}
+                                disabled={panelData?.generating || !panel.content?.trim()}
+                                style={{
+                                  marginLeft: 'auto',
+                                  padding: '0.15rem 0.4rem',
+                                  fontSize: '0.7rem',
+                                  background: panelData?.generating ? '#95a5a6' : '#3498db',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: panelData?.generating || !panel.content?.trim() ? 'not-allowed' : 'pointer'
+                                }}
+                              >
+                                {panelData?.path ? 'Regenerate' : 'Generate'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Batch Generate Button */}
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                        <button
+                          onClick={generateAllPanels}
+                          disabled={generatingAllPanels || panels.every(p => !p.content?.trim())}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            fontSize: '0.85rem',
+                            background: generatingAllPanels ? '#95a5a6' : '#27ae60',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: generatingAllPanels || panels.every(p => !p.content?.trim()) ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {generatingAllPanels ? 'Generating All...' : 'Generate All Panels'}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await compositePageFromPanels();
+                          }}
+                          disabled={!panels.some(p => panelImages[p.id]?.path)}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            fontSize: '0.85rem',
+                            background: panels.some(p => panelImages[p.id]?.path) ? '#9b59b6' : '#ccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: panels.some(p => panelImages[p.id]?.path) ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          Preview Composite
+                        </button>
+                        <button
+                          onClick={saveCompositedImage}
+                          disabled={!panels.some(p => panelImages[p.id]?.path)}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            fontSize: '0.85rem',
+                            background: panels.some(p => panelImages[p.id]?.path) ? '#e94560' : '#ccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: panels.some(p => panelImages[p.id]?.path) ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          Save Composite as Page
+                        </button>
+                      </div>
+
+                      {/* Composite Canvas */}
+                      <canvas
+                        ref={compositeCanvasRef}
+                        style={{
+                          width: '100%',
+                          maxHeight: '400px',
+                          objectFit: 'contain',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          background: '#fff'
+                        }}
+                      />
+
+                      {/* Crop Controls for each panel */}
+                      {panels.some(p => panelImages[p.id]?.path) && (
+                        <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#f9f9f9', borderRadius: '4px', border: '1px solid #eee' }}>
+                          <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Panel Fit & Position</h4>
+                          {panels.map((panel, i) => {
+                            const panelData = panelImages[panel.id];
+                            if (!panelData?.path) return null;
+
+                            return (
+                              <div key={panel.id} style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#fff', borderRadius: '4px', border: '1px solid #ddd' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#333', minWidth: '55px' }}>Panel {i + 1}</span>
+                                  <button
+                                    onClick={() => {
+                                      setPanelImages(prev => ({
+                                        ...prev,
+                                        [panel.id]: { ...prev[panel.id], fitMode: 'stretch' }
+                                      }));
+                                      setTimeout(() => compositePageFromPanels(), 50);
+                                    }}
+                                    style={{
+                                      padding: '0.2rem 0.5rem',
+                                      fontSize: '0.7rem',
+                                      background: (panelData?.fitMode || 'stretch') === 'stretch' ? '#3498db' : '#ddd',
+                                      color: (panelData?.fitMode || 'stretch') === 'stretch' ? 'white' : '#666',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    Stretch
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setPanelImages(prev => ({
+                                        ...prev,
+                                        [panel.id]: { ...prev[panel.id], fitMode: 'crop', cropX: prev[panel.id]?.cropX ?? 0, cropY: prev[panel.id]?.cropY ?? 0, zoom: prev[panel.id]?.zoom ?? 1 }
+                                      }));
+                                      setTimeout(() => compositePageFromPanels(), 50);
+                                    }}
+                                    style={{
+                                      padding: '0.2rem 0.5rem',
+                                      fontSize: '0.7rem',
+                                      background: panelData?.fitMode === 'crop' ? '#3498db' : '#ddd',
+                                      color: panelData?.fitMode === 'crop' ? 'white' : '#666',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    Crop
+                                  </button>
+                                </div>
+                                {/* Crop position sliders - only show when in crop mode */}
+                                {panelData?.fitMode === 'crop' && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <span style={{ fontSize: '0.7rem', color: '#666', width: '55px' }}>Horizontal:</span>
+                                      <input
+                                        type="range"
+                                        min="-100"
+                                        max="100"
+                                        value={(panelData?.cropX ?? 0) * 100}
+                                        onChange={(e) => {
+                                          setPanelImages(prev => ({
+                                            ...prev,
+                                            [panel.id]: { ...prev[panel.id], cropX: parseInt(e.target.value) / 100 }
+                                          }));
+                                          setTimeout(() => compositePageFromPanels(), 50);
+                                        }}
+                                        style={{ flex: 1 }}
+                                      />
+                                      <span style={{ fontSize: '0.65rem', color: '#999', width: '35px' }}>
+                                        {Math.round((panelData?.cropX ?? 0) * 100)}%
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <span style={{ fontSize: '0.7rem', color: '#666', width: '55px' }}>Vertical:</span>
+                                      <input
+                                        type="range"
+                                        min="-100"
+                                        max="100"
+                                        value={(panelData?.cropY ?? 0) * 100}
+                                        onChange={(e) => {
+                                          setPanelImages(prev => ({
+                                            ...prev,
+                                            [panel.id]: { ...prev[panel.id], cropY: parseInt(e.target.value) / 100 }
+                                          }));
+                                          setTimeout(() => compositePageFromPanels(), 50);
+                                        }}
+                                        style={{ flex: 1 }}
+                                      />
+                                      <span style={{ fontSize: '0.65rem', color: '#999', width: '35px' }}>
+                                        {Math.round((panelData?.cropY ?? 0) * 100)}%
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <span style={{ fontSize: '0.7rem', color: '#666', width: '55px' }}>Zoom:</span>
+                                      <input
+                                        type="range"
+                                        min="100"
+                                        max="300"
+                                        step="10"
+                                        value={(panelData?.zoom ?? 1) * 100}
+                                        onChange={(e) => {
+                                          setPanelImages(prev => ({
+                                            ...prev,
+                                            [panel.id]: { ...prev[panel.id], zoom: parseInt(e.target.value) / 100 }
+                                          }));
+                                          setTimeout(() => compositePageFromPanels(), 50);
+                                        }}
+                                        style={{ flex: 1 }}
+                                      />
+                                      <span style={{ fontSize: '0.65rem', color: '#999', width: '35px' }}>
+                                        {Math.round((panelData?.zoom ?? 1) * 100)}%
+                                      </span>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        setPanelImages(prev => ({
+                                          ...prev,
+                                          [panel.id]: { ...prev[panel.id], cropX: 0, cropY: 0, zoom: 1 }
+                                        }));
+                                        setTimeout(() => compositePageFromPanels(), 50);
+                                      }}
+                                      style={{
+                                        padding: '0.15rem 0.4rem',
+                                        fontSize: '0.65rem',
+                                        background: '#95a5a6',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        alignSelf: 'flex-start'
+                                      }}
+                                    >
+                                      Reset All
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
+                  )}
+
+                  {/* Full Page Mode: Prompt Preview, Error, Generated Image */}
+                  {!showCompositePreview && (
+                    <>
+                      {/* Prompt Preview */}
+                      {showPromptPreview && (
+                        <div style={{ marginBottom: '1rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <h4 style={{ fontSize: '0.85rem', color: '#666', margin: 0 }}>Full Prompt:</h4>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#666' }}>
+                              <input
+                                type="checkbox"
+                                checked={useCustomPrompt}
+                                onChange={(e) => {
+                                  setUseCustomPrompt(e.target.checked);
+                                  if (e.target.checked && !customPrompt) {
+                                    setCustomPrompt(buildFullPrompt());
+                                  }
+                                }}
+                              />
+                              Edit manually
+                            </label>
+                          </div>
+                          {useCustomPrompt ? (
+                            <>
+                              <textarea
+                                value={customPrompt}
+                                onChange={(e) => setCustomPrompt(e.target.value)}
+                                style={{
+                                  width: '100%',
+                                  minHeight: '300px',
+                                  padding: '1rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.75rem',
+                                  fontFamily: 'monospace',
+                                  color: '#333',
+                                  border: '1px solid #27ae60',
+                                  background: '#f0fff0',
+                                  resize: 'vertical'
+                                }}
+                              />
+                              <button
+                                onClick={() => setCustomPrompt(buildFullPrompt())}
+                                style={{
+                                  marginTop: '0.5rem',
+                                  padding: '0.4rem 0.8rem',
+                                  fontSize: '0.75rem',
+                                  background: '#95a5a6',
+                                  color: '#fff',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Reset to Generated
+                              </button>
+                            </>
+                          ) : (
+                            <pre style={{
+                              background: '#f9f9f9',
+                              padding: '1rem',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              whiteSpace: 'pre-wrap',
+                              maxHeight: '300px',
+                              overflow: 'auto',
+                              color: '#333',
+                              border: '1px solid #ddd'
+                            }}>
+                              {buildFullPrompt()}
+                            </pre>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Error */}
+                      {generationError && (
+                        <div style={{
+                          marginBottom: '1rem',
+                          padding: '0.75rem',
+                          background: 'rgba(192, 57, 43, 0.2)',
+                          border: '1px solid #c0392b',
+                          borderRadius: '4px',
+                          color: '#e74c3c',
+                          fontSize: '0.85rem'
+                        }}>
+                          Error: {generationError}
+                        </div>
+                      )}
+
+                      {/* Generated Image */}
+                      {generatedImage && (
+                        <div>
+                          <h4 style={{ marginBottom: '0.5rem' }}>Generated Image:</h4>
+                          <img
+                            src={`http://localhost:3001${generatedImage.path}`}
+                            alt="Generated page"
+                            style={{
+                              width: '100%',
+                              borderRadius: '4px',
+                              border: '1px solid #ddd'
+                            }}
+                          />
+                          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              className="btn btn-primary"
+                              onClick={saveGeneratedImage}
+                              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                            >
+                              Save as Page Image
+                            </button>
+                            <button
+                              className="btn btn-secondary"
+                              onClick={generatePageImage}
+                              disabled={isGenerating}
+                              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                            >
+                              Regenerate
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}
             </div>
           )}
+        </div>
+
+        {/* ChatGPT Panel */}
+        <div className="chat-panel">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', color: '#333' }}>ChatGPT</h3>
+            <button
+              onClick={clearChat}
+              style={{
+                padding: '0.25rem 0.5rem',
+                fontSize: '0.7rem',
+                background: '#95a5a6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              Clear
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div className="chat-messages">
+            {chatMessages.length === 0 && (
+              <div style={{ color: '#888', fontSize: '0.85rem', textAlign: 'center', padding: '2rem 1rem' }}>
+                <p>Start a conversation with ChatGPT</p>
+                <p style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>You can upload images or share your generated page</p>
+              </div>
+            )}
+            {chatMessages.map((msg, idx) => (
+              <div key={idx} className={`chat-message ${msg.role}`}>
+                {msg.images && msg.images.length > 0 && (
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    {msg.images.map((img, imgIdx) => (
+                      <img key={imgIdx} src={img} alt="Uploaded" style={{ maxHeight: '100px' }} />
+                    ))}
+                  </div>
+                )}
+                <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content || '[No content]'}</div>
+              </div>
+            ))}
+            {isSendingChat && (
+              <div className="chat-message assistant" style={{ fontStyle: 'italic' }}>
+                Thinking...
+              </div>
+            )}
+            <div ref={chatMessagesEndRef} />
+          </div>
+
+          {/* Pending images */}
+          {chatImages.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              {chatImages.map((img, idx) => (
+                <div key={idx} style={{ position: 'relative' }}>
+                  <img src={img.preview} alt={img.name} style={{ height: '50px', borderRadius: '4px', border: '1px solid #ddd' }} />
+                  <button
+                    onClick={() => removeChatImage(idx)}
+                    style={{
+                      position: 'absolute',
+                      top: '-5px',
+                      right: '-5px',
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: '#c0392b',
+                      color: '#fff',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Input area */}
+          <div className="chat-input-area">
+            <textarea
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  sendChatMessage();
+                }
+              }}
+              placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+              rows={3}
+              disabled={isSendingChat}
+            />
+            <div className="chat-buttons">
+              <button
+                onClick={sendChatMessage}
+                disabled={isSendingChat || (!chatInput.trim() && chatImages.length === 0)}
+                style={{
+                  padding: '0.4rem 1rem',
+                  background: isSendingChat ? '#95a5a6' : '#e94560',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isSendingChat ? 'wait' : 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                {isSendingChat ? 'Sending...' : 'Send'}
+              </button>
+              <input
+                type="file"
+                ref={chatFileInputRef}
+                onChange={handleChatFileUpload}
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+              />
+              <button
+                onClick={() => chatFileInputRef.current?.click()}
+                disabled={isSendingChat}
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  background: '#3498db',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Upload Image
+              </button>
+              <button
+                onClick={uploadGeneratedImageToChat}
+                disabled={isSendingChat || !generatedImage?.path}
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  background: generatedImage?.path ? '#27ae60' : '#95a5a6',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: generatedImage?.path ? 'pointer' : 'not-allowed',
+                  fontSize: '0.85rem'
+                }}
+                title={generatedImage?.path ? 'Add generated image to chat' : 'Generate an image first'}
+              >
+                Add Generated
+              </button>
+              <button
+                onClick={() => setChatInput(prev => prev + (prev ? '\n\n' : '') + buildFullPrompt())}
+                disabled={isSendingChat}
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  background: '#9b59b6',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+                title="Add the full prompt to chat input"
+              >
+                Add Prompt
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2996,69 +5372,120 @@ function PageEditor({ isCover = false }) {
 
                 return (
                   <div key={bubble.id}>
-                    {/* Speech bubble tail */}
+                    {/* Unified Speech Bubble with integrated tail (preview) */}
                     {bubble.type === 'speech' && bubble.showTail !== false && (() => {
-                      const tailBasePos = bubble.tailBaseX ?? 0.5;
-                      const tailWidthVal = bubble.tailWidth ?? 0.06;
-                      const tailSide = bubble.tailSide || 'bottom';
-                      const halfWidth = (tailWidthVal * CANVAS_WIDTH) / 2;
+                      const bx = bubble.x * CANVAS_WIDTH;
+                      const by = bubble.y * CANVAS_HEIGHT;
+                      const bw = bubble.width * CANVAS_WIDTH;
+                      const bh = bubble.height * CANVAS_HEIGHT;
+                      const r = Math.min(bubble.cornerRadius || 8, bw / 2, bh / 2);
+                      const borderWidthVal = bubble.borderWidth ?? 2.5;
+                      const borderColorVal = bubble.borderColor || '#000';
+                      const cx = bx + bw / 2;
+                      const cy = by + bh / 2;
+                      const rotation = bubble.rotation ?? 0;
+                      const tailWidth = (bubble.tailWidth ?? 0.25) * bw;
+                      const halfTailWidth = tailWidth / 2;
+                      const tailLength = (bubble.tailLength ?? 0.35) * bh;
+                      const tailCurve = bubble.tailCurve ?? 0;
+                      const angleOffset = tailCurve * tailLength * 1.5;
+                      const tailBend = bubble.tailBend ?? 0;
+                      const bendOffset = tailBend * tailLength * 0.8;
+                      const tipX = cx + angleOffset;
+                      const tipY = by + bh + tailLength;
+                      const ctrl1X = cx + halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                      const ctrl1Y = by + bh + tailLength * 0.5;
+                      const ctrl2X = cx - halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                      const ctrl2Y = by + bh + tailLength * 0.5;
 
-                      let baseX, baseY, base1X, base1Y, base2X, base2Y;
-                      if (tailSide === 'bottom') {
-                        baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                        baseY = (bubble.y + bubble.height) * CANVAS_HEIGHT;
-                        base1X = baseX - halfWidth; base1Y = baseY;
-                        base2X = baseX + halfWidth; base2Y = baseY;
-                      } else if (tailSide === 'top') {
-                        baseX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                        baseY = bubble.y * CANVAS_HEIGHT;
-                        base1X = baseX - halfWidth; base1Y = baseY;
-                        base2X = baseX + halfWidth; base2Y = baseY;
-                      } else if (tailSide === 'left') {
-                        baseX = bubble.x * CANVAS_WIDTH;
-                        baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                        base1X = baseX; base1Y = baseY - halfWidth;
-                        base2X = baseX; base2Y = baseY + halfWidth;
-                      } else {
-                        baseX = (bubble.x + bubble.width) * CANVAS_WIDTH;
-                        baseY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                        base1X = baseX; base1Y = baseY - halfWidth;
-                        base2X = baseX; base2Y = baseY + halfWidth;
-                      }
+                      const isVeryRound = r >= Math.min(bw, bh) * 0.4;
+                      const tailRightX = Math.min(cx + halfTailWidth, bx + bw - r - 2);
+                      const tailLeftX = Math.max(cx - halfTailWidth, bx + r + 2);
 
-                      const tipX = tailEndX * CANVAS_WIDTH;
-                      const tipY = tailEndY * CANVAS_HEIGHT;
-                      const dx = tipX - baseX;
-                      const dy = tipY - baseY;
-                      const distance = Math.sqrt(dx * dx + dy * dy);
-                      let curlAmount = distance * 0.25;
-                      let perpX = 0, perpY = 0;
-                      if (tailSide === 'bottom' || tailSide === 'top') {
-                        perpX = dx > 0 ? curlAmount : -curlAmount;
+                      let path;
+                      if (isVeryRound) {
+                        const ellipseRx = bw / 2;
+                        const ellipseRy = bh / 2;
+                        const tailConnectRight = Math.min(halfTailWidth, ellipseRx * 0.6);
+                        const tailConnectLeft = Math.min(halfTailWidth, ellipseRx * 0.6);
+                        const yOffsetRight = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectRight / ellipseRx, 2));
+                        const yOffsetLeft = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectLeft / ellipseRx, 2));
+                        const connectRightY = cy + yOffsetRight;
+                        const connectLeftY = cy + yOffsetLeft;
+
+                        path = `
+                          M ${cx} ${by}
+                          A ${ellipseRx} ${ellipseRy} 0 0 1 ${cx + tailConnectRight} ${connectRightY}
+                          C ${cx + tailConnectRight} ${connectRightY + tailLength * 0.2},
+                            ${ctrl1X} ${ctrl1Y},
+                            ${tipX} ${tipY}
+                          C ${ctrl2X} ${ctrl2Y},
+                            ${cx - tailConnectLeft} ${connectLeftY + tailLength * 0.2},
+                            ${cx - tailConnectLeft} ${connectLeftY}
+                          A ${ellipseRx} ${ellipseRy} 0 1 1 ${cx} ${by}
+                          Z
+                        `;
                       } else {
-                        perpY = dy > 0 ? curlAmount : -curlAmount;
+                        path = `
+                          M ${bx + r} ${by}
+                          L ${bx + bw - r} ${by}
+                          A ${r} ${r} 0 0 1 ${bx + bw} ${by + r}
+                          L ${bx + bw} ${by + bh - r}
+                          A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh}
+                          L ${tailRightX} ${by + bh}
+                          C ${ctrl1X} ${ctrl1Y},
+                            ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                            ${tipX} ${tipY}
+                          C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
+                            ${ctrl2X} ${ctrl2Y},
+                            ${tailLeftX} ${by + bh}
+                          L ${bx + r} ${by + bh}
+                          A ${r} ${r} 0 0 1 ${bx} ${by + bh - r}
+                          L ${bx} ${by + r}
+                          A ${r} ${r} 0 0 1 ${bx + r} ${by}
+                          Z
+                        `;
                       }
-                      const midX = (baseX + tipX) / 2;
-                      const midY = (baseY + tipY) / 2;
-                      const ctrl1X = midX + perpX * 0.5;
-                      const ctrl1Y = midY + perpY * 0.5;
-                      const ctrl2X = midX + perpX * 1.2;
-                      const ctrl2Y = midY + perpY * 1.2;
-                      const fillPath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y} Z`;
-                      const strokePath = `M ${base1X} ${base1Y} Q ${ctrl1X} ${ctrl1Y} ${tipX} ${tipY} Q ${ctrl2X} ${ctrl2Y} ${base2X} ${base2Y}`;
-                      const borderColor = bubble.borderColor || '#000';
-                      const borderWidth = bubble.borderWidth ?? 2.5;
 
                       return (
-                        <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 49, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
+                        <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 50, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
                           <defs>
-                            <filter id={`roughTailPreview-${bubble.id}`} x="-10%" y="-10%" width="120%" height="120%">
+                            <filter id={`roughBubblePreview-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
                               <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
-                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
                             </filter>
                           </defs>
-                          <path d={fillPath} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke="none" filter={`url(#roughTailPreview-${bubble.id})`} />
-                          {!bubble.noBorder && <path d={strokePath} fill="none" stroke={borderColor} strokeWidth={borderWidth} strokeLinecap="round" filter={`url(#roughTailPreview-${bubble.id})`} />}
+                          <g transform={`rotate(${rotation} ${cx} ${cy})`}>
+                            <path
+                              d={path}
+                              fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
+                              stroke={bubble.noBorder ? 'none' : borderColorVal}
+                              strokeWidth={borderWidthVal}
+                              strokeLinejoin="round"
+                              filter={`url(#roughBubblePreview-${bubble.id})`}
+                            />
+                          </g>
+                          <foreignObject x={bx} y={by} width={bw} height={bh}>
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px 8px', boxSizing: 'border-box' }}>
+                              <span style={{
+                                fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                                fontSize: `${bubble.fontSize}px`,
+                                fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                                fontStyle: bubble.italic ? 'italic' : 'normal',
+                                color: bubble.textColor || '#000000',
+                                textAlign: bubble.textAlign || 'center',
+                                width: '100%',
+                                wordBreak: 'break-word',
+                                lineHeight: 1.3,
+                                letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                                textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                                transform: `rotate(${bubble.textAngle ?? 0}deg)`,
+                                display: 'inline-block'
+                              }}>
+                                {getBubbleDisplayText(bubble)}
+                              </span>
+                            </div>
+                          </foreignObject>
                         </svg>
                       );
                     })()}
@@ -3121,7 +5548,8 @@ function PageEditor({ isCover = false }) {
                       );
                     })()}
 
-                    {/* Bubble body */}
+                    {/* Bubble body (for non-speech or speech without tail) */}
+                    {!(bubble.type === 'speech' && bubble.showTail !== false) && (
                     <div
                       style={{
                         position: 'absolute',
@@ -3155,12 +5583,14 @@ function PageEditor({ isCover = false }) {
                           lineHeight: 1.3,
                           letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
                           textTransform: bubble.uppercase ? 'uppercase' : 'none',
-                          transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2)}deg)`
+                          transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) + (bubble.textAngle ?? 0)}deg)`,
+                          display: 'inline-block'
                         }}
                       >
                         {getBubbleDisplayText(bubble)}
                       </span>
                     </div>
+                    )}
                   </div>
                 );
               })}

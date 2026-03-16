@@ -3,46 +3,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 
 const DEFAULT_SETTINGS = {
-  styleBible: `• Page ratio is A4.
-• Speech and thinking bubbles should be contained in the panel and not spill over the edges of the panel.
-• Black & white only. Human-drawn underground noir comic. Rough ink on paper.
-• Uneven line weight, occasional wobble.
-• Visible pencil under-sketch lines.
-• Messy cross-hatching (inconsistent spacing/direction).
-• Heavy contrast.
-• Slight line wobble (human-made feel)
-• Flat black shadows with imperfect fills (tiny white pinholes).
-• Light paper grain only.
-• Subtle ink texture only.
-• No blotchy grey stains.
-• No circular mottling.
-• No sponge-like texture.
-• No hyperrealism
-• No digital polish look
-
-IMPORTANT
-Keep it looking like a human-drawn comic page, not glossy AI.
-No photorealism. No hyper-detail. No noir gore.`,
-
-  cameraInks: `Bold silhouettes and strong negative space.
-Slightly imperfect anatomy and perspective (human-made).
-Hand-drawn panel borders, slightly wobbly.
-Keep lighting high-contrast with clear shadow shapes (no gradients).`,
-
+  styleBible: '',
+  cameraInks: '',
   characters: [],
-
-  globalDoNot: `Do NOT draw rounded corners.
-Do NOT draw an outer page border or white frame.
-Do NOT show a page on a background (no table/photo/scan framing).
-No vignette, no drop shadow.
-The artwork itself is the page, filling the entire canvas edge-to-edge (only a tiny safe margin).`,
-
-  hardNegatives: `No clean vector lines.
-No digital polish.
-No extra panels beyond the layout.
-No inset panels.
-No split panels.
-No decorative borders that look like panels.`
+  globalDoNot: '',
+  hardNegatives: ''
 };
 
 function ComicEditor() {
@@ -57,7 +22,9 @@ function ComicEditor() {
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState(null);
-  
+  const [deleteModal, setDeleteModal] = useState({ show: false, page: null });
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     loadComic();
   }, [id]);
@@ -67,7 +34,15 @@ function ComicEditor() {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
       if (response.data.promptSettings) {
-        setSettings({ ...DEFAULT_SETTINGS, ...response.data.promptSettings });
+        const loadedSettings = { ...DEFAULT_SETTINGS, ...response.data.promptSettings };
+        // Ensure characters have IDs (for backwards compatibility)
+        if (loadedSettings.characters) {
+          loadedSettings.characters = loadedSettings.characters.map((char, idx) => ({
+            ...char,
+            id: char.id || `char-${Date.now()}-${idx}`
+          }));
+        }
+        setSettings(loadedSettings);
       }
     } catch (error) {
       console.error('Failed to load comic:', error);
@@ -80,13 +55,28 @@ function ComicEditor() {
     try {
       const response = await api.post(`/comics/${id}/pages`);
       const newPage = response.data;
-      setComic({
-        ...comic,
-        pages: [...comic.pages, newPage]
-      });
+      // Reload comic to ensure fresh data
+      await loadComic();
       navigate(`/comic/${id}/page/${newPage.id}`);
     } catch (error) {
       console.error('Failed to add page:', error);
+    }
+  };
+
+  const handleDeletePage = async (archive = false) => {
+    if (!deleteModal.page) return;
+
+    setDeleting(true);
+    try {
+      await api.delete(`/comics/${id}/pages/${deleteModal.page.id}?archive=${archive}&deleteAudio=${!archive}`);
+      setDeleteModal({ show: false, page: null });
+      // Reload comic from server to ensure fresh data
+      await loadComic();
+    } catch (error) {
+      console.error('Failed to delete page:', error);
+      alert('Failed to delete page: ' + error.message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -146,23 +136,23 @@ function ComicEditor() {
     if (!newCharacter.name.trim()) return;
     setSettings(prev => ({
       ...prev,
-      characters: [...prev.characters, { ...newCharacter, id: Date.now() }]
+      characters: [...prev.characters, { ...newCharacter, id: `char-${Date.now()}` }]
     }));
     setNewCharacter({ name: '', description: '' });
   };
 
-  const removeCharacter = (charId) => {
+  const removeCharacter = (index) => {
     setSettings(prev => ({
       ...prev,
-      characters: prev.characters.filter(c => c.id !== charId)
+      characters: prev.characters.filter((_, i) => i !== index)
     }));
   };
 
-  const updateCharacter = (charId, field, value) => {
+  const updateCharacter = (index, field, value) => {
     setSettings(prev => ({
       ...prev,
-      characters: prev.characters.map(c =>
-        c.id === charId ? { ...c, [field]: value } : c
+      characters: prev.characters.map((c, i) =>
+        i === index ? { ...c, [field]: value } : c
       )
     }));
   };
@@ -222,6 +212,13 @@ function ComicEditor() {
         >
           Export
         </button>
+        <button
+          className={`btn ${activeTab === 'voices' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('voices')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Voices ({(comic.voices || []).length})
+        </button>
       </div>
 
       {/* Pages Tab */}
@@ -260,6 +257,7 @@ function ComicEditor() {
               <div
                 key={page.id}
                 className="page-thumbnail"
+                style={{ position: 'relative', cursor: 'pointer' }}
                 onClick={() => navigate(`/comic/${id}/page/${page.id}`)}
               >
                 {page.masterImage ? (
@@ -284,6 +282,31 @@ function ComicEditor() {
                 <small style={{ color: '#666' }}>
                   {page.panels?.length || 0} panels
                 </small>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteModal({ show: true, page });
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    background: 'rgba(192, 57, 43, 0.9)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '24px',
+                    height: '24px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  title="Delete page"
+                >
+                  ×
+                </button>
               </div>
             ))}
           </div>
@@ -374,9 +397,9 @@ function ComicEditor() {
                   Define characters to maintain consistency across pages
                 </p>
 
-                {settings.characters.map((char) => (
+                {settings.characters.map((char, index) => (
                   <div
-                    key={char.id}
+                    key={char.id || `fallback-${index}`}
                     style={{
                       background: '#1a1a2e',
                       borderRadius: '8px',
@@ -388,7 +411,7 @@ function ComicEditor() {
                       <input
                         type="text"
                         value={char.name}
-                        onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
+                        onChange={(e) => updateCharacter(index, 'name', e.target.value)}
                         placeholder="Character name"
                         style={{
                           padding: '0.5rem',
@@ -403,7 +426,7 @@ function ComicEditor() {
                         }}
                       />
                       <button
-                        onClick={() => removeCharacter(char.id)}
+                        onClick={() => removeCharacter(index)}
                         style={{
                           padding: '0.4rem 0.8rem',
                           background: '#c0392b',
@@ -419,7 +442,7 @@ function ComicEditor() {
                     </div>
                     <textarea
                       value={char.description}
-                      onChange={(e) => updateCharacter(char.id, 'description', e.target.value)}
+                      onChange={(e) => updateCharacter(index, 'description', e.target.value)}
                       placeholder="Character description (gender, age, build, face anchors, hair, clothing, props, condition...)"
                       style={{
                         width: '100%',
@@ -616,6 +639,247 @@ function ComicEditor() {
               </code>
               directory.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Voices Tab */}
+      {activeTab === 'voices' && (
+        <div style={{ maxWidth: '800px' }}>
+          <h2 style={{ marginBottom: '1rem' }}>Voice Configuration</h2>
+          <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+            Configure character voices using ElevenLabs voice IDs. These will be available when generating audio for sentences.
+          </p>
+
+          {/* Existing voices */}
+          <div style={{ marginBottom: '2rem' }}>
+            {(comic.voices || []).length === 0 ? (
+              <p style={{ color: '#888', fontStyle: 'italic' }}>No voices configured yet. Add your first voice below.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {(comic.voices || []).map((voice, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '1rem',
+                      background: '#f8f9fa',
+                      padding: '1rem',
+                      borderRadius: '8px',
+                      border: '1px solid #ddd'
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>{voice.name}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#666', fontFamily: 'monospace' }}>{voice.voiceId}</div>
+                    </div>
+                    <button
+                      className="btn btn-danger"
+                      onClick={async () => {
+                        const updatedVoices = comic.voices.filter((_, i) => i !== idx);
+                        try {
+                          await api.put(`/comics/${id}`, { voices: updatedVoices });
+                          setComic({ ...comic, voices: updatedVoices });
+                        } catch (error) {
+                          console.error('Failed to remove voice:', error);
+                          alert('Failed to remove voice');
+                        }
+                      }}
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add new voice */}
+          <div style={{
+            background: '#e8f4fc',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            border: '1px solid #b8d4e3'
+          }}>
+            <h3 style={{ marginBottom: '1rem', color: '#2980b9' }}>Add New Voice</h3>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#666' }}>
+                  Character Name
+                </label>
+                <input
+                  type="text"
+                  id="newVoiceName"
+                  placeholder="e.g., Narrator, Javier, Diego"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    fontSize: '1rem'
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1.5 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#666' }}>
+                  ElevenLabs Voice ID
+                </label>
+                <input
+                  type="text"
+                  id="newVoiceId"
+                  placeholder="e.g., EXAVITQu4vr4xnSDxMaL"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    fontSize: '1rem',
+                    fontFamily: 'monospace'
+                  }}
+                />
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  const nameInput = document.getElementById('newVoiceName');
+                  const idInput = document.getElementById('newVoiceId');
+                  const name = nameInput.value.trim();
+                  const voiceId = idInput.value.trim();
+
+                  if (!name || !voiceId) {
+                    alert('Please enter both a name and voice ID');
+                    return;
+                  }
+
+                  // Check for duplicate voice ID
+                  if ((comic.voices || []).some(v => v.voiceId === voiceId)) {
+                    alert('This voice ID is already added');
+                    return;
+                  }
+
+                  const updatedVoices = [...(comic.voices || []), { name, voiceId }];
+                  try {
+                    await api.put(`/comics/${id}`, { voices: updatedVoices });
+                    setComic({ ...comic, voices: updatedVoices });
+                    nameInput.value = '';
+                    idInput.value = '';
+                  } catch (error) {
+                    console.error('Failed to add voice:', error);
+                    alert('Failed to add voice');
+                  }
+                }}
+                style={{ padding: '0.6rem 1.5rem', whiteSpace: 'nowrap' }}
+              >
+                Add Voice
+              </button>
+            </div>
+          </div>
+
+          {/* Help section */}
+          <div style={{
+            background: '#f8f9fa',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            marginTop: '1.5rem'
+          }}>
+            <h3 style={{ marginBottom: '1rem', color: '#333' }}>Finding Voice IDs</h3>
+            <ol style={{ color: '#666', lineHeight: '1.8', paddingLeft: '1.25rem' }}>
+              <li>Go to <a href="https://elevenlabs.io/app/voice-library" target="_blank" rel="noopener noreferrer" style={{ color: '#3498db' }}>ElevenLabs Voice Library</a></li>
+              <li>Find a voice you want to use</li>
+              <li>Click on the voice to open its details</li>
+              <li>Copy the Voice ID from the URL or the voice settings</li>
+              <li>The ID looks like: <code style={{ background: '#fff', padding: '0.2rem 0.4rem', borderRadius: '3px' }}>EXAVITQu4vr4xnSDxMaL</code></li>
+            </ol>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Page Confirmation Modal */}
+      {deleteModal.show && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: '#1a1a2e',
+            borderRadius: '8px',
+            padding: '2rem',
+            maxWidth: '450px',
+            width: '90%',
+            border: '1px solid #16213e'
+          }}>
+            <h2 style={{ marginBottom: '1rem', color: '#e94560' }}>Delete Page {deleteModal.page?.pageNumber}?</h2>
+            <p style={{ marginBottom: '1.5rem', color: '#ccc', lineHeight: '1.5' }}>
+              Choose how you want to remove this page:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button
+                onClick={() => handleDeletePage(true)}
+                disabled={deleting}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: '#2980b9',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: deleting ? 'wait' : 'pointer',
+                  fontSize: '0.95rem',
+                  textAlign: 'left'
+                }}
+              >
+                <strong>Archive</strong>
+                <br />
+                <small style={{ opacity: 0.8 }}>Move to archive. Can be restored later.</small>
+              </button>
+
+              <button
+                onClick={() => handleDeletePage(false)}
+                disabled={deleting}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: '#c0392b',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: deleting ? 'wait' : 'pointer',
+                  fontSize: '0.95rem',
+                  textAlign: 'left'
+                }}
+              >
+                <strong>Delete Permanently</strong>
+                <br />
+                <small style={{ opacity: 0.8 }}>Remove forever including audio files.</small>
+              </button>
+
+              <button
+                onClick={() => setDeleteModal({ show: false, page: null })}
+                disabled={deleting}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: 'transparent',
+                  color: '#888',
+                  border: '1px solid #444',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  marginTop: '0.5rem'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
