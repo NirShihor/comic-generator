@@ -169,4 +169,62 @@ Return ONLY the JSON object, no other text.`;
   }
 });
 
+// Batch word lookup - get meaning + baseForm for all words in a sentence
+router.post('/batch-word-lookup', async (req, res) => {
+  try {
+    const { words, sentenceText, sentenceTranslation, sourceLanguage = 'es', targetLanguage = 'en' } = req.body;
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    }
+
+    if (!words || !words.length || !sentenceText) {
+      return res.status(400).json({ error: 'words array and sentenceText are required' });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const languageNames = {
+      en: 'English', es: 'Spanish', fr: 'French', de: 'German',
+      it: 'Italian', pt: 'Portuguese', ja: 'Japanese', ko: 'Korean', zh: 'Chinese'
+    };
+
+    const sourceLang = languageNames[sourceLanguage] || sourceLanguage;
+    const targetLang = languageNames[targetLanguage] || targetLanguage;
+
+    const prompt = `Given this ${sourceLang} sentence: "${sentenceText}"
+Translation: "${sentenceTranslation || ''}"
+
+For each word below, provide the ${targetLang} meaning in this context, its dictionary base form (infinitive for verbs, singular for nouns, masculine singular for adjectives), and whether it is a proper noun (name of a person, place, pet, or any other proper name).
+
+Words: ${words.join(', ')}
+
+Return a JSON array with one entry per word in the same order: [{ "text": "word", "meaning": "english meaning", "baseForm": "base form", "isName": false }, ...]
+Set "isName": true for any proper nouns (people, places, pets, brands, etc.).
+Return ONLY the JSON array, no other text.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a precise language assistant. Always respond with valid JSON only.' },
+        { role: 'user', content: prompt }
+      ],
+      max_completion_tokens: 1000,
+      temperature: 0.2
+    });
+
+    const responseText = completion.choices[0].message.content.trim();
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      return res.status(500).json({ error: 'Failed to parse batch word lookup response' });
+    }
+
+    const wordDataArray = JSON.parse(jsonMatch[0]);
+    res.json(wordDataArray);
+  } catch (error) {
+    console.error('Batch word lookup error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

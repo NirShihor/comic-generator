@@ -201,6 +201,9 @@ router.put('/:id/pages/:pageId', async (req, res) => {
     if (req.body.bubbles !== undefined) {
       page.bubbles = req.body.bubbles;
     }
+    if (req.body.bakedImage !== undefined) {
+      page.bakedImage = req.body.bakedImage;
+    }
     if (req.body.masterImage !== undefined) {
       page.masterImage = req.body.masterImage;
 
@@ -379,7 +382,8 @@ router.post('/:id/export-full', async (req, res) => {
     const projectAudioDir = path.join(PROJECTS_DIR, req.params.id, 'audio');
 
     if (comicObj.cover?.image) {
-      const cleanCoverImage = comicObj.cover.image.split('?')[0];
+      const coverImage = comicObj.cover.bakedImage || comicObj.cover.image;
+      const cleanCoverImage = coverImage.split('?')[0];
       const coverSourcePath = path.join(__dirname, '../..', cleanCoverImage);
       const coverDestPath = path.join(imagesDir, `${comicSlug}_cover.png`);
       try {
@@ -391,9 +395,10 @@ router.post('/:id/export-full', async (req, res) => {
     }
 
     for (const page of comicObj.pages) {
-      if (page.masterImage) {
+      const pageImage = page.bakedImage || page.masterImage;
+      if (pageImage) {
         const pageNum = page.pageNumber;
-        const cleanMasterImage = page.masterImage.split('?')[0];
+        const cleanMasterImage = pageImage.split('?')[0];
         const sourceImagePath = path.join(__dirname, '../..', cleanMasterImage);
 
         const masterDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}.png`);
@@ -504,7 +509,8 @@ function transformToReaderFormat(comic, comicSlug) {
                   meaning: word.meaning || '',
                   baseForm: word.baseForm || word.text || '',
                   ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
-                  ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs })
+                  ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
+                  ...(word.vocabQuiz && { vocabQuiz: true })
                 }))
               };
             })
@@ -564,7 +570,10 @@ function transformToReaderFormat(comic, comicSlug) {
                     id: `${comicSlug}-w${wordCounter++}`,
                     text: word.text || '',
                     meaning: word.meaning || '',
-                    baseForm: word.baseForm || word.text || ''
+                    baseForm: word.baseForm || word.text || '',
+                    ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
+                    ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
+                    ...(word.vocabQuiz && { vocabQuiz: true })
                   }))
                 };
               })
@@ -588,7 +597,20 @@ function transformToReaderFormat(comic, comicSlug) {
     targetLanguage: comic.targetLanguage || 'en',
     version: '1.0',
     pages,
-    reviewWords: []
+    reviewWords: pages.flatMap(page =>
+      (page.panels || []).flatMap(panel =>
+        (panel.bubbles || []).flatMap(bubble =>
+          (bubble.sentences || []).flatMap(sentence =>
+            (sentence.words || []).filter(w => w.vocabQuiz).map(w => ({
+              id: w.id,
+              text: w.text,
+              meaning: w.meaning,
+              baseForm: w.baseForm
+            }))
+          )
+        )
+      )
+    )
   };
 }
 

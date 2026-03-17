@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import html2canvas from 'html2canvas';
 
 // Strip audio enhancement tags like [sighs], [pause], [ominous, slowly] and quotation marks from text
 function stripAudioTags(text) {
@@ -216,6 +217,7 @@ function generateLayoutDescription(panels) {
 
 function PageEditor({ isCover = false }) {
   const { id, pageId } = useParams();
+  const navigate = useNavigate();
   const [comic, setComic] = useState(null);
   const [page, setPage] = useState(null);
   const [lines, setLines] = useState([]); // { type: 'horizontal'|'vertical', y/x, x1/y1, x2/y2 }
@@ -256,6 +258,7 @@ function PageEditor({ isCover = false }) {
   // Audio generation state (voices come from comic.voices)
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [audioModel, setAudioModel] = useState('eleven_v3');
+  const [copiedTag, setCopiedTag] = useState(null);
   const [audioSettings, setAudioSettings] = useState({
     stability: 0.5,
     similarity_boost: 0.75,
@@ -264,6 +267,7 @@ function PageEditor({ isCover = false }) {
   });
   const [audioPreview, setAudioPreview] = useState({}); // { [sentenceId]: { url, base64, isPlaying } }
   const [generatingAudio, setGeneratingAudio] = useState({}); // { [sentenceId]: true/false }
+  const [savingAudio, setSavingAudio] = useState({}); // { [sentenceId]: true/false }
   const [enhancingText, setEnhancingText] = useState({}); // { [sentenceId]: true/false }
   const [translatingText, setTranslatingText] = useState({}); // { [sentenceId]: true/false }
   const [translateInput, setTranslateInput] = useState({}); // { [sentenceId]: 'english text' }
@@ -473,6 +477,7 @@ function PageEditor({ isCover = false }) {
     const preview = audioPreview[sentenceId];
     if (!preview?.filename) return;
 
+    setSavingAudio(prev => ({ ...prev, [sentenceId]: true }));
     try {
       const audioName = `${comic.title.toLowerCase().replace(/\s+/g, '_')}_p${pageNum}_s${panelNum}`;
       const response = await api.post('/audio/save-to-project', {
@@ -489,20 +494,58 @@ function PageEditor({ isCover = false }) {
       // Build word list from timestamps - every spoken word gets an entry
       const timestamps = preview.wordTimestamps || [];
       const existingWords = sentence?.words || [];
-      const allWords = timestamps.map(t => {
-        const normalised = t.word.toLowerCase().replace(/[.,!?;:"""''¿¡]/g, '');
-        const existing = existingWords.find(w =>
-          (w.text || '').toLowerCase().replace(/[.,!?;:"""''¿¡]/g, '') === normalised
-        );
+      const normWord = (s) => (s || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\]]/g, '').trim();
+      const cleanWord = (s) => (s || '').replace(/[.,!?;:"""''¿¡…\[\]]+/g, '').trim();
+      const audioTagWords = new Set(['slowly', 'whispering', 'shouting', 'frightened', 'surprised', 'amazed', 'hopeful', 'worried', 'excited', 'pause', 'sighs', 'laughs', 'cries', 'gasps', 'whispers', 'shouts', 'sad', 'angry', 'happy', 'fearful', 'fearfully', 'very']);
+      const stripTags = (w) => w.replace(/\[.*?\]/g, '').trim();
+      const isAudioTag = (w) => { const cleaned = stripTags(w); return !cleaned || audioTagWords.has(normWord(cleaned)); };
+      const allWords = timestamps.filter(t => !isAudioTag(t.word)).map(t => {
+        t = { ...t, word: stripTags(t.word) || t.word };
+        const normalised = normWord(t.word);
+        const existing = existingWords.find(w => normWord(w.text) === normalised);
         return {
           id: existing?.id || `word-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          text: existing?.text || t.word,
-          meaning: existing?.meaning || '',
-          baseForm: existing?.baseForm || '',
+          text: cleanWord(existing?.text || t.word),
+          meaning: cleanWord(existing?.meaning || ''),
+          baseForm: cleanWord(existing?.baseForm || ''),
           startTimeMs: t.startMs,
-          endTimeMs: t.endMs
+          endTimeMs: t.endMs,
+          vocabQuiz: existing?.vocabQuiz || false
         };
       });
+
+      // Auto-fill meaning/baseForm for words that don't have them
+      const wordsNeedingLookup = allWords.filter(w => !w.meaning);
+      if (wordsNeedingLookup.length > 0 && cleanedText) {
+        try {
+          const lookupResponse = await api.post('/chat/batch-word-lookup', {
+            words: wordsNeedingLookup.map(w => normWord(w.text)),
+            sentenceText: cleanedText,
+            sentenceTranslation: sentence?.translation || '',
+            sourceLanguage: comic?.language || 'es',
+            targetLanguage: comic?.targetLanguage || 'en'
+          });
+          const lookupResults = lookupResponse.data;
+          if (Array.isArray(lookupResults)) {
+            const nameIds = new Set();
+            wordsNeedingLookup.forEach((w, i) => {
+              if (lookupResults[i]) {
+                if (lookupResults[i].isName) {
+                  nameIds.add(w.id);
+                } else {
+                  w.meaning = cleanWord(lookupResults[i].meaning || '');
+                  w.baseForm = cleanWord(lookupResults[i].baseForm || '');
+                }
+              }
+            });
+            if (nameIds.size > 0) {
+              allWords.splice(0, allWords.length, ...allWords.filter(w => !nameIds.has(w.id)));
+            }
+          }
+        } catch (lookupError) {
+          console.error('Batch word lookup failed (words saved without meanings):', lookupError);
+        }
+      }
 
       setBubbles(prev => prev.map(b => {
         if (b.id !== bubbleId) return b;
@@ -516,6 +559,51 @@ function PageEditor({ isCover = false }) {
     } catch (error) {
       console.error('Failed to save audio:', error);
       alert('Failed to save audio: ' + error.message);
+    } finally {
+      setSavingAudio(prev => ({ ...prev, [sentenceId]: false }));
+    }
+  };
+
+  const fillDictionary = async (bubbleId, sentenceId) => {
+    const bubble = bubbles.find(b => b.id === bubbleId);
+    const sentence = bubble?.sentences?.find(s => s.id === sentenceId);
+    if (!sentence?.words?.length || !sentence.text) return;
+
+    const normWord = (s) => (s || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\]]/g, '').trim();
+    const wordsNeedingLookup = sentence.words.filter(w => !w.meaning);
+    if (wordsNeedingLookup.length === 0) return;
+
+    const cleanedText = stripAudioTags(sentence.text);
+    try {
+      const lookupResponse = await api.post('/chat/batch-word-lookup', {
+        words: wordsNeedingLookup.map(w => normWord(w.text)),
+        sentenceText: cleanedText,
+        sentenceTranslation: sentence.translation || '',
+        sourceLanguage: comic?.language || 'es',
+        targetLanguage: comic?.targetLanguage || 'en'
+      });
+      const lookupResults = lookupResponse.data;
+      if (Array.isArray(lookupResults)) {
+        setBubbles(prev => prev.map(b => {
+          if (b.id !== bubbleId) return b;
+          return { ...b, sentences: (b.sentences || []).map(s => {
+            if (s.id !== sentenceId) return s;
+            const updatedWords = s.words.map(w => {
+              if (w.meaning) return w;
+              const idx = wordsNeedingLookup.findIndex(wn => wn.id === w.id);
+              if (idx >= 0 && lookupResults[idx]) {
+                if (lookupResults[idx].isName) return null;
+                return { ...w, meaning: lookupResults[idx].meaning || '', baseForm: lookupResults[idx].baseForm || '' };
+              }
+              return w;
+            }).filter(Boolean);
+            return { ...s, words: updatedWords };
+          })};
+        }));
+      }
+    } catch (error) {
+      console.error('Fill dictionary failed:', error);
+      alert('Failed to fill dictionary: ' + error.message);
     }
   };
 
@@ -1934,6 +2022,105 @@ function PageEditor({ isCover = false }) {
     }
   };
 
+  // --- Bake Bubbles into Page Image ---
+  const [isBaking, setIsBaking] = useState(false);
+  const [showBakedPreview, setShowBakedPreview] = useState(false);
+  const bakeTargetRef = useRef(null);
+
+  const bakeBubblesToImage = async () => {
+    if (!page.masterImage || bubbles.length === 0) {
+      alert('Need a page image and at least one bubble to bake.');
+      return;
+    }
+    setIsBaking(true);
+    // Wait for React to render the off-screen bake target
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    // Ensure all bubble fonts are loaded before capture
+    const usedFonts = [...new Set(bubbles.map(b => {
+      const font = BUBBLE_FONTS.find(f => f.id === b.fontId) || BUBBLE_FONTS[0];
+      return font.family.replace(/'/g, '').split(',')[0].trim();
+    }))];
+    try {
+      await Promise.all(usedFonts.map(f => document.fonts.load(`16px "${f}"`)));
+      await document.fonts.ready;
+    } catch (e) {
+      console.warn('Font preload warning:', e);
+    }
+
+    // Extra frame to let fonts apply to rendered elements
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    try {
+      const targetEl = bakeTargetRef.current;
+      if (!targetEl) throw new Error('Bake target not rendered');
+
+      const scale = 1024 / CANVAS_WIDTH; // 2.56x for 1024x1536 output
+      const canvas = await html2canvas(targetEl, {
+        scale,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT
+      });
+
+      canvas.toBlob(async (blob) => {
+        try {
+          const formData = new FormData();
+          formData.append('image', blob, `baked-${pageId}.png`);
+
+          const uploadResponse = await api.post('/images/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+
+          if (isCover) {
+            await api.post('/images/save-to-project', {
+              comicId: id,
+              filename: uploadResponse.data.filename,
+              imageType: 'cover-baked',
+              pageNumber: 0
+            });
+
+            const bakedPath = `/projects/${id}/images/${id}_cover_baked.png`;
+            const updatedComic = { ...comic };
+            updatedComic.cover = { ...updatedComic.cover, bakedImage: bakedPath };
+            await api.put(`/comics/${id}`, updatedComic);
+            setComic(updatedComic);
+          } else {
+            await api.post('/images/save-to-project', {
+              comicId: id,
+              filename: uploadResponse.data.filename,
+              imageType: 'baked',
+              pageNumber: page.pageNumber
+            });
+
+            const bakedPath = `/projects/${id}/images/${id}_p${page.pageNumber}_baked.png`;
+            const updatedComic = { ...comic };
+            const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+            if (pageIndex !== -1) {
+              updatedComic.pages[pageIndex].bakedImage = bakedPath;
+              await api.put(`/comics/${id}`, updatedComic);
+              setComic(updatedComic);
+            }
+          }
+
+          setPage(prev => ({ ...prev, bakedImage: `${(isCover ? `/projects/${id}/images/${id}_cover_baked.png` : `/projects/${id}/images/${id}_p${page.pageNumber}_baked.png`)}?t=${Date.now()}` }));
+          alert('Bubbles baked into image!');
+        } catch (error) {
+          console.error('Failed to bake bubbles:', error);
+          alert('Failed to bake bubbles: ' + error.message);
+        } finally {
+          setIsBaking(false);
+        }
+      }, 'image/png');
+    } catch (error) {
+      console.error('Failed to bake bubbles:', error);
+      alert('Failed to bake bubbles: ' + error.message);
+      setIsBaking(false);
+    }
+  };
+
   const generatePageImage = async () => {
     if (!panelsComputed || panels.length === 0) {
       alert('Please compute panels and add content first.');
@@ -2155,6 +2342,11 @@ function PageEditor({ isCover = false }) {
   const selectedPanelData = panels.find(p => p.id === selectedPanel);
   const snapPoints = getSnapPoints();
 
+  const sortedPages = comic?.pages ? [...comic.pages].sort((a, b) => a.pageNumber - b.pageNumber) : [];
+  const currentPageIdx = sortedPages.findIndex(p => p.id === pageId);
+  const prevPage = currentPageIdx > 0 ? sortedPages[currentPageIdx - 1] : null;
+  const nextPage = currentPageIdx < sortedPages.length - 1 ? sortedPages[currentPageIdx + 1] : null;
+
   return (
     <div>
       <div className="page-header">
@@ -2162,20 +2354,27 @@ function PageEditor({ isCover = false }) {
           <Link to={`/comic/${id}`} style={{ color: '#888', textDecoration: 'none', marginBottom: '0.5rem', display: 'block' }}>
             ← Back to {comic.title}
           </Link>
-          <h1>{isCover ? 'Cover' : `Page ${page.pageNumber}`}</h1>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            className="btn btn-secondary"
-            onClick={() => setShowPagePreview(true)}
-            disabled={!page.masterImage}
-            style={{ opacity: page.masterImage ? 1 : 0.5 }}
-          >
-            Preview
-          </button>
-          <button className="btn btn-primary" onClick={savePage}>
-            {isCover ? 'Save Cover' : 'Save Page'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h1 style={{ margin: 0 }}>{isCover ? 'Cover' : `Page ${page.pageNumber}`}</h1>
+            {!isCover && sortedPages.length > 0 && (
+              <div style={{ display: 'flex', gap: '0.25rem' }}>
+                <button
+                  onClick={() => prevPage && navigate(`/comic/${id}/page/${prevPage.id}`)}
+                  disabled={!prevPage}
+                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.85rem', background: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: prevPage ? 'pointer' : 'default', opacity: prevPage ? 1 : 0.4 }}
+                >
+                  ← Prev
+                </button>
+                <button
+                  onClick={() => nextPage && navigate(`/comic/${id}/page/${nextPage.id}`)}
+                  disabled={!nextPage}
+                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.85rem', background: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: nextPage ? 'pointer' : 'default', opacity: nextPage ? 1 : 0.4 }}
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2220,6 +2419,25 @@ function PageEditor({ isCover = false }) {
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
           >
             {isAddingBubble ? 'Cancel' : '+ Add Bubble'}
+          </button>
+        )}
+        {editorMode === 'bubbles' && page.masterImage && bubbles.length > 0 && (
+          <button
+            className="btn btn-secondary"
+            onClick={bakeBubblesToImage}
+            disabled={isBaking}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: isBaking ? '#ccc' : '#8e44ad', color: '#fff', border: 'none' }}
+          >
+            {isBaking ? 'Baking...' : 'Bake Bubbles'}
+          </button>
+        )}
+        {page.bakedImage && (
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowBakedPreview(prev => !prev)}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: showBakedPreview ? '#27ae60' : '#95a5a6', color: '#fff', border: 'none' }}
+          >
+            {showBakedPreview ? 'Hide Baked' : 'View Baked'}
           </button>
         )}
         {!isCover && (
@@ -3431,8 +3649,46 @@ function PageEditor({ isCover = false }) {
           )}
         </div>
 
+        {/* Baked Image Preview */}
+        {showBakedPreview && page.bakedImage && (
+          <div style={{ marginBottom: '1rem', position: 'relative' }}>
+            <button
+              onClick={() => setShowBakedPreview(false)}
+              style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, background: '#c0392b', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.2rem 0.5rem', cursor: 'pointer', fontSize: '0.75rem' }}
+            >
+              Close
+            </button>
+            <img
+              src={`http://localhost:3001${page.bakedImage}`}
+              alt="Baked page"
+              style={{
+                width: CANVAS_WIDTH,
+                height: CANVAS_HEIGHT,
+                objectFit: 'contain',
+                border: '2px solid #27ae60',
+                borderRadius: '4px',
+                background: '#fff'
+              }}
+            />
+          </div>
+        )}
+
         {/* Sidebar */}
         <div className="sidebar">
+          {/* Preview & Save */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowPagePreview(true)}
+              disabled={!page.masterImage}
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', opacity: page.masterImage ? 1 : 0.5 }}
+            >
+              Preview
+            </button>
+            <button className="btn btn-primary" onClick={savePage} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+              {isCover ? 'Save Cover' : 'Save Page'}
+            </button>
+          </div>
           {/* Sidebar Tabs */}
           <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem', borderBottom: '2px solid #ddd', paddingBottom: '0.5rem' }}>
             <button
@@ -3906,6 +4162,38 @@ function PageEditor({ isCover = false }) {
                               </button>
                             </div>
 
+                            <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[pause]'].map(tag => {
+                                const tagKey = `${sentence.id}-${tag}`;
+                                const isCopied = copiedTag === tagKey;
+                                return (
+                                <button
+                                  key={tag}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(tag);
+                                    setCopiedTag(tagKey);
+                                    setTimeout(() => setCopiedTag(prev => prev === tagKey ? null : prev), 600);
+                                  }}
+                                  style={{
+                                    padding: '0.15rem 0.4rem',
+                                    fontSize: '0.7rem',
+                                    background: isCopied ? '#27ae60' : '#f0f0f0',
+                                    color: isCopied ? '#fff' : '#666',
+                                    border: `1px solid ${isCopied ? '#27ae60' : '#ddd'}`,
+                                    borderRadius: '3px',
+                                    cursor: 'pointer',
+                                    fontFamily: 'monospace',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  title={`Copy ${tag} to clipboard`}
+                                >
+                                  {tag}
+                                </button>
+                                );
+                              })}
+                            </div>
+
                             <input
                               type="text"
                               value={sentence.text}
@@ -4063,6 +4351,7 @@ function PageEditor({ isCover = false }) {
                                       {audioPreview[sentence.id]?.isPlaying ? 'Stop' : 'Play'}
                                     </button>
                                     <button
+                                      disabled={savingAudio[sentence.id]}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         const panelIdx = panels.findIndex(p => {
@@ -4076,14 +4365,14 @@ function PageEditor({ isCover = false }) {
                                       style={{
                                         padding: '0.25rem 0.5rem',
                                         fontSize: '0.65rem',
-                                        background: '#27ae60',
+                                        background: savingAudio[sentence.id] ? '#95a5a6' : '#27ae60',
                                         color: '#fff',
                                         border: 'none',
                                         borderRadius: '3px',
-                                        cursor: 'pointer'
+                                        cursor: savingAudio[sentence.id] ? 'wait' : 'pointer'
                                       }}
                                     >
-                                      Save
+                                      {savingAudio[sentence.id] ? 'Saving...' : 'Save'}
                                     </button>
                                   </>
                                 )}
@@ -4094,20 +4383,38 @@ function PageEditor({ isCover = false }) {
                             <div style={{ marginTop: '0.25rem' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
                                 <span style={{ fontSize: '0.7rem', color: '#888' }}>Words ({(sentence.words || []).length})</span>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); addWord(bubble.id, sentence.id); }}
-                                  style={{
-                                    padding: '0.15rem 0.4rem',
-                                    background: '#27ae60',
-                                    border: 'none',
-                                    borderRadius: '3px',
-                                    color: '#fff',
-                                    cursor: 'pointer',
-                                    fontSize: '0.65rem'
-                                  }}
-                                >
-                                  + Manual
-                                </button>
+                                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                  {(sentence.words || []).some(w => !w.meaning) && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); fillDictionary(bubble.id, sentence.id); }}
+                                      style={{
+                                        padding: '0.15rem 0.4rem',
+                                        background: '#3498db',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        color: '#fff',
+                                        cursor: 'pointer',
+                                        fontSize: '0.65rem'
+                                      }}
+                                    >
+                                      Fill Dictionary
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); addWord(bubble.id, sentence.id); }}
+                                    style={{
+                                      padding: '0.15rem 0.4rem',
+                                      background: '#27ae60',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      color: '#fff',
+                                      cursor: 'pointer',
+                                      fontSize: '0.65rem'
+                                    }}
+                                  >
+                                    + Manual
+                                  </button>
+                                </div>
                               </div>
 
                               {/* Clickable words - Spanish */}
@@ -4241,6 +4548,19 @@ function PageEditor({ isCover = false }) {
                                       fontSize: '0.75rem'
                                     }}
                                   />
+                                  <label
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="Include in Vocabulary Quiz"
+                                    style={{ display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer', gap: '1px' }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={word.vocabQuiz || false}
+                                      onChange={(e) => updateWord(bubble.id, sentence.id, word.id, { vocabQuiz: e.target.checked })}
+                                      style={{ margin: 0, cursor: 'pointer' }}
+                                    />
+                                    <span style={{ fontSize: '0.6rem', color: '#666' }}>Q</span>
+                                  </label>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); removeWord(bubble.id, sentence.id, word.id); }}
                                     style={{
@@ -5460,318 +5780,250 @@ function PageEditor({ isCover = false }) {
         </div>
       </div>
 
-      {/* Page Preview Modal */}
-      {showPagePreview && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.85)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '2rem'
-          }}
-          onClick={() => setShowPagePreview(false)}
-        >
+      {/* Shared preview content: used by both Preview modal and off-screen Bake target */}
+      {(() => {
+        const previewContent = (ref) => (
           <div
+            ref={ref}
             style={{
               position: 'relative',
-              maxWidth: '90vw',
-              maxHeight: '90vh'
+              width: CANVAS_WIDTH,
+              height: CANVAS_HEIGHT,
+              background: '#fff',
+              overflow: 'hidden'
             }}
-            onClick={(e) => e.stopPropagation()}
           >
-            {/* Close button */}
-            <button
-              onClick={() => setShowPagePreview(false)}
-              style={{
-                position: 'absolute',
-                top: -40,
-                right: 0,
-                background: '#fff',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '0.5rem 1rem',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-            >
-              Close Preview
-            </button>
-
-            {/* Preview Canvas */}
-            <div
-              style={{
-                position: 'relative',
-                width: CANVAS_WIDTH,
-                height: CANVAS_HEIGHT,
-                background: '#fff',
-                borderRadius: '4px',
-                overflow: 'hidden',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
-              }}
-            >
-              {/* Background image */}
-              {page.masterImage && (
-                <img
-                  src={`http://localhost:3001${page.masterImage}`}
-                  alt="Page preview"
-                  style={{
-                    position: 'absolute',
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                />
-              )}
-
-              {/* SVG filter for hand-drawn effect */}
-              <svg width="0" height="0" style={{ position: 'absolute' }}>
-                <defs>
-                  <filter id="roughEdgePreview" x="-5%" y="-5%" width="110%" height="110%">
-                    <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="noise" />
-                    <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
-                  </filter>
-                </defs>
-              </svg>
-
-              {/* Render bubbles */}
-              {bubbles.map((bubble) => {
-                const bubbleCenterX = bubble.x + bubble.width / 2;
-                const bubbleCenterY = bubble.y + bubble.height / 2;
-                const tailEndX = bubbleCenterX + (bubble.tailX || 0);
-                const tailEndY = bubbleCenterY + (bubble.tailY || 0);
-
-                return (
-                  <div key={bubble.id}>
-                    {/* Unified Speech Bubble with integrated tail (preview) */}
-                    {bubble.type === 'speech' && bubble.showTail !== false && (() => {
-                      const bx = bubble.x * CANVAS_WIDTH;
-                      const by = bubble.y * CANVAS_HEIGHT;
-                      const bw = bubble.width * CANVAS_WIDTH;
-                      const bh = bubble.height * CANVAS_HEIGHT;
-                      const r = Math.min(bubble.cornerRadius || 8, bw / 2, bh / 2);
-                      const borderWidthVal = bubble.borderWidth ?? 2.5;
-                      const borderColorVal = bubble.borderColor || '#000';
-                      const cx = bx + bw / 2;
-                      const cy = by + bh / 2;
-                      const rotation = bubble.rotation ?? 0;
-                      const tailWidth = (bubble.tailWidth ?? 0.25) * bw;
-                      const halfTailWidth = tailWidth / 2;
-                      const tailLength = (bubble.tailLength ?? 0.35) * bh;
-                      const tailCurve = bubble.tailCurve ?? 0;
-                      const angleOffset = tailCurve * tailLength * 1.5;
-                      const tailBend = bubble.tailBend ?? 0;
-                      const bendOffset = tailBend * tailLength * 0.8;
-                      const tipX = cx + angleOffset;
-                      const tipY = by + bh + tailLength;
-                      const ctrl1X = cx + halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
-                      const ctrl1Y = by + bh + tailLength * 0.5;
-                      const ctrl2X = cx - halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
-                      const ctrl2Y = by + bh + tailLength * 0.5;
-
-                      const isVeryRound = r >= Math.min(bw, bh) * 0.4;
-                      const tailRightX = Math.min(cx + halfTailWidth, bx + bw - r - 2);
-                      const tailLeftX = Math.max(cx - halfTailWidth, bx + r + 2);
-
-                      let path;
-                      if (isVeryRound) {
-                        const ellipseRx = bw / 2;
-                        const ellipseRy = bh / 2;
-                        const tailConnectRight = Math.min(halfTailWidth, ellipseRx * 0.6);
-                        const tailConnectLeft = Math.min(halfTailWidth, ellipseRx * 0.6);
-                        const yOffsetRight = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectRight / ellipseRx, 2));
-                        const yOffsetLeft = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectLeft / ellipseRx, 2));
-                        const connectRightY = cy + yOffsetRight;
-                        const connectLeftY = cy + yOffsetLeft;
-
-                        path = `
-                          M ${cx} ${by}
-                          A ${ellipseRx} ${ellipseRy} 0 0 1 ${cx + tailConnectRight} ${connectRightY}
-                          C ${cx + tailConnectRight} ${connectRightY + tailLength * 0.2},
-                            ${ctrl1X} ${ctrl1Y},
-                            ${tipX} ${tipY}
-                          C ${ctrl2X} ${ctrl2Y},
-                            ${cx - tailConnectLeft} ${connectLeftY + tailLength * 0.2},
-                            ${cx - tailConnectLeft} ${connectLeftY}
-                          A ${ellipseRx} ${ellipseRy} 0 1 1 ${cx} ${by}
-                          Z
-                        `;
-                      } else {
-                        path = `
-                          M ${bx + r} ${by}
-                          L ${bx + bw - r} ${by}
-                          A ${r} ${r} 0 0 1 ${bx + bw} ${by + r}
-                          L ${bx + bw} ${by + bh - r}
-                          A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh}
-                          L ${tailRightX} ${by + bh}
-                          C ${ctrl1X} ${ctrl1Y},
-                            ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
-                            ${tipX} ${tipY}
-                          C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15},
-                            ${ctrl2X} ${ctrl2Y},
-                            ${tailLeftX} ${by + bh}
-                          L ${bx + r} ${by + bh}
-                          A ${r} ${r} 0 0 1 ${bx} ${by + bh - r}
-                          L ${bx} ${by + r}
-                          A ${r} ${r} 0 0 1 ${bx + r} ${by}
-                          Z
-                        `;
-                      }
-
-                      return (
+            {page.masterImage && (
+              <img
+                src={`http://localhost:3001${page.masterImage}`}
+                alt="Page preview"
+                crossOrigin="anonymous"
+                style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            )}
+            <svg width="0" height="0" style={{ position: 'absolute' }}>
+              <defs>
+                <filter id={ref === bakeTargetRef ? 'roughEdgeBake' : 'roughEdgePreview'} x="-5%" y="-5%" width="110%" height="110%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="noise" />
+                  <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+                </filter>
+              </defs>
+            </svg>
+            {bubbles.map((bubble) => {
+              const bubbleCenterX = bubble.x + bubble.width / 2;
+              const bubbleCenterY = bubble.y + bubble.height / 2;
+              const tailEndX = bubbleCenterX + (bubble.tailX || 0);
+              const tailEndY = bubbleCenterY + (bubble.tailY || 0);
+              const filtSuffix = ref === bakeTargetRef ? 'Bake' : 'Preview';
+              return (
+                <div key={bubble.id}>
+                  {bubble.type === 'speech' && bubble.showTail !== false && (() => {
+                    const bx = bubble.x * CANVAS_WIDTH;
+                    const by = bubble.y * CANVAS_HEIGHT;
+                    const bw = bubble.width * CANVAS_WIDTH;
+                    const bh = bubble.height * CANVAS_HEIGHT;
+                    const r = Math.min(bubble.cornerRadius || 8, bw / 2, bh / 2);
+                    const borderWidthVal = bubble.borderWidth ?? 2.5;
+                    const borderColorVal = bubble.borderColor || '#000';
+                    const cx = bx + bw / 2;
+                    const cy = by + bh / 2;
+                    const rotation = bubble.rotation ?? 0;
+                    const tailWidth = (bubble.tailWidth ?? 0.25) * bw;
+                    const halfTailWidth = tailWidth / 2;
+                    const tailLength = (bubble.tailLength ?? 0.35) * bh;
+                    const tailCurve = bubble.tailCurve ?? 0;
+                    const angleOffset = tailCurve * tailLength * 1.5;
+                    const tailBend = bubble.tailBend ?? 0;
+                    const bendOffset = tailBend * tailLength * 0.8;
+                    const tipX = cx + angleOffset;
+                    const tipY = by + bh + tailLength;
+                    const ctrl1X = cx + halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                    const ctrl1Y = by + bh + tailLength * 0.5;
+                    const ctrl2X = cx - halfTailWidth * 0.3 + angleOffset * 0.5 + bendOffset;
+                    const ctrl2Y = by + bh + tailLength * 0.5;
+                    const isVeryRound = r >= Math.min(bw, bh) * 0.4;
+                    const tailRightX = Math.min(cx + halfTailWidth, bx + bw - r - 2);
+                    const tailLeftX = Math.max(cx - halfTailWidth, bx + r + 2);
+                    let path;
+                    if (isVeryRound) {
+                      const ellipseRx = bw / 2;
+                      const ellipseRy = bh / 2;
+                      const tailConnectRight = Math.min(halfTailWidth, ellipseRx * 0.6);
+                      const tailConnectLeft = Math.min(halfTailWidth, ellipseRx * 0.6);
+                      const yOffsetRight = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectRight / ellipseRx, 2));
+                      const yOffsetLeft = ellipseRy * Math.sqrt(1 - Math.pow(tailConnectLeft / ellipseRx, 2));
+                      const connectRightY = cy + yOffsetRight;
+                      const connectLeftY = cy + yOffsetLeft;
+                      path = `M ${cx} ${by} A ${ellipseRx} ${ellipseRy} 0 0 1 ${cx + tailConnectRight} ${connectRightY} C ${cx + tailConnectRight} ${connectRightY + tailLength * 0.2}, ${ctrl1X} ${ctrl1Y}, ${tipX} ${tipY} C ${ctrl2X} ${ctrl2Y}, ${cx - tailConnectLeft} ${connectLeftY + tailLength * 0.2}, ${cx - tailConnectLeft} ${connectLeftY} A ${ellipseRx} ${ellipseRy} 0 1 1 ${cx} ${by} Z`;
+                    } else {
+                      path = `M ${bx + r} ${by} L ${bx + bw - r} ${by} A ${r} ${r} 0 0 1 ${bx + bw} ${by + r} L ${bx + bw} ${by + bh - r} A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh} L ${tailRightX} ${by + bh} C ${ctrl1X} ${ctrl1Y}, ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15}, ${tipX} ${tipY} C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15}, ${ctrl2X} ${ctrl2Y}, ${tailLeftX} ${by + bh} L ${bx + r} ${by + bh} A ${r} ${r} 0 0 1 ${bx} ${by + bh - r} L ${bx} ${by + r} A ${r} ${r} 0 0 1 ${bx + r} ${by} Z`;
+                    }
+                    return (
+                      <>
                         <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 50, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
                           <defs>
-                            <filter id={`roughBubblePreview-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
+                            <filter id={`roughBubble${filtSuffix}-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
                               <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
                               <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
                             </filter>
                           </defs>
                           <g transform={`rotate(${rotation} ${cx} ${cy})`}>
-                            <path
-                              d={path}
-                              fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
-                              stroke={bubble.noBorder ? 'none' : borderColorVal}
-                              strokeWidth={borderWidthVal}
-                              strokeLinejoin="round"
-                              filter={`url(#roughBubblePreview-${bubble.id})`}
-                            />
+                            <path d={path} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke={bubble.noBorder ? 'none' : borderColorVal} strokeWidth={borderWidthVal} strokeLinejoin="round" filter={`url(#roughBubble${filtSuffix}-${bubble.id})`} />
                           </g>
-                          <foreignObject x={bx} y={by} width={bw} height={bh}>
-                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px 8px', boxSizing: 'border-box' }}>
-                              <span style={{
-                                fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
-                                fontSize: `${bubble.fontSize}px`,
-                                fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
-                                fontStyle: bubble.italic ? 'italic' : 'normal',
-                                color: bubble.textColor || '#000000',
-                                textAlign: bubble.textAlign || 'center',
-                                width: '100%',
-                                wordBreak: 'break-word',
-                                lineHeight: 1.3,
-                                letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
-                                textTransform: bubble.uppercase ? 'uppercase' : 'none',
-                                transform: `rotate(${bubble.textAngle ?? 0}deg)`,
-                                display: 'inline-block'
-                              }}>
-                                {getBubbleDisplayText(bubble)}
-                              </span>
-                            </div>
-                          </foreignObject>
                         </svg>
-                      );
-                    })()}
-
-                    {/* Thought bubble trail */}
-                    {bubble.type === 'thought' && bubble.showTail !== false && (() => {
-                      const tailBasePos = bubble.tailBaseX ?? 0.5;
-                      const tailSide = bubble.tailSide || 'bottom';
-                      let startX, startY;
-                      if (tailSide === 'bottom') {
-                        startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                        startY = (bubble.y + bubble.height) * CANVAS_HEIGHT;
-                      } else if (tailSide === 'top') {
-                        startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH;
-                        startY = bubble.y * CANVAS_HEIGHT;
-                      } else if (tailSide === 'left') {
-                        startX = bubble.x * CANVAS_WIDTH;
-                        startY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                      } else {
-                        startX = (bubble.x + bubble.width) * CANVAS_WIDTH;
-                        startY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT;
-                      }
-                      const tipX = tailEndX * CANVAS_WIDTH;
-                      const tipY = tailEndY * CANVAS_HEIGHT;
-                      const dx = tipX - startX;
-                      const dy = tipY - startY;
-                      const distance = Math.sqrt(dx * dx + dy * dy);
-                      let curlAmount = Math.min(distance * 0.3, 30);
-                      let perpX = 0, perpY = 0;
-                      if (tailSide === 'bottom' || tailSide === 'top') {
-                        perpX = dx > 0 ? curlAmount : -curlAmount;
-                      } else {
-                        perpY = dy > 0 ? curlAmount : -curlAmount;
-                      }
-                      const ctrlX = (startX + tipX) / 2 + perpX;
-                      const ctrlY = (startY + tipY) / 2 + perpY;
-                      const circles = [];
-                      for (let i = 0; i < 3; i++) {
-                        const t = Math.min(((i + 1) * 18) / Math.max(distance, 1), 0.9);
-                        const oneMinusT = 1 - t;
-                        const cx = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * ctrlX + t * t * tipX;
-                        const cy = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * ctrlY + t * t * tipY;
-                        circles.push({ cx, cy, radius: 7 - (i * 2) });
-                      }
-                      const borderColor = bubble.borderColor || '#000';
-                      const borderWidth = bubble.borderWidth ?? 2;
-
-                      return (
-                        <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 49, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
-                          <defs>
-                            <filter id={`roughCirclesPreview-${bubble.id}`} x="-20%" y="-20%" width="140%" height="140%">
-                              <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="noise" />
-                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
-                            </filter>
-                          </defs>
-                          {circles.map((circle, i) => (
-                            <circle key={i} cx={circle.cx} cy={circle.cy} r={circle.radius} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke={bubble.noBorder ? 'none' : borderColor} strokeWidth={borderWidth} filter={`url(#roughCirclesPreview-${bubble.id})`} />
-                          ))}
-                        </svg>
-                      );
-                    })()}
-
-                    {/* Bubble body (for non-speech or speech without tail) */}
-                    {!(bubble.type === 'speech' && bubble.showTail !== false) && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: `${bubble.x * 100}%`,
-                        top: `${bubble.y * 100}%`,
-                        width: `${bubble.width * 100}%`,
-                        height: `${bubble.height * 100}%`,
-                        background: bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')),
-                        border: bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`,
-                        borderRadius: bubble.type === 'thought' ? `${bubble.cornerRadius ?? 50}%` : `${bubble.cornerRadius || 8}px`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '6px 8px',
-                        boxSizing: 'border-box',
-                        zIndex: 50,
-                        transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2}deg)`,
-                        filter: 'url(#roughEdgePreview)'
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
-                          fontSize: `${bubble.fontSize}px`,
-                          fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
-                          fontStyle: bubble.italic ? 'italic' : 'normal',
-                          color: bubble.textColor || '#000000',
-                          textAlign: bubble.textAlign || 'center',
-                          width: '100%',
-                          wordBreak: 'break-word',
-                          lineHeight: 1.3,
-                          letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
-                          textTransform: bubble.uppercase ? 'uppercase' : 'none',
-                          transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) + (bubble.textAngle ?? 0)}deg)`,
-                          display: 'inline-block'
-                        }}
-                      >
-                        {getBubbleDisplayText(bubble)}
-                      </span>
-                    </div>
-                    )}
+                        <div style={{
+                          position: 'absolute',
+                          left: bx,
+                          top: by,
+                          width: bw,
+                          height: bh,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '6px 8px',
+                          boxSizing: 'border-box',
+                          zIndex: 51,
+                          pointerEvents: 'none'
+                        }}>
+                          <span style={{
+                            fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                            fontSize: `${bubble.fontSize}px`,
+                            fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                            fontStyle: bubble.italic ? 'italic' : 'normal',
+                            color: bubble.textColor || '#000000',
+                            textAlign: bubble.textAlign || 'center',
+                            width: '100%',
+                            wordBreak: 'break-word',
+                            lineHeight: 1.3,
+                            letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                            textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                            transform: `rotate(${bubble.textAngle ?? 0}deg)`,
+                            display: 'inline-block'
+                          }}>
+                            {getBubbleDisplayText(bubble)}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  {bubble.type === 'thought' && bubble.showTail !== false && (() => {
+                    const tailBasePos = bubble.tailBaseX ?? 0.5;
+                    const tailSide = bubble.tailSide || 'bottom';
+                    let startX, startY;
+                    if (tailSide === 'bottom') { startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH; startY = (bubble.y + bubble.height) * CANVAS_HEIGHT; }
+                    else if (tailSide === 'top') { startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH; startY = bubble.y * CANVAS_HEIGHT; }
+                    else if (tailSide === 'left') { startX = bubble.x * CANVAS_WIDTH; startY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT; }
+                    else { startX = (bubble.x + bubble.width) * CANVAS_WIDTH; startY = (bubble.y + bubble.height * tailBasePos) * CANVAS_HEIGHT; }
+                    const tipX = tailEndX * CANVAS_WIDTH;
+                    const tipY = tailEndY * CANVAS_HEIGHT;
+                    const dx = tipX - startX;
+                    const dy = tipY - startY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    let curlAmount = Math.min(distance * 0.3, 30);
+                    let perpX = 0, perpY = 0;
+                    if (tailSide === 'bottom' || tailSide === 'top') { perpX = dx > 0 ? curlAmount : -curlAmount; }
+                    else { perpY = dy > 0 ? curlAmount : -curlAmount; }
+                    const ctrlX = (startX + tipX) / 2 + perpX;
+                    const ctrlY = (startY + tipY) / 2 + perpY;
+                    const circles = [];
+                    for (let i = 0; i < 3; i++) {
+                      const t = Math.min(((i + 1) * 18) / Math.max(distance, 1), 0.9);
+                      const oneMinusT = 1 - t;
+                      const ccx = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * ctrlX + t * t * tipX;
+                      const ccy = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * ctrlY + t * t * tipY;
+                      circles.push({ cx: ccx, cy: ccy, radius: 7 - (i * 2) });
+                    }
+                    const borderColor = bubble.borderColor || '#000';
+                    const borderWidth = bubble.borderWidth ?? 2;
+                    return (
+                      <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 49, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
+                        <defs>
+                          <filter id={`roughCircles${filtSuffix}-${bubble.id}`} x="-20%" y="-20%" width="140%" height="140%">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+                          </filter>
+                        </defs>
+                        {circles.map((circle, i) => (
+                          <circle key={i} cx={circle.cx} cy={circle.cy} r={circle.radius} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke={bubble.noBorder ? 'none' : borderColor} strokeWidth={borderWidth} filter={`url(#roughCircles${filtSuffix}-${bubble.id})`} />
+                        ))}
+                      </svg>
+                    );
+                  })()}
+                  {!(bubble.type === 'speech' && bubble.showTail !== false) && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: `${bubble.x * 100}%`,
+                      top: `${bubble.y * 100}%`,
+                      width: `${bubble.width * 100}%`,
+                      height: `${bubble.height * 100}%`,
+                      background: bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')),
+                      border: bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`,
+                      borderRadius: bubble.type === 'thought' ? `${bubble.cornerRadius ?? 50}%` : `${bubble.cornerRadius || 8}px`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '6px 8px',
+                      boxSizing: 'border-box',
+                      zIndex: 50,
+                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2}deg)`,
+                      filter: `url(#roughEdge${filtSuffix})`
+                    }}
+                  >
+                    <span style={{
+                      fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                      fontSize: `${bubble.fontSize}px`,
+                      fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                      fontStyle: bubble.italic ? 'italic' : 'normal',
+                      color: bubble.textColor || '#000000',
+                      textAlign: bubble.textAlign || 'center',
+                      width: '100%',
+                      wordBreak: 'break-word',
+                      lineHeight: 1.3,
+                      letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                      textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                      transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) + (bubble.textAngle ?? 0)}deg)`,
+                      display: 'inline-block'
+                    }}>
+                      {getBubbleDisplayText(bubble)}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        </div>
-      )}
+        );
+
+        return (
+          <>
+            {/* Off-screen bake target (rendered when baking) */}
+            {isBaking && (
+              <div style={{ position: 'fixed', left: 0, top: 0, opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
+                {previewContent(bakeTargetRef)}
+              </div>
+            )}
+
+            {/* Page Preview Modal */}
+            {showPagePreview && (
+              <div
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}
+                onClick={() => setShowPagePreview(false)}
+              >
+                <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => setShowPagePreview(false)}
+                    style={{ position: 'absolute', top: -40, right: 0, background: '#fff', border: 'none', borderRadius: '4px', padding: '0.5rem 1rem', cursor: 'pointer', fontSize: '0.9rem' }}
+                  >
+                    Close Preview
+                  </button>
+                  {previewContent(null)}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }
