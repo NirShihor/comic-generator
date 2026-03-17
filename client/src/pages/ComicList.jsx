@@ -10,6 +10,16 @@ function ComicList() {
   const [newComic, setNewComic] = useState({ title: '', description: '', level: 'beginner' });
   const navigate = useNavigate();
 
+  const toggleLock = async (e, comic) => {
+    e.stopPropagation();
+    try {
+      const response = await api.patch(`/comics/${comic.id}/lock`);
+      setComics(comics.map(c => c.id === comic.id ? { ...c, locked: response.data.locked } : c));
+    } catch (error) {
+      console.error('Failed to toggle lock:', error);
+    }
+  };
+
   const handleDeleteClick = (e, comic) => {
     e.stopPropagation();
     setComicToDelete(comic);
@@ -75,22 +85,41 @@ function ComicList() {
             style={{ position: 'relative' }}
           >
             <button
-              onClick={(e) => handleDeleteClick(e, comic)}
+              onClick={(e) => toggleLock(e, comic)}
+              title={comic.locked !== false ? 'Locked — click to unlock for deletion' : 'Unlocked — click to lock'}
               style={{
                 position: 'absolute',
                 top: '8px',
-                right: '8px',
-                background: '#dc3545',
-                color: 'white',
+                left: '8px',
+                background: 'transparent',
+                color: comic.locked !== false ? '#ffc107' : '#666',
                 border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                fontSize: '0.75rem',
-                cursor: 'pointer'
+                fontSize: '1.1rem',
+                cursor: 'pointer',
+                padding: '2px 6px'
               }}
             >
-              Delete
+              {comic.locked !== false ? '\uD83D\uDD12' : '\uD83D\uDD13'}
             </button>
+            {comic.locked === false && (
+              <button
+                onClick={(e) => handleDeleteClick(e, comic)}
+                style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  background: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Delete
+              </button>
+            )}
             <h3>{comic.title}</h3>
             <p>{comic.description || 'No description'}</p>
             <p style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
