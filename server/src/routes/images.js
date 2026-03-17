@@ -213,6 +213,8 @@ router.post('/save-to-project', async (req, res) => {
 
     const newFilename = imageType === 'cover'
       ? `${comicId}_cover.png`
+      : imageType === 'baked'
+      ? `${comicId}_p${pageNumber}_baked.png`
       : `${comicId}_p${pageNumber}.png`;
 
     const destPath = path.join(destDir, newFilename);

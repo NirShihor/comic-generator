@@ -7,7 +7,8 @@ const WordSchema = new mongoose.Schema({
   meaning: String,
   baseForm: String,
   startTimeMs: Number,
-  endTimeMs: Number
+  endTimeMs: Number,
+  vocabQuiz: Boolean
 }, { _id: false });
 
 // Sentence Schema (nested in Bubble)
@@ -94,6 +95,7 @@ const PageSchema = new mongoose.Schema({
   id: String,
   pageNumber: Number,
   masterImage: String,
+  bakedImage: String,
   lines: [LineSchema],
   // Legacy format support
   dividerLines: {
