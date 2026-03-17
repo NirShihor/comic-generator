@@ -52,7 +52,13 @@ router.post('/generate', async (req, res) => {
     });
 
     // Build the full prompt with style instructions
-    const fullPrompt = `${prompt}. Style: ${style || 'comic book illustration, detailed ink drawing with dramatic lighting'}`;
+    let fullPrompt = `${prompt}. Style: ${style || 'comic book illustration, detailed ink drawing with dramatic lighting'}`;
+
+    // Truncate to stay within OpenAI's 32000 character limit
+    if (fullPrompt.length > 32000) {
+      console.log(`Prompt too long (${fullPrompt.length} chars), truncating to 32000`);
+      fullPrompt = fullPrompt.substring(0, 32000);
+    }
 
     console.log('Generating with OpenAI, prompt length:', fullPrompt.length);
 
@@ -104,11 +110,18 @@ router.post('/generate-page', async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY
     });
 
-    console.log('Generating with OpenAI, prompt length:', prompt.length);
+    // Truncate to stay within OpenAI's 32000 character limit
+    let finalPrompt = prompt;
+    if (finalPrompt.length > 32000) {
+      console.log(`Prompt too long (${finalPrompt.length} chars), truncating to 32000`);
+      finalPrompt = finalPrompt.substring(0, 32000);
+    }
+
+    console.log('Generating with OpenAI, prompt length:', finalPrompt.length);
 
     const response = await openai.images.generate({
       model: 'gpt-image-1',
-      prompt: prompt,
+      prompt: finalPrompt,
       n: 1,
       size: '1024x1536',
       quality: 'high'
@@ -163,11 +176,18 @@ router.post('/generate-panel', async (req, res) => {
       size = '1536x1024';
     }
 
-    console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${prompt.length}`);
+    // Truncate to stay within OpenAI's 32000 character limit
+    let finalPrompt = prompt;
+    if (finalPrompt.length > 32000) {
+      console.log(`Panel prompt too long (${finalPrompt.length} chars), truncating to 32000`);
+      finalPrompt = finalPrompt.substring(0, 32000);
+    }
+
+    console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${finalPrompt.length}`);
 
     const response = await openai.images.generate({
       model: 'gpt-image-1',
-      prompt: prompt,
+      prompt: finalPrompt,
       n: 1,
       size: size,
       quality: 'high'

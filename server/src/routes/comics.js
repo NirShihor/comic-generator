@@ -10,6 +10,11 @@ const ArchivedPage = require('../models/ArchivedPage');
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
+function sanitizeWordForFilename(word) {
+  if (!word) return '';
+  return word.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
+}
+
 function sanitizeTitle(title) {
   return title
     .toLowerCase()
@@ -451,6 +456,26 @@ router.post('/:id/export-full', async (req, res) => {
       }
     }
 
+    // Copy word audio files
+    const copiedWordAudio = [];
+    const wordAudioSourceDir = path.join(PROJECTS_DIR, req.params.id, 'audio', 'words');
+    const wordAudioDestDir = path.join(audioDir, 'words');
+    try {
+      const wordFiles = await fs.readdir(wordAudioSourceDir);
+      await fs.mkdir(wordAudioDestDir, { recursive: true });
+      for (const file of wordFiles) {
+        if (file.endsWith('.mp3')) {
+          await fs.copyFile(
+            path.join(wordAudioSourceDir, file),
+            path.join(wordAudioDestDir, file)
+          );
+          copiedWordAudio.push(`words/${file}`);
+        }
+      }
+    } catch (e) {
+      console.log('No word audio files to copy');
+    }
+
     const comicJsonPath = path.join(exportDir, 'comic.json');
     await fs.writeFile(comicJsonPath, JSON.stringify(exportedComic, null, 2));
 
@@ -460,6 +485,7 @@ router.post('/:id/export-full', async (req, res) => {
       comicJson: comicJsonPath,
       copiedImages,
       copiedAudio,
+      copiedWordAudio,
       message: `Exported to ${exportDir}`
     });
   } catch (error) {
@@ -503,15 +529,21 @@ function transformToReaderFormat(comic, comicSlug) {
                 text: sentence.text || '',
                 translation: sentence.translation || '',
                 audioUrl: sentence.audioUrl || '',
-                words: (sentence.words || []).map(word => ({
-                  id: `${comicSlug}-w${wordCounter++}`,
-                  text: word.text || '',
-                  meaning: word.meaning || '',
-                  baseForm: word.baseForm || word.text || '',
-                  ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
-                  ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
-                  ...(word.vocabQuiz && { vocabQuiz: true })
-                }))
+                words: (sentence.words || []).map(word => {
+                  const wText = sanitizeWordForFilename(word.text);
+                  const wBase = sanitizeWordForFilename(word.baseForm || word.text);
+                  return {
+                    id: `${comicSlug}-w${wordCounter++}`,
+                    text: word.text || '',
+                    meaning: word.meaning || '',
+                    baseForm: word.baseForm || word.text || '',
+                    ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
+                    ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
+                    ...(word.vocabQuiz && { vocabQuiz: true }),
+                    ...(wText && { wordAudioUrl: `words/${wText}` }),
+                    ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+                  };
+                })
               };
             })
           };
@@ -605,12 +637,30 @@ function transformToReaderFormat(comic, comicSlug) {
               id: w.id,
               text: w.text,
               meaning: w.meaning,
-              baseForm: w.baseForm
+              baseForm: w.baseForm,
+              ...(w.wordAudioUrl && { wordAudioUrl: w.wordAudioUrl }),
+              ...(w.baseFormAudioUrl && { baseFormAudioUrl: w.baseFormAudioUrl })
             }))
           )
         )
       )
-    )
+    ),
+    wordAudioMap: (() => {
+      const map = {};
+      for (const page of pages) {
+        for (const panel of page.panels || []) {
+          for (const bubble of panel.bubbles || []) {
+            for (const sentence of bubble.sentences || []) {
+              for (const word of sentence.words || []) {
+                if (word.wordAudioUrl) map[sanitizeWordForFilename(word.text)] = word.wordAudioUrl;
+                if (word.baseFormAudioUrl) map[sanitizeWordForFilename(word.baseForm)] = word.baseFormAudioUrl;
+              }
+            }
+          }
+        }
+      }
+      return map;
+    })()
   };
 }
 

@@ -4,8 +4,34 @@ const fs = require('fs').promises;
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
+const Comic = require('../models/Comic');
+
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
+
+function sanitizeWordForFilename(word) {
+  if (!word) return '';
+  return word.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
+}
+
+function collectUniqueWords(comic) {
+  const uniqueWords = new Set();
+  const allBubbles = [
+    ...(comic.cover?.bubbles || []),
+    ...(comic.pages || []).flatMap(p => p.bubbles || [])
+  ];
+  for (const bubble of allBubbles) {
+    for (const sentence of bubble.sentences || []) {
+      for (const word of sentence.words || []) {
+        const text = sanitizeWordForFilename(word.text);
+        const base = sanitizeWordForFilename(word.baseForm);
+        if (text) uniqueWords.add(text);
+        if (base && base !== text) uniqueWords.add(base);
+      }
+    }
+  }
+  return [...uniqueWords];
+}
 
 // Get available voices from ElevenLabs
 router.get('/voices', async (req, res) => {
@@ -369,6 +395,138 @@ router.post('/translate', async (req, res) => {
     });
   } catch (error) {
     console.error('Failed to translate:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Count unique words for word audio generation
+router.post('/word-audio-count', async (req, res) => {
+  try {
+    const { comicId } = req.body;
+    if (!comicId) return res.status(400).json({ error: 'comicId is required' });
+
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+
+    const uniqueWords = collectUniqueWords(comic.toObject());
+    const wordsDir = path.join(PROJECTS_DIR, comicId, 'audio', 'words');
+
+    let alreadyGenerated = 0;
+    try {
+      const existingFiles = await fs.readdir(wordsDir);
+      const existingSet = new Set(existingFiles.map(f => f.replace('.mp3', '')));
+      alreadyGenerated = uniqueWords.filter(w => existingSet.has(w)).length;
+    } catch (e) {
+      // Directory doesn't exist yet
+    }
+
+    res.json({
+      totalUnique: uniqueWords.length,
+      alreadyGenerated,
+      toGenerate: uniqueWords.length - alreadyGenerated
+    });
+  } catch (error) {
+    console.error('Word audio count error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate word audio for all unique words in a comic
+router.post('/generate-word-audio', async (req, res) => {
+  try {
+    const {
+      comicId,
+      voiceId,
+      modelId = 'eleven_v3',
+      stability = 0.5,
+      similarityBoost = 0.75,
+      speed = 1.0,
+      languageCode
+    } = req.body;
+
+    if (!comicId || !voiceId) {
+      return res.status(400).json({ error: 'comicId and voiceId are required' });
+    }
+    if (!process.env.ELEVENLABS_API_KEY) {
+      return res.status(400).json({ error: 'ElevenLabs API key not configured.' });
+    }
+
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+
+    const uniqueWords = collectUniqueWords(comic.toObject());
+    const wordsDir = path.join(PROJECTS_DIR, comicId, 'audio', 'words');
+    await fs.mkdir(wordsDir, { recursive: true });
+
+    // Check which files already exist
+    let existingSet = new Set();
+    try {
+      const existingFiles = await fs.readdir(wordsDir);
+      existingSet = new Set(existingFiles.map(f => f.replace('.mp3', '')));
+    } catch (e) {}
+
+    let generated = 0;
+    let skipped = 0;
+    let failed = 0;
+    const errors = [];
+
+    console.log(`Word audio: ${uniqueWords.length} unique words, ${existingSet.size} already on disk`);
+
+    for (const word of uniqueWords) {
+      if (existingSet.has(word)) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        const requestBody = {
+          text: word,
+          model_id: modelId,
+          voice_settings: {
+            stability,
+            similarity_boost: similarityBoost,
+            speed
+          }
+        };
+        if (languageCode) requestBody.language_code = languageCode;
+
+        const response = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+          {
+            method: 'POST',
+            headers: {
+              'xi-api-key': process.env.ELEVENLABS_API_KEY,
+              'Content-Type': 'application/json',
+              'Accept': 'audio/mpeg'
+            },
+            body: JSON.stringify(requestBody)
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`ElevenLabs ${response.status}: ${errorText}`);
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        await fs.writeFile(path.join(wordsDir, `${word}.mp3`), buffer);
+        generated++;
+        console.log(`  [${generated + skipped + failed}/${uniqueWords.length}] Generated: ${word}`);
+
+        // Rate limit delay
+        await new Promise(resolve => setTimeout(resolve, 250));
+      } catch (err) {
+        failed++;
+        errors.push({ word, error: err.message });
+        console.error(`  Failed: ${word} - ${err.message}`);
+      }
+    }
+
+    console.log(`Word audio done: ${generated} generated, ${skipped} skipped, ${failed} failed`);
+
+    res.json({ generated, skipped, failed, errors: errors.slice(0, 10), totalFiles: generated + skipped });
+  } catch (error) {
+    console.error('Word audio generation error:', error);
     res.status(500).json({ error: error.message });
   }
 });
