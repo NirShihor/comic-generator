@@ -382,7 +382,8 @@ router.post('/:id/export-full', async (req, res) => {
     const projectAudioDir = path.join(PROJECTS_DIR, req.params.id, 'audio');
 
     if (comicObj.cover?.image) {
-      const cleanCoverImage = comicObj.cover.image.split('?')[0];
+      const coverImage = comicObj.cover.bakedImage || comicObj.cover.image;
+      const cleanCoverImage = coverImage.split('?')[0];
       const coverSourcePath = path.join(__dirname, '../..', cleanCoverImage);
       const coverDestPath = path.join(imagesDir, `${comicSlug}_cover.png`);
       try {

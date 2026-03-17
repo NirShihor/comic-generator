@@ -130,6 +130,7 @@ const ComicSchema = new mongoose.Schema({
   cover: {
     image: String,
     sceneImage: String,
+    bakedImage: String,
     prompt: String,
     bubbles: [BubbleSchema]
   },

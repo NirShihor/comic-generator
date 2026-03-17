@@ -2074,24 +2074,38 @@ function PageEditor({ isCover = false }) {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
 
-          await api.post('/images/save-to-project', {
-            comicId: id,
-            filename: uploadResponse.data.filename,
-            imageType: 'baked',
-            pageNumber: page.pageNumber
-          });
+          if (isCover) {
+            await api.post('/images/save-to-project', {
+              comicId: id,
+              filename: uploadResponse.data.filename,
+              imageType: 'cover-baked',
+              pageNumber: 0
+            });
 
-          const bakedPath = `/projects/${id}/images/${id}_p${page.pageNumber}_baked.png`;
-
-          const updatedComic = { ...comic };
-          const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
-          if (pageIndex !== -1) {
-            updatedComic.pages[pageIndex].bakedImage = bakedPath;
+            const bakedPath = `/projects/${id}/images/${id}_cover_baked.png`;
+            const updatedComic = { ...comic };
+            updatedComic.cover = { ...updatedComic.cover, bakedImage: bakedPath };
             await api.put(`/comics/${id}`, updatedComic);
             setComic(updatedComic);
+          } else {
+            await api.post('/images/save-to-project', {
+              comicId: id,
+              filename: uploadResponse.data.filename,
+              imageType: 'baked',
+              pageNumber: page.pageNumber
+            });
+
+            const bakedPath = `/projects/${id}/images/${id}_p${page.pageNumber}_baked.png`;
+            const updatedComic = { ...comic };
+            const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+            if (pageIndex !== -1) {
+              updatedComic.pages[pageIndex].bakedImage = bakedPath;
+              await api.put(`/comics/${id}`, updatedComic);
+              setComic(updatedComic);
+            }
           }
 
-          setPage(prev => ({ ...prev, bakedImage: `${bakedPath}?t=${Date.now()}` }));
+          setPage(prev => ({ ...prev, bakedImage: `${(isCover ? `/projects/${id}/images/${id}_cover_baked.png` : `/projects/${id}/images/${id}_p${page.pageNumber}_baked.png`)}?t=${Date.now()}` }));
           alert('Bubbles baked into image!');
         } catch (error) {
           console.error('Failed to bake bubbles:', error);
