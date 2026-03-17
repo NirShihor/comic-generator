@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 
@@ -24,6 +24,48 @@ function ComicEditor() {
   const [exportResult, setExportResult] = useState(null);
   const [deleteModal, setDeleteModal] = useState({ show: false, page: null });
   const [deleting, setDeleting] = useState(false);
+  const [wordAudioVoiceId, setWordAudioVoiceId] = useState('');
+  const [wordAudioModel, setWordAudioModel] = useState('eleven_v3');
+  const [wordAudioGenerating, setWordAudioGenerating] = useState(false);
+  const [wordAudioProgress, setWordAudioProgress] = useState(null);
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`comic-chat-${id}`);
+      if (saved) {
+        return JSON.parse(saved).map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          hadImages: msg.hadImages
+        }));
+      }
+      return [];
+    } catch (e) {
+      localStorage.removeItem(`comic-chat-${id}`);
+      return [];
+    }
+  });
+  const [chatInput, setChatInput] = useState('');
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [chatImages, setChatImages] = useState([]);
+  const chatFileInputRef = useRef(null);
+  const chatMessagesEndRef = useRef(null);
+  const chatMessagesRef = useRef(chatMessages);
+
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      const messagesWithoutImages = chatMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        hadImages: msg.images && msg.images.length > 0
+      }));
+      try {
+        localStorage.setItem(`comic-chat-${id}`, JSON.stringify(messagesWithoutImages));
+      } catch (e) {}
+    }
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages, id]);
 
   useEffect(() => {
     loadComic();
@@ -157,6 +199,65 @@ function ComicEditor() {
     }));
   };
 
+  // Chat handlers
+  const scrollToBottomOfChat = () => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const clearChat = () => {
+    setChatMessages([]);
+    chatMessagesRef.current = [];
+    localStorage.removeItem(`comic-chat-${id}`);
+  };
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() && chatImages.length === 0) return;
+    const userMessage = { role: 'user', content: chatInput, images: chatImages.map(img => img.preview) };
+    const newMessages = [...chatMessagesRef.current, userMessage];
+    chatMessagesRef.current = newMessages;
+    setChatMessages(newMessages);
+    const messageText = chatInput;
+    setChatInput('');
+    const imagesToSend = [...chatImages];
+    setChatImages([]);
+    setIsSendingChat(true);
+    try {
+      const response = await api.post('/chat/message', {
+        messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        images: imagesToSend.map(img => img.base64)
+      });
+      const assistantMessage = { role: 'assistant', content: response.data.message };
+      const messagesWithResponse = [...chatMessagesRef.current, assistantMessage];
+      chatMessagesRef.current = messagesWithResponse;
+      setChatMessages(messagesWithResponse);
+    } catch (error) {
+      const errorMessage = { role: 'assistant', content: `Error: ${error.response?.data?.error || error.message}` };
+      const messagesWithError = [...chatMessagesRef.current, errorMessage];
+      chatMessagesRef.current = messagesWithError;
+      setChatMessages(messagesWithError);
+    } finally {
+      setIsSendingChat(false);
+      setTimeout(scrollToBottomOfChat, 100);
+    }
+  };
+
+  const handleChatFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target.result.split(',')[1];
+        setChatImages(prev => [...prev, { preview: event.target.result, base64, name: file.name }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const removeChatImage = (index) => {
+    setChatImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -173,7 +274,7 @@ function ComicEditor() {
   ];
 
   return (
-    <div>
+    <div style={{ maxWidth: 'none', width: 'calc(100vw - 4rem)' }}>
       <div className="page-header">
         <div>
           <Link to="/" style={{ color: '#888', textDecoration: 'none', marginBottom: '0.5rem', display: 'block' }}>
@@ -220,6 +321,34 @@ function ComicEditor() {
           Voices ({(comic.voices || []).length})
         </button>
       </div>
+
+      {/* Prompt Settings Sub-tabs (outside flex row so chat aligns with content) */}
+      {activeTab === 'prompt' && (
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', maxWidth: '700px' }}>
+          {settingsTabs.map(tab => (
+            <button
+              key={tab.id}
+              className={`btn ${settingsTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setSettingsTab(tab.id)}
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+            >
+              {tab.label}
+            </button>
+          ))}
+          <button
+            className="btn btn-primary"
+            onClick={saveSettings}
+            disabled={saving}
+            style={{ marginLeft: 'auto', padding: '0.4rem 1rem', fontSize: '0.85rem' }}
+          >
+            {saving ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'stretch' }}>
+      {/* Left column: Tab Content */}
+      <div style={{ width: '700px', flexShrink: 0 }}>
 
       {/* Pages Tab */}
       {activeTab === 'pages' && (
@@ -316,28 +445,6 @@ function ComicEditor() {
       {/* Prompt Settings Tab */}
       {activeTab === 'prompt' && (
         <div>
-          {/* Settings Sub-tabs */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-            {settingsTabs.map(tab => (
-              <button
-                key={tab.id}
-                className={`btn ${settingsTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setSettingsTab(tab.id)}
-                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-              >
-                {tab.label}
-              </button>
-            ))}
-            <button
-              className="btn btn-primary"
-              onClick={saveSettings}
-              disabled={saving}
-              style={{ marginLeft: 'auto', padding: '0.4rem 1rem', fontSize: '0.85rem' }}
-            >
-              {saving ? 'Saving...' : 'Save Settings'}
-            </button>
-          </div>
-
           {/* Settings Content */}
           <div style={{ background: '#0f3460', borderRadius: '8px', padding: '1.5rem' }}>
             {settingsTab === 'style' && (
@@ -507,7 +614,7 @@ function ComicEditor() {
 
             {settingsTab === 'donot' && (
               <div>
-                <h2 style={{ marginBottom: '1rem' }}>Global Do Not</h2>
+                <h2 style={{ marginBottom: '1rem', color: 'white' }}>Global Do Not</h2>
                 <textarea
                   value={settings.globalDoNot}
                   onChange={(e) => updateSetting('globalDoNot', e.target.value)}
@@ -526,7 +633,7 @@ function ComicEditor() {
                   }}
                 />
 
-                <h2 style={{ marginBottom: '1rem' }}>Hard Negatives</h2>
+                <h2 style={{ marginBottom: '1rem', color: 'white' }}>Hard Negatives</h2>
                 <textarea
                   value={settings.hardNegatives}
                   onChange={(e) => updateSetting('hardNegatives', e.target.value)}
@@ -592,13 +699,25 @@ function ComicEditor() {
               <p style={{ color: '#155724', marginBottom: '0.5rem' }}>
                 <strong>Images copied:</strong> {exportResult.copiedImages?.length || 0}
               </p>
+              <p style={{ color: '#155724', marginBottom: '0.5rem' }}>
+                <strong>Sentence audio copied:</strong> {exportResult.copiedAudio?.length || 0}
+              </p>
+              <p style={{ color: '#155724', marginBottom: '0.5rem' }}>
+                <strong>Word audio copied:</strong> {exportResult.copiedWordAudio?.length || 0}
+              </p>
               <details style={{ marginTop: '1rem' }}>
                 <summary style={{ cursor: 'pointer', color: '#155724' }}>
-                  View copied files ({exportResult.copiedImages?.length || 0})
+                  View copied files ({(exportResult.copiedImages?.length || 0) + (exportResult.copiedAudio?.length || 0) + (exportResult.copiedWordAudio?.length || 0)})
                 </summary>
                 <ul style={{ marginTop: '0.5rem', color: '#155724', fontSize: '0.85rem' }}>
                   {exportResult.copiedImages?.map((img, i) => (
-                    <li key={i}>{img}</li>
+                    <li key={`img-${i}`}>{img}</li>
+                  ))}
+                  {exportResult.copiedAudio?.map((a, i) => (
+                    <li key={`audio-${i}`}>{a}</li>
+                  ))}
+                  {exportResult.copiedWordAudio?.map((w, i) => (
+                    <li key={`word-${i}`}>{w}</li>
                   ))}
                 </ul>
               </details>
@@ -794,8 +913,264 @@ function ComicEditor() {
               <li>The ID looks like: <code style={{ background: '#fff', padding: '0.2rem 0.4rem', borderRadius: '3px' }}>EXAVITQu4vr4xnSDxMaL</code></li>
             </ol>
           </div>
+
+          {/* Word Audio Generation */}
+          <div style={{
+            background: '#f0f7ee',
+            border: '1px solid #a8d5a2',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            marginTop: '1.5rem'
+          }}>
+            <h3 style={{ marginBottom: '0.5rem', color: '#2d6a2e' }}>Word Audio Generation</h3>
+            <p style={{ color: '#666', marginBottom: '1rem', fontSize: '0.9rem' }}>
+              Generate individual audio files for every unique word in this comic.
+              Used by the reader app for word-level pronunciation playback.
+            </p>
+
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '180px' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#666' }}>Voice</label>
+                <select
+                  value={wordAudioVoiceId}
+                  onChange={(e) => setWordAudioVoiceId(e.target.value)}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.95rem' }}
+                >
+                  <option value="">Select voice...</option>
+                  {(comic.voices || []).map((voice, idx) => (
+                    <option key={`wa-${voice.voiceId}-${idx}`} value={voice.voiceId}>{voice.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#666' }}>Model</label>
+                <select
+                  value={wordAudioModel}
+                  onChange={(e) => setWordAudioModel(e.target.value)}
+                  style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.95rem' }}
+                >
+                  <option value="eleven_v3">V3 (Best)</option>
+                  <option value="eleven_multilingual_v2">Multilingual V2</option>
+                  <option value="eleven_turbo_v2_5">Turbo V2.5</option>
+                </select>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!wordAudioVoiceId) { alert('Please select a voice'); return; }
+                  setWordAudioGenerating(true);
+                  setWordAudioProgress(null);
+                  try {
+                    const countRes = await api.post('/audio/word-audio-count', { comicId: id });
+                    setWordAudioProgress({ ...countRes.data, generated: 0, failed: 0, done: false });
+                    const genRes = await api.post('/audio/generate-word-audio', {
+                      comicId: id,
+                      voiceId: wordAudioVoiceId,
+                      modelId: wordAudioModel
+                    }, { timeout: 600000 });
+                    setWordAudioProgress(prev => ({ ...prev, generated: genRes.data.generated, skipped: genRes.data.skipped, failed: genRes.data.failed, done: true }));
+                  } catch (error) {
+                    console.error('Word audio generation failed:', error);
+                    alert('Word audio generation failed: ' + error.message);
+                  } finally {
+                    setWordAudioGenerating(false);
+                  }
+                }}
+                disabled={wordAudioGenerating || !wordAudioVoiceId || (comic.voices || []).length === 0}
+                style={{
+                  padding: '0.5rem 1.2rem',
+                  background: (wordAudioGenerating || !wordAudioVoiceId) ? '#95a5a6' : '#27ae60',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: (wordAudioGenerating || !wordAudioVoiceId) ? 'default' : 'pointer',
+                  fontSize: '0.95rem',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {wordAudioGenerating ? 'Generating...' : 'Generate Word Audio'}
+              </button>
+            </div>
+
+            {wordAudioProgress && (
+              <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: '4px', padding: '1rem' }}>
+                <p style={{ margin: '0 0 0.3rem 0', fontSize: '0.9rem' }}><strong>Total unique words:</strong> {wordAudioProgress.totalUnique}</p>
+                <p style={{ margin: '0 0 0.3rem 0', fontSize: '0.9rem' }}><strong>Already on disk:</strong> {wordAudioProgress.alreadyGenerated}</p>
+                <p style={{ margin: '0 0 0.3rem 0', fontSize: '0.9rem' }}><strong>To generate:</strong> {wordAudioProgress.toGenerate}</p>
+                {wordAudioGenerating && !wordAudioProgress.done && (
+                  <p style={{ margin: '0.5rem 0 0 0', color: '#856404', fontSize: '0.85rem' }}>
+                    Generating audio... This may take several minutes. Please do not close this page.
+                  </p>
+                )}
+                {wordAudioProgress.done && (
+                  <div style={{ background: '#d4edda', padding: '0.75rem', borderRadius: '4px', marginTop: '0.5rem' }}>
+                    <p style={{ margin: 0, color: '#155724' }}>
+                      Done! Generated {wordAudioProgress.generated} files, skipped {wordAudioProgress.skipped} existing.
+                      {wordAudioProgress.failed > 0 && ` (${wordAudioProgress.failed} failed)`}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
+
+      </div>{/* End left column */}
+
+      {/* Right column: Chat Sidebar */}
+      <div style={{
+        flex: 1,
+        minWidth: 0,
+        background: '#1a1a2e',
+        border: '1px solid #16213e',
+        borderRadius: '8px',
+        padding: '1rem',
+        position: 'sticky',
+        top: '1rem',
+        maxHeight: 'calc(100vh - 2rem)',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', color: '#ccc' }}>ChatGPT</h3>
+            <button
+              onClick={clearChat}
+              style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+            >Clear</button>
+          </div>
+
+          {/* Messages */}
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            marginBottom: '0.75rem',
+            padding: '0.5rem',
+            background: '#0f0f23',
+            borderRadius: '6px',
+            minHeight: '200px',
+            maxHeight: 'calc(100vh - 250px)'
+          }}>
+            {chatMessages.length === 0 && (
+              <div style={{ color: '#555', fontSize: '0.85rem', textAlign: 'center', padding: '2rem 0.5rem' }}>
+                <p>Start a conversation with ChatGPT</p>
+                <p style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Chat persists across page editor sessions</p>
+              </div>
+            )}
+            {chatMessages.map((msg, idx) => (
+              <div key={idx} style={{
+                marginBottom: '0.5rem',
+                padding: '0.5rem',
+                borderRadius: '6px',
+                background: msg.role === 'user' ? '#16213e' : '#1e3a5f',
+                color: '#ddd',
+                fontSize: '0.85rem',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}>
+                <div style={{ fontSize: '0.65rem', color: '#888', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+                  {msg.role === 'user' ? 'You' : 'ChatGPT'}
+                </div>
+                {msg.images && msg.images.length > 0 && (
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    {msg.images.map((img, imgIdx) => (
+                      <img key={imgIdx} src={img} alt="Uploaded" style={{ maxHeight: '80px', borderRadius: '4px', marginRight: '0.25rem' }} />
+                    ))}
+                  </div>
+                )}
+                {msg.hadImages && !msg.images && (
+                  <div style={{ fontSize: '0.7rem', color: '#666', fontStyle: 'italic', marginBottom: '0.25rem' }}>[image was attached]</div>
+                )}
+                <div>{msg.content || '[No content]'}</div>
+              </div>
+            ))}
+            {isSendingChat && (
+              <div style={{ padding: '0.5rem', borderRadius: '6px', background: '#1e3a5f', color: '#888', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                Thinking...
+              </div>
+            )}
+            <div ref={chatMessagesEndRef} />
+          </div>
+
+          {/* Pending images */}
+          {chatImages.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              {chatImages.map((img, idx) => (
+                <div key={idx} style={{ position: 'relative' }}>
+                  <img src={img.preview} alt={img.name} style={{ height: '40px', borderRadius: '3px', border: '1px solid #333' }} />
+                  <button
+                    onClick={() => removeChatImage(idx)}
+                    style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%', width: '16px', height: '16px', fontSize: '10px', cursor: 'pointer', lineHeight: '16px', padding: 0 }}
+                  >x</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Input */}
+          <textarea
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
+              }
+            }}
+            placeholder="Type a message... (Enter to send)"
+            rows={3}
+            disabled={isSendingChat}
+            style={{
+              width: '100%',
+              padding: '0.5rem',
+              borderRadius: '4px',
+              border: '1px solid #333',
+              background: '#0f0f23',
+              color: '#ddd',
+              fontSize: '0.85rem',
+              resize: 'vertical',
+              marginBottom: '0.5rem',
+              boxSizing: 'border-box'
+            }}
+          />
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={sendChatMessage}
+              disabled={isSendingChat || (!chatInput.trim() && chatImages.length === 0)}
+              style={{
+                flex: 1,
+                padding: '0.4rem',
+                background: (isSendingChat || (!chatInput.trim() && chatImages.length === 0)) ? '#555' : '#3498db',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: (isSendingChat || (!chatInput.trim() && chatImages.length === 0)) ? 'default' : 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >{isSendingChat ? 'Sending...' : 'Send'}</button>
+            <input
+              type="file"
+              ref={chatFileInputRef}
+              onChange={handleChatFileUpload}
+              accept="image/*"
+              multiple
+              style={{ display: 'none' }}
+            />
+            <button
+              onClick={() => chatFileInputRef.current?.click()}
+              disabled={isSendingChat}
+              style={{
+                padding: '0.4rem 0.6rem',
+                background: '#555',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: isSendingChat ? 'default' : 'pointer',
+                fontSize: '0.75rem'
+              }}
+            >Upload</button>
+          </div>
+      </div>
+      </div>{/* End flex row */}
 
       {/* Delete Page Confirmation Modal */}
       {deleteModal.show && (

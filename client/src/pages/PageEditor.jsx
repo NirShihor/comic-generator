@@ -268,6 +268,7 @@ function PageEditor({ isCover = false }) {
   const [audioPreview, setAudioPreview] = useState({}); // { [sentenceId]: { url, base64, isPlaying } }
   const [generatingAudio, setGeneratingAudio] = useState({}); // { [sentenceId]: true/false }
   const [savingAudio, setSavingAudio] = useState({}); // { [sentenceId]: true/false }
+  const [savingText, setSavingText] = useState({}); // { [sentenceId]: true/false }
   const [enhancingText, setEnhancingText] = useState({}); // { [sentenceId]: true/false }
   const [translatingText, setTranslatingText] = useState({}); // { [sentenceId]: true/false }
   const [translateInput, setTranslateInput] = useState({}); // { [sentenceId]: 'english text' }
@@ -505,7 +506,7 @@ function PageEditor({ isCover = false }) {
         const existing = existingWords.find(w => normWord(w.text) === normalised);
         return {
           id: existing?.id || `word-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          text: cleanWord(existing?.text || t.word),
+          text: existing?.text || t.word,
           meaning: cleanWord(existing?.meaning || ''),
           baseForm: cleanWord(existing?.baseForm || ''),
           startTimeMs: t.startMs,
@@ -4327,6 +4328,126 @@ function PageEditor({ isCover = false }) {
                                   }}
                                 >
                                   {generatingAudio[sentence.id] ? 'Generating...' : 'Generate'}
+                                </button>
+
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    setSavingText(prev => ({ ...prev, [sentence.id]: true }));
+                                    try {
+                                      const cleanedText = sentence.text ? stripAudioTags(sentence.text) : '';
+                                      const normWord = (s) => (s || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\]]/g, '').trim();
+                                      const cleanWord = (s) => (s || '').replace(/[.,!?;:"""''¿¡…\[\]]+/g, '').trim();
+                                      const audioTagWords = new Set(['slowly', 'whispering', 'shouting', 'frightened', 'surprised', 'amazed', 'hopeful', 'worried', 'excited', 'pause', 'sighs', 'laughs', 'cries', 'gasps', 'whispers', 'shouts', 'sad', 'angry', 'happy', 'fearful', 'fearfully', 'very']);
+
+                                      // Build fresh words from text, always using current text as-is
+                                      const existingWords = sentence.words || [];
+                                      const textWords = cleanedText.split(/\s+/).filter(w => w && !audioTagWords.has(normWord(w)));
+                                      const allWords = textWords.map(w => {
+                                        const normalised = normWord(w);
+                                        const existing = existingWords.find(ew => normWord(ew.text) === normalised);
+                                        return {
+                                          id: existing?.id || `word-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                          text: w,
+                                          meaning: '',
+                                          baseForm: '',
+                                          startTimeMs: existing?.startTimeMs,
+                                          endTimeMs: existing?.endTimeMs,
+                                          vocabQuiz: existing?.vocabQuiz || false
+                                        };
+                                      });
+
+                                      // Auto-fill meaning/baseForm via batch lookup
+                                      const wordsNeedingLookup = allWords.filter(w => !w.meaning);
+                                      if (wordsNeedingLookup.length > 0 && cleanedText) {
+                                        try {
+                                          const lookupResponse = await api.post('/chat/batch-word-lookup', {
+                                            words: wordsNeedingLookup.map(w => normWord(w.text)),
+                                            sentenceText: cleanedText,
+                                            sentenceTranslation: sentence.translation || '',
+                                            sourceLanguage: comic?.language || 'es',
+                                            targetLanguage: comic?.targetLanguage || 'en'
+                                          });
+                                          const lookupResults = lookupResponse.data;
+                                          if (Array.isArray(lookupResults)) {
+                                            const nameIds = new Set();
+                                            wordsNeedingLookup.forEach((w, i) => {
+                                              if (lookupResults[i]) {
+                                                if (lookupResults[i].isName) {
+                                                  nameIds.add(w.id);
+                                                } else {
+                                                  w.meaning = cleanWord(lookupResults[i].meaning || '');
+                                                  w.baseForm = cleanWord(lookupResults[i].baseForm || '');
+                                                }
+                                              }
+                                            });
+                                            if (nameIds.size > 0) {
+                                              allWords.splice(0, allWords.length, ...allWords.filter(w => !nameIds.has(w.id)));
+                                            }
+                                          }
+                                        } catch (lookupError) {
+                                          console.error('Batch word lookup failed:', lookupError);
+                                        }
+                                      }
+
+                                      // Update local state with cleaned text + words
+                                      const updatedBubbles = bubbles.map(b => {
+                                        if (b.id !== bubble.id) return b;
+                                        return {
+                                          ...b,
+                                          sentences: (b.sentences || []).map(s =>
+                                            s.id === sentence.id ? { ...s, text: cleanedText, words: allWords } : s
+                                          )
+                                        };
+                                      });
+                                      setBubbles(updatedBubbles);
+
+                                      // Persist to database
+                                      if (isCover) {
+                                        const coverPrompt = panels[0]?.content || '';
+                                        await api.put(`/comics/${id}/cover`, {
+                                          image: page.masterImage,
+                                          prompt: coverPrompt,
+                                          bubbles: updatedBubbles
+                                        });
+                                      } else {
+                                        let panelsToSave = panels;
+                                        if (!panelsComputed) {
+                                          panelsToSave = computePanelsFromLines(lines, pageId);
+                                          setPanels(panelsToSave);
+                                          setPanelsComputed(true);
+                                        }
+                                        const updatedComic = { ...comic, promptSettings };
+                                        const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+                                        updatedComic.pages[pageIndex] = {
+                                          ...page,
+                                          lines,
+                                          panels: panelsToSave,
+                                          bubbles: updatedBubbles
+                                        };
+                                        await api.put(`/comics/${id}`, updatedComic);
+                                        setComic(updatedComic);
+                                        setPage(updatedComic.pages[pageIndex]);
+                                      }
+                                    } catch (error) {
+                                      console.error('Failed to save text:', error);
+                                      alert('Failed to save text');
+                                    }
+                                    setSavingText(prev => ({ ...prev, [sentence.id]: false }));
+                                  }}
+                                  disabled={!sentence.text || savingText[sentence.id]}
+                                  style={{
+                                    padding: '0.25rem 0.5rem',
+                                    fontSize: '0.65rem',
+                                    background: (!sentence.text || savingText[sentence.id]) ? '#95a5a6' : '#e67e22',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: (!sentence.text || savingText[sentence.id]) ? 'default' : 'pointer'
+                                  }}
+                                  title="Save cleaned text and build word dictionary without regenerating audio"
+                                >
+                                  {savingText[sentence.id] ? 'Saving...' : 'Save Text'}
                                 </button>
 
                                 {audioPreview[sentence.id] && (

@@ -47,7 +47,7 @@ router.post('/message', async (req, res) => {
           type: 'image_url',
           image_url: {
             url: `data:image/png;base64,${base64Image}`,
-            detail: 'high'
+            detail: 'auto'
           }
         });
       }
@@ -69,7 +69,7 @@ router.post('/message', async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-5.4',
       messages: openaiMessages,
-      max_completion_tokens: 2000,
+      max_completion_tokens: 16000,
       temperature: 0.7
     });
 
