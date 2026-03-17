@@ -149,6 +149,21 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// Toggle comic lock
+router.patch('/:id/lock', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+    comic.locked = !comic.locked;
+    await comic.save();
+    res.json({ locked: comic.locked });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Add page to comic
 router.post('/:id/pages', async (req, res) => {
   try {
@@ -670,6 +685,9 @@ router.delete('/:id', async (req, res) => {
     const comic = await Comic.findOne({ id: req.params.id });
     if (!comic) {
       return res.status(404).json({ error: 'Comic not found' });
+    }
+    if (comic.locked) {
+      return res.status(403).json({ error: 'Comic is locked. Unlock it before deleting.' });
     }
 
     const comicDir = path.join(PROJECTS_DIR, req.params.id);

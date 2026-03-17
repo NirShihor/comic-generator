@@ -122,6 +122,7 @@ const VoiceSchema = new mongoose.Schema({
 // Main Comic Schema
 const ComicSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
+  locked: { type: Boolean, default: true },
   title: { type: String, required: true },
   description: String,
   level: { type: String, enum: ['beginner', 'intermediate', 'advanced'], default: 'beginner' },
