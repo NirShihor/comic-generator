@@ -4,6 +4,7 @@ import api from '../services/api';
 
 const DEFAULT_SETTINGS = {
   styleBible: '',
+  styleBibleImages: [],
   cameraInks: '',
   characters: [],
   globalDoNot: '',
@@ -28,6 +29,14 @@ function ComicEditor() {
   const [wordAudioModel, setWordAudioModel] = useState('eleven_v3');
   const [wordAudioGenerating, setWordAudioGenerating] = useState(false);
   const [wordAudioProgress, setWordAudioProgress] = useState(null);
+
+  // Reference builder state
+  const [refImage, setRefImage] = useState(null);
+  const [refMessages, setRefMessages] = useState([]);
+  const [refInput, setRefInput] = useState('');
+  const [refLoading, setRefLoading] = useState(false);
+  const refFileInputRef = useRef(null);
+  const refMessagesEndRef = useRef(null);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState(() => {
@@ -258,6 +267,128 @@ function ComicEditor() {
     setChatImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Reference builder handlers
+  const handleRefImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target.result.split(',')[1];
+      const newImage = { preview: event.target.result, base64 };
+      setRefImage(newImage);
+      setRefMessages([]);
+      setRefInput('');
+      // Auto-describe the image
+      setRefLoading(true);
+      try {
+        const response = await api.post('/chat/describe-image', { image: base64 });
+        const initialMessages = [
+          { role: 'user', content: 'Describe this reference image in detail for use in comic book art direction prompts.', isInitial: true },
+          { role: 'assistant', content: response.data.message }
+        ];
+        setRefMessages(initialMessages);
+      } catch (error) {
+        setRefMessages([
+          { role: 'user', content: 'Describe this reference image.', isInitial: true },
+          { role: 'assistant', content: `Error: ${error.response?.data?.error || error.message}` }
+        ]);
+      } finally {
+        setRefLoading(false);
+        setTimeout(() => refMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const sendRefMessage = async () => {
+    if (!refInput.trim() || !refImage) return;
+    const newMessages = [...refMessages, { role: 'user', content: refInput }];
+    setRefMessages(newMessages);
+    const messageText = refInput;
+    setRefInput('');
+    setRefLoading(true);
+    try {
+      const response = await api.post('/chat/describe-image', {
+        image: refImage.base64,
+        messages: newMessages
+      });
+      setRefMessages(prev => [...prev, { role: 'assistant', content: response.data.message }]);
+    } catch (error) {
+      setRefMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.response?.data?.error || error.message}` }]);
+    } finally {
+      setRefLoading(false);
+      setTimeout(() => refMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
+  };
+
+  const addRefToCharacterBible = async () => {
+    // Get the last assistant message as the description
+    const lastAssistant = [...refMessages].reverse().find(m => m.role === 'assistant');
+    if (!lastAssistant || !refImage) return;
+    const name = prompt('Enter a name for this entry (character, object, setting...):');
+    if (!name || !name.trim()) return;
+
+    try {
+      // Save the reference image to the project
+      const response = await api.post('/images/save-reference', {
+        comicId: id,
+        image: refImage.base64
+      });
+      setSettings(prev => ({
+        ...prev,
+        characters: [...prev.characters, {
+          id: `char-${Date.now()}`,
+          name: name.trim(),
+          description: lastAssistant.content,
+          image: response.data.path
+        }]
+      }));
+      setSettingsTab('characters');
+    } catch (error) {
+      console.error('Failed to save reference image:', error);
+      // Still add the entry without the image
+      setSettings(prev => ({
+        ...prev,
+        characters: [...prev.characters, {
+          id: `char-${Date.now()}`,
+          name: name.trim(),
+          description: lastAssistant.content
+        }]
+      }));
+      setSettingsTab('characters');
+    }
+  };
+
+  const addRefToStyleBible = async () => {
+    const lastAssistant = [...refMessages].reverse().find(m => m.role === 'assistant');
+    if (!lastAssistant || !refImage) return;
+
+    try {
+      const response = await api.post('/images/save-reference', {
+        comicId: id,
+        image: refImage.base64
+      });
+      setSettings(prev => ({
+        ...prev,
+        styleBibleImages: [...(prev.styleBibleImages || []), {
+          id: `style-img-${Date.now()}`,
+          image: response.data.path,
+          description: lastAssistant.content
+        }]
+      }));
+      setSettingsTab('style');
+    } catch (error) {
+      console.error('Failed to save reference image:', error);
+    }
+  };
+
+  const clearRef = () => {
+    setRefImage(null);
+    setRefMessages([]);
+    setRefInput('');
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -270,7 +401,8 @@ function ComicEditor() {
     { id: 'style', label: 'Style Bible' },
     { id: 'camera', label: 'Camera & Inks' },
     { id: 'characters', label: 'Characters' },
-    { id: 'donot', label: 'Do Not / Negatives' }
+    { id: 'donot', label: 'Do Not / Negatives' },
+    { id: 'reference', label: 'Reference Builder' }
   ];
 
   return (
@@ -469,6 +601,64 @@ function ComicEditor() {
                     resize: 'vertical'
                   }}
                 />
+
+                {/* Style Bible Reference Images */}
+                {settings.styleBibleImages && settings.styleBibleImages.length > 0 && (
+                  <div style={{ marginTop: '1.5rem' }}>
+                    <h3 style={{ marginBottom: '0.75rem', color: '#ccc' }}>Reference Images</h3>
+                    {settings.styleBibleImages.map((item, index) => (
+                      <div
+                        key={item.id || `style-img-${index}`}
+                        style={{
+                          background: '#1a1a2e',
+                          borderRadius: '8px',
+                          padding: '1rem',
+                          marginBottom: '1rem',
+                          display: 'flex',
+                          gap: '1rem',
+                          alignItems: 'flex-start'
+                        }}
+                      >
+                        <img
+                          src={`http://localhost:3001${item.image}`}
+                          alt="Style reference"
+                          style={{ maxHeight: '150px', borderRadius: '6px', border: '1px solid #333', flexShrink: 0 }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{
+                            color: '#ddd',
+                            fontSize: '0.85rem',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            margin: 0
+                          }}>
+                            {item.description}
+                          </p>
+                          <button
+                            onClick={() => {
+                              setSettings(prev => ({
+                                ...prev,
+                                styleBibleImages: prev.styleBibleImages.filter((_, i) => i !== index)
+                              }));
+                            }}
+                            style={{
+                              marginTop: '0.5rem',
+                              padding: '0.3rem 0.6rem',
+                              background: '#c0392b',
+                              border: 'none',
+                              borderRadius: '4px',
+                              color: '#fff',
+                              cursor: 'pointer',
+                              fontSize: '0.8rem'
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -501,7 +691,7 @@ function ComicEditor() {
               <div>
                 <h2 style={{ marginBottom: '0.5rem' }}>Character Bible</h2>
                 <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                  Define characters to maintain consistency across pages
+                  Define characters, objects, and settings to maintain consistency across pages
                 </p>
 
                 {settings.characters.map((char, index) => (
@@ -547,10 +737,19 @@ function ComicEditor() {
                         Remove
                       </button>
                     </div>
+                    {char.image && (
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <img
+                          src={`http://localhost:3001${char.image}`}
+                          alt={char.name}
+                          style={{ maxHeight: '150px', borderRadius: '6px', border: '1px solid #333' }}
+                        />
+                      </div>
+                    )}
                     <textarea
                       value={char.description}
                       onChange={(e) => updateCharacter(index, 'description', e.target.value)}
-                      placeholder="Character description (gender, age, build, face anchors, hair, clothing, props, condition...)"
+                      placeholder="Description (appearance, build, clothing, distinguishing features, materials, colors...)"
                       style={{
                         width: '100%',
                         minHeight: '150px',
@@ -649,6 +848,176 @@ function ComicEditor() {
                     fontFamily: 'monospace',
                     resize: 'vertical'
                   }}
+                />
+              </div>
+            )}
+
+            {settingsTab === 'reference' && (
+              <div>
+                <h2 style={{ marginBottom: '0.5rem' }}>Reference Builder</h2>
+                <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                  Upload a reference image and let AI describe it. Refine until you're happy, then add it to the Character Bible.
+                </p>
+
+                {/* Upload area */}
+                {!refImage ? (
+                  <div
+                    onClick={() => refFileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const file = e.dataTransfer.files[0];
+                      if (file && file.type.startsWith('image/')) {
+                        const fakeEvent = { target: { files: [file], value: '' } };
+                        Object.defineProperty(fakeEvent.target, 'value', { set: () => {} });
+                        handleRefImageUpload(fakeEvent);
+                      }
+                    }}
+                    style={{
+                      border: '2px dashed #16213e',
+                      borderRadius: '8px',
+                      padding: '3rem',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      background: '#1a1a2e',
+                      color: '#888',
+                      marginBottom: '1rem'
+                    }}
+                  >
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>+</div>
+                    <div>Click or drag an image here</div>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                      <img
+                        src={refImage.preview}
+                        alt="Reference"
+                        style={{ maxHeight: '200px', borderRadius: '8px', border: '1px solid #333' }}
+                      />
+                      <button
+                        onClick={clearRef}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          background: '#c0392b',
+                          border: 'none',
+                          borderRadius: '4px',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+
+                    {/* Conversation */}
+                    <div style={{
+                      background: '#1a1a2e',
+                      borderRadius: '8px',
+                      padding: '1rem',
+                      maxHeight: '400px',
+                      overflowY: 'auto',
+                      marginBottom: '0.75rem'
+                    }}>
+                      {refMessages.filter(m => m.role === 'assistant').length === 0 && refLoading && (
+                        <div style={{ color: '#888', fontStyle: 'italic', fontSize: '0.85rem' }}>Analyzing image...</div>
+                      )}
+                      {refMessages.map((msg, idx) => (
+                        <div key={idx} style={{
+                          marginBottom: '0.5rem',
+                          padding: '0.5rem',
+                          borderRadius: '6px',
+                          background: msg.role === 'user' ? '#16213e' : '#1e3a5f',
+                          color: '#ddd',
+                          fontSize: '0.85rem',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word'
+                        }}>
+                          <div style={{ fontSize: '0.65rem', color: '#888', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+                            {msg.role === 'user' ? 'You' : 'AI'}
+                          </div>
+                          {msg.content}
+                        </div>
+                      ))}
+                      {refLoading && refMessages.length > 0 && (
+                        <div style={{ color: '#888', fontStyle: 'italic', fontSize: '0.85rem', padding: '0.5rem' }}>Thinking...</div>
+                      )}
+                      <div ref={refMessagesEndRef} />
+                    </div>
+
+                    {/* Refinement input */}
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <textarea
+                        value={refInput}
+                        onChange={(e) => setRefInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            sendRefMessage();
+                          }
+                        }}
+                        placeholder="Ask for changes... (Enter to send)"
+                        rows={2}
+                        disabled={refLoading}
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem',
+                          borderRadius: '4px',
+                          border: '1px solid #16213e',
+                          background: '#0f3460',
+                          color: '#fff',
+                          fontSize: '0.85rem',
+                          resize: 'vertical'
+                        }}
+                      />
+                      <button
+                        onClick={sendRefMessage}
+                        disabled={refLoading || !refInput.trim()}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: refLoading || !refInput.trim() ? '#555' : '#3498db',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: refLoading || !refInput.trim() ? 'default' : 'pointer',
+                          fontSize: '0.85rem',
+                          alignSelf: 'flex-end'
+                        }}
+                      >
+                        {refLoading ? '...' : 'Send'}
+                      </button>
+                    </div>
+
+                    {/* Add to Bible buttons */}
+                    {refMessages.some(m => m.role === 'assistant') && (
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          className="btn btn-primary"
+                          onClick={addRefToCharacterBible}
+                          style={{ padding: '0.5rem 1rem' }}
+                        >
+                          + Add to Character Bible
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          onClick={addRefToStyleBible}
+                          style={{ padding: '0.5rem 1rem', background: '#8e44ad' }}
+                        >
+                          + Add to Style Bible
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <input
+                  type="file"
+                  ref={refFileInputRef}
+                  onChange={handleRefImageUpload}
+                  accept="image/*"
+                  style={{ display: 'none' }}
                 />
               </div>
             )}

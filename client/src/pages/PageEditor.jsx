@@ -325,6 +325,7 @@ function PageEditor({ isCover = false }) {
   // Prompt settings (editable copy from comic - persists across pages)
   const [promptSettings, setPromptSettings] = useState({
     styleBible: '',
+    styleBibleImages: [],
     cameraInks: '',
     characters: [],
     globalDoNot: '',
@@ -474,13 +475,13 @@ function PageEditor({ isCover = false }) {
     }));
   };
 
-  const saveAudio = async (bubbleId, sentenceId, pageNum, panelNum) => {
+  const saveAudio = async (bubbleId, sentenceId, pageNum, panelNum, bubbleIdx, sentenceIdx) => {
     const preview = audioPreview[sentenceId];
     if (!preview?.filename) return;
 
     setSavingAudio(prev => ({ ...prev, [sentenceId]: true }));
     try {
-      const audioName = `${comic.title.toLowerCase().replace(/\s+/g, '_')}_p${pageNum}_s${panelNum}`;
+      const audioName = `${comic.title.toLowerCase().replace(/\s+/g, '_')}_p${pageNum}_s${panelNum}_b${bubbleIdx}_t${sentenceIdx}`;
       const response = await api.post('/audio/save-to-project', {
         comicId: id,
         filename: preview.filename,
@@ -1063,7 +1064,8 @@ function PageEditor({ isCover = false }) {
               id: `word-${Date.now()}`,
               text: '',
               meaning: '',
-              baseForm: ''
+              baseForm: '',
+              manual: true
             }]
           };
         })
@@ -1532,6 +1534,15 @@ function PageEditor({ isCover = false }) {
       prompt += `🎨 STYLE BIBLE\n${settings.styleBible}\n\n`;
     }
 
+    // Style Bible Reference Images
+    if (settings.styleBibleImages && settings.styleBibleImages.length > 0) {
+      prompt += `🎨 STYLE REFERENCE DESCRIPTIONS\n`;
+      settings.styleBibleImages.forEach((img, i) => {
+        prompt += `\nStyle Reference ${i + 1}:\n${img.description}\n`;
+      });
+      prompt += '\n';
+    }
+
     // Page Layout (use custom if set, otherwise auto-generate)
     const layout = customLayoutDescription || generateLayoutDescription(panels);
     prompt += `CRITICAL PAGE SHAPE:\n${layout}\n\n`;
@@ -1585,6 +1596,15 @@ function PageEditor({ isCover = false }) {
     // Style Bible
     if (settings.styleBible) {
       prompt += `🎨 STYLE BIBLE\n${settings.styleBible}\n\n`;
+    }
+
+    // Style Bible Reference Images
+    if (settings.styleBibleImages && settings.styleBibleImages.length > 0) {
+      prompt += `🎨 STYLE REFERENCE DESCRIPTIONS\n`;
+      settings.styleBibleImages.forEach((img, i) => {
+        prompt += `\nStyle Reference ${i + 1}:\n${img.description}\n`;
+      });
+      prompt += '\n';
     }
 
     // Camera & Inks
@@ -1643,6 +1663,23 @@ function PageEditor({ isCover = false }) {
     return 'square';
   };
 
+  // Collect all reference image paths from prompt settings
+  const getRefImagePaths = () => {
+    const paths = [];
+    const settings = promptSettings;
+    if (settings.styleBibleImages) {
+      settings.styleBibleImages.forEach(img => {
+        if (img.image) paths.push(img.image);
+      });
+    }
+    if (settings.characters) {
+      settings.characters.forEach(char => {
+        if (char.image) paths.push(char.image);
+      });
+    }
+    return paths;
+  };
+
   // Generate a single panel image
   const generatePanelImage = async (panel, panelIndex) => {
     if (!panel.content?.trim()) {
@@ -1661,10 +1698,12 @@ function PageEditor({ isCover = false }) {
 
       console.log(`Generating panel ${panelIndex + 1} (${panel.id}), aspect: ${aspectRatio}`);
 
+      const referenceImages = getRefImagePaths();
       const response = await api.post('/images/generate-panel', {
         prompt,
         panelId: panel.id,
-        aspectRatio
+        aspectRatio,
+        referenceImages
       });
 
       setPanelImages(prev => ({
@@ -2135,9 +2174,11 @@ function PageEditor({ isCover = false }) {
       const prompt = useCustomPrompt && customPrompt ? customPrompt : buildFullPrompt();
       console.log('Generating with prompt:', prompt);
 
+      const referenceImages = getRefImagePaths();
       const response = await api.post('/images/generate-page', {
         prompt,
-        size: '1024x1536' // Portrait for comic pages (GPT image supported size)
+        size: '1024x1536', // Portrait for comic pages (GPT image supported size)
+        referenceImages
       });
 
       setGeneratedImage({
@@ -4481,7 +4522,7 @@ function PageEditor({ isCover = false }) {
                                           return cx >= p.tapZone.x && cx <= p.tapZone.x + p.tapZone.width &&
                                                  cy >= p.tapZone.y && cy <= p.tapZone.y + p.tapZone.height;
                                         });
-                                        saveAudio(bubble.id, sentence.id, page.pageNumber, panelIdx + 1);
+                                        saveAudio(bubble.id, sentence.id, page.pageNumber, panelIdx + 1, i + 1, sIdx + 1);
                                       }}
                                       style={{
                                         padding: '0.25rem 0.5rem',
@@ -4935,6 +4976,29 @@ function PageEditor({ isCover = false }) {
                 />
               </div>
 
+              {/* Style Bible Reference Images */}
+              {promptSettings.styleBibleImages && promptSettings.styleBibleImages.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
+                    Style Reference Images ({promptSettings.styleBibleImages.length})
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', padding: '0.5rem', background: '#fff', borderRadius: '4px', border: '1px solid #ccc' }}>
+                    {promptSettings.styleBibleImages.map((img, idx) => (
+                      <img
+                        key={img.id || idx}
+                        src={`http://localhost:3001${img.image}`}
+                        alt={`Style ref ${idx + 1}`}
+                        title={img.description?.substring(0, 100) + '...'}
+                        style={{ height: '60px', borderRadius: '4px', border: '1px solid #999' }}
+                      />
+                    ))}
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.25rem' }}>
+                    These images are sent to the AI as visual references when generating panels.
+                  </p>
+                </div>
+              )}
+
               {/* Camera + Inks */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
@@ -4968,6 +5032,13 @@ function PageEditor({ isCover = false }) {
                 {(promptSettings.characters || []).map((char) => (
                   <div key={char.id} style={{ background: '#fff', borderRadius: '4px', padding: '0.75rem', marginBottom: '0.75rem', border: '1px solid #ccc' }}>
                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      {char.image && (
+                        <img
+                          src={`http://localhost:3001${char.image}`}
+                          alt={char.name}
+                          style={{ height: '50px', borderRadius: '4px', border: '1px solid #999', flexShrink: 0 }}
+                        />
+                      )}
                       <input
                         type="text"
                         value={char.name}

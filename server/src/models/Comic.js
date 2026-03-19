@@ -106,10 +106,18 @@ const PageSchema = new mongoose.Schema({
   bubbles: [BubbleSchema]
 }, { _id: false });
 
-// Character Schema (for prompt templates)
+// Character/Reference Schema (for prompt templates)
 const CharacterSchema = new mongoose.Schema({
   id: String,
   name: String,
+  description: String,
+  image: String
+}, { _id: false });
+
+// Style Bible Image Schema
+const StyleImageSchema = new mongoose.Schema({
+  id: String,
+  image: String,
   description: String
 }, { _id: false });
 
@@ -138,6 +146,7 @@ const ComicSchema = new mongoose.Schema({
   voices: [VoiceSchema],
   promptTemplates: {
     styleBible: String,
+    styleBibleImages: [StyleImageSchema],
     cameraInks: String,
     characters: [CharacterSchema],
     globalDoNot: String,
@@ -145,6 +154,7 @@ const ComicSchema = new mongoose.Schema({
   },
   promptSettings: {
     styleBible: String,
+    styleBibleImages: [StyleImageSchema],
     cameraInks: String,
     characters: [CharacterSchema],
     globalDoNot: String,

@@ -5,6 +5,27 @@ const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const OpenAI = require('openai');
+// Load reference images from disk as File objects for the OpenAI API
+async function loadReferenceImages(imagePaths) {
+  const files = [];
+  for (const imgPath of imagePaths) {
+    // imgPath is like /projects/comic-xxx/images/ref-xxx.png
+    const fullPath = path.join(__dirname, '../..', imgPath);
+    try {
+      await fs.access(fullPath);
+      const buffer = await fs.readFile(fullPath);
+      const ext = path.extname(fullPath).toLowerCase();
+      const mimeType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+        : ext === '.webp' ? 'image/webp'
+        : 'image/png';
+      const filename = path.basename(fullPath);
+      files.push(new File([buffer], filename, { type: mimeType }));
+    } catch (err) {
+      console.log(`Reference image not found, skipping: ${fullPath}`);
+    }
+  }
+  return files;
+}
 
 // Configure multer for image uploads
 const storage = multer.diskStorage({
@@ -98,7 +119,7 @@ router.post('/generate', async (req, res) => {
 // Generate comic page using OpenAI
 router.post('/generate-page', async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, referenceImages } = req.body;
 
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({
@@ -117,15 +138,32 @@ router.post('/generate-page', async (req, res) => {
       finalPrompt = finalPrompt.substring(0, 32000);
     }
 
-    console.log('Generating with OpenAI, prompt length:', finalPrompt.length);
+    // Load reference images if provided
+    const refStreams = referenceImages && referenceImages.length > 0
+      ? await loadReferenceImages(referenceImages)
+      : [];
 
-    const response = await openai.images.generate({
-      model: 'gpt-image-1',
-      prompt: finalPrompt,
-      n: 1,
-      size: '1024x1536',
-      quality: 'high'
-    });
+    console.log(`Generating with OpenAI, prompt length: ${finalPrompt.length}, reference images: ${refStreams.length}`);
+
+    let response;
+    if (refStreams.length > 0) {
+      response = await openai.images.edit({
+        model: 'gpt-image-1',
+        image: refStreams,
+        prompt: finalPrompt,
+        n: 1,
+        size: '1024x1536',
+        quality: 'high'
+      });
+    } else {
+      response = await openai.images.generate({
+        model: 'gpt-image-1',
+        prompt: finalPrompt,
+        n: 1,
+        size: '1024x1536',
+        quality: 'high'
+      });
+    }
 
     const imageData = response.data[0];
     let buffer;
@@ -155,7 +193,7 @@ router.post('/generate-page', async (req, res) => {
 // Generate single panel image
 router.post('/generate-panel', async (req, res) => {
   try {
-    const { prompt, panelId, aspectRatio = 'square' } = req.body;
+    const { prompt, panelId, aspectRatio = 'square', referenceImages } = req.body;
 
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({
@@ -183,15 +221,32 @@ router.post('/generate-panel', async (req, res) => {
       finalPrompt = finalPrompt.substring(0, 32000);
     }
 
-    console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${finalPrompt.length}`);
+    // Load reference images if provided
+    const refStreams = referenceImages && referenceImages.length > 0
+      ? await loadReferenceImages(referenceImages)
+      : [];
 
-    const response = await openai.images.generate({
-      model: 'gpt-image-1',
-      prompt: finalPrompt,
-      n: 1,
-      size: size,
-      quality: 'high'
-    });
+    console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${finalPrompt.length}, reference images: ${refStreams.length}`);
+
+    let response;
+    if (refStreams.length > 0) {
+      response = await openai.images.edit({
+        model: 'gpt-image-1',
+        image: refStreams,
+        prompt: finalPrompt,
+        n: 1,
+        size: size,
+        quality: 'high'
+      });
+    } else {
+      response = await openai.images.generate({
+        model: 'gpt-image-1',
+        prompt: finalPrompt,
+        n: 1,
+        size: size,
+        quality: 'high'
+      });
+    }
 
     const imageData = response.data[0];
     let buffer;
@@ -246,6 +301,30 @@ router.post('/save-to-project', async (req, res) => {
     res.json({
       filename: newFilename,
       path: `/projects/${comicId}/images/${newFilename}`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save a base64 reference image to a comic project
+router.post('/save-reference', async (req, res) => {
+  try {
+    const { comicId, image } = req.body;
+    if (!comicId || !image) {
+      return res.status(400).json({ error: 'comicId and image (base64) are required' });
+    }
+
+    const destDir = path.join(__dirname, '../../projects', comicId, 'images');
+    await fs.mkdir(destDir, { recursive: true });
+
+    const filename = `ref-${uuidv4()}.png`;
+    const destPath = path.join(destDir, filename);
+    await fs.writeFile(destPath, Buffer.from(image, 'base64'));
+
+    res.json({
+      filename,
+      path: `/projects/${comicId}/images/${filename}`
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

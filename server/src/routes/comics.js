@@ -555,6 +555,7 @@ function transformToReaderFormat(comic, comicSlug) {
                     ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
                     ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
                     ...(word.vocabQuiz && { vocabQuiz: true }),
+                    ...(word.manual && { manual: true }),
                     ...(wText && { wordAudioUrl: `words/${wText}` }),
                     ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
                   };
@@ -576,13 +577,26 @@ function transformToReaderFormat(comic, comicSlug) {
       panels: (page.panels || []).map(panel => {
         const panelNum = panel.panelOrder;
 
+        // Check if any part of the bubble overlaps the panel tap zone
         const panelBubbles = (page.bubbles || []).filter(bubble => {
-          const bubbleCenterX = bubble.x + (bubble.width || 0) / 2;
-          const bubbleCenterY = bubble.y + (bubble.height || 0) / 2;
-          return bubbleCenterX >= panel.tapZone.x &&
-                 bubbleCenterX <= panel.tapZone.x + panel.tapZone.width &&
-                 bubbleCenterY >= panel.tapZone.y &&
-                 bubbleCenterY <= panel.tapZone.y + panel.tapZone.height;
+          const bx = bubble.x || 0;
+          const by = bubble.y || 0;
+          const bw = bubble.width || 0;
+          const bh = bubble.height || 0;
+          const tx = panel.tapZone.x;
+          const ty = panel.tapZone.y;
+          const tw = panel.tapZone.width;
+          const th = panel.tapZone.height;
+          return bx + bw > tx && bx < tx + tw &&
+                 by + bh > ty && by < ty + th;
+        }).sort((a, b) => {
+          // Sort by reading order: top-to-bottom, left-to-right as tiebreaker
+          const ay = a.y || 0;
+          const by_ = b.y || 0;
+          const ax = a.x || 0;
+          const bx = b.x || 0;
+          if (Math.abs(ay - by_) < 0.02) return ax - bx; // Same row: left to right
+          return ay - by_; // Top to bottom
         });
 
         return {
@@ -600,6 +614,7 @@ function transformToReaderFormat(comic, comicSlug) {
             return {
               id: bubbleId,
               type: bubble.type || 'speech',
+              ...(bubble.isSoundEffect && { isSoundEffect: true }),
               position: {
                 x: bubble.x,
                 y: bubble.y,
@@ -613,15 +628,22 @@ function transformToReaderFormat(comic, comicSlug) {
                   text: sentence.text || '',
                   translation: sentence.translation || '',
                   audioUrl: sentence.audioUrl || '',
-                  words: (sentence.words || []).map(word => ({
-                    id: `${comicSlug}-w${wordCounter++}`,
-                    text: word.text || '',
-                    meaning: word.meaning || '',
-                    baseForm: word.baseForm || word.text || '',
-                    ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
-                    ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
-                    ...(word.vocabQuiz && { vocabQuiz: true })
-                  }))
+                  words: (sentence.words || []).map(word => {
+                    const wText = sanitizeWordForFilename(word.text);
+                    const wBase = sanitizeWordForFilename(word.baseForm || word.text);
+                    return {
+                      id: `${comicSlug}-w${wordCounter++}`,
+                      text: word.text || '',
+                      meaning: word.meaning || '',
+                      baseForm: word.baseForm || word.text || '',
+                      ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
+                      ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
+                      ...(word.vocabQuiz && { vocabQuiz: true }),
+                      ...(word.manual && { manual: true }),
+                      ...(wText && { wordAudioUrl: `words/${wText}` }),
+                      ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+                    };
+                  })
                 };
               })
             };
@@ -648,14 +670,22 @@ function transformToReaderFormat(comic, comicSlug) {
       (page.panels || []).flatMap(panel =>
         (panel.bubbles || []).flatMap(bubble =>
           (bubble.sentences || []).flatMap(sentence =>
-            (sentence.words || []).filter(w => w.vocabQuiz).map(w => ({
-              id: w.id,
-              text: w.text,
-              meaning: w.meaning,
-              baseForm: w.baseForm,
-              ...(w.wordAudioUrl && { wordAudioUrl: w.wordAudioUrl }),
-              ...(w.baseFormAudioUrl && { baseFormAudioUrl: w.baseFormAudioUrl })
-            }))
+            (sentence.words || []).filter(w => w.vocabQuiz).map(w => {
+              const wText = sanitizeWordForFilename(w.text);
+              const wBase = sanitizeWordForFilename(w.baseForm || w.text);
+              return {
+                word: {
+                  id: w.id,
+                  text: w.text,
+                  meaning: w.meaning,
+                  baseForm: w.baseForm,
+                  ...(wText && { wordAudioUrl: `words/${wText}` }),
+                  ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+                },
+                panelId: panel.id,
+                pageId: page.id
+              };
+            })
           )
         )
       )
