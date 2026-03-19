@@ -8,7 +8,8 @@ const WordSchema = new mongoose.Schema({
   baseForm: String,
   startTimeMs: Number,
   endTimeMs: Number,
-  vocabQuiz: Boolean
+  vocabQuiz: Boolean,
+  manual: Boolean
 }, { _id: false });
 
 // Sentence Schema (nested in Bubble)
@@ -160,6 +161,9 @@ const ComicSchema = new mongoose.Schema({
     globalDoNot: String,
     hardNegatives: String
   },
+  collectionId: String,
+  collectionTitle: String,
+  episodeNumber: Number,
   pages: [PageSchema]
 }, {
   timestamps: true,

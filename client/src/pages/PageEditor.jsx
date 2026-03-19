@@ -4282,7 +4282,29 @@ function PageEditor({ isCover = false }) {
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                                 <span style={{ fontSize: '0.7rem', color: '#2980b9', fontWeight: 'bold' }}>Audio</span>
                                 {sentence.audioUrl && (
-                                  <span style={{ fontSize: '0.65rem', color: '#27ae60' }}>Saved</span>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (audioRef.current) audioRef.current.pause();
+                                        const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${sentence.audioUrl}.mp3`);
+                                        audioRef.current = audio;
+                                        audio.play();
+                                      }}
+                                      style={{
+                                        padding: '0.1rem 0.35rem',
+                                        fontSize: '0.6rem',
+                                        background: '#27ae60',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                      title="Play saved audio"
+                                    >
+                                      ▶ Saved
+                                    </button>
+                                  </span>
                                 )}
                               </div>
 
@@ -4710,6 +4732,60 @@ function PageEditor({ isCover = false }) {
                                       fontSize: '0.75rem'
                                     }}
                                   />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (audioRef.current) audioRef.current.pause();
+                                      const sanitized = word.text.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
+                                      if (sanitized) {
+                                        const audio = new Audio(`http://localhost:3001/projects/${id}/audio/words/${sanitized}.mp3`);
+                                        audioRef.current = audio;
+                                        audio.play().catch(() => {});
+                                      }
+                                    }}
+                                    disabled={!word.text}
+                                    style={{
+                                      padding: '0.15rem 0.25rem',
+                                      background: 'transparent',
+                                      border: '1px solid #3498db',
+                                      borderRadius: '2px',
+                                      color: '#3498db',
+                                      cursor: word.text ? 'pointer' : 'default',
+                                      fontSize: '0.6rem',
+                                      flexShrink: 0,
+                                      opacity: word.text ? 1 : 0.3
+                                    }}
+                                    title="Play word audio"
+                                  >
+                                    ▶
+                                  </button>
+                                  {word.baseForm && word.baseForm.toLowerCase() !== word.text.toLowerCase() && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (audioRef.current) audioRef.current.pause();
+                                        const sanitized = word.baseForm.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
+                                        if (sanitized) {
+                                          const audio = new Audio(`http://localhost:3001/projects/${id}/audio/words/${sanitized}.mp3`);
+                                          audioRef.current = audio;
+                                          audio.play().catch(() => {});
+                                        }
+                                      }}
+                                      style={{
+                                        padding: '0.15rem 0.25rem',
+                                        background: 'transparent',
+                                        border: '1px solid #9b59b6',
+                                        borderRadius: '2px',
+                                        color: '#9b59b6',
+                                        cursor: 'pointer',
+                                        fontSize: '0.6rem',
+                                        flexShrink: 0
+                                      }}
+                                      title="Play base form audio"
+                                    >
+                                      ▶B
+                                    </button>
+                                  )}
                                   <label
                                     onClick={(e) => e.stopPropagation()}
                                     title="Include in Vocabulary Quiz"

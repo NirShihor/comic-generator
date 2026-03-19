@@ -1035,6 +1035,75 @@ function ComicEditor() {
             This will generate the comic.json file and copy all images (master pages and panel crops).
           </p>
 
+          {/* Collection Settings */}
+          <div style={{
+            background: '#f8f9fa',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            marginBottom: '1.5rem'
+          }}>
+            <h3 style={{ marginBottom: '1rem', color: '#333' }}>Collection Settings</h3>
+            <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Group this comic into a collection with other episodes. Leave empty for standalone comics.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Collection ID</label>
+                <input
+                  type="text"
+                  value={comic.collectionId || ''}
+                  onChange={(e) => setComic({ ...comic, collectionId: e.target.value || undefined })}
+                  placeholder="e.g. collection-el_visitante"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Collection Title</label>
+                <input
+                  type="text"
+                  value={comic.collectionTitle || ''}
+                  onChange={(e) => setComic({ ...comic, collectionTitle: e.target.value || undefined })}
+                  placeholder="e.g. EL VISITANTE"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'end' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Episode Number</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={comic.episodeNumber || ''}
+                  onChange={(e) => setComic({ ...comic, episodeNumber: e.target.value ? parseInt(e.target.value) : undefined })}
+                  placeholder="e.g. 1"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+                />
+              </div>
+              <div>
+                <button
+                  className="btn btn-primary"
+                  onClick={async () => {
+                    try {
+                      await api.put(`/comics/${id}`, {
+                        collectionId: comic.collectionId || null,
+                        collectionTitle: comic.collectionTitle || null,
+                        episodeNumber: comic.episodeNumber || null
+                      });
+                      alert('Collection settings saved!');
+                    } catch (error) {
+                      alert('Failed to save collection settings');
+                    }
+                  }}
+                  style={{ padding: '0.5rem 1.5rem' }}
+                >
+                  Save Collection Settings
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
             <button
               className="btn btn-secondary"

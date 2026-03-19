@@ -665,6 +665,9 @@ function transformToReaderFormat(comic, comicSlug) {
     language: comic.language || 'es',
     targetLanguage: comic.targetLanguage || 'en',
     version: '1.0',
+    ...(comic.collectionId && { collectionId: comic.collectionId }),
+    ...(comic.collectionTitle && { collectionTitle: comic.collectionTitle }),
+    ...(comic.episodeNumber && { episodeNumber: comic.episodeNumber }),
     pages,
     reviewWords: pages.flatMap(page =>
       (page.panels || []).flatMap(panel =>
