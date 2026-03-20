@@ -307,15 +307,19 @@ router.post('/save-to-project', async (req, res) => {
   }
 });
 
-// Save a base64 reference image to a comic project
+// Save a base64 reference image to a comic or collection project
 router.post('/save-reference', async (req, res) => {
   try {
-    const { comicId, image } = req.body;
-    if (!comicId || !image) {
-      return res.status(400).json({ error: 'comicId and image (base64) are required' });
+    const { comicId, collectionId, image } = req.body;
+    if ((!comicId && !collectionId) || !image) {
+      return res.status(400).json({ error: 'comicId or collectionId, and image (base64) are required' });
     }
 
-    const destDir = path.join(__dirname, '../../projects', comicId, 'images');
+    // Use collection path if collectionId is provided, otherwise comic path
+    const projectFolder = collectionId
+      ? path.join('collections', collectionId)
+      : comicId;
+    const destDir = path.join(__dirname, '../../projects', projectFolder, 'images');
     await fs.mkdir(destDir, { recursive: true });
 
     const filename = `ref-${uuidv4()}.png`;
@@ -324,7 +328,7 @@ router.post('/save-reference', async (req, res) => {
 
     res.json({
       filename,
-      path: `/projects/${comicId}/images/${filename}`
+      path: `/projects/${projectFolder}/images/${filename}`
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

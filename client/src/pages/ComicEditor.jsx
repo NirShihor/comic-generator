@@ -18,6 +18,8 @@ function ComicEditor() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('pages');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settingsSource, setSettingsSource] = useState('comic'); // 'comic' or 'collection'
+  const [settingsCollectionId, setSettingsCollectionId] = useState(null);
   const [settingsTab, setSettingsTab] = useState('style');
   const [saving, setSaving] = useState(false);
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
@@ -84,16 +86,36 @@ function ComicEditor() {
     try {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
-      if (response.data.promptSettings) {
-        const loadedSettings = { ...DEFAULT_SETTINGS, ...response.data.promptSettings };
-        // Ensure characters have IDs (for backwards compatibility)
-        if (loadedSettings.characters) {
-          loadedSettings.characters = loadedSettings.characters.map((char, idx) => ({
-            ...char,
-            id: char.id || `char-${Date.now()}-${idx}`
-          }));
+
+      // Load prompt settings from resolver (collection or comic)
+      try {
+        const settingsRes = await api.get(`/comics/${id}/prompt-settings`);
+        const { source, collectionId, promptSettings } = settingsRes.data;
+        setSettingsSource(source);
+        setSettingsCollectionId(collectionId);
+        if (promptSettings) {
+          const loadedSettings = { ...DEFAULT_SETTINGS, ...promptSettings };
+          if (loadedSettings.characters) {
+            loadedSettings.characters = loadedSettings.characters.map((char, idx) => ({
+              ...char,
+              id: char.id || `char-${Date.now()}-${idx}`
+            }));
+          }
+          setSettings(loadedSettings);
         }
-        setSettings(loadedSettings);
+      } catch (settingsErr) {
+        console.error('Failed to load prompt settings, falling back to comic:', settingsErr);
+        // Fallback to comic-level settings
+        if (response.data.promptSettings) {
+          const loadedSettings = { ...DEFAULT_SETTINGS, ...response.data.promptSettings };
+          if (loadedSettings.characters) {
+            loadedSettings.characters = loadedSettings.characters.map((char, idx) => ({
+              ...char,
+              id: char.id || `char-${Date.now()}-${idx}`
+            }));
+          }
+          setSettings(loadedSettings);
+        }
       }
     } catch (error) {
       console.error('Failed to load comic:', error);
@@ -164,13 +186,32 @@ function ComicEditor() {
   const saveSettings = async () => {
     setSaving(true);
     try {
-      const updatedComic = {
-        ...comic,
-        promptSettings: settings
-      };
-      await api.put(`/comics/${id}`, updatedComic);
-      setComic(updatedComic);
-      alert('Settings saved!');
+      if (settingsSource === 'collection' && settingsCollectionId) {
+        // Save to collection
+        await api.put(`/collections/${settingsCollectionId}`, {
+          title: comic.collectionTitle || '',
+          promptSettings: settings
+        });
+        alert('Collection settings saved! (shared across all episodes)');
+      } else if (comic.collectionId && settingsSource === 'comic') {
+        // Comic has a collectionId but no Collection document yet — create one
+        await api.put(`/collections/${comic.collectionId}`, {
+          title: comic.collectionTitle || '',
+          promptSettings: settings
+        });
+        setSettingsSource('collection');
+        setSettingsCollectionId(comic.collectionId);
+        alert('Collection created and settings saved! (now shared across all episodes)');
+      } else {
+        // Save to comic directly
+        const updatedComic = {
+          ...comic,
+          promptSettings: settings
+        };
+        await api.put(`/comics/${id}`, updatedComic);
+        setComic(updatedComic);
+        alert('Settings saved!');
+      }
     } catch (error) {
       console.error('Failed to save settings:', error);
       alert('Failed to save settings');
@@ -330,11 +371,14 @@ function ComicEditor() {
     if (!name || !name.trim()) return;
 
     try {
-      // Save the reference image to the project
-      const response = await api.post('/images/save-reference', {
-        comicId: id,
-        image: refImage.base64
-      });
+      // Save the reference image to the project (or collection)
+      const savePayload = { image: refImage.base64 };
+      if (settingsSource === 'collection' && settingsCollectionId) {
+        savePayload.collectionId = settingsCollectionId;
+      } else {
+        savePayload.comicId = id;
+      }
+      const response = await api.post('/images/save-reference', savePayload);
       setSettings(prev => ({
         ...prev,
         characters: [...prev.characters, {
@@ -365,10 +409,13 @@ function ComicEditor() {
     if (!lastAssistant || !refImage) return;
 
     try {
-      const response = await api.post('/images/save-reference', {
-        comicId: id,
-        image: refImage.base64
-      });
+      const savePayload = { image: refImage.base64 };
+      if (settingsSource === 'collection' && settingsCollectionId) {
+        savePayload.collectionId = settingsCollectionId;
+      } else {
+        savePayload.comicId = id;
+      }
+      const response = await api.post('/images/save-reference', savePayload);
       setSettings(prev => ({
         ...prev,
         styleBibleImages: [...(prev.styleBibleImages || []), {
@@ -456,26 +503,46 @@ function ComicEditor() {
 
       {/* Prompt Settings Sub-tabs (outside flex row so chat aligns with content) */}
       {activeTab === 'prompt' && (
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', maxWidth: '700px' }}>
-          {settingsTabs.map(tab => (
+        <>
+          {/* Collection settings banner */}
+          {(settingsSource === 'collection' || comic.collectionId) && (
+            <div style={{
+              background: '#2d1f5e',
+              border: '1px solid #7c3aed',
+              borderRadius: '8px',
+              padding: '0.75rem 1rem',
+              marginBottom: '0.75rem',
+              maxWidth: '700px',
+              fontSize: '0.85rem',
+              color: '#c4b5fd'
+            }}>
+              {settingsSource === 'collection'
+                ? `Editing shared collection settings for "${comic.collectionTitle || settingsCollectionId}". Changes apply to all episodes.`
+                : `This comic belongs to collection "${comic.collectionTitle || comic.collectionId}". Saving will create shared collection settings.`
+              }
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', maxWidth: '700px' }}>
+            {settingsTabs.map(tab => (
+              <button
+                key={tab.id}
+                className={`btn ${settingsTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setSettingsTab(tab.id)}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+              >
+                {tab.label}
+              </button>
+            ))}
             <button
-              key={tab.id}
-              className={`btn ${settingsTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setSettingsTab(tab.id)}
-              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+              className="btn btn-primary"
+              onClick={saveSettings}
+              disabled={saving}
+              style={{ marginLeft: 'auto', padding: '0.4rem 1rem', fontSize: '0.85rem' }}
             >
-              {tab.label}
+              {saving ? 'Saving...' : settingsSource === 'collection' || comic.collectionId ? 'Save to Collection' : 'Save Settings'}
             </button>
-          ))}
-          <button
-            className="btn btn-primary"
-            onClick={saveSettings}
-            disabled={saving}
-            style={{ marginLeft: 'auto', padding: '0.4rem 1rem', fontSize: '0.85rem' }}
-          >
-            {saving ? 'Saving...' : 'Save Settings'}
-          </button>
-        </div>
+          </div>
+        </>
       )}
 
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'stretch' }}>
@@ -1086,11 +1153,11 @@ function ComicEditor() {
                   className="btn btn-primary"
                   onClick={async () => {
                     try {
-                      await api.put(`/comics/${id}`, {
-                        collectionId: comic.collectionId || null,
-                        collectionTitle: comic.collectionTitle || null,
-                        episodeNumber: comic.episodeNumber || null
-                      });
+                      const collectionData = {};
+                      if (comic.collectionId) collectionData.collectionId = comic.collectionId;
+                      if (comic.collectionTitle) collectionData.collectionTitle = comic.collectionTitle;
+                      if (comic.episodeNumber) collectionData.episodeNumber = comic.episodeNumber;
+                      await api.put(`/comics/${id}`, collectionData);
                       alert('Collection settings saved!');
                     } catch (error) {
                       alert('Failed to save collection settings');

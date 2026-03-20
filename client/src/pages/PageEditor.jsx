@@ -197,22 +197,44 @@ function generateLayoutDescription(panels) {
     return 'Full page (no panels defined yet)';
   }
 
-  const descriptions = panels.map((panel, i) => {
-    const { x, y, width, height } = panel.tapZone;
+  // Group panels into rows by similar Y position (within 5% tolerance)
+  const rows = [];
+  const sorted = [...panels].map((p, i) => ({ ...p, originalIndex: i })).sort((a, b) => a.tapZone.y - b.tapZone.y);
+  let currentRow = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    if (Math.abs(sorted[i].tapZone.y - currentRow[0].tapZone.y) < 0.05) {
+      currentRow.push(sorted[i]);
+    } else {
+      rows.push(currentRow.sort((a, b) => a.tapZone.x - b.tapZone.x));
+      currentRow = [sorted[i]];
+    }
+  }
+  rows.push(currentRow.sort((a, b) => a.tapZone.x - b.tapZone.x));
 
-    // Use center point for position detection
-    const centerY = y + height / 2;
-    const centerX = x + width / 2;
+  let desc = `The page has EXACTLY ${count} panels arranged in ${rows.length} row${rows.length > 1 ? 's' : ''}:\n\n`;
 
-    const vPos = centerY < 0.33 ? 'top' : centerY < 0.67 ? 'middle' : 'bottom';
-    const hPos = centerX < 0.33 ? 'left' : centerX < 0.67 ? 'center' : 'right';
-    const widthDesc = width > 0.9 ? 'full-width' : width > 0.6 ? 'wide' : 'half-width';
-    const heightDesc = height > 0.6 ? 'full-length' : height > 0.4 ? 'half-length' : 'third-length';
+  rows.forEach((row, rowIdx) => {
+    const rowHeight = Math.round(row[0].tapZone.height * 100);
+    desc += `Row ${rowIdx + 1} (${rowHeight}% of page height, ${row.length} panel${row.length > 1 ? 's' : ''}):\n`;
 
-    return `Panel ${i + 1} = ${vPos}-${hPos}, ${widthDesc}, ${heightDesc}`;
+    row.forEach((panel) => {
+      const { width, height } = panel.tapZone;
+      const w = Math.round(width * 100);
+      const h = Math.round(height * 100);
+      const ratio = width / height;
+      const shape = ratio > 1.4 ? 'wide landscape' : ratio > 1.1 ? 'slightly landscape' : ratio < 0.7 ? 'tall portrait' : ratio < 0.9 ? 'slightly portrait' : 'roughly square';
+      const relWidth = row.length > 1
+        ? (width > 0.55 ? ', the WIDER panel in this row' : width < 0.45 ? ', the NARROWER panel in this row' : '')
+        : '';
+
+      desc += `  - Panel ${panel.originalIndex + 1}: ${w}% wide × ${h}% tall (${shape}${relWidth})\n`;
+    });
+    desc += '\n';
   });
 
-  return `EXACTLY ${count} panels:\n${descriptions.join('\n')}`;
+  desc += `IMPORTANT: Each panel's content should be composed to fit its specific proportions. Wider panels suit horizontal scenes; taller panels suit vertical compositions. The panel sizes are NOT equal — respect the different widths and heights described above.`;
+
+  return desc;
 }
 
 function PageEditor({ isCover = false }) {
@@ -322,7 +344,7 @@ function PageEditor({ isCover = false }) {
   // Sidebar tab state
   const [sidebarTab, setSidebarTab] = useState('panels'); // 'panels', 'prompts', 'generate'
 
-  // Prompt settings (editable copy from comic - persists across pages)
+  // Prompt settings (loaded from collection or comic via resolver)
   const [promptSettings, setPromptSettings] = useState({
     styleBible: '',
     styleBibleImages: [],
@@ -331,6 +353,8 @@ function PageEditor({ isCover = false }) {
     globalDoNot: '',
     hardNegatives: ''
   });
+  const [promptSettingsSource, setPromptSettingsSource] = useState('comic');
+  const [promptSettingsCollectionId, setPromptSettingsCollectionId] = useState(null);
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
 
   // Editor mode and bubble state
@@ -634,9 +658,8 @@ function PageEditor({ isCover = false }) {
         if (response.data.cover?.bubbles) {
           setBubbles(response.data.cover.bubbles);
         }
-        if (response.data.promptSettings) {
-          setPromptSettings(prev => ({ ...prev, ...response.data.promptSettings }));
-        }
+        // Load prompt settings via resolver (after comic data loaded)
+        loadPromptSettings();
         return;
       }
 
@@ -671,12 +694,24 @@ function PageEditor({ isCover = false }) {
       if (currentPage?.bubbles) {
         setBubbles(currentPage.bubbles);
       }
-      // Load prompt settings from comic
-      if (response.data.promptSettings) {
-        setPromptSettings(prev => ({ ...prev, ...response.data.promptSettings }));
-      }
+      // Load prompt settings via resolver
+      loadPromptSettings();
     } catch (error) {
       console.error('Failed to load comic:', error);
+    }
+  };
+
+  const loadPromptSettings = async () => {
+    try {
+      const res = await api.get(`/comics/${id}/prompt-settings`);
+      const { source, collectionId, promptSettings: ps } = res.data;
+      setPromptSettingsSource(source);
+      setPromptSettingsCollectionId(collectionId);
+      if (ps) {
+        setPromptSettings(prev => ({ ...prev, ...ps }));
+      }
+    } catch (err) {
+      console.error('Failed to load prompt settings from resolver:', err);
     }
   };
 
@@ -711,13 +746,20 @@ function PageEditor({ isCover = false }) {
     }));
   };
 
-  // Save prompt settings to comic
+  // Save prompt settings to collection or comic
   const savePromptSettings = async () => {
     try {
-      const updatedComic = { ...comic, promptSettings };
-      await api.put(`/comics/${id}`, updatedComic);
-      setComic(updatedComic);
-      alert('Prompt settings saved!');
+      if (promptSettingsSource === 'collection' && promptSettingsCollectionId) {
+        await api.put(`/collections/${promptSettingsCollectionId}`, {
+          promptSettings
+        });
+        alert('Collection prompt settings saved! (shared across all episodes)');
+      } else {
+        const updatedComic = { ...comic, promptSettings };
+        await api.put(`/comics/${id}`, updatedComic);
+        setComic(updatedComic);
+        alert('Prompt settings saved!');
+      }
     } catch (error) {
       console.error('Failed to save prompt settings:', error);
       alert('Failed to save prompt settings');
@@ -1498,7 +1540,11 @@ function PageEditor({ isCover = false }) {
         setPanelsComputed(true);
       }
 
-      const updatedComic = { ...comic, promptSettings };
+      const updatedComic = { ...comic };
+      // Only include promptSettings in comic save if not from collection
+      if (promptSettingsSource !== 'collection') {
+        updatedComic.promptSettings = promptSettings;
+      }
       const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
       updatedComic.pages[pageIndex] = {
         ...page,
@@ -4480,7 +4526,10 @@ function PageEditor({ isCover = false }) {
                                           setPanels(panelsToSave);
                                           setPanelsComputed(true);
                                         }
-                                        const updatedComic = { ...comic, promptSettings };
+                                        const updatedComic = { ...comic };
+                                        if (promptSettingsSource !== 'collection') {
+                                          updatedComic.promptSettings = promptSettings;
+                                        }
                                         const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
                                         updatedComic.pages[pageIndex] = {
                                           ...page,
