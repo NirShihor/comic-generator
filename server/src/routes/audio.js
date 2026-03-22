@@ -402,7 +402,7 @@ router.post('/translate', async (req, res) => {
 // Count unique words for word audio generation
 router.post('/word-audio-count', async (req, res) => {
   try {
-    const { comicId } = req.body;
+    const { comicId, forceRegenerate } = req.body;
     if (!comicId) return res.status(400).json({ error: 'comicId is required' });
 
     const comic = await Comic.findOne({ id: comicId });
@@ -412,12 +412,14 @@ router.post('/word-audio-count', async (req, res) => {
     const wordsDir = path.join(PROJECTS_DIR, comicId, 'audio', 'words');
 
     let alreadyGenerated = 0;
-    try {
-      const existingFiles = await fs.readdir(wordsDir);
-      const existingSet = new Set(existingFiles.map(f => f.replace('.mp3', '')));
-      alreadyGenerated = uniqueWords.filter(w => existingSet.has(w)).length;
-    } catch (e) {
-      // Directory doesn't exist yet
+    if (!forceRegenerate) {
+      try {
+        const existingFiles = await fs.readdir(wordsDir);
+        const existingSet = new Set(existingFiles.map(f => f.replace('.mp3', '')));
+        alreadyGenerated = uniqueWords.filter(w => existingSet.has(w)).length;
+      } catch (e) {
+        // Directory doesn't exist yet
+      }
     }
 
     res.json({
@@ -441,7 +443,8 @@ router.post('/generate-word-audio', async (req, res) => {
       stability = 0.5,
       similarityBoost = 0.75,
       speed = 1.0,
-      languageCode
+      languageCode,
+      forceRegenerate = false
     } = req.body;
 
     if (!comicId || !voiceId) {
@@ -460,17 +463,19 @@ router.post('/generate-word-audio', async (req, res) => {
 
     // Check which files already exist
     let existingSet = new Set();
-    try {
-      const existingFiles = await fs.readdir(wordsDir);
-      existingSet = new Set(existingFiles.map(f => f.replace('.mp3', '')));
-    } catch (e) {}
+    if (!forceRegenerate) {
+      try {
+        const existingFiles = await fs.readdir(wordsDir);
+        existingSet = new Set(existingFiles.map(f => f.replace('.mp3', '')));
+      } catch (e) {}
+    }
 
     let generated = 0;
     let skipped = 0;
     let failed = 0;
     const errors = [];
 
-    console.log(`Word audio: ${uniqueWords.length} unique words, ${existingSet.size} already on disk`);
+    console.log(`Word audio: ${uniqueWords.length} unique words, ${existingSet.size} already on disk${forceRegenerate ? ' (force regenerate)' : ''}`);
 
     for (const word of uniqueWords) {
       if (existingSet.has(word)) {

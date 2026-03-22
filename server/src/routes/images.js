@@ -5,7 +5,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const OpenAI = require('openai');
-// Load reference images from disk as File objects for the OpenAI API
+const sharp = require('sharp');
+
+// Load reference images from disk, resize to reduce payload, and return as File objects
 async function loadReferenceImages(imagePaths) {
   const files = [];
   for (const imgPath of imagePaths) {
@@ -13,15 +15,15 @@ async function loadReferenceImages(imagePaths) {
     const fullPath = path.join(__dirname, '../..', imgPath);
     try {
       await fs.access(fullPath);
-      const buffer = await fs.readFile(fullPath);
-      const ext = path.extname(fullPath).toLowerCase();
-      const mimeType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
-        : ext === '.webp' ? 'image/webp'
-        : 'image/png';
-      const filename = path.basename(fullPath);
-      files.push(new File([buffer], filename, { type: mimeType }));
+      // Resize to max 512px on longest side and convert to JPEG for smaller payload
+      const resizedBuffer = await sharp(fullPath)
+        .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+      const filename = path.basename(fullPath, path.extname(fullPath)) + '.jpg';
+      files.push(new File([resizedBuffer], filename, { type: 'image/jpeg' }));
     } catch (err) {
-      console.log(`Reference image not found, skipping: ${fullPath}`);
+      console.log(`Reference image not found or resize failed, skipping: ${fullPath}`);
     }
   }
   return files;
@@ -131,19 +133,21 @@ router.post('/generate-page', async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY
     });
 
-    // Truncate to stay within OpenAI's 32000 character limit
-    let finalPrompt = prompt;
-    if (finalPrompt.length > 32000) {
-      console.log(`Prompt too long (${finalPrompt.length} chars), truncating to 32000`);
-      finalPrompt = finalPrompt.substring(0, 32000);
-    }
-
     // Load reference images if provided
     const refStreams = referenceImages && referenceImages.length > 0
       ? await loadReferenceImages(referenceImages)
       : [];
 
-    console.log(`Generating with OpenAI, prompt length: ${finalPrompt.length}, reference images: ${refStreams.length}`);
+    // Truncate prompt — use a lower limit when sending reference images
+    // because the total multipart payload (images + prompt) has a size limit
+    let finalPrompt = prompt;
+    const maxPromptLen = 32000;
+    if (finalPrompt.length > maxPromptLen) {
+      console.log(`Page prompt too long (${finalPrompt.length} chars), truncating to ${maxPromptLen}`);
+      finalPrompt = finalPrompt.substring(0, maxPromptLen);
+    }
+
+    console.log(`Generating page with OpenAI, prompt length: ${finalPrompt.length}, reference images: ${refStreams.length}`);
 
     let response;
     if (refStreams.length > 0) {
@@ -214,17 +218,19 @@ router.post('/generate-panel', async (req, res) => {
       size = '1536x1024';
     }
 
-    // Truncate to stay within OpenAI's 32000 character limit
-    let finalPrompt = prompt;
-    if (finalPrompt.length > 32000) {
-      console.log(`Panel prompt too long (${finalPrompt.length} chars), truncating to 32000`);
-      finalPrompt = finalPrompt.substring(0, 32000);
-    }
-
     // Load reference images if provided
     const refStreams = referenceImages && referenceImages.length > 0
       ? await loadReferenceImages(referenceImages)
       : [];
+
+    // Truncate prompt — use a lower limit when sending reference images
+    // because the total multipart payload (images + prompt) has a size limit
+    let finalPrompt = prompt;
+    const maxPromptLen = 32000;
+    if (finalPrompt.length > maxPromptLen) {
+      console.log(`Panel prompt too long (${finalPrompt.length} chars), truncating to ${maxPromptLen}`);
+      finalPrompt = finalPrompt.substring(0, maxPromptLen);
+    }
 
     console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${finalPrompt.length}, reference images: ${refStreams.length}`);
 

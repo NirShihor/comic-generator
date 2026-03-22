@@ -31,6 +31,7 @@ function ComicEditor() {
   const [wordAudioModel, setWordAudioModel] = useState('eleven_v3');
   const [wordAudioGenerating, setWordAudioGenerating] = useState(false);
   const [wordAudioProgress, setWordAudioProgress] = useState(null);
+  const [wordAudioForceRegenerate, setWordAudioForceRegenerate] = useState(false);
 
   // Reference builder state
   const [refImage, setRefImage] = useState(null);
@@ -1465,12 +1466,13 @@ function ComicEditor() {
                   setWordAudioGenerating(true);
                   setWordAudioProgress(null);
                   try {
-                    const countRes = await api.post('/audio/word-audio-count', { comicId: id });
+                    const countRes = await api.post('/audio/word-audio-count', { comicId: id, forceRegenerate: wordAudioForceRegenerate });
                     setWordAudioProgress({ ...countRes.data, generated: 0, failed: 0, done: false });
                     const genRes = await api.post('/audio/generate-word-audio', {
                       comicId: id,
                       voiceId: wordAudioVoiceId,
-                      modelId: wordAudioModel
+                      modelId: wordAudioModel,
+                      forceRegenerate: wordAudioForceRegenerate
                     }, { timeout: 600000 });
                     setWordAudioProgress(prev => ({ ...prev, generated: genRes.data.generated, skipped: genRes.data.skipped, failed: genRes.data.failed, done: true }));
                   } catch (error) {
@@ -1495,6 +1497,15 @@ function ComicEditor() {
                 {wordAudioGenerating ? 'Generating...' : 'Generate Word Audio'}
               </button>
             </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>
+              <input
+                type="checkbox"
+                checked={wordAudioForceRegenerate}
+                onChange={(e) => setWordAudioForceRegenerate(e.target.checked)}
+              />
+              Force regenerate all (overwrite existing files)
+            </label>
 
             {wordAudioProgress && (
               <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: '4px', padding: '1rem' }}>
