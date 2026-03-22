@@ -5,6 +5,29 @@ const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const OpenAI = require('openai');
+const sharp = require('sharp');
+
+// Load reference images from disk, resize to reduce payload, and return as File objects
+async function loadReferenceImages(imagePaths) {
+  const files = [];
+  for (const imgPath of imagePaths) {
+    // imgPath is like /projects/comic-xxx/images/ref-xxx.png
+    const fullPath = path.join(__dirname, '../..', imgPath);
+    try {
+      await fs.access(fullPath);
+      // Resize to max 512px on longest side and convert to JPEG for smaller payload
+      const resizedBuffer = await sharp(fullPath)
+        .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+      const filename = path.basename(fullPath, path.extname(fullPath)) + '.jpg';
+      files.push(new File([resizedBuffer], filename, { type: 'image/jpeg' }));
+    } catch (err) {
+      console.log(`Reference image not found or resize failed, skipping: ${fullPath}`);
+    }
+  }
+  return files;
+}
 
 // Configure multer for image uploads
 const storage = multer.diskStorage({
@@ -98,7 +121,7 @@ router.post('/generate', async (req, res) => {
 // Generate comic page using OpenAI
 router.post('/generate-page', async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, referenceImages } = req.body;
 
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({
@@ -110,22 +133,41 @@ router.post('/generate-page', async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY
     });
 
-    // Truncate to stay within OpenAI's 32000 character limit
+    // Load reference images if provided
+    const refStreams = referenceImages && referenceImages.length > 0
+      ? await loadReferenceImages(referenceImages)
+      : [];
+
+    // Truncate prompt — use a lower limit when sending reference images
+    // because the total multipart payload (images + prompt) has a size limit
     let finalPrompt = prompt;
-    if (finalPrompt.length > 32000) {
-      console.log(`Prompt too long (${finalPrompt.length} chars), truncating to 32000`);
-      finalPrompt = finalPrompt.substring(0, 32000);
+    const maxPromptLen = 32000;
+    if (finalPrompt.length > maxPromptLen) {
+      console.log(`Page prompt too long (${finalPrompt.length} chars), truncating to ${maxPromptLen}`);
+      finalPrompt = finalPrompt.substring(0, maxPromptLen);
     }
 
-    console.log('Generating with OpenAI, prompt length:', finalPrompt.length);
+    console.log(`Generating page with OpenAI, prompt length: ${finalPrompt.length}, reference images: ${refStreams.length}`);
 
-    const response = await openai.images.generate({
-      model: 'gpt-image-1',
-      prompt: finalPrompt,
-      n: 1,
-      size: '1024x1536',
-      quality: 'high'
-    });
+    let response;
+    if (refStreams.length > 0) {
+      response = await openai.images.edit({
+        model: 'gpt-image-1',
+        image: refStreams,
+        prompt: finalPrompt,
+        n: 1,
+        size: '1024x1536',
+        quality: 'high'
+      });
+    } else {
+      response = await openai.images.generate({
+        model: 'gpt-image-1',
+        prompt: finalPrompt,
+        n: 1,
+        size: '1024x1536',
+        quality: 'high'
+      });
+    }
 
     const imageData = response.data[0];
     let buffer;
@@ -155,7 +197,7 @@ router.post('/generate-page', async (req, res) => {
 // Generate single panel image
 router.post('/generate-panel', async (req, res) => {
   try {
-    const { prompt, panelId, aspectRatio = 'square' } = req.body;
+    const { prompt, panelId, aspectRatio = 'square', referenceImages } = req.body;
 
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({
@@ -176,22 +218,41 @@ router.post('/generate-panel', async (req, res) => {
       size = '1536x1024';
     }
 
-    // Truncate to stay within OpenAI's 32000 character limit
+    // Load reference images if provided
+    const refStreams = referenceImages && referenceImages.length > 0
+      ? await loadReferenceImages(referenceImages)
+      : [];
+
+    // Truncate prompt — use a lower limit when sending reference images
+    // because the total multipart payload (images + prompt) has a size limit
     let finalPrompt = prompt;
-    if (finalPrompt.length > 32000) {
-      console.log(`Panel prompt too long (${finalPrompt.length} chars), truncating to 32000`);
-      finalPrompt = finalPrompt.substring(0, 32000);
+    const maxPromptLen = 32000;
+    if (finalPrompt.length > maxPromptLen) {
+      console.log(`Panel prompt too long (${finalPrompt.length} chars), truncating to ${maxPromptLen}`);
+      finalPrompt = finalPrompt.substring(0, maxPromptLen);
     }
 
-    console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${finalPrompt.length}`);
+    console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${finalPrompt.length}, reference images: ${refStreams.length}`);
 
-    const response = await openai.images.generate({
-      model: 'gpt-image-1',
-      prompt: finalPrompt,
-      n: 1,
-      size: size,
-      quality: 'high'
-    });
+    let response;
+    if (refStreams.length > 0) {
+      response = await openai.images.edit({
+        model: 'gpt-image-1',
+        image: refStreams,
+        prompt: finalPrompt,
+        n: 1,
+        size: size,
+        quality: 'high'
+      });
+    } else {
+      response = await openai.images.generate({
+        model: 'gpt-image-1',
+        prompt: finalPrompt,
+        n: 1,
+        size: size,
+        quality: 'high'
+      });
+    }
 
     const imageData = response.data[0];
     let buffer;
@@ -246,6 +307,34 @@ router.post('/save-to-project', async (req, res) => {
     res.json({
       filename: newFilename,
       path: `/projects/${comicId}/images/${newFilename}`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save a base64 reference image to a comic or collection project
+router.post('/save-reference', async (req, res) => {
+  try {
+    const { comicId, collectionId, image } = req.body;
+    if ((!comicId && !collectionId) || !image) {
+      return res.status(400).json({ error: 'comicId or collectionId, and image (base64) are required' });
+    }
+
+    // Use collection path if collectionId is provided, otherwise comic path
+    const projectFolder = collectionId
+      ? path.join('collections', collectionId)
+      : comicId;
+    const destDir = path.join(__dirname, '../../projects', projectFolder, 'images');
+    await fs.mkdir(destDir, { recursive: true });
+
+    const filename = `ref-${uuidv4()}.png`;
+    const destPath = path.join(destDir, filename);
+    await fs.writeFile(destPath, Buffer.from(image, 'base64'));
+
+    res.json({
+      filename,
+      path: `/projects/${projectFolder}/images/${filename}`
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

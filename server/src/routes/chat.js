@@ -91,6 +91,79 @@ router.post('/message', async (req, res) => {
   }
 });
 
+// Describe/refine a reference image for use in prompt settings
+router.post('/describe-image', async (req, res) => {
+  try {
+    const { image, messages } = req.body;
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    }
+
+    if (!image) {
+      return res.status(400).json({ error: 'image (base64) is required' });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const systemPrompt = `You are a visual description specialist for comic book art direction. Your job is to produce detailed, precise descriptions of characters, objects, buildings, and scenes from reference images. These descriptions will be used as prompts for AI image generation, so they must be specific and consistent.
+
+When describing a reference image, include:
+- Physical appearance: build, proportions, distinguishing features
+- Face: shape, expression defaults, notable features
+- Hair: style, color, length, texture
+- Clothing: every garment, colors, patterns, accessories
+- Props or objects they carry
+- Any notable style or artistic characteristics
+- For buildings/objects: materials, colors, architectural style, condition, distinguishing details
+
+Write in a direct, descriptive style. Use comma-separated visual tags where appropriate. Do not narrate or tell a story — just describe what you see in concrete visual terms suitable for image generation prompts.`;
+
+    const openaiMessages = [
+      { role: 'system', content: systemPrompt }
+    ];
+
+    // Add conversation history (previous refinements)
+    if (messages && messages.length > 0) {
+      for (const msg of messages) {
+        if (msg.role === 'user' && msg.isInitial) {
+          // First message includes the image
+          openaiMessages.push({
+            role: 'user',
+            content: [
+              { type: 'text', text: msg.content },
+              { type: 'image_url', image_url: { url: `data:image/png;base64,${image}`, detail: 'high' } }
+            ]
+          });
+        } else {
+          openaiMessages.push({ role: msg.role, content: msg.content });
+        }
+      }
+    } else {
+      // First call — just the image with a default prompt
+      openaiMessages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe this reference image in detail for use in comic book art direction prompts.' },
+          { type: 'image_url', image_url: { url: `data:image/png;base64,${image}`, detail: 'high' } }
+        ]
+      });
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-5.4',
+      messages: openaiMessages,
+      max_completion_tokens: 4000,
+      temperature: 0.5
+    });
+
+    res.json({ message: completion.choices[0].message.content });
+  } catch (error) {
+    console.error('Describe image error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Word lookup - get text, meaning, and baseForm for a clicked word or phrase
 router.post('/word-lookup', async (req, res) => {
   try {

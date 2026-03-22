@@ -85,6 +85,62 @@ router.get('/', async (req, res) => {
 });
 
 // Get single comic project
+// Resolve prompt settings: from collection if comic belongs to one, otherwise from comic
+router.get('/:id/prompt-settings', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    // If comic belongs to a collection, try loading from collection
+    if (comic.collectionId) {
+      const Collection = require('../models/Collection');
+      const collection = await Collection.findOne({ id: comic.collectionId });
+      if (collection && collection.promptSettings) {
+        return res.json({
+          source: 'collection',
+          collectionId: comic.collectionId,
+          collectionTitle: collection.title || comic.collectionTitle || '',
+          promptSettings: collection.promptSettings
+        });
+      }
+
+      // No Collection document yet — look for a sibling comic that has prompt settings
+      const sibling = await Comic.findOne({
+        collectionId: comic.collectionId,
+        id: { $ne: comic.id },
+        'promptSettings.styleBible': { $exists: true, $ne: '' }
+      });
+      if (sibling && sibling.promptSettings) {
+        // Auto-create the Collection document from the sibling's settings
+        const newCollection = new Collection({
+          id: comic.collectionId,
+          title: comic.collectionTitle || sibling.collectionTitle || '',
+          promptSettings: sibling.promptSettings
+        });
+        await newCollection.save();
+        return res.json({
+          source: 'collection',
+          collectionId: comic.collectionId,
+          collectionTitle: newCollection.title,
+          promptSettings: sibling.promptSettings
+        });
+      }
+    }
+
+    // Fallback to comic-level settings
+    res.json({
+      source: 'comic',
+      collectionId: comic.collectionId || null,
+      collectionTitle: comic.collectionTitle || '',
+      promptSettings: comic.promptSettings || {}
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const comic = await Comic.findOne({ id: req.params.id });
@@ -418,13 +474,33 @@ router.post('/:id/export-full', async (req, res) => {
       const pageImage = page.bakedImage || page.masterImage;
       if (pageImage) {
         const pageNum = page.pageNumber;
-        const cleanMasterImage = pageImage.split('?')[0];
-        const sourceImagePath = path.join(__dirname, '../..', cleanMasterImage);
+        const cleanPageImage = pageImage.split('?')[0];
+        const sourceImagePath = path.join(__dirname, '../..', cleanPageImage);
 
         const masterDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}.png`);
         try {
           await fs.copyFile(sourceImagePath, masterDestPath);
           copiedImages.push(`${comicSlug}_p${pageNum}.png`);
+
+          // If there's a baked image, also export the raw master as _no_text variant
+          // for Speaking Practice Mode in the reader app
+          const rawMasterPath = page.masterImage
+            ? path.join(__dirname, '../..', page.masterImage.split('?')[0])
+            : null;
+          const hasBakedImage = page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage;
+
+          // Determine the source for panel crops and no_text variants
+          const rawImagePath = hasBakedImage ? rawMasterPath : sourceImagePath;
+
+          if (hasBakedImage && rawMasterPath) {
+            const noTextDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_no_text.png`);
+            try {
+              await fs.copyFile(rawMasterPath, noTextDestPath);
+              copiedImages.push(`${comicSlug}_p${pageNum}_no_text.png`);
+            } catch (e) {
+              console.log('Raw master image not found for no_text:', rawMasterPath);
+            }
+          }
 
           const metadata = await sharp(sourceImagePath).metadata();
           const imgWidth = metadata.width;
@@ -432,6 +508,7 @@ router.post('/:id/export-full', async (req, res) => {
 
           for (const panel of page.panels || []) {
             const panelNum = panel.panelOrder;
+            // Panel crop from baked image (with text)
             const sceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}.png`);
             const cropped = await cropAndSaveScene(
               sourceImagePath,
@@ -442,6 +519,26 @@ router.post('/:id/export-full', async (req, res) => {
             );
             if (cropped) {
               copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}.png`);
+            }
+
+            // Panel crop from raw master (no text) for Speaking Practice Mode
+            if (hasBakedImage && rawMasterPath) {
+              const noTextSceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}_no_text.png`);
+              try {
+                const rawMetadata = await sharp(rawMasterPath).metadata();
+                const rawCropped = await cropAndSaveScene(
+                  rawMasterPath,
+                  noTextSceneDestPath,
+                  panel.tapZone,
+                  rawMetadata.width,
+                  rawMetadata.height
+                );
+                if (rawCropped) {
+                  copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}_no_text.png`);
+                }
+              } catch (e) {
+                console.log('Failed to crop no_text panel:', e.message);
+              }
             }
           }
         } catch (e) {
@@ -555,6 +652,7 @@ function transformToReaderFormat(comic, comicSlug) {
                     ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
                     ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
                     ...(word.vocabQuiz && { vocabQuiz: true }),
+                    ...(word.manual && { manual: true }),
                     ...(wText && { wordAudioUrl: `words/${wText}` }),
                     ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
                   };
@@ -573,21 +671,42 @@ function transformToReaderFormat(comic, comicSlug) {
       id: `${comicSlug}-page-${page.pageNumber}`,
       pageNumber: pageNum,
       masterImage: `${comicSlug}_p${page.pageNumber}`,
+      // Include noTextImage when a baked image exists (raw master is exported as _no_text)
+      ...(page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage && {
+        noTextImage: `${comicSlug}_p${page.pageNumber}_no_text`
+      }),
       panels: (page.panels || []).map(panel => {
         const panelNum = panel.panelOrder;
+        const hasBakedPage = page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage;
 
+        // Check if any part of the bubble overlaps the panel tap zone
         const panelBubbles = (page.bubbles || []).filter(bubble => {
-          const bubbleCenterX = bubble.x + (bubble.width || 0) / 2;
-          const bubbleCenterY = bubble.y + (bubble.height || 0) / 2;
-          return bubbleCenterX >= panel.tapZone.x &&
-                 bubbleCenterX <= panel.tapZone.x + panel.tapZone.width &&
-                 bubbleCenterY >= panel.tapZone.y &&
-                 bubbleCenterY <= panel.tapZone.y + panel.tapZone.height;
+          const bx = bubble.x || 0;
+          const by = bubble.y || 0;
+          const bw = bubble.width || 0;
+          const bh = bubble.height || 0;
+          const tx = panel.tapZone.x;
+          const ty = panel.tapZone.y;
+          const tw = panel.tapZone.width;
+          const th = panel.tapZone.height;
+          return bx + bw > tx && bx < tx + tw &&
+                 by + bh > ty && by < ty + th;
+        }).sort((a, b) => {
+          // Sort by reading order: top-to-bottom, left-to-right as tiebreaker
+          const ay = a.y || 0;
+          const by_ = b.y || 0;
+          const ax = a.x || 0;
+          const bx = b.x || 0;
+          if (Math.abs(ay - by_) < 0.02) return ax - bx; // Same row: left to right
+          return ay - by_; // Top to bottom
         });
 
         return {
           id: `${comicSlug}-panel-${page.pageNumber}-${panelNum}`,
           artworkImage: `${comicSlug}_p${page.pageNumber}_s${panelNum}`,
+          ...(hasBakedPage && {
+            noTextImage: `${comicSlug}_p${page.pageNumber}_s${panelNum}_no_text`
+          }),
           panelOrder: panelNum,
           tapZone: {
             x: panel.tapZone.x,
@@ -600,6 +719,7 @@ function transformToReaderFormat(comic, comicSlug) {
             return {
               id: bubbleId,
               type: bubble.type || 'speech',
+              ...(bubble.isSoundEffect && { isSoundEffect: true }),
               position: {
                 x: bubble.x,
                 y: bubble.y,
@@ -613,15 +733,22 @@ function transformToReaderFormat(comic, comicSlug) {
                   text: sentence.text || '',
                   translation: sentence.translation || '',
                   audioUrl: sentence.audioUrl || '',
-                  words: (sentence.words || []).map(word => ({
-                    id: `${comicSlug}-w${wordCounter++}`,
-                    text: word.text || '',
-                    meaning: word.meaning || '',
-                    baseForm: word.baseForm || word.text || '',
-                    ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
-                    ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
-                    ...(word.vocabQuiz && { vocabQuiz: true })
-                  }))
+                  words: (sentence.words || []).map(word => {
+                    const wText = sanitizeWordForFilename(word.text);
+                    const wBase = sanitizeWordForFilename(word.baseForm || word.text);
+                    return {
+                      id: `${comicSlug}-w${wordCounter++}`,
+                      text: word.text || '',
+                      meaning: word.meaning || '',
+                      baseForm: word.baseForm || word.text || '',
+                      ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
+                      ...(word.endTimeMs != null && { endTimeMs: word.endTimeMs }),
+                      ...(word.vocabQuiz && { vocabQuiz: true }),
+                      ...(word.manual && { manual: true }),
+                      ...(wText && { wordAudioUrl: `words/${wText}` }),
+                      ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+                    };
+                  })
                 };
               })
             };
@@ -643,19 +770,30 @@ function transformToReaderFormat(comic, comicSlug) {
     language: comic.language || 'es',
     targetLanguage: comic.targetLanguage || 'en',
     version: '1.0',
+    ...(comic.collectionId && { collectionId: comic.collectionId }),
+    ...(comic.collectionTitle && { collectionTitle: comic.collectionTitle }),
+    ...(comic.episodeNumber && { episodeNumber: comic.episodeNumber }),
     pages,
     reviewWords: pages.flatMap(page =>
       (page.panels || []).flatMap(panel =>
         (panel.bubbles || []).flatMap(bubble =>
           (bubble.sentences || []).flatMap(sentence =>
-            (sentence.words || []).filter(w => w.vocabQuiz).map(w => ({
-              id: w.id,
-              text: w.text,
-              meaning: w.meaning,
-              baseForm: w.baseForm,
-              ...(w.wordAudioUrl && { wordAudioUrl: w.wordAudioUrl }),
-              ...(w.baseFormAudioUrl && { baseFormAudioUrl: w.baseFormAudioUrl })
-            }))
+            (sentence.words || []).filter(w => w.vocabQuiz).map(w => {
+              const wText = sanitizeWordForFilename(w.text);
+              const wBase = sanitizeWordForFilename(w.baseForm || w.text);
+              return {
+                word: {
+                  id: w.id,
+                  text: w.text,
+                  meaning: w.meaning,
+                  baseForm: w.baseForm,
+                  ...(wText && { wordAudioUrl: `words/${wText}` }),
+                  ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+                },
+                panelId: panel.id,
+                pageId: page.id
+              };
+            })
           )
         )
       )

@@ -6,6 +6,7 @@ const cors = require('cors');
 const connectDB = require('./config/database');
 
 const comicRoutes = require('./routes/comics');
+const collectionRoutes = require('./routes/collections');
 const imageRoutes = require('./routes/images');
 const audioRoutes = require('./routes/audio');
 const chatRoutes = require('./routes/chat');
@@ -27,6 +28,7 @@ app.use('/projects', express.static(path.join(__dirname, '../projects')));
 
 // Routes
 app.use('/api/comics', comicRoutes);
+app.use('/api/collections', collectionRoutes);
 app.use('/api/images', imageRoutes);
 app.use('/api/audio', audioRoutes);
 app.use('/api/chat', chatRoutes);
