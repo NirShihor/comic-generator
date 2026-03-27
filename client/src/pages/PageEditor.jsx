@@ -3,6 +3,72 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import html2canvas from 'html2canvas';
 
+// Simple color picker popup with swatches + custom hex input
+function ColorPicker({ value, onChange, onClick, disabled, style }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const colors = [
+    '#ffffff', '#000000', '#f44336', '#e91e63', '#9c27b0', '#673ab7',
+    '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50',
+    '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722',
+    '#795548', '#9e9e9e', '#607d8b', '#fffde7', '#fff9c4', '#f3e5f5'
+  ];
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <div
+        onClick={(e) => { e.stopPropagation(); onClick?.(e); if (!disabled) setOpen(!open); }}
+        style={{
+          ...style,
+          background: value,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.4 : 1
+        }}
+      />
+      {open && !disabled && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute', top: '100%', left: 0, zIndex: 1000,
+            background: '#fff', border: '1px solid #ccc', borderRadius: '6px',
+            padding: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '3px',
+            width: '156px', marginTop: '2px'
+          }}
+        >
+          {colors.map(c => (
+            <div
+              key={c}
+              onClick={() => { onChange({ target: { value: c } }); setOpen(false); }}
+              style={{
+                width: '22px', height: '22px', background: c, borderRadius: '3px',
+                border: c === value ? '2px solid #333' : '1px solid #ddd',
+                cursor: 'pointer'
+              }}
+            />
+          ))}
+          <input
+            type="color"
+            value={value}
+            onChange={(e) => { onChange(e); setOpen(false); }}
+            style={{ gridColumn: '1 / -1', width: '100%', height: '24px', marginTop: '3px', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '3px' }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Strip audio enhancement tags like [sighs], [pause], [ominous, slowly] and quotation marks from text
 function stripAudioTags(text) {
   if (!text) return text;
@@ -273,7 +339,10 @@ function PageEditor({ isCover = false }) {
   // Panel-by-panel generation state
   // Each panel can have: { path, generating, error, fitMode: 'stretch'|'crop', cropX: 0, cropY: 0, zoom: 1 }
   const [panelImages, setPanelImages] = useState({});
+  const abortControllers = useRef({}); // { [panelId]: AbortController }
   const [panelRefinePrompts, setPanelRefinePrompts] = useState({});
+  // Per-panel framing options (checkboxes): { [panelId]: { subjectSmall: true, ... } }
+  const [panelFraming, setPanelFraming] = useState({});
   const [generatingAllPanels, setGeneratingAllPanels] = useState(false);
   const [showCompositePreview, setShowCompositePreview] = useState(false);
   const compositeCanvasRef = useRef(null);
@@ -358,6 +427,26 @@ function PageEditor({ isCover = false }) {
   const [promptSettingsSource, setPromptSettingsSource] = useState('comic');
   const [promptSettingsCollectionId, setPromptSettingsCollectionId] = useState(null);
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
+
+  // Default bubble style (comic-level)
+  const [defaultBubbleStyle, setDefaultBubbleStyle] = useState({
+    bgColor: '#ffffff',
+    textColor: '#000000',
+    borderColor: '#000000',
+    borderWidth: 2.5,
+    fontId: 'patrick-hand',
+    fontSize: 15
+  });
+
+  // Toast notification
+  const [toast, setToast] = useState(null);
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const toastTimer = useRef(null);
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2000);
+  };
 
   // Editor mode and bubble state
   const [editorMode, setEditorMode] = useState(isCover ? 'bubbles' : 'layout'); // 'layout' or 'bubbles'
@@ -555,20 +644,12 @@ function PageEditor({ isCover = false }) {
           });
           const lookupResults = lookupResponse.data;
           if (Array.isArray(lookupResults)) {
-            const nameIds = new Set();
             wordsNeedingLookup.forEach((w, i) => {
-              if (lookupResults[i]) {
-                if (lookupResults[i].isName) {
-                  nameIds.add(w.id);
-                } else {
-                  w.meaning = cleanWord(lookupResults[i].meaning || '');
-                  w.baseForm = cleanWord(lookupResults[i].baseForm || '');
-                }
+              if (lookupResults[i] && !lookupResults[i].isName) {
+                w.meaning = cleanWord(lookupResults[i].meaning || '');
+                w.baseForm = cleanWord(lookupResults[i].baseForm || '');
               }
             });
-            if (nameIds.size > 0) {
-              allWords.splice(0, allWords.length, ...allWords.filter(w => !nameIds.has(w.id)));
-            }
           }
         } catch (lookupError) {
           console.error('Batch word lookup failed (words saved without meanings):', lookupError);
@@ -583,12 +664,73 @@ function PageEditor({ isCover = false }) {
         })};
       }));
 
-      alert('Audio saved successfully!');
+      showToast('Audio saved!');
     } catch (error) {
       console.error('Failed to save audio:', error);
       alert('Failed to save audio: ' + error.message);
     } finally {
       setSavingAudio(prev => ({ ...prev, [sentenceId]: false }));
+    }
+  };
+
+  // Generate and save audio for an alternative sentence text
+  const generateAlternativeAudio = async (bubbleId, sentenceId, altIndex) => {
+    const bubble = bubbles.find(b => b.id === bubbleId);
+    const sentence = bubble?.sentences?.find(s => s.id === sentenceId);
+    const alt = sentence?.alternatives?.[altIndex];
+    if (!alt?.text || !selectedVoiceId) {
+      alert('Please enter alternative text and select a voice');
+      return;
+    }
+
+    const altKey = `${sentenceId}-alt-${altIndex}`;
+    setGeneratingAudio(prev => ({ ...prev, [altKey]: true }));
+    try {
+      // Generate audio
+      const response = await api.post('/audio/generate', {
+        text: alt.text,
+        voice_id: selectedVoiceId,
+        model_id: audioModel,
+        ...audioSettings
+      });
+
+      // Save to project
+      const pageNum = page?.pageNumber || 0;
+      const bubbleIdx = bubbles.indexOf(bubble) + 1;
+      const sentenceIdx = (bubble.sentences || []).indexOf(sentence) + 1;
+      const audioName = `${comic.title.toLowerCase().replace(/\s+/g, '_')}_p${pageNum}_s${sentenceIdx}_b${bubbleIdx}_alt${altIndex + 1}`;
+      await api.post('/audio/save-to-project', {
+        comicId: id,
+        filename: response.data.filename,
+        audioName
+      });
+
+      // Update the alternative with the audioUrl and save to DB
+      const updatedAlts = [...(sentence.alternatives || [])];
+      updatedAlts[altIndex] = { ...updatedAlts[altIndex], audioUrl: audioName };
+
+      setBubbles(prev => {
+        const newBubbles = prev.map(b => {
+          if (b.id !== bubbleId) return b;
+          return { ...b, sentences: (b.sentences || []).map(s => {
+            if (s.id !== sentenceId) return s;
+            return { ...s, alternatives: updatedAlts };
+          })};
+        });
+        // Persist to DB
+        const updatedComic = { ...comic };
+        const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+        if (pageIndex >= 0) {
+          updatedComic.pages[pageIndex] = { ...updatedComic.pages[pageIndex], bubbles: newBubbles };
+          api.put(`/comics/${id}`, updatedComic).catch(err => console.error('Failed to save alternatives:', err));
+        }
+        return newBubbles;
+      });
+    } catch (error) {
+      console.error('Failed to generate alternative audio:', error);
+      alert('Failed to generate alternative audio: ' + error.message);
+    } finally {
+      setGeneratingAudio(prev => ({ ...prev, [altKey]: false }));
     }
   };
 
@@ -639,6 +781,11 @@ function PageEditor({ isCover = false }) {
     try {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
+
+      // Load default bubble style if saved on comic
+      if (response.data.defaultBubbleStyle) {
+        setDefaultBubbleStyle(prev => ({ ...prev, ...response.data.defaultBubbleStyle }));
+      }
 
       if (isCover) {
         // Create a virtual "page" for the cover
@@ -692,6 +839,14 @@ function PageEditor({ isCover = false }) {
       if (currentPage?.panels && currentPage.panels.length > 0) {
         setPanels(currentPage.panels);
         setPanelsComputed(true);
+        // Restore panel images from saved artworkImage
+        const restored = {};
+        currentPage.panels.forEach(p => {
+          if (p.artworkImage) {
+            restored[p.id] = { path: p.artworkImage, generating: null, error: null, fitMode: 'stretch', cropX: 0, cropY: 0, zoom: 1 };
+          }
+        });
+        if (Object.keys(restored).length > 0) setPanelImages(restored);
       }
       if (currentPage?.bubbles) {
         setBubbles(currentPage.bubbles);
@@ -755,12 +910,12 @@ function PageEditor({ isCover = false }) {
         await api.put(`/collections/${promptSettingsCollectionId}`, {
           promptSettings
         });
-        alert('Collection prompt settings saved! (shared across all episodes)');
+        showToast('Collection prompt settings saved!');
       } else {
         const updatedComic = { ...comic, promptSettings };
         await api.put(`/comics/${id}`, updatedComic);
         setComic(updatedComic);
-        alert('Prompt settings saved!');
+        showToast('Prompt settings saved!');
       }
     } catch (error) {
       console.error('Failed to save prompt settings:', error);
@@ -1010,12 +1165,14 @@ function PageEditor({ isCover = false }) {
       width: 0.2,
       height: 0.1,
       type: 'speech', // 'speech', 'thought', 'narration', 'image'
-      fontId: 'patrick-hand', // default font
-      fontSize: 15,
+      fontId: defaultBubbleStyle.fontId || 'patrick-hand',
+      fontSize: defaultBubbleStyle.fontSize || 15,
       italic: false,
-      uppercase: false, // default to lowercase
-      bgColor: '#ffffff',
-      textColor: '#000000',
+      uppercase: false,
+      bgColor: defaultBubbleStyle.bgColor || '#ffffff',
+      textColor: defaultBubbleStyle.textColor || '#000000',
+      borderColor: defaultBubbleStyle.borderColor || '#000000',
+      borderWidth: defaultBubbleStyle.borderWidth ?? 2.5,
       cornerRadius: 20, // 0 = square, 50 = very round
       // Tail position relative to bubble center (as offset in percentage of canvas)
       tailX: 0.03, // tip offset from bubble center
@@ -1077,15 +1234,27 @@ function PageEditor({ isCover = false }) {
   };
 
   const updateSentence = (bubbleId, sentenceId, updates) => {
-    setBubbles(prev => prev.map(b => {
-      if (b.id !== bubbleId) return b;
-      return {
-        ...b,
-        sentences: (b.sentences || []).map(s =>
-          s.id === sentenceId ? { ...s, ...updates } : s
-        )
-      };
-    }));
+    setBubbles(prev => {
+      const newBubbles = prev.map(b => {
+        if (b.id !== bubbleId) return b;
+        return {
+          ...b,
+          sentences: (b.sentences || []).map(s =>
+            s.id === sentenceId ? { ...s, ...updates } : s
+          )
+        };
+      });
+      // Auto-save alternatives to DB when they change
+      if ('alternatives' in updates) {
+        const updatedComic = { ...comic };
+        const pageIndex = updatedComic.pages?.findIndex(p => p.id === pageId);
+        if (pageIndex >= 0) {
+          updatedComic.pages[pageIndex] = { ...updatedComic.pages[pageIndex], bubbles: newBubbles };
+          api.put(`/comics/${id}`, updatedComic).catch(err => console.error('Failed to save alternatives:', err));
+        }
+      }
+      return newBubbles;
+    });
   };
 
   const removeSentence = (bubbleId, sentenceId) => {
@@ -1208,30 +1377,52 @@ function PageEditor({ isCover = false }) {
   };
 
   // Generate an image for an image-type bubble
-  const generateBubbleImage = async (bubbleId, prompt) => {
+  const generateBubbleImage = async (bubbleId, prompt, provider = 'openai') => {
     if (!prompt.trim()) return;
-    updateBubble(bubbleId, { imageGenerating: true, imagePrompt: prompt });
+    updateBubble(bubbleId, { imageGenerating: provider, imagePrompt: prompt });
     try {
       const response = await api.post('/images/generate', {
         prompt,
         style: promptSettings.styleBible || 'comic book illustration',
-        size: '1024x1024'
+        size: '1024x1024',
+        provider
       }, { timeout: 600000 });
       updateBubble(bubbleId, {
         imageUrl: response.data.path,
-        imageGenerating: false
+        imageGenerating: null
       });
     } catch (error) {
       console.error('Bubble image generation failed:', error);
-      updateBubble(bubbleId, { imageGenerating: false });
+      updateBubble(bubbleId, { imageGenerating: null });
       alert('Image generation failed: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  // Upload an image from disk directly into a bubble
+  const uploadBubbleImage = async (bubbleId, file) => {
+    if (!file) return;
+    updateBubble(bubbleId, { imageGenerating: 'upload' });
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await api.post('/images/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      updateBubble(bubbleId, {
+        imageUrl: response.data.path,
+        imageGenerating: null
+      });
+    } catch (error) {
+      console.error('Bubble image upload failed:', error);
+      updateBubble(bubbleId, { imageGenerating: null });
+      alert('Image upload failed: ' + (error.response?.data?.error || error.message));
     }
   };
 
   // Refine an existing image bubble using the current image as reference
   const refineBubbleImage = async (bubbleId, refinementPrompt, currentImageUrl) => {
     if (!refinementPrompt.trim() || !currentImageUrl) return;
-    updateBubble(bubbleId, { imageGenerating: true });
+    updateBubble(bubbleId, { imageGenerating: 'refine' });
     try {
       const response = await api.post('/images/generate-panel', {
         prompt: refinementPrompt,
@@ -1241,11 +1432,11 @@ function PageEditor({ isCover = false }) {
       }, { timeout: 600000 });
       updateBubble(bubbleId, {
         imageUrl: response.data.path,
-        imageGenerating: false
+        imageGenerating: null
       });
     } catch (error) {
       console.error('Bubble image refinement failed:', error);
-      updateBubble(bubbleId, { imageGenerating: false });
+      updateBubble(bubbleId, { imageGenerating: null });
       alert('Image refinement failed: ' + (error.response?.data?.error || error.message));
     }
   };
@@ -1568,6 +1759,13 @@ function PageEditor({ isCover = false }) {
     ));
   };
 
+  // Update panel's artworkImage and auto-save to DB
+  const updatePanelArtwork = (panelId, imagePath) => {
+    setPanels(prev => prev.map(p =>
+      p.id === panelId ? { ...p, artworkImage: imagePath } : p
+    ));
+  };
+
   // Zero-width Unicode markers for highlights (invisible in textarea, survive copy-paste)
   const HL_START = '\u2060'; // Word Joiner
   const HL_END = '\u2061';   // Function Application
@@ -1619,7 +1817,7 @@ function PageEditor({ isCover = false }) {
           prompt: coverPrompt,
           bubbles
         });
-        alert('Cover saved!');
+        showToast('Cover saved!');
         return;
       }
 
@@ -1646,7 +1844,7 @@ function PageEditor({ isCover = false }) {
       await api.put(`/comics/${id}`, updatedComic);
       setComic(updatedComic);
       setPage(updatedComic.pages[pageIndex]);
-      alert('Page saved!');
+      showToast('Page saved!');
     } catch (error) {
       console.error('Failed to save page:', error);
       alert('Failed to save page');
@@ -1772,6 +1970,38 @@ function PageEditor({ isCover = false }) {
     prompt += `This is Panel ${panelIndex + 1} of ${panels.length} on ${isCover ? 'the COVER' : `PAGE ${page.pageNumber}`}.\n\n`;
     prompt += `Panel Content:\n${stripHighlightMarkers(panel.content) || '(No content specified)'}\n\n`;
 
+    // Per-panel framing options
+    const framing = panelFraming[panel.id];
+    if (framing) {
+      const framingLines = [];
+      if (framing.subjectSmall) framingLines.push('- Subject should be SMALL in the frame');
+      if (framing.cameraFar) framingLines.push('- Pull the camera FAR BACK from the subject');
+      if (framing.negativeSpace) framingLines.push('- Include LOTS of negative space around the subject');
+      if (framing.wideMargins) framingLines.push('- Leave WIDE margins on all sides of the subject');
+      if (framing.fullEnvironment) framingLines.push('- Show the ENTIRE environment visible around the subject');
+      if (framing.safeCrop) framingLines.push('- Keep subject in a SAFE CROP AREA away from edges, the image will be cropped');
+      if (framingLines.length > 0) {
+        prompt += `FRAMING / CAMERA DISTANCE:\n${framingLines.join('\n')}\n\n`;
+      }
+
+      // Camera angle rotation
+      if (framing.cameraAngle && framing.cameraAngle !== 0) {
+        const angleDescriptions = {
+          '-75': 'Rotate the camera 75 degrees to the LEFT around the scene. Show the scene from a strong left-side angle — we should see much more of the right-hand side of subjects/objects.',
+          '-50': 'Rotate the camera 50 degrees to the LEFT around the scene. Show the scene from a moderate left angle — the viewpoint shifts noticeably leftward.',
+          '-25': 'Rotate the camera 25 degrees to the LEFT around the scene. Show the scene from a slight left angle — a subtle shift in perspective to the left.',
+          '25': 'Rotate the camera 25 degrees to the RIGHT around the scene. Show the scene from a slight right angle — a subtle shift in perspective to the right.',
+          '50': 'Rotate the camera 50 degrees to the RIGHT around the scene. Show the scene from a moderate right angle — the viewpoint shifts noticeably rightward.',
+          '75': 'Rotate the camera 75 degrees to the RIGHT around the scene. Show the scene from a strong right-side angle — we should see much more of the left-hand side of subjects/objects.',
+          '180': 'Rotate the camera 180 degrees — show the scene from the OPPOSITE SIDE. Reverse the viewpoint completely so we see what was behind the original camera position.',
+        };
+        const desc = angleDescriptions[String(framing.cameraAngle)];
+        if (desc) {
+          prompt += `CAMERA ANGLE ROTATION:\n${desc}\nMaintain the same scene, characters, lighting, and environment — only change the camera position.\n\n`;
+        }
+      }
+    }
+
     // Additional instructions
     if (additionalInstructions.trim()) {
       prompt += `ADDITIONAL INSTRUCTIONS:\n${additionalInstructions}\n\n`;
@@ -1816,16 +2046,32 @@ function PageEditor({ isCover = false }) {
     return paths;
   };
 
+  // Stop a panel image generation in progress
+  const stopPanelGeneration = (panelId) => {
+    if (abortControllers.current[panelId]) {
+      abortControllers.current[panelId].abort();
+      delete abortControllers.current[panelId];
+    }
+    setPanelImages(prev => ({
+      ...prev,
+      [panelId]: { ...prev[panelId], generating: null, error: null }
+    }));
+  };
+
   // Generate a single panel image
-  const generatePanelImage = async (panel, panelIndex) => {
+  const generatePanelImage = async (panel, panelIndex, provider = 'openai') => {
     if (!panel.content?.trim()) {
       alert(`Panel ${panelIndex + 1} has no content. Please add content first.`);
       return;
     }
 
+    // Create abort controller for this panel
+    const controller = new AbortController();
+    abortControllers.current[panel.id] = controller;
+
     setPanelImages(prev => ({
       ...prev,
-      [panel.id]: { ...prev[panel.id], generating: true, error: null }
+      [panel.id]: { ...prev[panel.id], generating: provider, error: null }
     }));
 
     try {
@@ -1834,20 +2080,26 @@ function PageEditor({ isCover = false }) {
 
       console.log(`Generating panel ${panelIndex + 1} (${panel.id}), aspect: ${aspectRatio}`);
 
+      // Separate per-panel linked refs from global style/character refs
+      const linkedPanelImages = panelImages[panel.id]?.refImages || [];
       const referenceImages = getRefImagePaths();
       const response = await api.post('/images/generate-panel', {
         prompt,
         panelId: panel.id,
         aspectRatio,
-        referenceImages
-      }, { timeout: 600000 });
+        referenceImages,
+        linkedPanelImages,
+        provider
+      }, { timeout: 600000, signal: controller.signal });
+
+      delete abortControllers.current[panel.id];
 
       setPanelImages(prev => ({
         ...prev,
         [panel.id]: {
           ...prev[panel.id], // Preserve existing fitMode and crop settings
           path: response.data.path,
-          generating: false,
+          generating: null,
           error: null,
           fitMode: prev[panel.id]?.fitMode || 'stretch',
           cropX: prev[panel.id]?.cropX ?? 0,
@@ -1856,29 +2108,112 @@ function PageEditor({ isCover = false }) {
         }
       }));
 
+      updatePanelArtwork(panel.id, response.data.path);
       console.log(`Panel ${panelIndex + 1} generated:`, response.data.path);
     } catch (error) {
+      delete abortControllers.current[panel.id];
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+        console.log(`Panel ${panelIndex + 1} generation cancelled`);
+        return; // Don't set error state for cancellations
+      }
       console.error(`Panel ${panelIndex + 1} generation failed:`, error);
       setPanelImages(prev => ({
         ...prev,
         [panel.id]: {
           ...prev[panel.id],
-          generating: false,
+          generating: null,
           error: error.response?.data?.error || error.message
         }
       }));
     }
   };
 
+  // Upload an image from disk directly into a panel
+  const uploadPanelImage = async (panel, file) => {
+    if (!file) return;
+
+    setPanelImages(prev => ({
+      ...prev,
+      [panel.id]: { ...prev[panel.id], generating: 'upload', error: null }
+    }));
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await api.post('/images/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setPanelImages(prev => ({
+        ...prev,
+        [panel.id]: {
+          ...prev[panel.id],
+          path: response.data.path,
+          generating: null,
+          error: null,
+          fitMode: prev[panel.id]?.fitMode || 'stretch',
+          cropX: prev[panel.id]?.cropX ?? 0,
+          cropY: prev[panel.id]?.cropY ?? 0,
+          zoom: prev[panel.id]?.zoom ?? 1
+        }
+      }));
+      updatePanelArtwork(panel.id, response.data.path);
+    } catch (error) {
+      console.error('Panel image upload failed:', error);
+      setPanelImages(prev => ({
+        ...prev,
+        [panel.id]: {
+          ...prev[panel.id],
+          generating: null,
+          error: error.response?.data?.error || error.message
+        }
+      }));
+    }
+  };
+
+  // Upload a reference image for a specific panel prompt
+  const uploadPanelRefImage = async (panelId, file) => {
+    if (!file) return;
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await api.post('/images/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setPanelImages(prev => ({
+        ...prev,
+        [panelId]: {
+          ...prev[panelId],
+          refImages: [...(prev[panelId]?.refImages || []), response.data.path]
+        }
+      }));
+    } catch (error) {
+      console.error('Panel ref image upload failed:', error);
+      alert('Upload failed: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  // Remove a per-panel reference image
+  const removePanelRefImage = (panelId, index) => {
+    setPanelImages(prev => ({
+      ...prev,
+      [panelId]: {
+        ...prev[panelId],
+        refImages: (prev[panelId]?.refImages || []).filter((_, i) => i !== index)
+      }
+    }));
+  };
+
   // Refine a generated panel image using it as reference with improvement instructions
-  const refinePanelImage = async (panel, panelIndex, refinementPrompt) => {
+  const refinePanelImage = async (panel, panelIndex, refinementPrompt, provider = 'openai') => {
     if (!refinementPrompt?.trim()) return;
     const currentPath = panelImages[panel.id]?.path;
     if (!currentPath) return;
 
     setPanelImages(prev => ({
       ...prev,
-      [panel.id]: { ...prev[panel.id], generating: true, error: null }
+      [panel.id]: { ...prev[panel.id], generating: provider, error: null }
     }));
 
     try {
@@ -1886,14 +2221,15 @@ function PageEditor({ isCover = false }) {
       // Build the full panel prompt and append refinement instructions
       const fullPrompt = buildPanelPrompt(panel, panelIndex)
         + `\n\nREFINEMENT INSTRUCTIONS (apply these changes to the attached reference image):\n${refinementPrompt}`;
-      // Include the current image + all style/character reference images
-      const refImages = [currentPath, ...getRefImagePaths()];
-
+      // Current image is the main edit target, style refs are separate
       const response = await api.post('/images/generate-panel', {
         prompt: fullPrompt,
         panelId: panel.id,
         aspectRatio,
-        referenceImages: refImages
+        referenceImages: getRefImagePaths(),
+        linkedPanelImages: [currentPath],
+        isRefinement: true,
+        provider
       }, { timeout: 600000 });
 
       setPanelImages(prev => ({
@@ -1901,17 +2237,18 @@ function PageEditor({ isCover = false }) {
         [panel.id]: {
           ...prev[panel.id],
           path: response.data.path,
-          generating: false,
+          generating: null,
           error: null
         }
       }));
+      updatePanelArtwork(panel.id, response.data.path);
     } catch (error) {
       console.error(`Panel ${panelIndex + 1} refinement failed:`, error);
       setPanelImages(prev => ({
         ...prev,
         [panel.id]: {
           ...prev[panel.id],
-          generating: false,
+          generating: null,
           error: error.response?.data?.error || error.message
         }
       }));
@@ -2239,7 +2576,7 @@ function PageEditor({ isCover = false }) {
       // Update local page state with cache-buster for immediate display refresh
       setPage(prev => ({ ...prev, masterImage: `${imagePath}?t=${Date.now()}` }));
 
-      alert('Composited page saved to project!');
+      showToast('Composited page saved!');
     } catch (error) {
       console.error('Failed to save composited image:', error);
       alert('Failed to save composited image: ' + error.message);
@@ -2330,7 +2667,7 @@ function PageEditor({ isCover = false }) {
           }
 
           setPage(prev => ({ ...prev, bakedImage: `${(isCover ? `/projects/${id}/images/${id}_cover_baked.png` : `/projects/${id}/images/${id}_p${page.pageNumber}_baked.png`)}?t=${Date.now()}` }));
-          alert('Bubbles baked into image!');
+          showToast('Bubbles baked into image!');
         } catch (error) {
           console.error('Failed to bake bubbles:', error);
           alert('Failed to bake bubbles: ' + error.message);
@@ -2395,7 +2732,7 @@ function PageEditor({ isCover = false }) {
         await api.put(`/comics/${id}`, { cover: updatedCover });
         setComic(prev => ({ ...prev, cover: updatedCover }));
         setPage(prev => ({ ...prev, masterImage: savedPath + `?t=${Date.now()}` }));
-        alert('Image saved to cover!');
+        showToast('Image saved to cover!');
         return;
       }
 
@@ -2410,7 +2747,7 @@ function PageEditor({ isCover = false }) {
         masterImage: updatedComic.pages[pageIndex].masterImage + `?t=${Date.now()}`
       };
       setPage(pageWithCacheBuster);
-      alert('Image saved to page!');
+      showToast('Image saved to page!');
     } catch (error) {
       console.error('Failed to save image:', error);
       alert('Failed to save image');
@@ -2575,6 +2912,36 @@ function PageEditor({ isCover = false }) {
 
   return (
     <div>
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '20px', right: '20px', zIndex: 10000,
+          padding: '0.6rem 1.2rem', borderRadius: '8px',
+          background: toast.type === 'error' ? '#e74c3c' : '#27ae60',
+          color: '#fff', fontSize: '0.9rem', fontWeight: 500,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          {toast.message}
+        </div>
+      )}
+      {lightboxImage && (
+        <div
+          onClick={() => setLightboxImage(null)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.85)', zIndex: 10001,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer'
+          }}
+        >
+          <img
+            src={lightboxImage}
+            alt="Full size preview"
+            style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '4px' }}
+          />
+        </div>
+      )}
       <div className="page-header">
         <div>
           <Link to={`/comic/${id}`} style={{ color: '#888', textDecoration: 'none', marginBottom: '0.5rem', display: 'block' }}>
@@ -4091,6 +4458,50 @@ function PageEditor({ isCover = false }) {
             <div style={{ marginTop: '1rem' }}>
               <h3 style={{ marginBottom: '0.5rem' }}>Bubbles ({bubbles.length})</h3>
 
+              {/* Default bubble colors */}
+              <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#f5f5f5', borderRadius: '6px', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: 'bold' }}>Defaults:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#888' }}>BG</span>
+                  <ColorPicker
+                    value={defaultBubbleStyle.bgColor}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDefaultBubbleStyle(prev => ({ ...prev, bgColor: val }));
+                      api.put(`/comics/${id}`, { defaultBubbleStyle: { ...defaultBubbleStyle, bgColor: val } }).catch(err => console.error('Failed to save defaults:', err));
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ width: '28px', height: '22px', border: '1px solid #ccc', borderRadius: '3px' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#888' }}>Border</span>
+                  <ColorPicker
+                    value={defaultBubbleStyle.borderColor}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDefaultBubbleStyle(prev => ({ ...prev, borderColor: val }));
+                      api.put(`/comics/${id}`, { defaultBubbleStyle: { ...defaultBubbleStyle, borderColor: val } }).catch(err => console.error('Failed to save defaults:', err));
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ width: '28px', height: '22px', border: '1px solid #ccc', borderRadius: '3px' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#888' }}>Text</span>
+                  <ColorPicker
+                    value={defaultBubbleStyle.textColor}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDefaultBubbleStyle(prev => ({ ...prev, textColor: val }));
+                      api.put(`/comics/${id}`, { defaultBubbleStyle: { ...defaultBubbleStyle, textColor: val } }).catch(err => console.error('Failed to save defaults:', err));
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ width: '28px', height: '22px', border: '1px solid #ccc', borderRadius: '3px' }}
+                  />
+                </div>
+              </div>
+
               {bubbles.length === 0 && (
                 <p style={{ color: '#888', fontSize: '0.9rem' }}>
                   Click on the canvas to add a speech bubble
@@ -4188,7 +4599,7 @@ function PageEditor({ isCover = false }) {
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' && bubble.imagePrompt) {
                                   e.preventDefault();
-                                  generateBubbleImage(bubble.id, bubble.imagePrompt);
+                                  generateBubbleImage(bubble.id, bubble.imagePrompt, 'openai');
                                 }
                               }}
                               placeholder="e.g. a wooden chair"
@@ -4201,20 +4612,65 @@ function PageEditor({ isCover = false }) {
                               }}
                             />
                             <button
-                              onClick={(e) => { e.stopPropagation(); generateBubbleImage(bubble.id, bubble.imagePrompt); }}
+                              onClick={(e) => { e.stopPropagation(); generateBubbleImage(bubble.id, bubble.imagePrompt, 'openai'); }}
                               disabled={bubble.imageGenerating || !bubble.imagePrompt}
                               style={{
-                                padding: '0.4rem 0.8rem',
-                                background: bubble.imageGenerating ? '#ccc' : '#e94560',
+                                padding: '0.4rem 0.6rem',
+                                background: bubble.imageGenerating ? '#ccc' : '#27ae60',
                                 border: 'none',
                                 borderRadius: '4px',
                                 color: '#fff',
                                 cursor: bubble.imageGenerating ? 'not-allowed' : 'pointer',
-                                fontSize: '0.8rem',
+                                fontSize: '0.75rem',
                                 whiteSpace: 'nowrap'
                               }}
                             >
-                              {bubble.imageGenerating ? 'Generating...' : (bubble.imageUrl ? 'Regenerate' : 'Generate')}
+                              {bubble.imageGenerating === 'openai' ? '⏳...' : 'GPT'}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); generateBubbleImage(bubble.id, bubble.imagePrompt, 'gemini'); }}
+                              disabled={bubble.imageGenerating || !bubble.imagePrompt}
+                              style={{
+                                padding: '0.4rem 0.6rem',
+                                background: bubble.imageGenerating ? '#ccc' : '#4285f4',
+                                border: 'none',
+                                borderRadius: '4px',
+                                color: '#fff',
+                                cursor: bubble.imageGenerating ? 'not-allowed' : 'pointer',
+                                fontSize: '0.75rem',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {bubble.imageGenerating === 'gemini' ? '⏳...' : 'Gemini'}
+                            </button>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              id={`bubble-upload-${bubble.id}`}
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                if (e.target.files[0]) {
+                                  uploadBubbleImage(bubble.id, e.target.files[0]);
+                                  e.target.value = '';
+                                }
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); document.getElementById(`bubble-upload-${bubble.id}`).click(); }}
+                              disabled={bubble.imageGenerating}
+                              style={{
+                                padding: '0.4rem 0.6rem',
+                                background: bubble.imageGenerating ? '#ccc' : '#8e44ad',
+                                border: 'none',
+                                borderRadius: '4px',
+                                color: '#fff',
+                                cursor: bubble.imageGenerating ? 'not-allowed' : 'pointer',
+                                fontSize: '0.75rem',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {bubble.imageGenerating === 'upload' ? '⏳...' : 'Upload'}
                             </button>
                           </div>
                           {bubble.imageUrl && (
@@ -4262,7 +4718,7 @@ function PageEditor({ isCover = false }) {
                                     whiteSpace: 'nowrap'
                                   }}
                                 >
-                                  {bubble.imageGenerating ? 'Refining...' : 'Refine'}
+                                  {bubble.imageGenerating === 'refine' ? '⏳...' : 'Refine'}
                                 </button>
                               </div>
                             </div>
@@ -4355,8 +4811,7 @@ function PageEditor({ isCover = false }) {
                           <label style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginBottom: '0.2rem' }}>
                             Background
                           </label>
-                          <input
-                            type="color"
+                          <ColorPicker
                             value={bubble.bgColor || '#ffffff'}
                             onChange={(e) => updateBubble(bubble.id, { bgColor: e.target.value, bgTransparent: false })}
                             onClick={(e) => e.stopPropagation()}
@@ -4365,9 +4820,7 @@ function PageEditor({ isCover = false }) {
                               width: '40px',
                               height: '28px',
                               border: '1px solid #ccc',
-                              borderRadius: '4px',
-                              cursor: bubble.bgTransparent ? 'not-allowed' : 'pointer',
-                              opacity: bubble.bgTransparent ? 0.4 : 1
+                              borderRadius: '4px'
                             }}
                           />
                         </div>
@@ -4394,13 +4847,12 @@ function PageEditor({ isCover = false }) {
                             Border
                           </label>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <input
-                              type="color"
+                            <ColorPicker
                               value={bubble.borderColor || '#000000'}
                               onChange={(e) => updateBubble(bubble.id, { borderColor: e.target.value })}
                               onClick={(e) => e.stopPropagation()}
                               disabled={bubble.noBorder}
-                              style={{ width: '32px', height: '24px', border: '1px solid #ccc', borderRadius: '4px', cursor: bubble.noBorder ? 'not-allowed' : 'pointer' }}
+                              style={{ width: '32px', height: '24px', border: '1px solid #ccc', borderRadius: '4px' }}
                             />
                             <input
                               type="range"
@@ -4420,12 +4872,11 @@ function PageEditor({ isCover = false }) {
                           <label style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginBottom: '0.2rem' }}>
                             Text
                           </label>
-                          <input
-                            type="color"
+                          <ColorPicker
                             value={bubble.textColor || '#000000'}
                             onChange={(e) => updateBubble(bubble.id, { textColor: e.target.value })}
                             onClick={(e) => e.stopPropagation()}
-                            style={{ width: '40px', height: '28px', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}
+                            style={{ width: '40px', height: '28px', border: '1px solid #ccc', borderRadius: '4px' }}
                           />
                         </div>
                       </div>
@@ -4575,6 +5026,89 @@ function PageEditor({ isCover = false }) {
                                 marginBottom: '0.25rem'
                               }}
                             />
+                            {/* Alternative texts */}
+                            {(sentence.alternatives || []).map((alt, altIdx) => (
+                              <div key={altIdx} style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.25rem', alignItems: 'center' }}>
+                                <input
+                                  type="text"
+                                  defaultValue={alt.text}
+                                  onBlur={(e) => {
+                                    const updatedAlts = [...(sentence.alternatives || [])];
+                                    updatedAlts[altIdx] = { ...updatedAlts[altIdx], text: e.target.value.trim() };
+                                    updateSentence(bubble.id, sentence.id, { alternatives: updatedAlts.filter(a => a.text) });
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  placeholder="Alternative text"
+                                  style={{
+                                    flex: 1,
+                                    padding: '0.3rem',
+                                    borderRadius: '3px',
+                                    border: '1px solid #e0c080',
+                                    background: '#fef9ef',
+                                    fontSize: '0.8rem'
+                                  }}
+                                />
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); generateAlternativeAudio(bubble.id, sentence.id, altIdx); }}
+                                  disabled={generatingAudio[`${sentence.id}-alt-${altIdx}`] || !alt.text || !selectedVoiceId}
+                                  style={{
+                                    padding: '0.2rem 0.4rem',
+                                    fontSize: '0.7rem',
+                                    background: alt.audioUrl ? '#27ae60' : generatingAudio[`${sentence.id}-alt-${altIdx}`] ? '#95a5a6' : '#3498db',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: generatingAudio[`${sentence.id}-alt-${altIdx}`] ? 'wait' : 'pointer',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {generatingAudio[`${sentence.id}-alt-${altIdx}`] ? '...' : alt.audioUrl ? 'Regen' : 'Gen Audio'}
+                                </button>
+                                {alt.audioUrl && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (audioRef.current) audioRef.current.pause();
+                                      const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${alt.audioUrl}.mp3`);
+                                      audioRef.current = audio;
+                                      audio.play();
+                                    }}
+                                    style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', background: '#27ae60', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                                  >
+                                    ▶
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const updatedAlts = (sentence.alternatives || []).filter((_, i) => i !== altIdx);
+                                    updateSentence(bubble.id, sentence.id, { alternatives: updatedAlts });
+                                  }}
+                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                                >
+                                  x
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const updatedAlts = [...(sentence.alternatives || []), { text: '', audioUrl: '' }];
+                                updateSentence(bubble.id, sentence.id, { alternatives: updatedAlts });
+                              }}
+                              style={{
+                                padding: '0.2rem 0.5rem',
+                                fontSize: '0.7rem',
+                                background: 'transparent',
+                                color: '#e67e22',
+                                border: '1px dashed #e67e22',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                marginBottom: '0.25rem'
+                              }}
+                            >
+                              + Alternative
+                            </button>
 
                             {/* Audio Generation */}
                             <div style={{
@@ -4738,20 +5272,12 @@ function PageEditor({ isCover = false }) {
                                           });
                                           const lookupResults = lookupResponse.data;
                                           if (Array.isArray(lookupResults)) {
-                                            const nameIds = new Set();
                                             wordsNeedingLookup.forEach((w, i) => {
-                                              if (lookupResults[i]) {
-                                                if (lookupResults[i].isName) {
-                                                  nameIds.add(w.id);
-                                                } else {
-                                                  w.meaning = cleanWord(lookupResults[i].meaning || '');
-                                                  w.baseForm = cleanWord(lookupResults[i].baseForm || '');
-                                                }
+                                              if (lookupResults[i] && !lookupResults[i].isName) {
+                                                w.meaning = cleanWord(lookupResults[i].meaning || '');
+                                                w.baseForm = cleanWord(lookupResults[i].baseForm || '');
                                               }
                                             });
-                                            if (nameIds.size > 0) {
-                                              allWords.splice(0, allWords.length, ...allWords.filter(w => !nameIds.has(w.id)));
-                                            }
                                           }
                                         } catch (lookupError) {
                                           console.error('Batch word lookup failed:', lookupError);
@@ -5566,22 +6092,95 @@ function PageEditor({ isCover = false }) {
                           <span style={{ fontWeight: 'normal', marginLeft: '0.5rem', color: '#999' }}>
                             ({(panel.tapZone.width * 100).toFixed(0)}% × {(panel.tapZone.height * 100).toFixed(0)}%)
                           </span>
+                          <button
+                            onClick={() => {
+                              const prompt = buildPanelPrompt(panel, i);
+                              const win = window.open('', '_blank', 'width=800,height=600');
+                              win.document.write(`<html><head><title>Panel ${i + 1} Prompt</title></head><body><pre style="white-space:pre-wrap;word-wrap:break-word;font-family:monospace;font-size:13px;padding:1rem;max-width:800px">${prompt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre></body></html>`);
+                            }}
+                            style={{ marginLeft: '0.5rem', fontSize: '0.6rem', color: '#2980b9', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                          >
+                            View Prompt
+                          </button>
                         </label>
-                        <button
-                          onClick={() => generatePanelImage(panel, i)}
-                          disabled={panelImages[panel.id]?.generating || !panel.content?.trim()}
-                          style={{
-                            padding: '0.25rem 0.5rem',
-                            fontSize: '0.75rem',
-                            background: panelImages[panel.id]?.generating ? '#95a5a6' : panel.content?.trim() ? '#27ae60' : '#ccc',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: panelImages[panel.id]?.generating || !panel.content?.trim() ? 'not-allowed' : 'pointer'
-                          }}
-                        >
-                          {panelImages[panel.id]?.generating ? '⏳ Generating...' : '🎨 Generate Panel'}
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          {panelImages[panel.id]?.generating && panelImages[panel.id]?.generating !== 'upload' ? (
+                            <button
+                              onClick={() => stopPanelGeneration(panel.id)}
+                              style={{
+                                padding: '0.25rem 0.5rem',
+                                fontSize: '0.7rem',
+                                background: '#e74c3c',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Stop ({panelImages[panel.id]?.generating === 'openai' ? 'ChatGPT' : 'Gemini'})
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => generatePanelImage(panel, i, 'openai')}
+                                disabled={panelImages[panel.id]?.generating || !panel.content?.trim()}
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  fontSize: '0.7rem',
+                                  background: panelImages[panel.id]?.generating ? '#95a5a6' : panel.content?.trim() ? '#27ae60' : '#ccc',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: panelImages[panel.id]?.generating || !panel.content?.trim() ? 'not-allowed' : 'pointer'
+                                }}
+                              >
+                                ChatGPT
+                              </button>
+                              <button
+                                onClick={() => generatePanelImage(panel, i, 'gemini')}
+                                disabled={panelImages[panel.id]?.generating || !panel.content?.trim()}
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  fontSize: '0.7rem',
+                                  background: panelImages[panel.id]?.generating ? '#95a5a6' : panel.content?.trim() ? '#4285f4' : '#ccc',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: panelImages[panel.id]?.generating || !panel.content?.trim() ? 'not-allowed' : 'pointer'
+                                }}
+                              >
+                                Gemini
+                              </button>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            id={`panel-upload-${panel.id}`}
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              if (e.target.files[0]) {
+                                uploadPanelImage(panel, e.target.files[0]);
+                                e.target.value = '';
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => document.getElementById(`panel-upload-${panel.id}`).click()}
+                            disabled={panelImages[panel.id]?.generating}
+                            style={{
+                              padding: '0.25rem 0.5rem',
+                              fontSize: '0.7rem',
+                              background: panelImages[panel.id]?.generating ? '#95a5a6' : '#8e44ad',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: panelImages[panel.id]?.generating ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            {panelImages[panel.id]?.generating === 'upload' ? '⏳...' : 'Upload'}
+                          </button>
+                        </div>
                       </div>
                       <div style={{ position: 'relative', width: '100%' }}>
                         {/* Highlight overlay behind textarea — uses zero-width markers */}
@@ -5675,18 +6274,196 @@ function PageEditor({ isCover = false }) {
                           </button>
                         )}
                       </div>
+                      {/* Per-panel reference images */}
+                      <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                        {(panelImages[panel.id]?.refImages || []).map((refPath, ri) => (
+                          <div key={ri} style={{ position: 'relative', display: 'inline-block' }}>
+                            <img
+                              src={`http://localhost:3001${refPath}`}
+                              alt={`Ref ${ri + 1}`}
+                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ccc' }}
+                            />
+                            <button
+                              onClick={() => removePanelRefImage(panel.id, ri)}
+                              style={{
+                                position: 'absolute', top: '-4px', right: '-4px',
+                                width: '14px', height: '14px', borderRadius: '50%',
+                                background: '#e74c3c', color: '#fff', border: 'none',
+                                fontSize: '0.55rem', lineHeight: '14px', textAlign: 'center',
+                                cursor: 'pointer', padding: 0
+                              }}
+                            >x</button>
+                          </div>
+                        ))}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          id={`panel-ref-upload-${panel.id}`}
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            if (e.target.files[0]) {
+                              uploadPanelRefImage(panel.id, e.target.files[0]);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => document.getElementById(`panel-ref-upload-${panel.id}`).click()}
+                          style={{
+                            padding: '0.2rem 0.4rem',
+                            fontSize: '0.65rem',
+                            background: '#f0f0f0',
+                            color: '#555',
+                            border: '1px dashed #aaa',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Ref Image
+                        </button>
+                        {/* Link other panels' images as references */}
+                        {panels.filter(p => p.id !== panel.id && panelImages[p.id]?.path).length > 0 && (
+                          <>
+                            <span style={{ fontSize: '0.6rem', color: '#999', marginLeft: '0.2rem' }}>|</span>
+                            {panels.map((p, pi) => {
+                              if (p.id === panel.id || !panelImages[p.id]?.path) return null;
+                              const alreadyLinked = (panelImages[panel.id]?.refImages || []).includes(panelImages[p.id].path);
+                              return (
+                                <button
+                                  key={p.id}
+                                  onClick={() => {
+                                    if (!alreadyLinked) {
+                                      setPanelImages(prev => ({
+                                        ...prev,
+                                        [panel.id]: {
+                                          ...prev[panel.id],
+                                          refImages: [...(prev[panel.id]?.refImages || []), panelImages[p.id].path]
+                                        }
+                                      }));
+                                    }
+                                  }}
+                                  disabled={alreadyLinked}
+                                  title={alreadyLinked ? `Panel ${pi + 1} already linked` : `Use Panel ${pi + 1}'s image as reference`}
+                                  style={{
+                                    padding: '0.15rem 0.35rem',
+                                    fontSize: '0.6rem',
+                                    background: alreadyLinked ? '#ddd' : '#e8f4fc',
+                                    color: alreadyLinked ? '#999' : '#2980b9',
+                                    border: `1px solid ${alreadyLinked ? '#ccc' : '#2980b9'}`,
+                                    borderRadius: '3px',
+                                    cursor: alreadyLinked ? 'default' : 'pointer',
+                                    opacity: alreadyLinked ? 0.6 : 1
+                                  }}
+                                >
+                                  P{pi + 1}
+                                </button>
+                              );
+                            })}
+                          </>
+                        )}
+                      </div>
+                      {/* Framing options */}
+                      <div style={{ marginTop: '0.3rem', display: 'flex', flexWrap: 'wrap', gap: '0.15rem 0.5rem', alignItems: 'center' }}>
+                        {(() => {
+                          const framingKeys = ['subjectSmall', 'cameraFar', 'negativeSpace', 'wideMargins', 'fullEnvironment', 'safeCrop'];
+                          const allChecked = framingKeys.every(k => !!panelFraming[panel.id]?.[k]);
+                          return (
+                            <label style={{ fontSize: '0.65rem', color: '#444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.15rem', fontWeight: 'bold' }}>
+                              <input
+                                type="checkbox"
+                                checked={allChecked}
+                                onChange={(e) => {
+                                  const val = e.target.checked;
+                                  setPanelFraming(prev => ({
+                                    ...prev,
+                                    [panel.id]: {
+                                      ...prev[panel.id],
+                                      ...Object.fromEntries(framingKeys.map(k => [k, val]))
+                                    }
+                                  }));
+                                }}
+                                style={{ margin: 0, width: '12px', height: '12px' }}
+                              />
+                              All
+                            </label>
+                          );
+                        })()}
+                        {[
+                          { key: 'subjectSmall', label: 'Subject small' },
+                          { key: 'cameraFar', label: 'Camera far' },
+                          { key: 'negativeSpace', label: 'Negative space' },
+                          { key: 'wideMargins', label: 'Wide margins' },
+                          { key: 'fullEnvironment', label: 'Full environment' },
+                          { key: 'safeCrop', label: 'Safe crop' },
+                        ].map(opt => (
+                          <label key={opt.key} style={{ fontSize: '0.65rem', color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.15rem' }}>
+                            <input
+                              type="checkbox"
+                              checked={!!panelFraming[panel.id]?.[opt.key]}
+                              onChange={(e) => setPanelFraming(prev => ({
+                                ...prev,
+                                [panel.id]: { ...prev[panel.id], [opt.key]: e.target.checked }
+                              }))}
+                              style={{ margin: 0, width: '12px', height: '12px' }}
+                            />
+                            {opt.label}
+                          </label>
+                        ))}
+                      </div>
+                      {/* Camera angle rotation */}
+                      <div style={{ marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.2rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.6rem', color: '#999', marginRight: '0.1rem' }}>Angle:</span>
+                        {[
+                          { value: -75, label: '-75°' },
+                          { value: -50, label: '-50°' },
+                          { value: -25, label: '-25°' },
+                          { value: 0, label: '0°' },
+                          { value: 25, label: '+25°' },
+                          { value: 50, label: '+50°' },
+                          { value: 75, label: '+75°' },
+                          { value: 180, label: '180°' },
+                        ].map(opt => {
+                          const current = panelFraming[panel.id]?.cameraAngle || 0;
+                          const isSelected = current === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              onClick={() => setPanelFraming(prev => ({
+                                ...prev,
+                                [panel.id]: { ...prev[panel.id], cameraAngle: opt.value }
+                              }))}
+                              style={{
+                                padding: '0.1rem 0.3rem',
+                                fontSize: '0.6rem',
+                                background: isSelected ? (opt.value === 0 ? '#999' : '#2980b9') : '#f0f0f0',
+                                color: isSelected ? '#fff' : '#666',
+                                border: `1px solid ${isSelected ? (opt.value === 0 ? '#777' : '#2471a3') : '#ccc'}`,
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                fontWeight: isSelected ? 'bold' : 'normal',
+                                minWidth: '30px',
+                                textAlign: 'center'
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                       {/* Panel image preview + refinement */}
                       {panelImages[panel.id]?.path && (
                         <div style={{ marginTop: '0.5rem' }}>
                           <img
                             src={`http://localhost:3001${panelImages[panel.id].path}`}
                             alt={`Panel ${i + 1}`}
+                            onClick={() => setLightboxImage(`http://localhost:3001${panelImages[panel.id].path}`)}
                             style={{
                               width: '100%',
                               maxHeight: '150px',
                               objectFit: 'contain',
                               borderRadius: '4px',
-                              border: '1px solid #ddd'
+                              border: '1px solid #ddd',
+                              cursor: 'pointer'
                             }}
                           />
                           <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.4rem' }}>
@@ -5697,7 +6474,7 @@ function PageEditor({ isCover = false }) {
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' && panelRefinePrompts[panel.id]) {
                                   e.preventDefault();
-                                  refinePanelImage(panel, i, panelRefinePrompts[panel.id]);
+                                  refinePanelImage(panel, i, panelRefinePrompts[panel.id], 'openai');
                                 }
                               }}
                               placeholder="Refine: e.g. remove the extra chair"
@@ -5710,20 +6487,36 @@ function PageEditor({ isCover = false }) {
                               }}
                             />
                             <button
-                              onClick={() => refinePanelImage(panel, i, panelRefinePrompts[panel.id])}
+                              onClick={() => refinePanelImage(panel, i, panelRefinePrompts[panel.id], 'openai')}
                               disabled={panelImages[panel.id]?.generating || !panelRefinePrompts[panel.id]?.trim()}
                               style={{
-                                padding: '0.4rem 0.8rem',
+                                padding: '0.4rem 0.6rem',
                                 background: (panelImages[panel.id]?.generating || !panelRefinePrompts[panel.id]?.trim()) ? '#ccc' : '#8e44ad',
                                 border: 'none',
                                 borderRadius: '4px',
                                 color: '#fff',
                                 cursor: (panelImages[panel.id]?.generating || !panelRefinePrompts[panel.id]?.trim()) ? 'not-allowed' : 'pointer',
-                                fontSize: '0.8rem',
+                                fontSize: '0.75rem',
                                 whiteSpace: 'nowrap'
                               }}
                             >
-                              Refine
+                              {panelImages[panel.id]?.generating === 'openai' ? '⏳...' : 'Refine (GPT)'}
+                            </button>
+                            <button
+                              onClick={() => refinePanelImage(panel, i, panelRefinePrompts[panel.id], 'gemini')}
+                              disabled={panelImages[panel.id]?.generating || !panelRefinePrompts[panel.id]?.trim()}
+                              style={{
+                                padding: '0.4rem 0.6rem',
+                                background: (panelImages[panel.id]?.generating || !panelRefinePrompts[panel.id]?.trim()) ? '#ccc' : '#4285f4',
+                                border: 'none',
+                                borderRadius: '4px',
+                                color: '#fff',
+                                cursor: (panelImages[panel.id]?.generating || !panelRefinePrompts[panel.id]?.trim()) ? 'not-allowed' : 'pointer',
+                                fontSize: '0.75rem',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {panelImages[panel.id]?.generating === 'gemini' ? '⏳...' : 'Refine (Gemini)'}
                             </button>
                           </div>
                         </div>

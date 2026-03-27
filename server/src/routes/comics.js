@@ -147,7 +147,16 @@ router.get('/:id', async (req, res) => {
     if (!comic) {
       return res.status(404).json({ error: 'Comic not found' });
     }
-    res.json(comic);
+    const comicObj = comic.toObject();
+    // If comic belongs to a collection, use collection voices
+    if (comic.collectionId) {
+      const Collection = require('../models/Collection');
+      const collection = await Collection.findOne({ id: comic.collectionId });
+      if (collection?.voices?.length > 0) {
+        comicObj.voices = collection.voices;
+      }
+    }
+    res.json(comicObj);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -189,6 +198,20 @@ router.put('/:id', async (req, res) => {
     const updateData = { ...req.body };
     delete updateData.id; // Don't allow changing the id
 
+    // If updating voices and comic belongs to a collection, save to collection instead
+    if (updateData.voices) {
+      const existingComic = await Comic.findOne({ id: req.params.id });
+      if (existingComic?.collectionId) {
+        const Collection = require('../models/Collection');
+        await Collection.findOneAndUpdate(
+          { id: existingComic.collectionId },
+          { $set: { voices: updateData.voices } },
+          { upsert: true }
+        );
+        delete updateData.voices; // Don't store on comic level
+      }
+    }
+
     const comic = await Comic.findOneAndUpdate(
       { id: req.params.id },
       { $set: updateData },
@@ -199,7 +222,17 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
 
-    res.json(comic);
+    // Re-inject collection voices into response
+    const comicObj = comic.toObject();
+    if (comic.collectionId) {
+      const Collection = require('../models/Collection');
+      const collection = await Collection.findOne({ id: comic.collectionId });
+      if (collection?.voices?.length > 0) {
+        comicObj.voices = collection.voices;
+      }
+    }
+
+    res.json(comicObj);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -495,7 +528,33 @@ router.post('/:id/export-full', async (req, res) => {
           if (hasBakedImage && rawMasterPath) {
             const noTextDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_no_text.png`);
             try {
-              await fs.copyFile(rawMasterPath, noTextDestPath);
+              // Get image bubbles from this page
+              const pageBubbles = page.bubbles || [];
+              const imageBubbles = pageBubbles.filter(b => b.type === 'image' && b.imageUrl);
+
+              if (imageBubbles.length > 0) {
+                // Composite image bubbles onto the raw master
+                const rawMeta = await sharp(rawMasterPath).metadata();
+                const composites = [];
+                for (const ib of imageBubbles) {
+                  const imgPath = path.join(__dirname, '../..', ib.imageUrl.split('?')[0]);
+                  try {
+                    await fs.access(imgPath);
+                    const left = Math.round(ib.x * rawMeta.width);
+                    const top = Math.round(ib.y * rawMeta.height);
+                    const width = Math.round(ib.width * rawMeta.width);
+                    const height = Math.round(ib.height * rawMeta.height);
+                    const resized = await sharp(imgPath).resize(width, height, { fit: 'fill' }).toBuffer();
+                    composites.push({ input: resized, left, top });
+                  } catch (e) {
+                    console.log('Image bubble source not found, skipping:', imgPath);
+                  }
+                }
+                await sharp(rawMasterPath).composite(composites).toFile(noTextDestPath);
+              } else {
+                // No image bubbles — just copy the raw master
+                await fs.copyFile(rawMasterPath, noTextDestPath);
+              }
               copiedImages.push(`${comicSlug}_p${pageNum}_no_text.png`);
             } catch (e) {
               console.log('Raw master image not found for no_text:', rawMasterPath);
@@ -521,17 +580,18 @@ router.post('/:id/export-full', async (req, res) => {
               copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}.png`);
             }
 
-            // Panel crop from raw master (no text) for Speaking Practice Mode
+            // Panel crop from no_text image (master + image bubbles) for Speaking Practice Mode
             if (hasBakedImage && rawMasterPath) {
               const noTextSceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}_no_text.png`);
               try {
-                const rawMetadata = await sharp(rawMasterPath).metadata();
+                const noTextFullPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_no_text.png`);
+                const noTextMeta = await sharp(noTextFullPath).metadata();
                 const rawCropped = await cropAndSaveScene(
-                  rawMasterPath,
+                  noTextFullPath,
                   noTextSceneDestPath,
                   panel.tapZone,
-                  rawMetadata.width,
-                  rawMetadata.height
+                  noTextMeta.width,
+                  noTextMeta.height
                 );
                 if (rawCropped) {
                   copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}_no_text.png`);
@@ -563,6 +623,20 @@ router.post('/:id/export-full', async (req, res) => {
             copiedAudio.push(audioFilename);
           } catch (e) {
             console.log('Audio file not found:', audioSourcePath);
+          }
+        }
+        // Copy alternative audio files
+        for (const alt of sentence.alternatives || []) {
+          if (alt.audioUrl) {
+            const altFilename = `${alt.audioUrl}.mp3`;
+            const altSourcePath = path.join(projectAudioDir, altFilename);
+            const altDestPath = path.join(audioDir, altFilename);
+            try {
+              await fs.copyFile(altSourcePath, altDestPath);
+              copiedAudio.push(altFilename);
+            } catch (e) {
+              console.log('Alternative audio file not found:', altSourcePath);
+            }
           }
         }
       }
@@ -641,6 +715,10 @@ function transformToReaderFormat(comic, comicSlug) {
                 text: sentence.text || '',
                 translation: sentence.translation || '',
                 audioUrl: sentence.audioUrl || '',
+                ...(sentence.alternatives?.length > 0 && {
+                  alternativeTexts: sentence.alternatives.map(a => a.text),
+                  alternativeAudioUrls: sentence.alternatives.filter(a => a.audioUrl).map(a => a.audioUrl)
+                }),
                 words: (sentence.words || []).map(word => {
                   const wText = sanitizeWordForFilename(word.text);
                   const wBase = sanitizeWordForFilename(word.baseForm || word.text);
@@ -720,6 +798,7 @@ function transformToReaderFormat(comic, comicSlug) {
               id: bubbleId,
               type: bubble.type || 'speech',
               ...(bubble.isSoundEffect && { isSoundEffect: true }),
+              ...(bubble.imageUrl && { imageUrl: bubble.imageUrl }),
               position: {
                 x: bubble.x,
                 y: bubble.y,
@@ -733,6 +812,10 @@ function transformToReaderFormat(comic, comicSlug) {
                   text: sentence.text || '',
                   translation: sentence.translation || '',
                   audioUrl: sentence.audioUrl || '',
+                  ...(sentence.alternatives?.length > 0 && {
+                  alternativeTexts: sentence.alternatives.map(a => a.text),
+                  alternativeAudioUrls: sentence.alternatives.filter(a => a.audioUrl).map(a => a.audioUrl)
+                }),
                   words: (sentence.words || []).map(word => {
                     const wText = sanitizeWordForFilename(word.text);
                     const wBase = sanitizeWordForFilename(word.baseForm || word.text);

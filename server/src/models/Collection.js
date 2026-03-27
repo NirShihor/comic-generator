@@ -15,10 +15,17 @@ const StyleImageSchema = new mongoose.Schema({
   description: String
 }, { _id: false });
 
+// Voice Schema (same as in Comic)
+const VoiceSchema = new mongoose.Schema({
+  name: String,
+  voiceId: String
+}, { _id: false });
+
 // Collection Schema
 const CollectionSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
   title: String,
+  voices: [VoiceSchema],
   promptSettings: {
     styleBible: String,
     styleBibleImages: [StyleImageSchema],
