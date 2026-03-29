@@ -176,6 +176,7 @@ const ComicSchema = new mongoose.Schema({
     fontId: String,
     fontSize: Number
   },
+  notes: String,
   collectionId: String,
   collectionTitle: String,
   episodeNumber: Number,

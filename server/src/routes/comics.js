@@ -261,9 +261,11 @@ router.post('/:id/pages', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
 
+    const { afterPageNumber } = req.body || {};
+
     const page = {
       id: `page-${uuidv4()}`,
-      pageNumber: comic.pages.length + 1,
+      pageNumber: 0, // will be set below
       masterImage: '',
       dividerLines: {
         horizontal: [],
@@ -272,7 +274,30 @@ router.post('/:id/pages', async (req, res) => {
       panels: []
     };
 
-    comic.pages.push(page);
+    if (afterPageNumber != null && afterPageNumber < comic.pages.length) {
+      // Insert after the specified page number
+      page.pageNumber = afterPageNumber + 1;
+
+      // Renumber all pages that come after the insertion point
+      comic.pages.forEach(p => {
+        if (p.pageNumber > afterPageNumber) {
+          p.pageNumber += 1;
+        }
+      });
+
+      // Insert at the correct position in the array
+      const insertIdx = comic.pages.findIndex(p => p.pageNumber === afterPageNumber + 2);
+      if (insertIdx >= 0) {
+        comic.pages.splice(insertIdx, 0, page);
+      } else {
+        comic.pages.push(page);
+      }
+    } else {
+      // Append at the end (default)
+      page.pageNumber = comic.pages.length + 1;
+      comic.pages.push(page);
+    }
+
     await comic.save();
 
     res.json(page);

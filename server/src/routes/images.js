@@ -9,7 +9,7 @@ const sharp = require('sharp');
 const { GoogleGenAI } = require('@google/genai');
 
 // Generate image using Gemini API
-async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = []) {
+async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [], isAngleChange = false) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('Gemini API key not configured. Add GEMINI_API_KEY to .env file.');
   }
@@ -65,7 +65,11 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
 
   // Add the text prompt with appropriate reference image instructions
   let textPrompt = prompt;
-  if (styleCount > 0) {
+  if (isAngleChange && linkedCount > 0) {
+    const angleNote = `CAMERA ANGLE CHANGE — The FIRST attached image is the CURRENT scene. You MUST recreate this EXACT SAME scene — same characters, same clothing, same environment, same props, same lighting — but viewed from a DIFFERENT camera angle as specified in the prompt below. DO NOT add or remove characters. DO NOT change any visual details. The ONLY thing that changes is the camera position.`;
+    const styleNote = styleCount > 0 ? `\n\nThe remaining ${styleCount} image(s) are style references for art consistency only.` : '';
+    textPrompt = `${angleNote}${styleNote}\n\n${prompt}`;
+  } else if (styleCount > 0) {
     const styleNote = `IMPORTANT: ${styleCount} of the attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.`;
     textPrompt = `${styleNote}\n\n${prompt}`;
   }
@@ -311,10 +315,130 @@ router.post('/generate-page', async (req, res) => {
   }
 });
 
+// Use GPT-4o Responses API with image_generation tool to rotate a scene.
+// This is how ChatGPT's web interface works — GPT-4o sees the input image,
+// reasons about the perspective change, and generates a new image natively.
+async function generateAngleChange(imagePath, angleDegrees, panelContent) {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const fullPath = path.join(__dirname, '../..', imagePath);
+  const imageBuffer = await fs.readFile(fullPath);
+  const base64Image = imageBuffer.toString('base64');
+  const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+
+  // For negative angles, we generate with the positive equivalent and flip the result.
+  // This is because the image generation model doesn't reliably follow left/right
+  // directional cues in text — it tends to default to one direction regardless.
+  // Horizontal flipping is a standard technique in comics/animation for mirroring angles.
+  const needsFlip = angleDegrees < 0 && Math.abs(angleDegrees) < 150; // Don't flip 180°
+  const effectiveAngle = Math.abs(angleDegrees); // Always generate as positive
+  const absAngle = effectiveAngle;
+
+  // Always use positive-angle descriptions for generation
+  const cameraSide = 'RIGHT';
+  const visibleSide = 'LEFT';
+  const facingDirection = 'LEFT';
+  const angleDirection = `${absAngle} degrees to the ${cameraSide}`;
+
+  // Add a plain-language description of how extreme the rotation is
+  // Focus on VISUAL RESULT: which side of character is visible, which way they face in frame
+  let angleIntensity = '';
+  if (absAngle >= 150) {
+    angleIntensity = 'This is a complete 180° turn — we should see the characters FROM BEHIND. Their backs face the camera. The background shows what was originally in front of them.';
+  } else if (absAngle >= 85) {
+    angleIntensity = `This is a full 90° side view. The character must be shown in COMPLETE PROFILE: we see ONLY their ${visibleSide} cheek, ${visibleSide} ear, ${visibleSide} shoulder. Their nose points toward the ${facingDirection} edge of the frame. They are looking toward the ${facingDirection}. The background perspective changes completely — what was behind them is now on the ${cameraSide} side of the frame.`;
+  } else if (absAngle >= 60) {
+    angleIntensity = `This is a strong three-quarter to near-profile view. The character's ${visibleSide} cheek, ${visibleSide} ear, and ${visibleSide} shoulder are prominently visible. Their nose and gaze point toward the ${facingDirection} edge of the frame. The background perspective shifts dramatically.`;
+  } else if (absAngle >= 40) {
+    angleIntensity = `This is a three-quarter view. The character's ${visibleSide} side is more visible than their ${cameraSide} side. They appear to be looking slightly toward the ${facingDirection}. The background perspective shifts noticeably.`;
+  } else {
+    angleIntensity = `This is a subtle angle shift. The character's ${visibleSide} side becomes slightly more visible. They appear to be looking slightly toward the ${facingDirection}.`;
+  }
+
+  console.log(`GPT-4o Responses API: generating angle change (${angleDegrees}°)...`);
+
+  // Step 1: Ask GPT-4o to analyze the scene and describe what the rotated
+  // background should look like (without generating an image yet)
+  const analysisResponse = await openai.responses.create({
+    model: 'gpt-5.4',
+    input: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'input_image',
+            image_url: `data:${mimeType};base64,${base64Image}`
+          },
+          {
+            type: 'input_text',
+            text: `Look at this image. I want to rotate the camera ${absAngle}° to the ${cameraSide} around the subject.
+
+IMPORTANT VISUAL RESULT: In the new image, the character's ${visibleSide} side (${visibleSide} cheek, ${visibleSide} ear, ${visibleSide} shoulder) must face the camera. The character's nose and gaze must point toward the ${facingDirection} edge of the frame.
+
+${angleIntensity}
+
+The ENTIRE background perspective must also change to match the new camera position. Describe in detail what the background would look like from this new camera angle. Don't generate an image yet — just describe the changes.`
+          }
+        ]
+      }
+    ],
+  });
+
+  const analysisText = analysisResponse.output_text || '';
+  console.log(`GPT-4o analysis (${analysisText.length} chars): ${analysisText.substring(0, 150)}...`);
+
+  // Step 2: Generate the image. Include the analysis directly in the generation prompt
+  // so the model has the background description right next to the generation request.
+  const response = await openai.responses.create({
+    model: 'gpt-5.4',
+    input: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'input_image',
+            image_url: `data:${mimeType};base64,${base64Image}`
+          },
+          {
+            type: 'input_text',
+            text: `I need you to recreate this scene but with the camera rotated ${absAngle}° to the ${cameraSide}. Here is a detailed description of what the rotated scene should look like:
+
+${analysisText}
+
+IMPORTANT REQUIREMENTS:
+1. The character's ${visibleSide} side faces the camera (${visibleSide} cheek, ${visibleSide} ear visible). Their nose points toward the ${facingDirection} of the frame.
+2. The BACKGROUND MUST CHANGE DRAMATICALLY — do NOT keep the same background composition. The perspective shift means buildings, streets, and environment appear completely different from the new camera position. This is the most important requirement.
+3. Keep the same character appearance, clothing, and art style.
+4. Scene context: ${panelContent}
+
+Generate this image now.`
+          }
+        ]
+      }
+    ],
+    tools: [{ type: 'image_generation', quality: 'high' }],
+  });
+
+  // Extract the generated image from the response
+  const imageOutput = response.output.find(o => o.type === 'image_generation_call');
+  if (!imageOutput || !imageOutput.result) {
+    throw new Error('GPT-4o Responses API returned no image');
+  }
+
+  let resultBuffer = Buffer.from(imageOutput.result, 'base64');
+
+  // For negative angles, flip the image horizontally to get the opposite direction
+  if (needsFlip) {
+    console.log(`Flipping image horizontally for negative angle (${angleDegrees}°)`);
+    resultBuffer = await sharp(resultBuffer).flop().toBuffer();
+  }
+
+  return resultBuffer;
+}
+
 // Generate single panel image (OpenAI or Gemini)
 router.post('/generate-panel', async (req, res) => {
   try {
-    const { prompt, panelId, aspectRatio = 'square', referenceImages, linkedPanelImages, isRefinement, provider = 'openai' } = req.body;
+    const { prompt, panelId, aspectRatio = 'square', referenceImages, linkedPanelImages, isRefinement, isAngleChange, angleSourceImage, angleDegrees, panelContent, provider = 'openai' } = req.body;
 
     const styleRefs = referenceImages || [];
     const linkedRefs = linkedPanelImages || [];
@@ -322,8 +446,35 @@ router.post('/generate-panel', async (req, res) => {
     let finalPrompt = prompt;
     let buffer;
 
+    // For angle changes with OpenAI, use the Responses API with image_generation tool.
+    // This is how ChatGPT's web interface works — GPT-4o sees the input image,
+    // reasons about the perspective change, and generates a new image natively.
+    if (isAngleChange && angleSourceImage && angleDegrees && provider !== 'gemini' && process.env.OPENAI_API_KEY) {
+      try {
+        buffer = await generateAngleChange(angleSourceImage, angleDegrees, panelContent || '');
+        console.log(`Panel ${panelId} angle change generated with GPT-4o Responses API`);
+
+        // Save to file
+        const filename = `panel-${panelId}-${uuidv4()}.png`;
+        const uploadDir = path.join(__dirname, '../../uploads');
+        const outputPath = path.join(uploadDir, filename);
+        await fs.writeFile(outputPath, buffer);
+        console.log(`Panel ${panelId} generated: ${filename}`);
+        return res.json({ path: `/uploads/${filename}` });
+      } catch (err) {
+        console.log(`GPT-4o Responses API failed, falling back to images.edit: ${err.message}`);
+        // Fall through to the normal generation path
+      }
+    }
+
     if (provider === 'gemini') {
-      buffer = await generateWithGemini(finalPrompt, styleRefs, linkedRefs);
+      // For angle changes, only send the source image — skip character refs and style refs
+      // to prevent the AI from adding extra characters or changing the scene
+      const geminiStyleRefs = isAngleChange && angleSourceImage ? [] : styleRefs;
+      const geminiLinkedRefs = isAngleChange && angleSourceImage
+        ? [angleSourceImage]
+        : linkedRefs;
+      buffer = await generateWithGemini(finalPrompt, geminiStyleRefs, geminiLinkedRefs, isAngleChange);
       console.log(`Panel ${panelId} generated with Gemini`);
     } else {
       if (!process.env.OPENAI_API_KEY) {
@@ -343,16 +494,27 @@ router.post('/generate-panel', async (req, res) => {
         size = '1536x1024';
       }
 
-      // For OpenAI: linked panel refs are blurred for new generations so
-      // images.edit() picks up style/palette/mood but can't copy composition.
-      // For refinements, load unblurred so the edit actually works on the image.
-      const linkedRefStreams = linkedRefs.length > 0
-        ? (isRefinement ? await loadReferenceImages(linkedRefs) : await loadBlurredReferenceImages(linkedRefs))
-        : [];
-      const styleRefStreams = styleRefs.length > 0
-        ? await loadReferenceImages(styleRefs)
-        : [];
-      const allRefStreams = [...linkedRefStreams, ...styleRefStreams];
+      // For angle changes: the source image (current panel) goes unblurred FIRST,
+      // and user's linked panel refs stay blurred (they're character references, not the scene).
+      // For refinements: linked refs unblurred. For new generations: linked refs blurred.
+      let allRefStreams = [];
+
+      if (isAngleChange && angleSourceImage) {
+        // For angle changes: ONLY send the current panel image (unblurred).
+        // Skip per-panel character refs entirely — they confuse the AI into
+        // adding extra characters. Style refs also skipped to keep focus on
+        // recreating the source image from a different angle.
+        const sourceStreams = await loadReferenceImages([angleSourceImage]);
+        allRefStreams = [...sourceStreams];
+      } else {
+        const linkedRefStreams = linkedRefs.length > 0
+          ? (isRefinement ? await loadReferenceImages(linkedRefs) : await loadBlurredReferenceImages(linkedRefs))
+          : [];
+        const styleRefStreams = styleRefs.length > 0
+          ? await loadReferenceImages(styleRefs)
+          : [];
+        allRefStreams = [...linkedRefStreams, ...styleRefStreams];
+      }
 
       const maxPromptLen = 32000;
       if (finalPrompt.length > maxPromptLen) {
@@ -360,13 +522,20 @@ router.post('/generate-panel', async (req, res) => {
         finalPrompt = finalPrompt.substring(0, maxPromptLen);
       }
 
-      console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${finalPrompt.length}, linked refs (blurred): ${linkedRefStreams.length}, style refs: ${styleRefStreams.length}`);
+      console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${finalPrompt.length}, angle-change: ${!!isAngleChange}, source: ${angleSourceImage ? 1 : 0}, linked refs: ${linkedRefs.length}, style refs: ${styleRefs.length}`);
 
       let response;
       if (allRefStreams.length > 0) {
         // Build reference instructions based on what types are present
         let refInstructions = '';
-        if (linkedRefStreams.length > 0) {
+        if (isAngleChange && angleSourceImage) {
+          refInstructions = `CAMERA ANGLE CHANGE — REFERENCE IMAGE INSTRUCTIONS:
+The FIRST attached image is the CURRENT scene that you MUST use as your primary reference.
+You must recreate this EXACT SAME scene — same characters, same clothing, same environment, same props, same lighting — but from a DIFFERENT camera angle as specified in the prompt.
+DO NOT add any new characters. DO NOT remove any characters. DO NOT change clothing, hair, or any visual detail.
+The ONLY thing that changes is the camera position/angle. Everything else must be IDENTICAL.
+Other attached images are style/character references ONLY — do NOT add characters from reference images into the scene.\n\n`;
+        } else if (linkedRefs.length > 0) {
           refInstructions = `REFERENCE IMAGE INSTRUCTIONS:
 Some attached images are blurred scene references — use them ONLY to match the color palette, lighting mood, and art style.
 Do NOT try to recreate their composition or layout. Generate a completely NEW composition following the prompt below.

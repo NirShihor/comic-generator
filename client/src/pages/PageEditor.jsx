@@ -337,7 +337,7 @@ function PageEditor({ isCover = false }) {
   const [showPagePreview, setShowPagePreview] = useState(false);
 
   // Panel-by-panel generation state
-  // Each panel can have: { path, generating, error, fitMode: 'stretch'|'crop', cropX: 0, cropY: 0, zoom: 1 }
+  // Each panel can have: { path, generating, error, fitMode: 'stretch'|'crop', cropX: 0, cropY: 0, zoom: 1, brightness: 1, contrast: 1, saturation: 1 }
   const [panelImages, setPanelImages] = useState({});
   const abortControllers = useRef({}); // { [panelId]: AbortController }
   const [panelRefinePrompts, setPanelRefinePrompts] = useState({});
@@ -387,6 +387,7 @@ function PageEditor({ isCover = false }) {
     }
   });
   const [chatInput, setChatInput] = useState('');
+  const [comicNotes, setComicNotes] = useState('');
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [chatImages, setChatImages] = useState([]); // Images to send with next message
   const chatFileInputRef = useRef(null);
@@ -786,6 +787,10 @@ function PageEditor({ isCover = false }) {
       if (response.data.defaultBubbleStyle) {
         setDefaultBubbleStyle(prev => ({ ...prev, ...response.data.defaultBubbleStyle }));
       }
+      // Load comic notes
+      if (response.data.notes) {
+        setComicNotes(response.data.notes);
+      }
 
       if (isCover) {
         // Create a virtual "page" for the cover
@@ -843,7 +848,7 @@ function PageEditor({ isCover = false }) {
         const restored = {};
         currentPage.panels.forEach(p => {
           if (p.artworkImage) {
-            restored[p.id] = { path: p.artworkImage, generating: null, error: null, fitMode: 'stretch', cropX: 0, cropY: 0, zoom: 1 };
+            restored[p.id] = { path: p.artworkImage, generating: null, error: null, fitMode: 'stretch', cropX: 0, cropY: 0, zoom: 1, brightness: 1, contrast: 1, saturation: 1 };
           }
         });
         if (Object.keys(restored).length > 0) setPanelImages(restored);
@@ -1987,17 +1992,19 @@ function PageEditor({ isCover = false }) {
       // Camera angle rotation
       if (framing.cameraAngle && framing.cameraAngle !== 0) {
         const angleDescriptions = {
-          '-75': 'Rotate the camera 75 degrees to the LEFT around the scene. Show the scene from a strong left-side angle — we should see much more of the right-hand side of subjects/objects.',
-          '-50': 'Rotate the camera 50 degrees to the LEFT around the scene. Show the scene from a moderate left angle — the viewpoint shifts noticeably leftward.',
-          '-25': 'Rotate the camera 25 degrees to the LEFT around the scene. Show the scene from a slight left angle — a subtle shift in perspective to the left.',
-          '25': 'Rotate the camera 25 degrees to the RIGHT around the scene. Show the scene from a slight right angle — a subtle shift in perspective to the right.',
-          '50': 'Rotate the camera 50 degrees to the RIGHT around the scene. Show the scene from a moderate right angle — the viewpoint shifts noticeably rightward.',
-          '75': 'Rotate the camera 75 degrees to the RIGHT around the scene. Show the scene from a strong right-side angle — we should see much more of the left-hand side of subjects/objects.',
-          '180': 'Rotate the camera 180 degrees — show the scene from the OPPOSITE SIDE. Reverse the viewpoint completely so we see what was behind the original camera position.',
+          '-90': 'The camera has rotated 90° LEFT — a full side view. Characters are seen in COMPLETE PROFILE from their RIGHT side. The background perspective is completely different: if the original looked down a street, we now look ACROSS it — the street runs left-to-right and we see building facades directly.',
+          '-75': 'The camera has rotated 75° LEFT — nearly a side view. Characters are seen from their RIGHT SIDE in near-profile. The background perspective changes significantly: streets that receded into the distance now run mostly across the frame.',
+          '-50': 'The camera has rotated 50° LEFT — a three-quarter view. Characters are shown in THREE-QUARTER RIGHT view, we see their right cheek and right shoulder prominently. The background perspective shifts noticeably.',
+          '-25': 'The camera has rotated 25° LEFT — a subtle shift. Characters are at a slight angle from their RIGHT. Their right side is slightly more visible. The background shifts subtly.',
+          '25': 'The camera has rotated 25° RIGHT — a subtle shift. Characters are at a slight angle from their LEFT. Their left side is slightly more visible. The background shifts subtly.',
+          '50': 'The camera has rotated 50° RIGHT — a three-quarter view. Characters are shown in THREE-QUARTER LEFT view, we see their left cheek and left shoulder prominently. The background perspective shifts noticeably.',
+          '75': 'The camera has rotated 75° RIGHT — nearly a side view. Characters are seen from their LEFT SIDE in near-profile. The background perspective changes significantly: streets that receded into the distance now run mostly across the frame.',
+          '90': 'The camera has rotated 90° RIGHT — a full side view. Characters are seen in COMPLETE PROFILE from their LEFT side. The background perspective is completely different: if the original looked down a street, we now look ACROSS it — the street runs left-to-right and we see building facades directly.',
+          '180': 'The camera has rotated 180° — we see the scene from the OPPOSITE direction. Characters are viewed FROM BEHIND. We see the BACKS of their heads and shoulders. They face AWAY from the camera. We should NOT see any faces. The background shows what was originally in front of them.',
         };
         const desc = angleDescriptions[String(framing.cameraAngle)];
         if (desc) {
-          prompt += `CAMERA ANGLE ROTATION:\n${desc}\nMaintain the same scene, characters, lighting, and environment — only change the camera position.\n\n`;
+          prompt += `CAMERA POSITION (CRITICAL):\n${desc}\nThe background and environment must remain the SAME LOCATION at the SAME LEVEL (street-level stays street-level, indoor stays indoor). Do NOT change the setting or move to a different location. The scene stays identical — only the camera viewpoint changes.\n\nCONSISTENCY RULES (DO NOT VIOLATE):\n- Do NOT add any characters that are not described in the panel content above.\n- Do NOT remove any characters that ARE described.\n- Every character must wear the EXACT same clothing as described in the character bible.\n- Maintain the SAME hairstyle, hair color, and hair length for each character.\n- Maintain the SAME body posture and stance — only rotate the viewpoint, not the pose.\n- Keep the SAME environment and location type. A street scene stays a street scene at ground level.\n- The ONLY thing that changes is the camera angle on the characters.\n\n`;
         }
       }
     }
@@ -2059,7 +2066,7 @@ function PageEditor({ isCover = false }) {
   };
 
   // Generate a single panel image
-  const generatePanelImage = async (panel, panelIndex, provider = 'openai') => {
+  const generatePanelImage = async (panel, panelIndex, provider = 'openai', isAngleChange = false) => {
     if (!panel.content?.trim()) {
       alert(`Panel ${panelIndex + 1} has no content. Please add content first.`);
       return;
@@ -2078,17 +2085,31 @@ function PageEditor({ isCover = false }) {
       const prompt = buildPanelPrompt(panel, panelIndex);
       const aspectRatio = getPanelAspectRatio(panel);
 
-      console.log(`Generating panel ${panelIndex + 1} (${panel.id}), aspect: ${aspectRatio}`);
+      console.log(`Generating panel ${panelIndex + 1} (${panel.id}), aspect: ${aspectRatio}, angleChange: ${isAngleChange}`);
 
       // Separate per-panel linked refs from global style/character refs
       const linkedPanelImages = panelImages[panel.id]?.refImages || [];
       const referenceImages = getRefImagePaths();
+
+      // For angle changes, send the current panel image separately as the
+      // "source" image (unblurred), while other refs stay in their normal paths
+      const angleSourceImage = (isAngleChange && panelImages[panel.id]?.path)
+        ? panelImages[panel.id].path
+        : null;
+      const angleDegrees = isAngleChange ? (panelFraming[panel.id]?.cameraAngle || 0) : 0;
+
+      console.log('ANGLE DEBUG:', { isAngleChange, angleSourceImage, angleDegrees, cameraAngle: panelFraming[panel.id]?.cameraAngle });
+
       const response = await api.post('/images/generate-panel', {
         prompt,
         panelId: panel.id,
         aspectRatio,
         referenceImages,
         linkedPanelImages,
+        isAngleChange,
+        angleSourceImage,
+        angleDegrees,
+        panelContent: panel.content,
         provider
       }, { timeout: 600000, signal: controller.signal });
 
@@ -2104,7 +2125,10 @@ function PageEditor({ isCover = false }) {
           fitMode: prev[panel.id]?.fitMode || 'stretch',
           cropX: prev[panel.id]?.cropX ?? 0,
           cropY: prev[panel.id]?.cropY ?? 0,
-          zoom: prev[panel.id]?.zoom ?? 1
+          zoom: prev[panel.id]?.zoom ?? 1,
+          brightness: prev[panel.id]?.brightness ?? 1,
+          contrast: prev[panel.id]?.contrast ?? 1,
+          saturation: prev[panel.id]?.saturation ?? 1
         }
       }));
 
@@ -2155,7 +2179,10 @@ function PageEditor({ isCover = false }) {
           fitMode: prev[panel.id]?.fitMode || 'stretch',
           cropX: prev[panel.id]?.cropX ?? 0,
           cropY: prev[panel.id]?.cropY ?? 0,
-          zoom: prev[panel.id]?.zoom ?? 1
+          zoom: prev[panel.id]?.zoom ?? 1,
+          brightness: prev[panel.id]?.brightness ?? 1,
+          contrast: prev[panel.id]?.contrast ?? 1,
+          saturation: prev[panel.id]?.saturation ?? 1
         }
       }));
       updatePanelArtwork(panel.id, response.data.path);
@@ -2411,6 +2438,15 @@ function PageEditor({ isCover = false }) {
       const trimmedW = img.width - (trimX * 2);
       const trimmedH = img.height - (trimY * 2);
 
+      // Apply per-panel image adjustments (brightness, contrast, saturation)
+      const brightness = panelData?.brightness ?? 1;
+      const contrast = panelData?.contrast ?? 1;
+      const saturation = panelData?.saturation ?? 1;
+      const hasFilters = brightness !== 1 || contrast !== 1 || saturation !== 1;
+      if (hasFilters) {
+        ctx.filter = `brightness(${brightness}) contrast(${contrast}) saturate(${saturation})`;
+      }
+
       if (fitMode === 'crop') {
         // Crop mode: preserve aspect ratio, cover the panel, and allow repositioning + zoom
         const imgAspect = trimmedW / trimmedH;
@@ -2446,6 +2482,11 @@ function PageEditor({ isCover = false }) {
       } else {
         // Stretch mode: scale to fit exactly (may distort), but trim edges
         ctx.drawImage(img, trimX, trimY, trimmedW, trimmedH, adjustedX, adjustedY, adjustedW, adjustedH);
+      }
+
+      // Reset filter after drawing
+      if (hasFilters) {
+        ctx.filter = 'none';
       }
     }
 
@@ -5622,12 +5663,14 @@ function PageEditor({ isCover = false }) {
                                   )}
                                   <label
                                     onClick={(e) => e.stopPropagation()}
+                                    onMouseDown={(e) => e.stopPropagation()}
                                     title="Include in Vocabulary Quiz"
                                     style={{ display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer', gap: '1px' }}
                                   >
                                     <input
                                       type="checkbox"
                                       checked={word.vocabQuiz || false}
+                                      onClick={(e) => e.stopPropagation()}
                                       onChange={(e) => updateWord(bubble.id, sentence.id, word.id, { vocabQuiz: e.target.checked })}
                                       style={{ margin: 0, cursor: 'pointer' }}
                                     />
@@ -5635,6 +5678,7 @@ function PageEditor({ isCover = false }) {
                                   </label>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); removeWord(bubble.id, sentence.id, word.id); }}
+                                    onMouseDown={(e) => e.stopPropagation()}
                                     style={{
                                       padding: '0.15rem 0.3rem',
                                       marginRight: '0.25rem',
@@ -5771,7 +5815,7 @@ function PageEditor({ isCover = false }) {
                             <input
                               type="range"
                               min="10"
-                              max="100"
+                              max="300"
                               value={Math.round((bubble.tailLength ?? 0.35) * 100)}
                               onChange={(e) => updateBubble(bubble.id, { tailLength: parseInt(e.target.value) / 100 })}
                               onClick={(e) => e.stopPropagation()}
@@ -6414,6 +6458,7 @@ function PageEditor({ isCover = false }) {
                       <div style={{ marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.2rem', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.6rem', color: '#999', marginRight: '0.1rem' }}>Angle:</span>
                         {[
+                          { value: -90, label: '-90°' },
                           { value: -75, label: '-75°' },
                           { value: -50, label: '-50°' },
                           { value: -25, label: '-25°' },
@@ -6421,6 +6466,7 @@ function PageEditor({ isCover = false }) {
                           { value: 25, label: '+25°' },
                           { value: 50, label: '+50°' },
                           { value: 75, label: '+75°' },
+                          { value: 90, label: '+90°' },
                           { value: 180, label: '180°' },
                         ].map(opt => {
                           const current = panelFraming[panel.id]?.cameraAngle || 0;
@@ -6449,6 +6495,41 @@ function PageEditor({ isCover = false }) {
                             </button>
                           );
                         })}
+                        {panelImages[panel.id]?.path && (panelFraming[panel.id]?.cameraAngle || 0) !== 0 && (
+                          <>
+                            <button
+                              onClick={() => generatePanelImage(panel, i, 'openai', true)}
+                              disabled={panelImages[panel.id]?.generating || !panel.content?.trim()}
+                              style={{
+                                padding: '0.1rem 0.4rem',
+                                fontSize: '0.6rem',
+                                background: panelImages[panel.id]?.generating ? '#ccc' : '#27ae60',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: panelImages[panel.id]?.generating ? 'not-allowed' : 'pointer',
+                                marginLeft: '0.3rem'
+                              }}
+                            >
+                              Re-gen (GPT)
+                            </button>
+                            <button
+                              onClick={() => generatePanelImage(panel, i, 'gemini', true)}
+                              disabled={panelImages[panel.id]?.generating || !panel.content?.trim()}
+                              style={{
+                                padding: '0.1rem 0.4rem',
+                                fontSize: '0.6rem',
+                                background: panelImages[panel.id]?.generating ? '#ccc' : '#4285f4',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: panelImages[panel.id]?.generating ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              Re-gen (Gemini)
+                            </button>
+                          </>
+                        )}
                       </div>
                       {/* Panel image preview + refinement */}
                       {panelImages[panel.id]?.path && (
@@ -6959,6 +7040,114 @@ function PageEditor({ isCover = false }) {
                                     </button>
                                   </div>
                                 )}
+                                {/* Image Adjustments: Brightness, Contrast, Saturation */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.5rem', borderTop: '1px solid #eee', paddingTop: '0.4rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.15rem' }}>
+                                    <span style={{ fontSize: '0.7rem', color: '#888' }}>Adjustments</span>
+                                    <button
+                                      onClick={() => {
+                                        setPanelImages(prev => ({
+                                          ...prev,
+                                          [panel.id]: { ...prev[panel.id], saturation: 0 }
+                                        }));
+                                        setTimeout(() => compositePageFromPanels(), 50);
+                                      }}
+                                      style={{
+                                        padding: '0.1rem 0.35rem',
+                                        fontSize: '0.6rem',
+                                        background: (panelData?.saturation ?? 1) === 0 ? '#8e44ad' : '#ddd',
+                                        color: (panelData?.saturation ?? 1) === 0 ? 'white' : '#666',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      B&W
+                                    </button>
+                                    {((panelData?.brightness ?? 1) !== 1 || (panelData?.contrast ?? 1) !== 1 || (panelData?.saturation ?? 1) !== 1) && (
+                                      <button
+                                        onClick={() => {
+                                          setPanelImages(prev => ({
+                                            ...prev,
+                                            [panel.id]: { ...prev[panel.id], brightness: 1, contrast: 1, saturation: 1 }
+                                          }));
+                                          setTimeout(() => compositePageFromPanels(), 50);
+                                        }}
+                                        style={{
+                                          padding: '0.1rem 0.35rem',
+                                          fontSize: '0.6rem',
+                                          background: '#95a5a6',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '3px',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        Reset
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.7rem', color: '#666', width: '55px' }}>Bright:</span>
+                                    <input
+                                      type="range"
+                                      min="50"
+                                      max="150"
+                                      value={Math.round((panelData?.brightness ?? 1) * 100)}
+                                      onChange={(e) => {
+                                        setPanelImages(prev => ({
+                                          ...prev,
+                                          [panel.id]: { ...prev[panel.id], brightness: parseInt(e.target.value) / 100 }
+                                        }));
+                                        setTimeout(() => compositePageFromPanels(), 50);
+                                      }}
+                                      style={{ flex: 1 }}
+                                    />
+                                    <span style={{ fontSize: '0.65rem', color: '#999', width: '35px' }}>
+                                      {Math.round((panelData?.brightness ?? 1) * 100)}%
+                                    </span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.7rem', color: '#666', width: '55px' }}>Contrast:</span>
+                                    <input
+                                      type="range"
+                                      min="50"
+                                      max="150"
+                                      value={Math.round((panelData?.contrast ?? 1) * 100)}
+                                      onChange={(e) => {
+                                        setPanelImages(prev => ({
+                                          ...prev,
+                                          [panel.id]: { ...prev[panel.id], contrast: parseInt(e.target.value) / 100 }
+                                        }));
+                                        setTimeout(() => compositePageFromPanels(), 50);
+                                      }}
+                                      style={{ flex: 1 }}
+                                    />
+                                    <span style={{ fontSize: '0.65rem', color: '#999', width: '35px' }}>
+                                      {Math.round((panelData?.contrast ?? 1) * 100)}%
+                                    </span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.7rem', color: '#666', width: '55px' }}>Saturatn:</span>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="200"
+                                      value={Math.round((panelData?.saturation ?? 1) * 100)}
+                                      onChange={(e) => {
+                                        setPanelImages(prev => ({
+                                          ...prev,
+                                          [panel.id]: { ...prev[panel.id], saturation: parseInt(e.target.value) / 100 }
+                                        }));
+                                        setTimeout(() => compositePageFromPanels(), 50);
+                                      }}
+                                      style={{ flex: 1 }}
+                                    />
+                                    <span style={{ fontSize: '0.65rem', color: '#999', width: '35px' }}>
+                                      {Math.round((panelData?.saturation ?? 1) * 100)}%
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
                             );
                           })}
@@ -7264,6 +7453,61 @@ function PageEditor({ isCover = false }) {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Notes Panel */}
+        <div style={{
+          width: '280px',
+          background: '#f5f5f5',
+          borderRadius: '12px',
+          padding: '1rem',
+          border: '1px solid #ddd',
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          height: 'calc(100vh - 180px)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', color: '#333' }}>Notes</h3>
+            <button
+              onClick={async () => {
+                try {
+                  await api.put(`/comics/${id}`, { notes: comicNotes });
+                  showToast('Notes saved!');
+                } catch (err) {
+                  console.error('Failed to save notes:', err);
+                }
+              }}
+              style={{
+                padding: '0.25rem 0.5rem',
+                fontSize: '0.7rem',
+                background: '#27ae60',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              Save
+            </button>
+          </div>
+          <textarea
+            value={comicNotes}
+            onChange={(e) => setComicNotes(e.target.value)}
+            placeholder="Paste or type notes here... (shared across all pages in this comic)"
+            style={{
+              flex: 1,
+              width: '100%',
+              padding: '0.5rem',
+              borderRadius: '6px',
+              border: '1px solid #ccc',
+              fontSize: '0.8rem',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+              lineHeight: '1.4',
+              resize: 'none',
+              boxSizing: 'border-box'
+            }}
+          />
         </div>
       </div>
 
