@@ -7092,7 +7092,7 @@ function PageEditor({ isCover = false }) {
                                     <input
                                       type="range"
                                       min="50"
-                                      max="150"
+                                      max="300"
                                       value={Math.round((panelData?.brightness ?? 1) * 100)}
                                       onChange={(e) => {
                                         setPanelImages(prev => ({
