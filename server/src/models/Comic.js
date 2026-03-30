@@ -18,13 +18,17 @@ const SentenceSchema = new mongoose.Schema({
   text: String,
   translation: String,
   audioUrl: String,
+  alternatives: [{
+    text: String,
+    audioUrl: String
+  }],
   words: [WordSchema]
 }, { _id: false });
 
 // Bubble Schema (nested in Panel)
 const BubbleSchema = new mongoose.Schema({
   id: String,
-  type: { type: String, enum: ['speech', 'thought', 'narration'], default: 'speech' },
+  type: { type: String, enum: ['speech', 'thought', 'narration', 'image'], default: 'speech' },
   x: Number,
   y: Number,
   width: Number,
@@ -61,6 +65,9 @@ const BubbleSchema = new mongoose.Schema({
   italic: Boolean,
   uppercase: Boolean,
   cornerRadius: Number,
+  // Image bubble fields
+  imageUrl: String,
+  imagePrompt: String,
   // Content
   sentences: [SentenceSchema]
 }, { _id: false });
@@ -161,6 +168,15 @@ const ComicSchema = new mongoose.Schema({
     globalDoNot: String,
     hardNegatives: String
   },
+  defaultBubbleStyle: {
+    bgColor: String,
+    textColor: String,
+    borderColor: String,
+    borderWidth: Number,
+    fontId: String,
+    fontSize: Number
+  },
+  notes: String,
   collectionId: String,
   collectionTitle: String,
   episodeNumber: Number,

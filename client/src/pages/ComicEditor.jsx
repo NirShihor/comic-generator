@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 
@@ -125,9 +125,9 @@ function ComicEditor() {
     }
   };
 
-  const addPage = async () => {
+  const addPage = async (afterPageNumber = null) => {
     try {
-      const response = await api.post(`/comics/${id}/pages`);
+      const response = await api.post(`/comics/${id}/pages`, afterPageNumber != null ? { afterPageNumber } : {});
       const newPage = response.data;
       // Reload comic to ensure fresh data
       await loadComic();
@@ -464,7 +464,7 @@ function ComicEditor() {
           <p style={{ color: '#888' }}>{comic.description}</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
-          <button className="btn btn-primary" onClick={addPage}>
+          <button className="btn btn-primary" onClick={() => addPage()}>
             + Add Page
           </button>
         </div>
@@ -581,62 +581,85 @@ function ComicEditor() {
               <p style={{ fontWeight: 'bold', color: '#e94560' }}>Cover</p>
             </div>
 
-            {/* Regular Pages */}
-            {comic.pages.map((page) => (
-              <div
-                key={page.id}
-                className="page-thumbnail"
-                style={{ position: 'relative', cursor: 'pointer' }}
-                onClick={() => navigate(`/comic/${id}/page/${page.id}`)}
-              >
-                {page.masterImage ? (
-                  <img
-                    src={`http://localhost:3001${page.masterImage}`}
-                    alt={`Page ${page.pageNumber}`}
-                  />
-                ) : (
-                  <div style={{
-                    aspectRatio: '2/3',
-                    background: '#f5f5f5',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#666'
-                  }}>
-                    No Image
-                  </div>
-                )}
-                <p>Page {page.pageNumber}</p>
-                <small style={{ color: '#666' }}>
-                  {page.panels?.length || 0} panels
-                </small>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteModal({ show: true, page });
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: '4px',
-                    right: '4px',
-                    background: 'rgba(192, 57, 43, 0.9)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '24px',
-                    height: '24px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  title="Delete page"
+            {/* Regular Pages (sorted by pageNumber, with insert buttons between) */}
+            {[...comic.pages].sort((a, b) => a.pageNumber - b.pageNumber).map((page) => (
+              <React.Fragment key={page.id}>
+                <div
+                  className="page-thumbnail"
+                  style={{ position: 'relative', cursor: 'pointer' }}
+                  onClick={() => navigate(`/comic/${id}/page/${page.id}`)}
                 >
-                  ×
-                </button>
-              </div>
+                  {page.masterImage ? (
+                    <img
+                      src={`http://localhost:3001${page.masterImage}`}
+                      alt={`Page ${page.pageNumber}`}
+                    />
+                  ) : (
+                    <div style={{
+                      aspectRatio: '2/3',
+                      background: '#f5f5f5',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#666'
+                    }}>
+                      No Image
+                    </div>
+                  )}
+                  <p>Page {page.pageNumber}</p>
+                  <small style={{ color: '#666' }}>
+                    {page.panels?.length || 0} panels
+                  </small>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteModal({ show: true, page });
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '4px',
+                      right: '4px',
+                      background: 'rgba(192, 57, 43, 0.9)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '24px',
+                      height: '24px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    title="Delete page"
+                  >
+                    ×
+                  </button>
+                  {/* Insert page after this page */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addPage(page.pageNumber);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      bottom: '4px',
+                      right: '4px',
+                      background: 'rgba(39, 174, 96, 0.9)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      fontSize: '10px',
+                    }}
+                    title={`Insert new page after page ${page.pageNumber}`}
+                  >
+                    + Insert After
+                  </button>
+                </div>
+              </React.Fragment>
             ))}
           </div>
         </div>

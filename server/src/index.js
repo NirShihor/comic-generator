@@ -38,6 +38,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// Increase server timeout to 10 minutes for long-running image generation requests
+server.timeout = 600000;
+server.keepAliveTimeout = 600000;
+server.headersTimeout = 601000;
