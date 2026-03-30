@@ -788,7 +788,7 @@ function PageEditor({ isCover = false }) {
         setDefaultBubbleStyle(prev => ({ ...prev, ...response.data.defaultBubbleStyle }));
       }
       // Load comic notes
-      if (response.data.notes) {
+      if (response.data.notes != null) {
         setComicNotes(response.data.notes);
       }
 
@@ -7493,7 +7493,10 @@ function PageEditor({ isCover = false }) {
           </div>
           <textarea
             value={comicNotes}
-            onChange={(e) => setComicNotes(e.target.value)}
+            onChange={(e) => {
+              setComicNotes(e.target.value);
+              setComic(prev => prev ? { ...prev, notes: e.target.value } : prev);
+            }}
             placeholder="Paste or type notes here... (shared across all pages in this comic)"
             style={{
               flex: 1,

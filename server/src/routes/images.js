@@ -146,6 +146,28 @@ async function loadBlurredReferenceImages(imagePaths) {
   return files;
 }
 
+// Helper: wrap a long-running async operation with periodic keep-alive writes
+// to prevent browser/proxy from closing the connection on idle.
+// Sends newlines every 15s, then the final JSON result.
+function withKeepAlive(res, asyncFn) {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-cache');
+  const keepAlive = setInterval(() => {
+    try { res.write(' '); } catch (e) { clearInterval(keepAlive); }
+  }, 15000);
+  return asyncFn()
+    .then(result => {
+      clearInterval(keepAlive);
+      res.end(JSON.stringify(result));
+    })
+    .catch(err => {
+      clearInterval(keepAlive);
+      console.error('Generation error:', err);
+      // If headers already sent (we wrote keep-alive bytes), send error as JSON in body
+      res.end(JSON.stringify({ error: err.message }));
+    });
+}
+
 // Configure multer for image uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -238,8 +260,8 @@ router.post('/generate', async (req, res) => {
 });
 
 // Generate comic page using OpenAI or Gemini
-router.post('/generate-page', async (req, res) => {
-  try {
+router.post('/generate-page', (req, res) => {
+  withKeepAlive(res, async () => {
     const { prompt, referenceImages, provider = 'openai' } = req.body;
 
     let finalPrompt = prompt;
@@ -250,9 +272,7 @@ router.post('/generate-page', async (req, res) => {
       buffer = await generateWithGemini(finalPrompt, referenceImages || [], []);
     } else {
       if (!process.env.OPENAI_API_KEY) {
-        return res.status(400).json({
-          error: 'OpenAI API key not configured. Add OPENAI_API_KEY to .env file.'
-        });
+        return { error: 'OpenAI API key not configured. Add OPENAI_API_KEY to .env file.' };
       }
 
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -305,14 +325,11 @@ router.post('/generate-page', async (req, res) => {
     const filePath = path.join(__dirname, '../../uploads', filename);
     await fs.writeFile(filePath, buffer);
 
-    res.json({
+    return {
       filename,
       path: `/uploads/${filename}`
-    });
-  } catch (error) {
-    console.error('Page generation error:', error);
-    res.status(500).json({ error: error.message });
-  }
+    };
+  });
 });
 
 // Use GPT-4o Responses API with image_generation tool to rotate a scene.
@@ -436,8 +453,8 @@ Generate this image now.`
 }
 
 // Generate single panel image (OpenAI or Gemini)
-router.post('/generate-panel', async (req, res) => {
-  try {
+router.post('/generate-panel', (req, res) => {
+  withKeepAlive(res, async () => {
     const { prompt, panelId, aspectRatio = 'square', referenceImages, linkedPanelImages, isRefinement, isAngleChange, angleSourceImage, angleDegrees, panelContent, provider = 'openai' } = req.body;
 
     const styleRefs = referenceImages || [];
@@ -460,7 +477,7 @@ router.post('/generate-panel', async (req, res) => {
         const outputPath = path.join(uploadDir, filename);
         await fs.writeFile(outputPath, buffer);
         console.log(`Panel ${panelId} generated: ${filename}`);
-        return res.json({ path: `/uploads/${filename}` });
+        return { path: `/uploads/${filename}` };
       } catch (err) {
         console.log(`GPT-4o Responses API failed, falling back to images.edit: ${err.message}`);
         // Fall through to the normal generation path
@@ -478,9 +495,7 @@ router.post('/generate-panel', async (req, res) => {
       console.log(`Panel ${panelId} generated with Gemini`);
     } else {
       if (!process.env.OPENAI_API_KEY) {
-        return res.status(400).json({
-          error: 'OpenAI API key not configured. Add OPENAI_API_KEY to .env file.'
-        });
+        return { error: 'OpenAI API key not configured. Add OPENAI_API_KEY to .env file.' };
       }
 
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -578,15 +593,12 @@ CHANGE: camera angle, composition, character poses, framing — follow the promp
 
     console.log(`Panel ${panelId} generated: ${filename}`);
 
-    res.json({
+    return {
       panelId,
       filename,
       path: `/uploads/${filename}`
-    });
-  } catch (error) {
-    console.error('Panel generation error:', error);
-    res.status(500).json({ error: error.message });
-  }
+    };
+  });
 });
 
 // Save image to comic project
