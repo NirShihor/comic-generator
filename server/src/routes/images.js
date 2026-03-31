@@ -77,28 +77,44 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
 
   console.log(`Gemini: generating with ${linkedCount} linked refs + ${styleCount} style refs, prompt length: ${prompt.length}`);
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.1-flash-image-preview',
-    contents: parts,
-    config: {
-      responseModalities: ['IMAGE'],
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-image-preview',
+      contents: parts,
+      config: {
+        responseModalities: ['TEXT', 'IMAGE'],
+      }
+    });
+
+    const candidate = response.candidates?.[0];
+
+    if (!candidate || !candidate.content || !candidate.content.parts) {
+      const finishReason = candidate?.finishReason || 'unknown';
+      console.log(`Gemini attempt ${attempt}/${maxRetries}: no image data (finishReason: ${finishReason})`);
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+        continue;
+      }
+      throw new Error(`Gemini returned no image data after ${maxRetries} attempts (finishReason: ${finishReason})`);
     }
-  });
 
-  const candidate = response.candidates[0];
-
-  if (!candidate || !candidate.content || !candidate.content.parts) {
-    throw new Error('Gemini returned no image data');
-  }
-
-  // Find the image part in the response
-  for (const part of candidate.content.parts) {
-    if (part.inlineData) {
-      return Buffer.from(part.inlineData.data, 'base64');
+    // Find the image part in the response
+    for (const part of candidate.content.parts) {
+      if (part.inlineData) {
+        return Buffer.from(part.inlineData.data, 'base64');
+      }
     }
-  }
 
-  throw new Error('Gemini response contained no image');
+    // Response had parts but none with image data — log what we got
+    const partTypes = candidate.content.parts.map(p => p.text ? `text: "${p.text.substring(0, 100)}"` : Object.keys(p).join(',')).join('; ');
+    console.log(`Gemini attempt ${attempt}/${maxRetries}: response had parts but no image (${partTypes})`);
+    if (attempt < maxRetries) {
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+      continue;
+    }
+    throw new Error(`Gemini response contained no image after ${maxRetries} attempts`);
+  }
 }
 
 // Load reference images from disk, resize to reduce payload, and return as File objects

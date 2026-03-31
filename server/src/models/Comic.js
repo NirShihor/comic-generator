@@ -76,6 +76,11 @@ const BubbleSchema = new mongoose.Schema({
 const PanelSchema = new mongoose.Schema({
   id: String,
   panelOrder: Number,
+  floating: Boolean,
+  corners: [{
+    x: Number,
+    y: Number
+  }],
   tapZone: {
     x: Number,
     y: Number,
@@ -125,6 +130,7 @@ const CharacterSchema = new mongoose.Schema({
 // Style Bible Image Schema
 const StyleImageSchema = new mongoose.Schema({
   id: String,
+  name: String,
   image: String,
   description: String
 }, { _id: false });
@@ -139,6 +145,7 @@ const VoiceSchema = new mongoose.Schema({
 const ComicSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
   locked: { type: Boolean, default: true },
+  published: { type: Boolean, default: false },
   title: { type: String, required: true },
   description: String,
   level: { type: String, enum: ['beginner', 'intermediate', 'advanced'], default: 'beginner' },

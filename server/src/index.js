@@ -10,6 +10,7 @@ const collectionRoutes = require('./routes/collections');
 const imageRoutes = require('./routes/images');
 const audioRoutes = require('./routes/audio');
 const chatRoutes = require('./routes/chat');
+const readerRoutes = require('./routes/reader');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -32,6 +33,7 @@ app.use('/api/collections', collectionRoutes);
 app.use('/api/images', imageRoutes);
 app.use('/api/audio', audioRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/reader', readerRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

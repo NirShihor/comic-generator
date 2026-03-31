@@ -408,6 +408,8 @@ function ComicEditor() {
   const addRefToStyleBible = async () => {
     const lastAssistant = [...refMessages].reverse().find(m => m.role === 'assistant');
     if (!lastAssistant || !refImage) return;
+    const name = prompt('Enter a name for this reference (e.g. landscape, building, prop...):');
+    if (!name || !name.trim()) return;
 
     try {
       const savePayload = { image: refImage.base64 };
@@ -421,6 +423,7 @@ function ComicEditor() {
         ...prev,
         styleBibleImages: [...(prev.styleBibleImages || []), {
           id: `style-img-${Date.now()}`,
+          name: name.trim(),
           image: response.data.path,
           description: lastAssistant.content
         }]
@@ -716,6 +719,51 @@ function ComicEditor() {
                           style={{ maxHeight: '150px', borderRadius: '6px', border: '1px solid #333', flexShrink: 0 }}
                         />
                         <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <input
+                              type="text"
+                              value={item.name || ''}
+                              onChange={(e) => {
+                                setSettings(prev => ({
+                                  ...prev,
+                                  styleBibleImages: prev.styleBibleImages.map((img, i) =>
+                                    i === index ? { ...img, name: e.target.value } : img
+                                  )
+                                }));
+                              }}
+                              placeholder="Name (e.g. landscape, building...)"
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid #333',
+                                borderRadius: '4px',
+                                color: '#fff',
+                                padding: '0.3rem 0.5rem',
+                                fontSize: '0.9rem',
+                                fontWeight: 'bold',
+                                flex: 1
+                              }}
+                            />
+                            <button
+                              onClick={() => {
+                                setSettings(prev => ({
+                                  ...prev,
+                                  styleBibleImages: prev.styleBibleImages.filter((_, i) => i !== index)
+                                }));
+                              }}
+                              style={{
+                                marginLeft: '0.5rem',
+                                padding: '0.3rem 0.6rem',
+                                background: '#c0392b',
+                                border: 'none',
+                                borderRadius: '4px',
+                                color: '#fff',
+                                cursor: 'pointer',
+                                fontSize: '0.8rem'
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
                           <p style={{
                             color: '#ddd',
                             fontSize: '0.85rem',
@@ -725,26 +773,6 @@ function ComicEditor() {
                           }}>
                             {item.description}
                           </p>
-                          <button
-                            onClick={() => {
-                              setSettings(prev => ({
-                                ...prev,
-                                styleBibleImages: prev.styleBibleImages.filter((_, i) => i !== index)
-                              }));
-                            }}
-                            style={{
-                              marginTop: '0.5rem',
-                              padding: '0.3rem 0.6rem',
-                              background: '#c0392b',
-                              border: 'none',
-                              borderRadius: '4px',
-                              color: '#fff',
-                              cursor: 'pointer',
-                              fontSize: '0.8rem'
-                            }}
-                          >
-                            Remove
-                          </button>
                         </div>
                       </div>
                     ))}
@@ -1125,6 +1153,48 @@ function ComicEditor() {
             Export your comic in the format required by the Comic Reader iOS app.
             This will generate the comic.json file and copy all images (master pages and panel crops).
           </p>
+
+          {/* Publish Toggle */}
+          <div style={{
+            background: comic.published ? '#d4edda' : '#f8f9fa',
+            border: `1px solid ${comic.published ? '#c3e6cb' : '#ddd'}`,
+            borderRadius: '8px',
+            padding: '1.5rem',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div>
+              <h3 style={{ margin: 0, color: '#333' }}>Publish to Reader App</h3>
+              <p style={{ color: '#888', fontSize: '0.85rem', margin: '0.3rem 0 0' }}>
+                {comic.published
+                  ? 'This comic is visible in the Reader app store.'
+                  : 'This comic is not yet visible in the Reader app store.'}
+              </p>
+            </div>
+            <button
+              style={{
+                padding: '0.5rem 1.2rem',
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                color: '#fff',
+                background: comic.published ? '#dc3545' : '#28a745'
+              }}
+              onClick={async () => {
+                try {
+                  await api.put(`/comics/${id}`, { published: !comic.published });
+                  setComic({ ...comic, published: !comic.published });
+                } catch (error) {
+                  alert('Failed to update publish status');
+                }
+              }}
+            >
+              {comic.published ? 'Unpublish' : 'Publish'}
+            </button>
+          </div>
 
           {/* Collection Settings */}
           <div style={{

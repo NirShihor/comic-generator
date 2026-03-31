@@ -69,6 +69,18 @@ function ColorPicker({ value, onChange, onClick, disabled, style }) {
   );
 }
 
+// Compute bounding-box tapZone from 4 corner points
+function cornersToTapZone(corners) {
+  const xs = corners.map(c => c.x);
+  const ys = corners.map(c => c.y);
+  return {
+    x: Math.min(...xs),
+    y: Math.min(...ys),
+    width: Math.max(...xs) - Math.min(...xs),
+    height: Math.max(...ys) - Math.min(...ys)
+  };
+}
+
 // Strip audio enhancement tags like [sighs], [pause], [ominous, slowly] and quotation marks from text
 function stripAudioTags(text) {
   if (!text) return text;
@@ -324,6 +336,17 @@ function PageEditor({ isCover = false }) {
   const [dragLineIndex, setDragLineIndex] = useState(null);
   const [isDraggingEndpoint, setIsDraggingEndpoint] = useState(false);
   const [dragEndpoint, setDragEndpoint] = useState(null); // 'start' or 'end'
+
+  // Floating panel state
+  const [isDrawingFloatingPanel, setIsDrawingFloatingPanel] = useState(false);
+  const [floatingPanelStart, setFloatingPanelStart] = useState(null);
+  const [floatingPanelEnd, setFloatingPanelEnd] = useState(null);
+  const [isDraggingFloatingPanel, setIsDraggingFloatingPanel] = useState(false);
+  const [draggingFloatingPanelId, setDraggingFloatingPanelId] = useState(null);
+  const [floatingDragOffset, setFloatingDragOffset] = useState({ x: 0, y: 0 });
+  const [isDraggingCorner, setIsDraggingCorner] = useState(false);
+  const [draggingCornerPanelId, setDraggingCornerPanelId] = useState(null);
+  const [draggingCornerIndex, setDraggingCornerIndex] = useState(null);
 
   // Image generation state
   const [generatedImage, setGeneratedImage] = useState(null);
@@ -984,6 +1007,13 @@ function PageEditor({ isCover = false }) {
     const coords = getRelativeCoords(e);
     if (!coords) return;
 
+    // Floating panel drawing mode
+    if (isDrawingFloatingPanel) {
+      setFloatingPanelStart(coords);
+      setFloatingPanelEnd(coords);
+      return;
+    }
+
     const snapPoints = getSnapPoints();
     const snappedCoords = {
       x: snapToNearest(coords.x, snapPoints.x),
@@ -1001,30 +1031,65 @@ function PageEditor({ isCover = false }) {
     const coords = getRelativeCoords(e);
     if (!coords) return;
 
-    // Handle endpoint dragging (extend/shorten lines)
+    // Handle floating panel drawing
+    if (isDrawingFloatingPanel && floatingPanelStart) {
+      setFloatingPanelEnd(coords);
+      return;
+    }
+
+    // Handle floating panel dragging (move all corners by delta)
+    if (isDraggingFloatingPanel && draggingFloatingPanelId) {
+      const dx = coords.x - floatingDragOffset.x;
+      const dy = coords.y - floatingDragOffset.y;
+      setFloatingDragOffset({ x: coords.x, y: coords.y });
+      setPanels(prev => prev.map(p => {
+        if (p.id !== draggingFloatingPanelId || !p.corners) return p;
+        const newCorners = p.corners.map(c => ({
+          x: Math.max(0, Math.min(1, c.x + dx)),
+          y: Math.max(0, Math.min(1, c.y + dy))
+        }));
+        return { ...p, corners: newCorners, tapZone: cornersToTapZone(newCorners) };
+      }));
+      return;
+    }
+
+    // Handle floating panel corner dragging
+    if (isDraggingCorner && draggingCornerPanelId != null && draggingCornerIndex != null) {
+      setPanels(prev => prev.map(p => {
+        if (p.id !== draggingCornerPanelId || !p.corners) return p;
+        const newCorners = p.corners.map((c, i) =>
+          i === draggingCornerIndex ? { x: Math.max(0, Math.min(1, coords.x)), y: Math.max(0, Math.min(1, coords.y)) } : c
+        );
+        return { ...p, corners: newCorners, tapZone: cornersToTapZone(newCorners) };
+      }));
+      return;
+    }
+
+    // Handle endpoint dragging (2D — endpoints can move freely to create diagonal lines)
     if (isDraggingEndpoint && dragLineIndex !== null && dragEndpoint) {
       const snapPoints = getSnapPoints();
 
       setLines(prev => prev.map((l, i) => {
         if (i !== dragLineIndex) return l;
 
+        const snappedX = snapToNearest(coords.x, snapPoints.x);
+        const snappedY = snapToNearest(coords.y, snapPoints.y);
+        const clampedX = Math.max(0, Math.min(1, snappedX));
+        const clampedY = Math.max(0, Math.min(1, snappedY));
+
         if (l.type === 'horizontal') {
-          // Horizontal line: drag x1 or x2
-          const snappedX = snapToNearest(coords.x, snapPoints.x);
-          const clampedX = Math.max(0, Math.min(1, snappedX));
+          // Horizontal line: drag endpoint freely (x + y)
           if (dragEndpoint === 'start') {
-            return { ...l, x1: Math.min(clampedX, l.x2 - 0.05) };
+            return { ...l, x1: Math.min(clampedX, l.x2 - 0.05), y1: clampedY };
           } else {
-            return { ...l, x2: Math.max(clampedX, l.x1 + 0.05) };
+            return { ...l, x2: Math.max(clampedX, l.x1 + 0.05), y2: clampedY };
           }
         } else {
-          // Vertical line: drag y1 or y2
-          const snappedY = snapToNearest(coords.y, snapPoints.y);
-          const clampedY = Math.max(0, Math.min(1, snappedY));
+          // Vertical line: drag endpoint freely (x + y)
           if (dragEndpoint === 'start') {
-            return { ...l, y1: Math.min(clampedY, l.y2 - 0.05) };
+            return { ...l, y1: Math.min(clampedY, l.y2 - 0.05), x1: clampedX };
           } else {
-            return { ...l, y2: Math.max(clampedY, l.y1 + 0.05) };
+            return { ...l, y2: Math.max(clampedY, l.y1 + 0.05), x2: clampedX };
           }
         }
       }));
@@ -1032,7 +1097,7 @@ function PageEditor({ isCover = false }) {
       return;
     }
 
-    // Handle line dragging
+    // Handle line dragging (move whole line — shift endpoints with it)
     if (isDragging && dragLineIndex !== null) {
       const line = lines[dragLineIndex];
       const snapPoints = getSnapPoints();
@@ -1041,13 +1106,27 @@ function PageEditor({ isCover = false }) {
         if (i !== dragLineIndex) return l;
 
         if (l.type === 'horizontal') {
-          // Snap y position
+          // Snap y position and shift y1/y2 by the same delta
           const newY = snapToNearest(coords.y, snapPoints.y.filter(y => y !== l.y));
-          return { ...l, y: Math.max(0, Math.min(1, newY)) };
+          const clampedY = Math.max(0, Math.min(1, newY));
+          const deltaY = clampedY - l.y;
+          return {
+            ...l,
+            y: clampedY,
+            y1: l.y1 != null ? Math.max(0, Math.min(1, l.y1 + deltaY)) : clampedY,
+            y2: l.y2 != null ? Math.max(0, Math.min(1, l.y2 + deltaY)) : clampedY
+          };
         } else {
-          // Snap x position
+          // Snap x position and shift x1/x2 by the same delta
           const newX = snapToNearest(coords.x, snapPoints.x.filter(x => x !== l.x));
-          return { ...l, x: Math.max(0, Math.min(1, newX)) };
+          const clampedX = Math.max(0, Math.min(1, newX));
+          const deltaX = clampedX - l.x;
+          return {
+            ...l,
+            x: clampedX,
+            x1: l.x1 != null ? Math.max(0, Math.min(1, l.x1 + deltaX)) : clampedX,
+            x2: l.x2 != null ? Math.max(0, Math.min(1, l.x2 + deltaX)) : clampedX
+          };
         }
       }));
       setPanelsComputed(false);
@@ -1067,6 +1146,53 @@ function PageEditor({ isCover = false }) {
   };
 
   const handleMouseUp = (overrideEndCoords = null) => {
+    // Stop floating panel drawing
+    if (isDrawingFloatingPanel && floatingPanelStart && floatingPanelEnd) {
+      const x = Math.min(floatingPanelStart.x, floatingPanelEnd.x);
+      const y = Math.min(floatingPanelStart.y, floatingPanelEnd.y);
+      const w = Math.abs(floatingPanelEnd.x - floatingPanelStart.x);
+      const h = Math.abs(floatingPanelEnd.y - floatingPanelStart.y);
+
+      if (w > 0.03 && h > 0.03) {
+        const corners = [
+          { x, y },                 // top-left
+          { x: x + w, y },          // top-right
+          { x: x + w, y: y + h },   // bottom-right
+          { x, y: y + h }           // bottom-left
+        ];
+        const newPanel = {
+          id: `floating-panel-${Date.now()}`,
+          panelOrder: panels.length + 1,
+          floating: true,
+          corners,
+          tapZone: cornersToTapZone(corners),
+          content: '',
+          artworkImage: null
+        };
+        setPanels(prev => [...prev, newPanel]);
+      }
+
+      setFloatingPanelStart(null);
+      setFloatingPanelEnd(null);
+      setIsDrawingFloatingPanel(false);
+      return;
+    }
+
+    // Stop floating panel dragging
+    if (isDraggingFloatingPanel) {
+      setIsDraggingFloatingPanel(false);
+      setDraggingFloatingPanelId(null);
+      return;
+    }
+
+    // Stop floating panel corner dragging
+    if (isDraggingCorner) {
+      setIsDraggingCorner(false);
+      setDraggingCornerPanelId(null);
+      setDraggingCornerIndex(null);
+      return;
+    }
+
     // Stop endpoint dragging
     if (isDraggingEndpoint) {
       setIsDraggingEndpoint(false);
@@ -1111,7 +1237,9 @@ function PageEditor({ isCover = false }) {
         type: 'horizontal',
         y: snappedY,
         x1: Math.min(drawStart.x, endCoords.x),
-        x2: Math.max(drawStart.x, endCoords.x)
+        y1: snappedY,
+        x2: Math.max(drawStart.x, endCoords.x),
+        y2: snappedY
       };
     } else {
       // Vertical line
@@ -1122,7 +1250,9 @@ function PageEditor({ isCover = false }) {
       newLine = {
         type: 'vertical',
         x: snappedX,
+        x1: snappedX,
         y1: Math.min(drawStart.y, endCoords.y),
+        x2: snappedX,
         y2: Math.max(drawStart.y, endCoords.y)
       };
     }
@@ -1522,6 +1652,30 @@ function PageEditor({ isCover = false }) {
         setSelectedBubbleId(null);
       }
     } else {
+      // Layout mode — check for floating panel corner handle or body drag
+      if (e.target.dataset.cornerDrag) {
+        const panelId = e.target.dataset.cornerDrag;
+        const cornerIndex = parseInt(e.target.dataset.cornerIndex, 10);
+        setIsDraggingCorner(true);
+        setDraggingCornerPanelId(panelId);
+        setDraggingCornerIndex(cornerIndex);
+        return;
+      }
+      if (e.target.dataset.floatingPanel) {
+        const panelId = e.target.dataset.floatingPanel;
+        const coords = getRelativeCoords(e);
+        if (coords) {
+          const panel = panels.find(p => p.id === panelId);
+          if (panel) {
+            setIsDraggingFloatingPanel(true);
+            setDraggingFloatingPanelId(panelId);
+            setFloatingDragOffset({ x: coords.x, y: coords.y });
+            setSelectedPanel(panelId);
+            setSelectedLineIndex(null);
+          }
+        }
+        return;
+      }
       handleMouseDown(e);
     }
   };
@@ -1722,15 +1876,28 @@ function PageEditor({ isCover = false }) {
     } else {
       handleMouseUp();
     }
+    // These apply regardless of mode
+    if (isDraggingFloatingPanel) {
+      setIsDraggingFloatingPanel(false);
+      setDraggingFloatingPanelId(null);
+    }
+    if (isDraggingCorner) {
+      setIsDraggingCorner(false);
+      setDraggingCornerPanelId(null);
+      setDraggingCornerIndex(null);
+    }
   };
 
   const computePanels = () => {
+    // Preserve floating panels across recompute
+    const floatingPanels = panels.filter(p => p.floating);
     const newPanels = computePanelsFromLines(lines, pageId);
+    const regularPanels = panels.filter(p => !p.floating);
     const panelsWithContent = newPanels.map((newPanel, idx) => {
-      const existing = panels[idx];
+      const existing = regularPanels[idx];
       return existing ? { ...newPanel, content: existing.content || '' } : newPanel;
     });
-    setPanels(panelsWithContent);
+    setPanels([...panelsWithContent, ...floatingPanels]);
     setPanelsComputed(true);
   };
 
@@ -1738,10 +1905,10 @@ function PageEditor({ isCover = false }) {
     if (index === 0) return;
     const newPanels = [...panels];
     [newPanels[index - 1], newPanels[index]] = [newPanels[index], newPanels[index - 1]];
-    // Update panel orders
+    // Update panel orders (preserve floating panel IDs)
     newPanels.forEach((p, i) => {
       p.panelOrder = i + 1;
-      p.id = `${pageId}-panel-${i + 1}`;
+      if (!p.floating) p.id = `${pageId}-panel-${i + 1}`;
     });
     setPanels(newPanels);
   };
@@ -1750,12 +1917,23 @@ function PageEditor({ isCover = false }) {
     if (index === panels.length - 1) return;
     const newPanels = [...panels];
     [newPanels[index], newPanels[index + 1]] = [newPanels[index + 1], newPanels[index]];
-    // Update panel orders
+    // Update panel orders (preserve floating panel IDs)
     newPanels.forEach((p, i) => {
       p.panelOrder = i + 1;
-      p.id = `${pageId}-panel-${i + 1}`;
+      if (!p.floating) p.id = `${pageId}-panel-${i + 1}`;
     });
     setPanels(newPanels);
+  };
+
+  const deleteFloatingPanel = (panelId) => {
+    setPanels(prev => prev.filter(p => p.id !== panelId));
+    if (selectedPanel === panelId) setSelectedPanel(null);
+    // Clean up any panel image data
+    setPanelImages(prev => {
+      const updated = { ...prev };
+      delete updated[panelId];
+      return updated;
+    });
   };
 
   const updatePanelContent = (panelId, content) => {
@@ -1828,7 +2006,9 @@ function PageEditor({ isCover = false }) {
 
       let panelsToSave = panels;
       if (!panelsComputed) {
-        panelsToSave = computePanelsFromLines(lines, pageId);
+        const floatingPanels = panels.filter(p => p.floating);
+        const recomputed = computePanelsFromLines(lines, pageId);
+        panelsToSave = [...recomputed, ...floatingPanels];
         setPanels(panelsToSave);
         setPanelsComputed(true);
       }
@@ -2338,11 +2518,16 @@ function PageEditor({ isCover = false }) {
       });
     };
 
+    // Separate regular and floating panels
+    const regularPanels = panels.filter(p => !p.floating);
+    const floatingPanels = panels.filter(p => p.floating);
+
     // First, load all images and sample their edge colors
     const loadedImages = [];
+    const floatingLoadedImages = [];
     let totalR = 0, totalG = 0, totalB = 0, sampleCount = 0;
 
-    for (const panel of panels) {
+    for (const panel of regularPanels) {
       const panelData = panelImages[panel.id];
       if (panelData?.path) {
         try {
@@ -2400,6 +2585,104 @@ function PageEditor({ isCover = false }) {
     ctx.fillStyle = gutterColor;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
+    // Helper function to draw a wobbly/hand-drawn line
+    const drawWobblyLine = (x1, y1, x2, y2) => {
+      const segments = 12; // Number of segments for the wobble
+      const wobbleAmount = 1.5; // Max pixels of wobble
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+
+      for (let i = 1; i <= segments; i++) {
+        const t = i / segments;
+        const x = x1 + (x2 - x1) * t;
+        const y = y1 + (y2 - y1) * t;
+
+        // Add random wobble perpendicular to the line direction
+        const wobbleX = (Math.random() - 0.5) * wobbleAmount * 2;
+        const wobbleY = (Math.random() - 0.5) * wobbleAmount * 2;
+
+        if (i === segments) {
+          // End at exact position
+          ctx.lineTo(x2, y2);
+        } else {
+          ctx.lineTo(x + wobbleX, y + wobbleY);
+        }
+      }
+      ctx.stroke();
+    };
+
+    // Find the divider line matching a panel edge
+    const findMatchingLine = (edge, tapZone) => {
+      const tolerance = 0.02;
+      const { x, y, width, height } = tapZone;
+
+      if (edge === 'top') {
+        if (y < tolerance) return null;
+        return lines.find(l => l.type === 'horizontal' && Math.abs(l.y - y) < tolerance && l.x1 <= x + tolerance && l.x2 >= x + width - tolerance) || null;
+      }
+      if (edge === 'bottom') {
+        if (y + height > 1 - tolerance) return null;
+        return lines.find(l => l.type === 'horizontal' && Math.abs(l.y - (y + height)) < tolerance && l.x1 <= x + tolerance && l.x2 >= x + width - tolerance) || null;
+      }
+      if (edge === 'left') {
+        if (x < tolerance) return null;
+        return lines.find(l => l.type === 'vertical' && Math.abs(l.x - x) < tolerance && l.y1 <= y + tolerance && l.y2 >= y + height - tolerance) || null;
+      }
+      if (edge === 'right') {
+        if (x + width > 1 - tolerance) return null;
+        return lines.find(l => l.type === 'vertical' && Math.abs(l.x - (x + width)) < tolerance && l.y1 <= y + tolerance && l.y2 >= y + height - tolerance) || null;
+      }
+      return null;
+    };
+
+    // Compute pixel-space corner offsets for a diagonal panel edge.
+    // Returns { startOffset, endOffset } in pixels — the Y offset (for horizontal lines)
+    // or X offset (for vertical lines) at each end of the panel edge.
+    // Returns null if the line is straight (no diagonal).
+    const getEdgeDiagonalOffsets = (line, edge, tapZone) => {
+      if (line.type === 'horizontal') {
+        const y1 = line.y1 != null ? line.y1 : line.y;
+        const y2 = line.y2 != null ? line.y2 : line.y;
+        if (Math.abs(y1 - y2) < 0.001) return null;
+
+        // The panel edge runs from tapZone.x to tapZone.x+width (in normalized coords)
+        // The line runs from line.x1 to line.x2
+        // Interpolate the y offset at each panel edge boundary
+        const lineSpan = line.x2 - line.x1;
+        if (lineSpan < 0.001) return null;
+
+        const tStart = (tapZone.x - line.x1) / lineSpan;
+        const tEnd = (tapZone.x + tapZone.width - line.x1) / lineSpan;
+        const yAtStart = (y1 + (y2 - y1) * tStart) * canvasHeight;
+        const yAtEnd = (y1 + (y2 - y1) * tEnd) * canvasHeight;
+        const baseY = line.y * canvasHeight;
+
+        return {
+          startOffset: yAtStart - baseY,
+          endOffset: yAtEnd - baseY
+        };
+      } else {
+        const x1 = line.x1 != null ? line.x1 : line.x;
+        const x2 = line.x2 != null ? line.x2 : line.x;
+        if (Math.abs(x1 - x2) < 0.001) return null;
+
+        const lineSpan = line.y2 - line.y1;
+        if (lineSpan < 0.001) return null;
+
+        const tStart = (tapZone.y - line.y1) / lineSpan;
+        const tEnd = (tapZone.y + tapZone.height - line.y1) / lineSpan;
+        const xAtStart = (x1 + (x2 - x1) * tStart) * canvasWidth;
+        const xAtEnd = (x1 + (x2 - x1) * tEnd) * canvasWidth;
+        const baseX = line.x * canvasWidth;
+
+        return {
+          startOffset: xAtStart - baseX,
+          endOffset: xAtEnd - baseX
+        };
+      }
+    };
+
     // Now draw all the loaded images
     for (const { panel, img } of loadedImages) {
       const { x, y, width, height } = panel.tapZone;
@@ -2431,6 +2714,50 @@ function PageEditor({ isCover = false }) {
       const adjustedW = pw - leftInset - rightInset;
       const adjustedH = ph - topInset - bottomInset;
 
+      // Check if any edge has a diagonal divider line
+      const topLine = findMatchingLine('top', panel.tapZone);
+      const bottomLine = findMatchingLine('bottom', panel.tapZone);
+      const leftLine = findMatchingLine('left', panel.tapZone);
+      const rightLine = findMatchingLine('right', panel.tapZone);
+
+      const topDiag = topLine ? getEdgeDiagonalOffsets(topLine, 'top', panel.tapZone) : null;
+      const bottomDiag = bottomLine ? getEdgeDiagonalOffsets(bottomLine, 'bottom', panel.tapZone) : null;
+      const leftDiag = leftLine ? getEdgeDiagonalOffsets(leftLine, 'left', panel.tapZone) : null;
+      const rightDiag = rightLine ? getEdgeDiagonalOffsets(rightLine, 'right', panel.tapZone) : null;
+
+      const hasDiagonals = topDiag || bottomDiag || leftDiag || rightDiag;
+
+      // Compute the 4 corners with diagonal offsets
+      // TL = top-left, TR = top-right, BR = bottom-right, BL = bottom-left
+      const tlX = adjustedX + (leftDiag ? leftDiag.startOffset : 0) + (topDiag ? 0 : 0);
+      const tlY = adjustedY + (topDiag ? topDiag.startOffset : 0) + (leftDiag ? 0 : 0);
+      const trX = adjustedX + adjustedW + (rightDiag ? rightDiag.startOffset : 0);
+      const trY = adjustedY + (topDiag ? topDiag.endOffset : 0);
+      const brX = adjustedX + adjustedW + (rightDiag ? rightDiag.endOffset : 0);
+      const brY = adjustedY + adjustedH + (bottomDiag ? bottomDiag.endOffset : 0);
+      const blX = adjustedX + (leftDiag ? leftDiag.endOffset : 0);
+      const blY = adjustedY + adjustedH + (bottomDiag ? bottomDiag.startOffset : 0);
+
+      ctx.save();
+      if (hasDiagonals) {
+        ctx.beginPath();
+        ctx.moveTo(tlX, tlY);
+        ctx.lineTo(trX, trY);
+        ctx.lineTo(brX, brY);
+        ctx.lineTo(blX, blY);
+        ctx.closePath();
+        ctx.clip();
+      }
+
+      // When diagonals are present, expand the draw area to the polygon's bounding box
+      // so the image fills the full clipped region (the clip trims it to the right shape)
+      const drawX = hasDiagonals ? Math.min(tlX, blX) : adjustedX;
+      const drawY = hasDiagonals ? Math.min(tlY, trY) : adjustedY;
+      const drawR = hasDiagonals ? Math.max(trX, brX) : adjustedX + adjustedW;
+      const drawB = hasDiagonals ? Math.max(blY, brY) : adjustedY + adjustedH;
+      const drawW = drawR - drawX;
+      const drawH = drawB - drawY;
+
       // Trim percentage off each edge to remove AI-generated borders
       const edgeTrim = 0.03; // 3% off each edge
       const trimX = img.width * edgeTrim;
@@ -2450,7 +2777,7 @@ function PageEditor({ isCover = false }) {
       if (fitMode === 'crop') {
         // Crop mode: preserve aspect ratio, cover the panel, and allow repositioning + zoom
         const imgAspect = trimmedW / trimmedH;
-        const panelAspect = adjustedW / adjustedH;
+        const panelAspect = drawW / drawH;
 
         // Calculate base source dimensions (minimum to cover the panel)
         let baseSourceW, baseSourceH;
@@ -2477,45 +2804,19 @@ function PageEditor({ isCover = false }) {
         const sourceX = trimX + (maxOffsetX / 2) * (1 + cropX);
         const sourceY = trimY + (maxOffsetY / 2) * (1 + cropY);
 
-        // Draw cropped portion of the image
-        ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, adjustedX, adjustedY, adjustedW, adjustedH);
+        // Draw to bounding box of clip polygon (clip trims to actual shape)
+        ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, drawX, drawY, drawW, drawH);
       } else {
         // Stretch mode: scale to fit exactly (may distort), but trim edges
-        ctx.drawImage(img, trimX, trimY, trimmedW, trimmedH, adjustedX, adjustedY, adjustedW, adjustedH);
+        ctx.drawImage(img, trimX, trimY, trimmedW, trimmedH, drawX, drawY, drawW, drawH);
       }
 
       // Reset filter after drawing
       if (hasFilters) {
         ctx.filter = 'none';
       }
+      ctx.restore();
     }
-
-    // Helper function to draw a wobbly/hand-drawn line
-    const drawWobblyLine = (x1, y1, x2, y2) => {
-      const segments = 12; // Number of segments for the wobble
-      const wobbleAmount = 1.5; // Max pixels of wobble
-
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-
-      for (let i = 1; i <= segments; i++) {
-        const t = i / segments;
-        const x = x1 + (x2 - x1) * t;
-        const y = y1 + (y2 - y1) * t;
-
-        // Add random wobble perpendicular to the line direction
-        const wobbleX = (Math.random() - 0.5) * wobbleAmount * 2;
-        const wobbleY = (Math.random() - 0.5) * wobbleAmount * 2;
-
-        if (i === segments) {
-          // End at exact position
-          ctx.lineTo(x2, y2);
-        } else {
-          ctx.lineTo(x + wobbleX, y + wobbleY);
-        }
-      }
-      ctx.stroke();
-    };
 
     // Calculate border color (darker shade from sampled colors)
     let borderColor = '#1a1a1a'; // fallback dark
@@ -2533,12 +2834,12 @@ function PageEditor({ isCover = false }) {
       borderColor = `rgb(${darkR}, ${darkG}, ${darkB})`;
     }
 
-    // Draw hand-drawn style panel borders
+    // Draw hand-drawn style panel borders for regular panels
     ctx.strokeStyle = borderColor;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    for (const panel of panels) {
+    for (const panel of regularPanels) {
       const { x, y, width, height } = panel.tapZone;
       const px = x * canvasWidth;
       const py = y * canvasHeight;
@@ -2557,18 +2858,161 @@ function PageEditor({ isCover = false }) {
       const adjustedW = pw - leftInset - rightInset;
       const adjustedH = ph - topInset - bottomInset;
 
+      // Find diagonal edges for this panel
+      const topLine = findMatchingLine('top', panel.tapZone);
+      const bottomLine = findMatchingLine('bottom', panel.tapZone);
+      const leftLine = findMatchingLine('left', panel.tapZone);
+      const rightLine = findMatchingLine('right', panel.tapZone);
+
+      const topDiag = topLine ? getEdgeDiagonalOffsets(topLine, 'top', panel.tapZone) : null;
+      const bottomDiag = bottomLine ? getEdgeDiagonalOffsets(bottomLine, 'bottom', panel.tapZone) : null;
+      const leftDiag = leftLine ? getEdgeDiagonalOffsets(leftLine, 'left', panel.tapZone) : null;
+      const rightDiag = rightLine ? getEdgeDiagonalOffsets(rightLine, 'right', panel.tapZone) : null;
+
+      // Compute corner positions with diagonal offsets
+      const tlX = adjustedX + (leftDiag ? leftDiag.startOffset : 0);
+      const tlY = adjustedY + (topDiag ? topDiag.startOffset : 0);
+      const trX = adjustedX + adjustedW + (rightDiag ? rightDiag.startOffset : 0);
+      const trY = adjustedY + (topDiag ? topDiag.endOffset : 0);
+      const brX = adjustedX + adjustedW + (rightDiag ? rightDiag.endOffset : 0);
+      const brY = adjustedY + adjustedH + (bottomDiag ? bottomDiag.endOffset : 0);
+      const blX = adjustedX + (leftDiag ? leftDiag.endOffset : 0);
+      const blY = adjustedY + adjustedH + (bottomDiag ? bottomDiag.startOffset : 0);
+
       // Draw multiple passes for thicker, more organic look
       for (let pass = 0; pass < 3; pass++) {
         ctx.lineWidth = 2 + Math.random() * 1.5;
 
-        // Top edge
-        drawWobblyLine(adjustedX, adjustedY, adjustedX + adjustedW, adjustedY);
-        // Right edge
-        drawWobblyLine(adjustedX + adjustedW, adjustedY, adjustedX + adjustedW, adjustedY + adjustedH);
-        // Bottom edge
-        drawWobblyLine(adjustedX + adjustedW, adjustedY + adjustedH, adjustedX, adjustedY + adjustedH);
-        // Left edge
-        drawWobblyLine(adjustedX, adjustedY + adjustedH, adjustedX, adjustedY);
+        // Top edge (TL → TR)
+        drawWobblyLine(tlX, tlY, trX, trY);
+        // Right edge (TR → BR)
+        drawWobblyLine(trX, trY, brX, brY);
+        // Bottom edge (BR → BL)
+        drawWobblyLine(brX, brY, blX, blY);
+        // Left edge (BL → TL)
+        drawWobblyLine(blX, blY, tlX, tlY);
+      }
+    }
+
+    // Render floating panels ON TOP of regular panels
+    const floatingMargin = 3;
+    for (const panel of floatingPanels) {
+      const panelData = panelImages[panel.id];
+      if (!panelData?.path) continue;
+
+      let img;
+      try {
+        img = await loadImage(`http://localhost:3001${panelData.path}`);
+      } catch (error) {
+        console.error(`Failed to load floating panel image for ${panel.id}:`, error);
+        continue;
+      }
+
+      // Use corners if available, fall back to tapZone rectangle
+      const corners = panel.corners && panel.corners.length === 4
+        ? panel.corners.map(c => ({ x: c.x * canvasWidth, y: c.y * canvasHeight }))
+        : (() => {
+            const { x, y, width, height } = panel.tapZone;
+            const px = x * canvasWidth, py = y * canvasHeight;
+            const pw = width * canvasWidth, ph = height * canvasHeight;
+            return [
+              { x: px, y: py }, { x: px + pw, y: py },
+              { x: px + pw, y: py + ph }, { x: px, y: py + ph }
+            ];
+          })();
+
+      // Shrink corners inward by floatingMargin for the inner (image) polygon
+      const centroidX = corners.reduce((s, c) => s + c.x, 0) / 4;
+      const centroidY = corners.reduce((s, c) => s + c.y, 0) / 4;
+      const innerCorners = corners.map(c => {
+        const dx = c.x - centroidX;
+        const dy = c.y - centroidY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist === 0) return { ...c };
+        const shrink = Math.min(floatingMargin, dist);
+        return { x: c.x - (dx / dist) * shrink, y: c.y - (dy / dist) * shrink };
+      });
+
+      // Compute bounding box from corners (for image positioning)
+      const bboxX = Math.min(...corners.map(c => c.x));
+      const bboxY = Math.min(...corners.map(c => c.y));
+      const bboxW = Math.max(...corners.map(c => c.x)) - bboxX;
+      const bboxH = Math.max(...corners.map(c => c.y)) - bboxY;
+
+      // Draw gutter-colored background within the outer polygon
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(corners[0].x, corners[0].y);
+      for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+      ctx.closePath();
+      ctx.fillStyle = gutterColor;
+      ctx.fill();
+      ctx.restore();
+
+      // Draw image clipped to the inner polygon
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(innerCorners[0].x, innerCorners[0].y);
+      for (let i = 1; i < innerCorners.length; i++) ctx.lineTo(innerCorners[i].x, innerCorners[i].y);
+      ctx.closePath();
+      ctx.clip();
+
+      // Trim edges and apply image adjustments
+      const edgeTrim = 0.03;
+      const trimX = img.width * edgeTrim;
+      const trimY = img.height * edgeTrim;
+      const trimmedW = img.width - (trimX * 2);
+      const trimmedH = img.height - (trimY * 2);
+
+      const fitMode = panelData?.fitMode || 'stretch';
+      const cropX = panelData?.cropX ?? 0;
+      const cropY = panelData?.cropY ?? 0;
+      const zoom = panelData?.zoom ?? 1;
+
+      const brightness = panelData?.brightness ?? 1;
+      const contrast = panelData?.contrast ?? 1;
+      const saturation = panelData?.saturation ?? 1;
+      const hasFilters = brightness !== 1 || contrast !== 1 || saturation !== 1;
+      if (hasFilters) {
+        ctx.filter = `brightness(${brightness}) contrast(${contrast}) saturate(${saturation})`;
+      }
+
+      if (fitMode === 'crop') {
+        const imgAspect = trimmedW / trimmedH;
+        const panelAspect = bboxW / bboxH;
+        let baseSourceW, baseSourceH;
+        if (imgAspect > panelAspect) {
+          baseSourceH = trimmedH;
+          baseSourceW = trimmedH * panelAspect;
+        } else {
+          baseSourceW = trimmedW;
+          baseSourceH = trimmedW / panelAspect;
+        }
+        const sourceW = baseSourceW / zoom;
+        const sourceH = baseSourceH / zoom;
+        const maxOffsetX = Math.max(0, trimmedW - sourceW);
+        const maxOffsetY = Math.max(0, trimmedH - sourceH);
+        const sourceX = trimX + (maxOffsetX / 2) * (1 + cropX);
+        const sourceY = trimY + (maxOffsetY / 2) * (1 + cropY);
+        ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, bboxX, bboxY, bboxW, bboxH);
+      } else {
+        ctx.drawImage(img, trimX, trimY, trimmedW, trimmedH, bboxX, bboxY, bboxW, bboxH);
+      }
+
+      if (hasFilters) {
+        ctx.filter = 'none';
+      }
+      ctx.restore();
+
+      // Draw wobbly border along each edge of the polygon
+      ctx.strokeStyle = borderColor;
+      for (let pass = 0; pass < 3; pass++) {
+        ctx.lineWidth = 2.5 + Math.random() * 1.5;
+        for (let i = 0; i < innerCorners.length; i++) {
+          const from = innerCorners[i];
+          const to = innerCorners[(i + 1) % innerCorners.length];
+          drawWobblyLine(from.x, from.y, to.x, to.y);
+        }
       }
     }
 
@@ -3041,11 +3485,20 @@ function PageEditor({ isCover = false }) {
           {isCover
             ? (isAddingBubble ? 'Click on canvas to place bubble' : 'Add bubbles for title text')
             : editorMode === 'layout'
-              ? 'Draw lines by dragging | Drag lines to reposition'
+              ? (isDrawingFloatingPanel ? 'Draw a rectangle for the floating panel' : 'Draw lines by dragging | Drag lines to reposition')
               : isAddingBubble
                 ? 'Click on canvas to place bubble'
                 : 'Drag to reposition | Select to edit'}
         </span>
+        {editorMode === 'layout' && !isCover && (
+          <button
+            className={`btn ${isDrawingFloatingPanel ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setIsDrawingFloatingPanel(!isDrawingFloatingPanel)}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: isDrawingFloatingPanel ? '#e67e22' : undefined, border: isDrawingFloatingPanel ? 'none' : undefined, color: isDrawingFloatingPanel ? '#fff' : undefined }}
+          >
+            {isDrawingFloatingPanel ? 'Cancel' : '+ Floating Panel'}
+          </button>
+        )}
         {editorMode === 'bubbles' && (
           <button
             className={`btn ${isAddingBubble ? 'btn-primary' : 'btn-secondary'}`}
@@ -3083,6 +3536,15 @@ function PageEditor({ isCover = false }) {
               style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#c0392b' }}
             >
               Delete Line
+            </button>
+          )}
+          {selectedPanel && panels.find(p => p.id === selectedPanel && p.floating) && (
+            <button
+              className="btn"
+              onClick={() => deleteFloatingPanel(selectedPanel)}
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#c0392b', color: '#fff', border: 'none' }}
+            >
+              Delete Floating Panel
             </button>
           )}
           <button
@@ -3152,6 +3614,15 @@ function PageEditor({ isCover = false }) {
               if (isDraggingTailCtrl2) {
                 setIsDraggingTailCtrl2(false);
               }
+              if (isDraggingFloatingPanel) {
+                setIsDraggingFloatingPanel(false);
+                setDraggingFloatingPanelId(null);
+              }
+              if (isDrawingFloatingPanel && floatingPanelStart) {
+                setFloatingPanelStart(null);
+                setFloatingPanelEnd(null);
+                setIsDrawingFloatingPanel(false);
+              }
             }}
             style={{
               width: CANVAS_WIDTH,
@@ -3160,7 +3631,7 @@ function PageEditor({ isCover = false }) {
               border: '2px solid #ddd',
               borderRadius: '4px',
               position: 'relative',
-              cursor: isDragging ? 'grabbing' : (editorMode === 'bubbles' ? (isAddingBubble ? 'crosshair' : 'default') : 'crosshair'),
+              cursor: isDragging || isDraggingFloatingPanel || isDraggingCorner ? 'grabbing' : isDrawingFloatingPanel ? 'crosshair' : (editorMode === 'bubbles' ? (isAddingBubble ? 'crosshair' : 'default') : 'crosshair'),
               overflow: 'hidden',
               userSelect: 'none'
             }}
@@ -3221,8 +3692,8 @@ function PageEditor({ isCover = false }) {
               />
             ))}
 
-            {/* Panel regions */}
-            {panelsComputed && panels.map((panel, i) => (
+            {/* Panel regions (regular panels only; floating panels rendered separately) */}
+            {panelsComputed && panels.filter(p => !p.floating).map((panel, i) => (
               <div
                 key={panel.id}
                 onClick={(e) => {
@@ -3262,7 +3733,7 @@ function PageEditor({ isCover = false }) {
               <React.Fragment key={`line-${i}`}>
                 {line.type === 'horizontal' ? (
                   <>
-                    {/* Horizontal line */}
+                    {/* Horizontal line bar (faded when diagonal — SVG line replaces it) */}
                     <div
                       data-line-index={i}
                       onMouseDown={(e) => handleLineMouseDown(e, i)}
@@ -3277,7 +3748,8 @@ function PageEditor({ isCover = false }) {
                         transform: 'translateY(-50%)',
                         zIndex: 20,
                         boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-                        borderRadius: '2px'
+                        borderRadius: '2px',
+                        opacity: (line.y1 != null && line.y2 != null && Math.abs(line.y1 - line.y2) > 0.005) ? 0.25 : 1
                       }}
                     />
                     {/* Left endpoint handle */}
@@ -3292,14 +3764,14 @@ function PageEditor({ isCover = false }) {
                       style={{
                         position: 'absolute',
                         left: `${line.x1 * 100}%`,
-                        top: `${line.y * 100}%`,
+                        top: `${(line.y1 != null ? line.y1 : line.y) * 100}%`,
                         width: '14px',
                         height: '14px',
                         background: selectedLineIndex === i ? '#00ff00' : '#e94560',
                         border: '2px solid #fff',
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%)',
-                        cursor: 'ew-resize',
+                        cursor: 'move',
                         zIndex: 25,
                         boxShadow: '0 0 4px rgba(0,0,0,0.5)'
                       }}
@@ -3316,14 +3788,14 @@ function PageEditor({ isCover = false }) {
                       style={{
                         position: 'absolute',
                         left: `${line.x2 * 100}%`,
-                        top: `${line.y * 100}%`,
+                        top: `${(line.y2 != null ? line.y2 : line.y) * 100}%`,
                         width: '14px',
                         height: '14px',
                         background: selectedLineIndex === i ? '#00ff00' : '#e94560',
                         border: '2px solid #fff',
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%)',
-                        cursor: 'ew-resize',
+                        cursor: 'move',
                         zIndex: 25,
                         boxShadow: '0 0 4px rgba(0,0,0,0.5)'
                       }}
@@ -3331,7 +3803,7 @@ function PageEditor({ isCover = false }) {
                   </>
                 ) : (
                   <>
-                    {/* Vertical line */}
+                    {/* Vertical line bar (faded when diagonal — SVG line replaces it) */}
                     <div
                       data-line-index={i}
                       onMouseDown={(e) => handleLineMouseDown(e, i)}
@@ -3346,7 +3818,8 @@ function PageEditor({ isCover = false }) {
                         transform: 'translateX(-50%)',
                         zIndex: 20,
                         boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-                        borderRadius: '2px'
+                        borderRadius: '2px',
+                        opacity: (line.x1 != null && line.x2 != null && Math.abs(line.x1 - line.x2) > 0.005) ? 0.25 : 1
                       }}
                     />
                     {/* Top endpoint handle */}
@@ -3360,7 +3833,7 @@ function PageEditor({ isCover = false }) {
                       }}
                       style={{
                         position: 'absolute',
-                        left: `${line.x * 100}%`,
+                        left: `${(line.x1 != null ? line.x1 : line.x) * 100}%`,
                         top: `${line.y1 * 100}%`,
                         width: '14px',
                         height: '14px',
@@ -3368,7 +3841,7 @@ function PageEditor({ isCover = false }) {
                         border: '2px solid #fff',
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%)',
-                        cursor: 'ns-resize',
+                        cursor: 'move',
                         zIndex: 25,
                         boxShadow: '0 0 4px rgba(0,0,0,0.5)'
                       }}
@@ -3384,7 +3857,7 @@ function PageEditor({ isCover = false }) {
                       }}
                       style={{
                         position: 'absolute',
-                        left: `${line.x * 100}%`,
+                        left: `${(line.x2 != null ? line.x2 : line.x) * 100}%`,
                         top: `${line.y2 * 100}%`,
                         width: '14px',
                         height: '14px',
@@ -3392,7 +3865,7 @@ function PageEditor({ isCover = false }) {
                         border: '2px solid #fff',
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%)',
-                        cursor: 'ns-resize',
+                        cursor: 'move',
                         zIndex: 25,
                         boxShadow: '0 0 4px rgba(0,0,0,0.5)'
                       }}
@@ -3401,6 +3874,90 @@ function PageEditor({ isCover = false }) {
                 )}
               </React.Fragment>
             ))}
+
+            {/* SVG overlay for diagonal line visualization */}
+            <svg
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                zIndex: 22,
+                pointerEvents: 'none',
+                overflow: 'visible'
+              }}
+            >
+              {lines.map((line, i) => {
+                const isSelected = selectedLineIndex === i;
+
+                if (line.type === 'horizontal') {
+                  const y1 = line.y1 != null ? line.y1 : line.y;
+                  const y2 = line.y2 != null ? line.y2 : line.y;
+                  const isDiagonal = Math.abs(y1 - y2) > 0.005;
+                  if (!isDiagonal) return null;
+
+                  const sx = line.x1 * CANVAS_WIDTH;
+                  const sy = y1 * CANVAS_HEIGHT;
+                  const ex = line.x2 * CANVAS_WIDTH;
+                  const ey = y2 * CANVAS_HEIGHT;
+                  const lineColor = isSelected ? '#00ff00' : '#e94560';
+
+                  return (
+                    <g key={`diag-${i}`}>
+                      {/* Wide invisible hit area */}
+                      <line
+                        x1={sx} y1={sy} x2={ex} y2={ey}
+                        stroke="transparent"
+                        strokeWidth="14"
+                        style={{ pointerEvents: 'auto', cursor: 'ns-resize' }}
+                        onMouseDown={(e) => handleLineMouseDown(e, i)}
+                      />
+                      {/* Visible diagonal line */}
+                      <line
+                        x1={sx} y1={sy} x2={ex} y2={ey}
+                        stroke={lineColor}
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        opacity="0.9"
+                        style={{ pointerEvents: 'none', filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))' }}
+                      />
+                    </g>
+                  );
+                } else {
+                  const x1 = line.x1 != null ? line.x1 : line.x;
+                  const x2 = line.x2 != null ? line.x2 : line.x;
+                  const isDiagonal = Math.abs(x1 - x2) > 0.005;
+                  if (!isDiagonal) return null;
+
+                  const sx = x1 * CANVAS_WIDTH;
+                  const sy = line.y1 * CANVAS_HEIGHT;
+                  const ex = x2 * CANVAS_WIDTH;
+                  const ey = line.y2 * CANVAS_HEIGHT;
+                  const lineColor = isSelected ? '#00ff00' : '#3498db';
+
+                  return (
+                    <g key={`diag-${i}`}>
+                      <line
+                        x1={sx} y1={sy} x2={ex} y2={ey}
+                        stroke="transparent"
+                        strokeWidth="14"
+                        style={{ pointerEvents: 'auto', cursor: 'ew-resize' }}
+                        onMouseDown={(e) => handleLineMouseDown(e, i)}
+                      />
+                      <line
+                        x1={sx} y1={sy} x2={ex} y2={ey}
+                        stroke={lineColor}
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        opacity="0.9"
+                        style={{ pointerEvents: 'none', filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))' }}
+                      />
+                    </g>
+                  );
+                }
+              })}
+            </svg>
 
             {/* Preview line */}
             {previewLine && previewLine.type === 'horizontal' && (
@@ -3436,6 +3993,98 @@ function PageEditor({ isCover = false }) {
                   borderRadius: '2px'
                 }}
               />
+            )}
+
+            {/* Floating panel preview while drawing */}
+            {isDrawingFloatingPanel && floatingPanelStart && floatingPanelEnd && (() => {
+              const x = Math.min(floatingPanelStart.x, floatingPanelEnd.x);
+              const y = Math.min(floatingPanelStart.y, floatingPanelEnd.y);
+              const w = Math.abs(floatingPanelEnd.x - floatingPanelStart.x);
+              const h = Math.abs(floatingPanelEnd.y - floatingPanelStart.y);
+              if (w < 0.01 && h < 0.01) return null;
+              return (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${x * 100}%`,
+                    top: `${y * 100}%`,
+                    width: `${w * 100}%`,
+                    height: `${h * 100}%`,
+                    border: '2px dashed #e67e22',
+                    background: 'rgba(230, 126, 34, 0.15)',
+                    zIndex: 35,
+                    pointerEvents: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              );
+            })()}
+
+            {/* Floating panel overlays (SVG) */}
+            {panels.filter(p => p.floating && p.corners).length > 0 && (
+              <svg
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 32, pointerEvents: 'none', overflow: 'visible' }}
+              >
+                {panels.filter(p => p.floating && p.corners).map((panel) => {
+                  const isSelected = selectedPanel === panel.id;
+                  const pts = panel.corners.map(c => `${c.x * CANVAS_WIDTH},${c.y * CANVAS_HEIGHT}`).join(' ');
+                  return (
+                    <g key={`floating-${panel.id}`}>
+                      {/* Polygon fill + outline */}
+                      <polygon
+                        points={pts}
+                        fill={isSelected ? 'rgba(230, 126, 34, 0.25)' : 'rgba(230, 126, 34, 0.1)'}
+                        stroke="#e67e22"
+                        strokeWidth={isSelected ? 2 : 1.5}
+                        strokeDasharray={isSelected ? 'none' : '6 3'}
+                        style={{ pointerEvents: 'auto', cursor: 'grab' }}
+                        data-floating-panel={panel.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPanel(panel.id);
+                          setSelectedLineIndex(null);
+                        }}
+                      />
+                      {/* "F" label at centroid */}
+                      <text
+                        x={panel.corners.reduce((s, c) => s + c.x, 0) / 4 * CANVAS_WIDTH}
+                        y={panel.corners.reduce((s, c) => s + c.y, 0) / 4 * CANVAS_HEIGHT}
+                        fill="#e67e22"
+                        fontSize="12"
+                        fontWeight="bold"
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        style={{ pointerEvents: 'none' }}
+                      >
+                        F
+                      </text>
+                      {/* Corner handles */}
+                      {panel.corners.map((c, ci) => (
+                        <circle
+                          key={ci}
+                          cx={c.x * CANVAS_WIDTH}
+                          cy={c.y * CANVAS_HEIGHT}
+                          r={isSelected ? 6 : 4}
+                          fill="#e67e22"
+                          stroke="#fff"
+                          strokeWidth={2}
+                          style={{ pointerEvents: 'auto', cursor: 'crosshair' }}
+                          data-corner-drag={panel.id}
+                          data-corner-index={ci}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            setIsDraggingCorner(true);
+                            setDraggingCornerPanelId(panel.id);
+                            setDraggingCornerIndex(ci);
+                            setSelectedPanel(panel.id);
+                            setSelectedLineIndex(null);
+                          }}
+                        />
+                      ))}
+                    </g>
+                  );
+                })}
+              </svg>
             )}
 
             {/* Speech Bubbles */}
@@ -4415,7 +5064,7 @@ function PageEditor({ isCover = false }) {
               style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
             >
               <div style={{ flex: 1 }}>
-                <h4>Panel {i + 1}</h4>
+                <h4>{panel.floating ? 'Floating Panel' : `Panel ${i + 1}`}{panel.floating && <span style={{ color: '#e67e22', fontSize: '0.7rem', marginLeft: '0.3rem' }}>(F)</span>}</h4>
                 <small style={{ color: '#888' }}>
                   {(panel.tapZone.width * 100).toFixed(0)}% × {(panel.tapZone.height * 100).toFixed(0)}%
                 </small>
@@ -5348,7 +5997,9 @@ function PageEditor({ isCover = false }) {
                                       } else {
                                         let panelsToSave = panels;
                                         if (!panelsComputed) {
-                                          panelsToSave = computePanelsFromLines(lines, pageId);
+                                          const floatingPanels = panels.filter(p => p.floating);
+                                          const recomputed = computePanelsFromLines(lines, pageId);
+                                          panelsToSave = [...recomputed, ...floatingPanels];
                                           setPanels(panelsToSave);
                                           setPanelsComputed(true);
                                         }
