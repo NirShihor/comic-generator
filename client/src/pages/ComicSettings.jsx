@@ -4,6 +4,7 @@ import api from '../services/api';
 
 const DEFAULT_SETTINGS = {
   styleBible: '',
+  styleBibleImages: [],
   cameraInks: '',
   characters: [],
   globalDoNot: '',
@@ -40,12 +41,8 @@ function ComicSettings() {
   const saveSettings = async () => {
     setSaving(true);
     try {
-      const updatedComic = {
-        ...comic,
-        promptSettings: settings
-      };
-      await api.put(`/comics/${id}`, updatedComic);
-      setComic(updatedComic);
+      await api.put(`/comics/${id}`, { promptSettings: settings });
+      setComic({ ...comic, promptSettings: settings });
       alert('Settings saved!');
     } catch (error) {
       console.error('Failed to save settings:', error);

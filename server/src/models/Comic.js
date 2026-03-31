@@ -89,6 +89,7 @@ const PanelSchema = new mongoose.Schema({
   },
   artworkImage: String,
   content: String,
+  selectedBibleRefs: [String],
   bubbles: [BubbleSchema]
 }, { _id: false });
 

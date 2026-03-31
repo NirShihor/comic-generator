@@ -11,6 +11,7 @@ const CharacterSchema = new mongoose.Schema({
 // Style Bible Image Schema (same as in Comic)
 const StyleImageSchema = new mongoose.Schema({
   id: String,
+  name: String,
   image: String,
   description: String
 }, { _id: false });

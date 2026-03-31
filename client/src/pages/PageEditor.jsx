@@ -367,6 +367,7 @@ function PageEditor({ isCover = false }) {
   // Per-panel framing options (checkboxes): { [panelId]: { subjectSmall: true, ... } }
   const [panelFraming, setPanelFraming] = useState({});
   const [generatingAllPanels, setGeneratingAllPanels] = useState(false);
+  const [biblePickerPanelId, setBiblePickerPanelId] = useState(null);
   const [showCompositePreview, setShowCompositePreview] = useState(false);
   const compositeCanvasRef = useRef(null);
 
@@ -2117,13 +2118,19 @@ function PageEditor({ isCover = false }) {
       prompt += `🎨 STYLE BIBLE\n${settings.styleBible}\n\n`;
     }
 
-    // Style Bible Reference Images
-    if (settings.styleBibleImages && settings.styleBibleImages.length > 0) {
-      prompt += `🎨 STYLE REFERENCE DESCRIPTIONS\n`;
-      settings.styleBibleImages.forEach((img, i) => {
-        prompt += `\nStyle Reference ${i + 1}:\n${img.description}\n`;
-      });
-      prompt += '\n';
+    // Style Bible Reference Images — only selected ones
+    const selectedRefs = panel.selectedBibleRefs || [];
+    if (settings.styleBibleImages && settings.styleBibleImages.length > 0 && selectedRefs.length > 0) {
+      const selectedStyleImages = settings.styleBibleImages.filter(
+        img => selectedRefs.includes(String(img.id))
+      );
+      if (selectedStyleImages.length > 0) {
+        prompt += `🎨 STYLE REFERENCE DESCRIPTIONS\n`;
+        selectedStyleImages.forEach((img, i) => {
+          prompt += `\nStyle Reference ${i + 1}:\n${img.description}\n`;
+        });
+        prompt += '\n';
+      }
     }
 
     // Camera & Inks
@@ -2131,13 +2138,18 @@ function PageEditor({ isCover = false }) {
       prompt += `CAMERA + INKS\n${settings.cameraInks}\n\n`;
     }
 
-    // Character Bible
+    // Character Bible — only selected ones
     if (settings.characters && settings.characters.length > 0) {
-      prompt += `CHARACTER BIBLE (MAINTAIN CONSISTENCY)\n`;
-      settings.characters.forEach(char => {
-        prompt += `\nCharacter: ${char.name}\n${char.description}\n`;
-      });
-      prompt += '\n';
+      const selectedChars = selectedRefs.length > 0
+        ? settings.characters.filter(char => selectedRefs.includes(String(char.id)))
+        : [];
+      if (selectedChars.length > 0) {
+        prompt += `CHARACTER BIBLE (MAINTAIN CONSISTENCY)\n`;
+        selectedChars.forEach(char => {
+          prompt += `\nCharacter: ${char.name}\n${char.description}\n`;
+        });
+        prompt += '\n';
+      }
     }
 
     // Global Do Not
@@ -2216,18 +2228,75 @@ function PageEditor({ isCover = false }) {
     return 'square';
   };
 
-  // Collect all reference image paths from prompt settings
-  const getRefImagePaths = () => {
+  // Toggle a bible ref (style image or character) for a panel
+  const togglePanelBibleRef = (panelId, refId) => {
+    const refIdStr = String(refId);
+    setPanels(prev => prev.map(p => {
+      if (p.id !== panelId) return p;
+      const current = p.selectedBibleRefs || [];
+      const isSelected = current.includes(refIdStr);
+      return {
+        ...p,
+        selectedBibleRefs: isSelected
+          ? current.filter(id => id !== refIdStr)
+          : [...current, refIdStr]
+      };
+    }));
+  };
+
+  const selectAllBibleRefs = (panelId) => {
+    const allIds = [
+      ...(promptSettings.styleBibleImages || []).map(img => String(img.id)),
+      ...(promptSettings.characters || []).filter(c => c.image).map(c => String(c.id))
+    ];
+    setPanels(prev => prev.map(p =>
+      p.id === panelId ? { ...p, selectedBibleRefs: allIds } : p
+    ));
+  };
+
+  const clearAllBibleRefs = (panelId) => {
+    setPanels(prev => prev.map(p =>
+      p.id === panelId ? { ...p, selectedBibleRefs: [] } : p
+    ));
+  };
+
+  // Collect reference image paths for a specific panel (only selected bible refs)
+  const getRefImagePaths = (panelId) => {
     const paths = [];
     const settings = promptSettings;
+    const panel = panels.find(p => p.id === panelId);
+    const selectedRefs = panel?.selectedBibleRefs || [];
+    if (selectedRefs.length === 0) return paths;
     if (settings.styleBibleImages) {
       settings.styleBibleImages.forEach(img => {
-        if (img.image) paths.push(img.image);
+        if (img.image && selectedRefs.includes(String(img.id))) paths.push(img.image);
       });
     }
     if (settings.characters) {
       settings.characters.forEach(char => {
-        if (char.image) paths.push(char.image);
+        if (char.image && selectedRefs.includes(String(char.id))) paths.push(char.image);
+      });
+    }
+    return paths;
+  };
+
+  // For full-page generation: union of all panels' selected refs
+  const getAllSelectedRefImagePaths = () => {
+    const allSelectedIds = new Set();
+    panels.forEach(p => {
+      (p.selectedBibleRefs || []).forEach(refId => allSelectedIds.add(refId));
+    });
+    if (allSelectedIds.size === 0) return [];
+    const paths = [];
+    const settings = promptSettings;
+    if (settings.styleBibleImages) {
+      settings.styleBibleImages.forEach(img => {
+        if (img.image && allSelectedIds.has(String(img.id))) paths.push(img.image);
+      });
+    }
+    if (settings.characters) {
+      settings.characters.forEach(char => {
+        if (char.image && allSelectedIds.has(String(char.id))) paths.push(char.image);
       });
     }
     return paths;
@@ -2267,9 +2336,9 @@ function PageEditor({ isCover = false }) {
 
       console.log(`Generating panel ${panelIndex + 1} (${panel.id}), aspect: ${aspectRatio}, angleChange: ${isAngleChange}`);
 
-      // Separate per-panel linked refs from global style/character refs
+      // Separate per-panel linked refs from selected style/character refs
       const linkedPanelImages = panelImages[panel.id]?.refImages || [];
-      const referenceImages = getRefImagePaths();
+      const referenceImages = getRefImagePaths(panel.id);
 
       // For angle changes, send the current panel image separately as the
       // "source" image (unblurred), while other refs stay in their normal paths
@@ -2433,7 +2502,7 @@ function PageEditor({ isCover = false }) {
         prompt: fullPrompt,
         panelId: panel.id,
         aspectRatio,
-        referenceImages: getRefImagePaths(),
+        referenceImages: getRefImagePaths(panel.id),
         linkedPanelImages: [currentPath],
         isRefinement: true,
         provider
@@ -3180,7 +3249,7 @@ function PageEditor({ isCover = false }) {
       const prompt = useCustomPrompt && customPrompt ? customPrompt : buildFullPrompt();
       console.log('Generating with prompt:', prompt);
 
-      const referenceImages = getRefImagePaths();
+      const referenceImages = getAllSelectedRefImagePaths();
       const response = await api.post('/images/generate-page', {
         prompt,
         size: '1024x1536', // Portrait for comic pages (GPT image supported size)
@@ -6875,8 +6944,91 @@ function PageEditor({ isCover = false }) {
                           >
                             {panelImages[panel.id]?.generating === 'upload' ? '⏳...' : 'Upload'}
                           </button>
+                          <button
+                            onClick={() => setBiblePickerPanelId(biblePickerPanelId === panel.id ? null : panel.id)}
+                            style={{
+                              padding: '0.25rem 0.5rem',
+                              fontSize: '0.7rem',
+                              background: (panel.selectedBibleRefs?.length > 0) ? '#e8d5f5' : '#f0f0f0',
+                              color: (panel.selectedBibleRefs?.length > 0) ? '#6c3483' : '#555',
+                              border: `1px solid ${(panel.selectedBibleRefs?.length > 0) ? '#6c3483' : '#ccc'}`,
+                              borderRadius: '4px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Refs{panel.selectedBibleRefs?.length > 0 ? ` (${panel.selectedBibleRefs.length})` : ''}
+                          </button>
                         </div>
                       </div>
+                      {/* Bible Refs Picker Popover */}
+                      {biblePickerPanelId === panel.id && (
+                        <div style={{
+                          background: '#fff', border: '1px solid #ccc', borderRadius: '8px',
+                          padding: '0.75rem', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                          marginBottom: '0.5rem', maxHeight: '250px', overflowY: 'auto'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <span style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#333' }}>Select Bible Refs</span>
+                            <div style={{ display: 'flex', gap: '0.3rem' }}>
+                              <button onClick={() => selectAllBibleRefs(panel.id)}
+                                style={{ fontSize: '0.65rem', background: 'none', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', padding: '0.1rem 0.3rem' }}>
+                                All
+                              </button>
+                              <button onClick={() => clearAllBibleRefs(panel.id)}
+                                style={{ fontSize: '0.65rem', background: 'none', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', padding: '0.1rem 0.3rem' }}>
+                                None
+                              </button>
+                              <button onClick={() => setBiblePickerPanelId(null)}
+                                style={{ fontSize: '0.65rem', background: 'none', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', padding: '0.1rem 0.3rem' }}>
+                                Close
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            {(promptSettings.styleBibleImages || []).map(img => {
+                              const isSelected = (panel.selectedBibleRefs || []).includes(String(img.id));
+                              return (
+                                <div key={img.id}
+                                  onClick={() => togglePanelBibleRef(panel.id, img.id)}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                    cursor: 'pointer', border: isSelected ? '2px solid #6c3483' : '2px solid transparent',
+                                    borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
+                                  }}>
+                                  <img src={`http://localhost:3001${img.image}`} alt={img.name}
+                                    style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
+                                  <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {img.name || (img.description ? img.description.split(',')[0].substring(0, 40) : 'Style ref')}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            {(promptSettings.characters || []).filter(c => c.image).map(char => {
+                              const isSelected = (panel.selectedBibleRefs || []).includes(String(char.id));
+                              return (
+                                <div key={char.id}
+                                  onClick={() => togglePanelBibleRef(panel.id, char.id)}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                    cursor: 'pointer', border: isSelected ? '2px solid #6c3483' : '2px solid transparent',
+                                    borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
+                                  }}>
+                                  <img src={`http://localhost:3001${char.image}`} alt={char.name}
+                                    style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
+                                  <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {char.name}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            {(!promptSettings.styleBibleImages?.length && !(promptSettings.characters || []).some(c => c.image)) && (
+                              <p style={{ fontSize: '0.75rem', color: '#999', margin: 0 }}>
+                                No style bible images or character images available. Add them in Comic Settings.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       <div style={{ position: 'relative', width: '100%' }}>
                         {/* Highlight overlay behind textarea — uses zero-width markers */}
                         {hasHighlights(panel.content) && (
@@ -7602,6 +7754,32 @@ function PageEditor({ isCover = false }) {
                                     }}
                                   >
                                     Crop
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!panelData?.path) return;
+                                      try {
+                                        const response = await api.post('/images/flip', { imagePath: panelData.path });
+                                        setPanelImages(prev => ({
+                                          ...prev,
+                                          [panel.id]: { ...prev[panel.id], path: response.data.path }
+                                        }));
+                                        setTimeout(() => compositePageFromPanels(), 50);
+                                      } catch (err) {
+                                        console.error('Flip failed:', err);
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '0.2rem 0.5rem',
+                                      fontSize: '0.7rem',
+                                      background: '#ddd',
+                                      color: '#666',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    Flip
                                   </button>
                                 </div>
                                 {/* Crop position sliders - only show when in crop mode */}

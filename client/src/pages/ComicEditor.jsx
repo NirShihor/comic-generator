@@ -205,12 +205,8 @@ function ComicEditor() {
         alert('Collection created and settings saved! (now shared across all episodes)');
       } else {
         // Save to comic directly
-        const updatedComic = {
-          ...comic,
-          promptSettings: settings
-        };
-        await api.put(`/comics/${id}`, updatedComic);
-        setComic(updatedComic);
+        await api.put(`/comics/${id}`, { promptSettings: settings });
+        setComic({ ...comic, promptSettings: settings });
         alert('Settings saved!');
       }
     } catch (error) {

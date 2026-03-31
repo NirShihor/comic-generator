@@ -539,7 +539,7 @@ router.post('/generate-panel', (req, res) => {
         allRefStreams = [...sourceStreams];
       } else {
         const linkedRefStreams = linkedRefs.length > 0
-          ? (isRefinement ? await loadReferenceImages(linkedRefs) : await loadBlurredReferenceImages(linkedRefs))
+          ? await loadReferenceImages(linkedRefs)
           : [];
         const styleRefStreams = styleRefs.length > 0
           ? await loadReferenceImages(styleRefs)
@@ -568,10 +568,9 @@ The ONLY thing that changes is the camera position/angle. Everything else must b
 Other attached images are style/character references ONLY — do NOT add characters from reference images into the scene.\n\n`;
         } else if (linkedRefs.length > 0) {
           refInstructions = `REFERENCE IMAGE INSTRUCTIONS:
-Some attached images are blurred scene references — use them ONLY to match the color palette, lighting mood, and art style.
-Do NOT try to recreate their composition or layout. Generate a completely NEW composition following the prompt below.
-KEEP: art style, color palette, lighting mood, character appearances as described in the character bible.
-CHANGE: camera angle, composition, character poses, framing — follow the prompt instructions exactly.\n\n`;
+Some attached images are SCENE REFERENCES — use them to match the setting, environment, color palette, lighting, and art style.
+Maintain visual consistency with the reference scene while following the prompt below for the specific action and composition.
+Other attached images are style/character references — use them for art style and character appearance consistency only.\n\n`;
         } else {
           refInstructions = `IMPORTANT: The attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n`;
         }
@@ -672,6 +671,28 @@ router.post('/save-reference', async (req, res) => {
       path: `/projects/${projectFolder}/images/${filename}`
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Flip an image horizontally
+router.post('/flip', async (req, res) => {
+  try {
+    const { imagePath } = req.body;
+    if (!imagePath) return res.status(400).json({ error: 'imagePath is required' });
+
+    const fullPath = path.join(__dirname, '../..', imagePath);
+    await fs.access(fullPath);
+
+    const flippedBuffer = await sharp(fullPath).flop().toBuffer();
+    const ext = path.extname(fullPath);
+    const filename = `panel-flipped-${uuidv4()}${ext}`;
+    const outputPath = path.join(__dirname, '../../uploads', filename);
+    await fs.writeFile(outputPath, flippedBuffer);
+
+    res.json({ path: `/uploads/${filename}` });
+  } catch (error) {
+    console.error('Flip error:', error);
     res.status(500).json({ error: error.message });
   }
 });
