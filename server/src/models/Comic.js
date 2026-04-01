@@ -90,6 +90,13 @@ const PanelSchema = new mongoose.Schema({
   artworkImage: String,
   content: String,
   selectedBibleRefs: [String],
+  fitMode: { type: String, default: 'stretch' },
+  cropX: { type: Number, default: 0 },
+  cropY: { type: Number, default: 0 },
+  zoom: { type: Number, default: 1 },
+  brightness: { type: Number, default: 1 },
+  contrast: { type: Number, default: 1 },
+  saturation: { type: Number, default: 1 },
   bubbles: [BubbleSchema]
 }, { _id: false });
 

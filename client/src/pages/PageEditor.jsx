@@ -872,7 +872,18 @@ function PageEditor({ isCover = false }) {
         const restored = {};
         currentPage.panels.forEach(p => {
           if (p.artworkImage) {
-            restored[p.id] = { path: p.artworkImage, generating: null, error: null, fitMode: 'stretch', cropX: 0, cropY: 0, zoom: 1, brightness: 1, contrast: 1, saturation: 1 };
+            restored[p.id] = {
+              path: p.artworkImage,
+              generating: null,
+              error: null,
+              fitMode: p.fitMode || 'stretch',
+              cropX: p.cropX ?? 0,
+              cropY: p.cropY ?? 0,
+              zoom: p.zoom ?? 1,
+              brightness: p.brightness ?? 1,
+              contrast: p.contrast ?? 1,
+              saturation: p.saturation ?? 1
+            };
           }
         });
         if (Object.keys(restored).length > 0) setPanelImages(restored);
@@ -1948,6 +1959,21 @@ function PageEditor({ isCover = false }) {
     setPanels(prev => prev.map(p =>
       p.id === panelId ? { ...p, artworkImage: imagePath } : p
     ));
+    // Auto-save to DB
+    api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, { artworkImage: imagePath }).catch(err => {
+      console.error('Failed to auto-save panel artwork:', err);
+    });
+  };
+
+  // Auto-save panel adjustment values to DB (debounced)
+  const adjustmentTimers = useRef({});
+  const savePanelAdjustments = (panelId, adjustments) => {
+    clearTimeout(adjustmentTimers.current[panelId]);
+    adjustmentTimers.current[panelId] = setTimeout(() => {
+      api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, adjustments).catch(err => {
+        console.error('Failed to auto-save panel adjustments:', err);
+      });
+    }, 500);
   };
 
   // Zero-width Unicode markers for highlights (invisible in textarea, survive copy-paste)
@@ -7721,6 +7747,7 @@ function PageEditor({ isCover = false }) {
                                         ...prev,
                                         [panel.id]: { ...prev[panel.id], fitMode: 'stretch' }
                                       }));
+                                      savePanelAdjustments(panel.id, { fitMode: 'stretch' });
                                       setTimeout(() => compositePageFromPanels(), 50);
                                     }}
                                     style={{
@@ -7741,6 +7768,7 @@ function PageEditor({ isCover = false }) {
                                         ...prev,
                                         [panel.id]: { ...prev[panel.id], fitMode: 'crop', cropX: prev[panel.id]?.cropX ?? 0, cropY: prev[panel.id]?.cropY ?? 0, zoom: prev[panel.id]?.zoom ?? 1 }
                                       }));
+                                      savePanelAdjustments(panel.id, { fitMode: 'crop' });
                                       setTimeout(() => compositePageFromPanels(), 50);
                                     }}
                                     style={{
@@ -7764,6 +7792,7 @@ function PageEditor({ isCover = false }) {
                                           ...prev,
                                           [panel.id]: { ...prev[panel.id], path: response.data.path }
                                         }));
+                                        updatePanelArtwork(panel.id, response.data.path);
                                         setTimeout(() => compositePageFromPanels(), 50);
                                       } catch (err) {
                                         console.error('Flip failed:', err);
@@ -7793,10 +7822,12 @@ function PageEditor({ isCover = false }) {
                                         max="100"
                                         value={(panelData?.cropX ?? 0) * 100}
                                         onChange={(e) => {
+                                          const val = parseInt(e.target.value) / 100;
                                           setPanelImages(prev => ({
                                             ...prev,
-                                            [panel.id]: { ...prev[panel.id], cropX: parseInt(e.target.value) / 100 }
+                                            [panel.id]: { ...prev[panel.id], cropX: val }
                                           }));
+                                          savePanelAdjustments(panel.id, { cropX: val });
                                           setTimeout(() => compositePageFromPanels(), 50);
                                         }}
                                         style={{ flex: 1 }}
@@ -7813,10 +7844,12 @@ function PageEditor({ isCover = false }) {
                                         max="100"
                                         value={(panelData?.cropY ?? 0) * 100}
                                         onChange={(e) => {
+                                          const val = parseInt(e.target.value) / 100;
                                           setPanelImages(prev => ({
                                             ...prev,
-                                            [panel.id]: { ...prev[panel.id], cropY: parseInt(e.target.value) / 100 }
+                                            [panel.id]: { ...prev[panel.id], cropY: val }
                                           }));
+                                          savePanelAdjustments(panel.id, { cropY: val });
                                           setTimeout(() => compositePageFromPanels(), 50);
                                         }}
                                         style={{ flex: 1 }}
@@ -7834,10 +7867,12 @@ function PageEditor({ isCover = false }) {
                                         step="10"
                                         value={(panelData?.zoom ?? 1) * 100}
                                         onChange={(e) => {
+                                          const val = parseInt(e.target.value) / 100;
                                           setPanelImages(prev => ({
                                             ...prev,
-                                            [panel.id]: { ...prev[panel.id], zoom: parseInt(e.target.value) / 100 }
+                                            [panel.id]: { ...prev[panel.id], zoom: val }
                                           }));
+                                          savePanelAdjustments(panel.id, { zoom: val });
                                           setTimeout(() => compositePageFromPanels(), 50);
                                         }}
                                         style={{ flex: 1 }}
@@ -7852,6 +7887,7 @@ function PageEditor({ isCover = false }) {
                                           ...prev,
                                           [panel.id]: { ...prev[panel.id], cropX: 0, cropY: 0, zoom: 1 }
                                         }));
+                                        savePanelAdjustments(panel.id, { cropX: 0, cropY: 0, zoom: 1 });
                                         setTimeout(() => compositePageFromPanels(), 50);
                                       }}
                                       style={{
@@ -7879,6 +7915,7 @@ function PageEditor({ isCover = false }) {
                                           ...prev,
                                           [panel.id]: { ...prev[panel.id], saturation: 0 }
                                         }));
+                                        savePanelAdjustments(panel.id, { saturation: 0 });
                                         setTimeout(() => compositePageFromPanels(), 50);
                                       }}
                                       style={{
@@ -7900,6 +7937,7 @@ function PageEditor({ isCover = false }) {
                                             ...prev,
                                             [panel.id]: { ...prev[panel.id], brightness: 1, contrast: 1, saturation: 1 }
                                           }));
+                                          savePanelAdjustments(panel.id, { brightness: 1, contrast: 1, saturation: 1 });
                                           setTimeout(() => compositePageFromPanels(), 50);
                                         }}
                                         style={{
@@ -7924,10 +7962,12 @@ function PageEditor({ isCover = false }) {
                                       max="300"
                                       value={Math.round((panelData?.brightness ?? 1) * 100)}
                                       onChange={(e) => {
+                                        const val = parseInt(e.target.value) / 100;
                                         setPanelImages(prev => ({
                                           ...prev,
-                                          [panel.id]: { ...prev[panel.id], brightness: parseInt(e.target.value) / 100 }
+                                          [panel.id]: { ...prev[panel.id], brightness: val }
                                         }));
+                                        savePanelAdjustments(panel.id, { brightness: val });
                                         setTimeout(() => compositePageFromPanels(), 50);
                                       }}
                                       style={{ flex: 1 }}
@@ -7944,10 +7984,12 @@ function PageEditor({ isCover = false }) {
                                       max="150"
                                       value={Math.round((panelData?.contrast ?? 1) * 100)}
                                       onChange={(e) => {
+                                        const val = parseInt(e.target.value) / 100;
                                         setPanelImages(prev => ({
                                           ...prev,
-                                          [panel.id]: { ...prev[panel.id], contrast: parseInt(e.target.value) / 100 }
+                                          [panel.id]: { ...prev[panel.id], contrast: val }
                                         }));
+                                        savePanelAdjustments(panel.id, { contrast: val });
                                         setTimeout(() => compositePageFromPanels(), 50);
                                       }}
                                       style={{ flex: 1 }}
@@ -7964,10 +8006,12 @@ function PageEditor({ isCover = false }) {
                                       max="200"
                                       value={Math.round((panelData?.saturation ?? 1) * 100)}
                                       onChange={(e) => {
+                                        const val = parseInt(e.target.value) / 100;
                                         setPanelImages(prev => ({
                                           ...prev,
-                                          [panel.id]: { ...prev[panel.id], saturation: parseInt(e.target.value) / 100 }
+                                          [panel.id]: { ...prev[panel.id], saturation: val }
                                         }));
+                                        savePanelAdjustments(panel.id, { saturation: val });
                                         setTimeout(() => compositePageFromPanels(), 50);
                                       }}
                                       style={{ flex: 1 }}

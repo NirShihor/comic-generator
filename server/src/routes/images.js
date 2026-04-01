@@ -9,7 +9,7 @@ const sharp = require('sharp');
 const { GoogleGenAI } = require('@google/genai');
 
 // Generate image using Gemini API
-async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [], isAngleChange = false) {
+async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [], isAngleChange = false, aspectRatio = 'square') {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('Gemini API key not configured. Add GEMINI_API_KEY to .env file.');
   }
@@ -73,9 +73,19 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
     const styleNote = `IMPORTANT: ${styleCount} of the attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.`;
     textPrompt = `${styleNote}\n\n${prompt}`;
   }
+  // Add aspect ratio instructions
+  const aspectInstructions = {
+    portrait: 'IMPORTANT: Generate this image in PORTRAIT orientation (taller than wide, approximately 2:3 ratio). The image MUST be vertical/portrait format.',
+    landscape: 'IMPORTANT: Generate this image in LANDSCAPE orientation (wider than tall, approximately 3:2 ratio). The image MUST be horizontal/landscape format.',
+    square: 'IMPORTANT: Generate this image in SQUARE format (1:1 ratio). Width and height must be equal.'
+  };
+  if (aspectInstructions[aspectRatio]) {
+    textPrompt = `${aspectInstructions[aspectRatio]}\n\n${textPrompt}`;
+  }
+
   parts.push({ text: textPrompt });
 
-  console.log(`Gemini: generating with ${linkedCount} linked refs + ${styleCount} style refs, prompt length: ${prompt.length}`);
+  console.log(`Gemini: generating with ${linkedCount} linked refs + ${styleCount} style refs, aspect: ${aspectRatio}, prompt length: ${prompt.length}`);
 
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -225,7 +235,7 @@ router.post('/generate', async (req, res) => {
     let buffer;
 
     if (provider === 'gemini') {
-      buffer = await generateWithGemini(fullPrompt, [], []);
+      buffer = await generateWithGemini(fullPrompt, [], [], false, 'portrait');
     } else {
       if (!process.env.OPENAI_API_KEY) {
         return res.status(400).json({
@@ -285,7 +295,7 @@ router.post('/generate-page', (req, res) => {
 
     if (provider === 'gemini') {
       // generate-page only has style refs (no per-panel linked refs)
-      buffer = await generateWithGemini(finalPrompt, referenceImages || [], []);
+      buffer = await generateWithGemini(finalPrompt, referenceImages || [], [], false, 'portrait');
     } else {
       if (!process.env.OPENAI_API_KEY) {
         return { error: 'OpenAI API key not configured. Add OPENAI_API_KEY to .env file.' };
@@ -507,7 +517,19 @@ router.post('/generate-panel', (req, res) => {
       const geminiLinkedRefs = isAngleChange && angleSourceImage
         ? [angleSourceImage]
         : linkedRefs;
-      buffer = await generateWithGemini(finalPrompt, geminiStyleRefs, geminiLinkedRefs, isAngleChange);
+      buffer = await generateWithGemini(finalPrompt, geminiStyleRefs, geminiLinkedRefs, isAngleChange, aspectRatio);
+      // Enforce target dimensions — Gemini may not respect aspect ratio from prompt alone
+      let targetWidth = 1024, targetHeight = 1024;
+      if (aspectRatio === 'portrait') { targetWidth = 1024; targetHeight = 1536; }
+      else if (aspectRatio === 'landscape') { targetWidth = 1536; targetHeight = 1024; }
+      const meta = await sharp(buffer).metadata();
+      if (meta.width !== targetWidth || meta.height !== targetHeight) {
+        buffer = await sharp(buffer)
+          .resize(targetWidth, targetHeight, { fit: 'cover', position: 'centre' })
+          .png()
+          .toBuffer();
+        console.log(`Gemini output resized from ${meta.width}x${meta.height} to ${targetWidth}x${targetHeight}`);
+      }
       console.log(`Panel ${panelId} generated with Gemini`);
     } else {
       if (!process.env.OPENAI_API_KEY) {

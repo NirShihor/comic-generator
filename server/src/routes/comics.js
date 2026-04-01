@@ -402,6 +402,39 @@ router.put('/:id/pages/:pageId/panels', async (req, res) => {
   }
 });
 
+// Update a single panel's fields (artwork, adjustments, etc.)
+router.patch('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
+    if (pageIndex === -1) {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+
+    const panel = comic.pages[pageIndex].panels.find(p => p.id === req.params.panelId);
+    if (!panel) {
+      return res.status(404).json({ error: 'Panel not found' });
+    }
+
+    // Merge provided fields onto the panel
+    const allowedFields = ['artworkImage', 'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation'];
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        panel[field] = req.body[field];
+      }
+    }
+
+    await comic.save();
+    res.json(panel);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Update cover image
 router.put('/:id/cover', async (req, res) => {
   try {
