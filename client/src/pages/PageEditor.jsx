@@ -366,6 +366,8 @@ function PageEditor({ isCover = false }) {
   const [panelRefinePrompts, setPanelRefinePrompts] = useState({});
   // Per-panel framing options (checkboxes): { [panelId]: { subjectSmall: true, ... } }
   const [panelFraming, setPanelFraming] = useState({});
+  const [otherPagePanels, setOtherPagePanels] = useState([]);
+  const [showOtherPages, setShowOtherPages] = useState({});
   const [generatingAllPanels, setGeneratingAllPanels] = useState(false);
   const [biblePickerPanelId, setBiblePickerPanelId] = useState(null);
   const [showCompositePreview, setShowCompositePreview] = useState(false);
@@ -836,6 +838,23 @@ function PageEditor({ isCover = false }) {
         if (response.data.cover?.bubbles) {
           setBubbles(response.data.cover.bubbles);
         }
+        // Build list of panels from all pages for cross-page references
+        const pages = response.data.pages || [];
+        const otherPanels = [];
+        pages.forEach((pg, pgIdx) => {
+          if (!pg.panels || pg.panels.length === 0) return;
+          pg.panels.forEach((pnl, pnlIdx) => {
+            if (pnl.artworkImage) {
+              otherPanels.push({
+                pageNumber: pg.pageNumber || pgIdx + 1,
+                panelIndex: pnlIdx,
+                panelId: pnl.id,
+                artworkImage: pnl.artworkImage
+              });
+            }
+          });
+        });
+        setOtherPagePanels(otherPanels);
         // Load prompt settings via resolver (after comic data loaded)
         loadPromptSettings();
         return;
@@ -891,6 +910,25 @@ function PageEditor({ isCover = false }) {
       if (currentPage?.bubbles) {
         setBubbles(currentPage.bubbles);
       }
+      // Build list of panels from other pages that have artwork
+      const currentPageIndex = pages.findIndex(p => p.id === pageId);
+      const otherPanels = [];
+      pages.forEach((pg, pgIdx) => {
+        if (pg.id === pageId) return; // skip current page
+        if (pgIdx > currentPageIndex) return; // only previous pages
+        if (!pg.panels || pg.panels.length === 0) return;
+        pg.panels.forEach((pnl, pnlIdx) => {
+          if (pnl.artworkImage) {
+            otherPanels.push({
+              pageNumber: pg.pageNumber || pgIdx + 1,
+              panelIndex: pnlIdx,
+              panelId: pnl.id,
+              artworkImage: pnl.artworkImage
+            });
+          }
+        });
+      });
+      setOtherPagePanels(otherPanels);
       // Load prompt settings via resolver
       loadPromptSettings();
     } catch (error) {
@@ -1960,14 +1998,25 @@ function PageEditor({ isCover = false }) {
       p.id === panelId ? { ...p, artworkImage: imagePath } : p
     ));
     // Auto-save to DB
-    api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, { artworkImage: imagePath }).catch(err => {
-      console.error('Failed to auto-save panel artwork:', err);
-    });
+    if (isCover) {
+      const updatedCover = { ...comic.cover, image: imagePath };
+      api.put(`/comics/${id}`, { cover: updatedCover }).then(() => {
+        setComic(prev => ({ ...prev, cover: updatedCover }));
+        setPage(prev => ({ ...prev, masterImage: imagePath + `?t=${Date.now()}` }));
+      }).catch(err => {
+        console.error('Failed to auto-save cover artwork:', err);
+      });
+    } else {
+      api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, { artworkImage: imagePath }).catch(err => {
+        console.error('Failed to auto-save panel artwork:', err);
+      });
+    }
   };
 
   // Auto-save panel adjustment values to DB (debounced)
   const adjustmentTimers = useRef({});
   const savePanelAdjustments = (panelId, adjustments) => {
+    if (isCover) return; // Cover doesn't persist panel adjustments
     clearTimeout(adjustmentTimers.current[panelId]);
     adjustmentTimers.current[panelId] = setTimeout(() => {
       api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, adjustments).catch(err => {
@@ -3128,35 +3177,45 @@ function PageEditor({ isCover = false }) {
       const blob = await response.blob();
 
       const formData = new FormData();
-      formData.append('image', blob, `composited-${pageId}.png`);
+      formData.append('image', blob, `composited-${isCover ? 'cover' : pageId}.png`);
 
       const uploadResponse = await api.post('/images/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      // Save to project
-      await api.post('/images/save-to-project', {
-        comicId: id,
-        filename: uploadResponse.data.filename,
-        imageType: 'page',
-        pageNumber: page.pageNumber
-      });
+      if (isCover) {
+        // Save to project as cover
+        const savedPath = uploadResponse.data.path;
+        const updatedCover = { ...comic.cover, image: savedPath };
+        await api.put(`/comics/${id}`, { cover: updatedCover });
+        setComic(prev => ({ ...prev, cover: updatedCover }));
+        setPage(prev => ({ ...prev, masterImage: savedPath + `?t=${Date.now()}` }));
+        showToast('Cover image updated!');
+      } else {
+        // Save to project as page
+        await api.post('/images/save-to-project', {
+          comicId: id,
+          filename: uploadResponse.data.filename,
+          imageType: 'page',
+          pageNumber: page.pageNumber
+        });
 
-      // Update comic and page data
-      const imagePath = `/projects/${id}/images/${id}_p${page.pageNumber}.png`;
+        // Update comic and page data
+        const imagePath = `/projects/${id}/images/${id}_p${page.pageNumber}.png`;
 
-      const updatedComic = { ...comic };
-      const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
-      updatedComic.pages[pageIndex].masterImage = imagePath;
+        const updatedComic = { ...comic };
+        const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+        updatedComic.pages[pageIndex].masterImage = imagePath;
 
-      // Save to database
-      await api.put(`/comics/${id}`, updatedComic);
-      setComic(updatedComic);
+        // Save to database
+        await api.put(`/comics/${id}`, updatedComic);
+        setComic(updatedComic);
 
-      // Update local page state with cache-buster for immediate display refresh
-      setPage(prev => ({ ...prev, masterImage: `${imagePath}?t=${Date.now()}` }));
+        // Update local page state with cache-buster for immediate display refresh
+        setPage(prev => ({ ...prev, masterImage: `${imagePath}?t=${Date.now()}` }));
 
-      showToast('Composited page saved!');
+        showToast('Composited page saved!');
+      }
     } catch (error) {
       console.error('Failed to save composited image:', error);
       alert('Failed to save composited image: ' + error.message);
@@ -6831,43 +6890,10 @@ function PageEditor({ isCover = false }) {
                 </div>
               </div>
 
-              {/* Cover Content - show for cover only */}
-              {isCover && (
+              {/* Panel Contents (also used for cover) */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-                  Cover Content
-                </label>
-                <textarea
-                  value={panels[0]?.content || ''}
-                  onChange={(e) => {
-                    const updated = [...panels];
-                    if (updated[0]) {
-                      updated[0] = { ...updated[0], content: e.target.value };
-                      setPanels(updated);
-                    }
-                  }}
-                  placeholder="Describe the cover image (characters, scene, composition, text/title placement...)"
-                  style={{
-                    width: '100%',
-                    minHeight: '150px',
-                    padding: '0.75rem',
-                    borderRadius: '4px',
-                    border: '1px solid #ccc',
-                    background: '#fff',
-                    color: '#333',
-                    fontSize: '0.9rem',
-                    fontFamily: 'monospace',
-                    resize: 'vertical'
-                  }}
-                />
-              </div>
-              )}
-
-              {/* Panel Contents - show for regular pages */}
-              {!isCover && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-                  Panel Contents ({panels.length})
+                  {isCover ? 'Cover Content' : `Panel Contents (${panels.length})`}
                 </label>
                 {panels.length === 0 ? (
                   <p style={{ color: '#888', fontSize: '0.85rem' }}>
@@ -6878,10 +6904,12 @@ function PageEditor({ isCover = false }) {
                     <div key={panel.id} style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                         <label style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>
-                          Panel {i + 1}
+                          {isCover ? 'Cover' : `Panel ${i + 1}`}
+                          {!isCover && (
                           <span style={{ fontWeight: 'normal', marginLeft: '0.5rem', color: '#999' }}>
                             ({(panel.tapZone.width * 100).toFixed(0)}% × {(panel.tapZone.height * 100).toFixed(0)}%)
                           </span>
+                          )}
                           <button
                             onClick={() => {
                               const prompt = buildPanelPrompt(panel, i);
@@ -7234,6 +7262,60 @@ function PageEditor({ isCover = false }) {
                             })}
                           </>
                         )}
+                        {/* Cross-page panel references */}
+                        {otherPagePanels.length > 0 && (
+                          <>
+                            <span style={{ fontSize: '0.6rem', color: '#999', marginLeft: '0.2rem' }}>|</span>
+                            <button
+                              onClick={() => setShowOtherPages(prev => ({ ...prev, [panel.id]: !prev[panel.id] }))}
+                              style={{
+                                padding: '0.15rem 0.35rem',
+                                fontSize: '0.6rem',
+                                background: showOtherPages[panel.id] ? '#d5e8d4' : '#f5f5f5',
+                                color: '#666',
+                                border: '1px solid #aaa',
+                                borderRadius: '3px',
+                                cursor: 'pointer'
+                              }}
+                              title="Show panels from other pages"
+                            >
+                              {showOtherPages[panel.id] ? '▾' : '▸'} Other pages
+                            </button>
+                            {showOtherPages[panel.id] && otherPagePanels.map((op) => {
+                              const alreadyLinked = (panelImages[panel.id]?.refImages || []).includes(op.artworkImage);
+                              return (
+                                <button
+                                  key={op.panelId}
+                                  onClick={() => {
+                                    if (!alreadyLinked) {
+                                      setPanelImages(prev => ({
+                                        ...prev,
+                                        [panel.id]: {
+                                          ...prev[panel.id],
+                                          refImages: [...(prev[panel.id]?.refImages || []), op.artworkImage]
+                                        }
+                                      }));
+                                    }
+                                  }}
+                                  disabled={alreadyLinked}
+                                  title={alreadyLinked ? `Pg${op.pageNumber}-P${op.panelIndex + 1} already linked` : `Use Page ${op.pageNumber}, Panel ${op.panelIndex + 1} as reference`}
+                                  style={{
+                                    padding: '0.15rem 0.35rem',
+                                    fontSize: '0.6rem',
+                                    background: alreadyLinked ? '#ddd' : '#e8f0fc',
+                                    color: alreadyLinked ? '#999' : '#6a1b9a',
+                                    border: `1px solid ${alreadyLinked ? '#ccc' : '#6a1b9a'}`,
+                                    borderRadius: '3px',
+                                    cursor: alreadyLinked ? 'default' : 'pointer',
+                                    opacity: alreadyLinked ? 0.6 : 1
+                                  }}
+                                >
+                                  Pg{op.pageNumber}-P{op.panelIndex + 1}
+                                </button>
+                              );
+                            })}
+                          </>
+                        )}
                       </div>
                       {/* Framing options */}
                       <div style={{ marginTop: '0.3rem', display: 'flex', flexWrap: 'wrap', gap: '0.15rem 0.5rem', alignItems: 'center' }}>
@@ -7440,7 +7522,6 @@ function PageEditor({ isCover = false }) {
                   ))
                 )}
               </div>
-              )}
 
               {/* Global Do Not */}
               <div style={{ marginBottom: '1.5rem' }}>
@@ -7595,8 +7676,8 @@ function PageEditor({ isCover = false }) {
                   </div>
                   )}
 
-                  {/* Full Page Mode */}
-                  {!showCompositePreview && (
+                  {/* Full Page Mode (not used for cover — cover uses panel-by-panel) */}
+                  {!showCompositePreview && !isCover && (
                     <>
                       {/* Buttons */}
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
@@ -7619,9 +7700,11 @@ function PageEditor({ isCover = false }) {
                     </>
                   )}
 
-                  {/* Panel by Panel Mode */}
-                  {showCompositePreview && (
+                  {/* Panel by Panel Mode (always shown for cover) */}
+                  {(showCompositePreview || isCover) && (
                     <div style={{ marginBottom: '1rem' }}>
+                      {!isCover && (
+                      <>
                       <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
                         Generate each panel separately for better layout control. Individual panel images will be composited into the final page.
                       </p>
@@ -7664,9 +7747,13 @@ function PageEditor({ isCover = false }) {
                           );
                         })}
                       </div>
+                      </>
+                      )}
 
-                      {/* Batch Generate Button */}
+                      {/* Batch Generate & Composite Buttons */}
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                        {!isCover && (
+                        <>
                         <button
                           onClick={generateAllPanels}
                           disabled={generatingAllPanels || panels.every(p => !p.content?.trim())}
@@ -7699,6 +7786,8 @@ function PageEditor({ isCover = false }) {
                         >
                           Preview Composite
                         </button>
+                        </>
+                        )}
                         <button
                           onClick={saveCompositedImage}
                           disabled={!panels.some(p => panelImages[p.id]?.path)}
@@ -7712,7 +7801,7 @@ function PageEditor({ isCover = false }) {
                             cursor: panels.some(p => panelImages[p.id]?.path) ? 'pointer' : 'not-allowed'
                           }}
                         >
-                          Save Composite as Page
+                          {isCover ? 'Apply Adjustments to Cover' : 'Save Composite as Page'}
                         </button>
                       </div>
 

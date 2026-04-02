@@ -7,15 +7,40 @@ const { sanitizeTitle, transformToReaderFormat } = require('../services/readerFo
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 
+// Calculate total size of a directory recursively (in bytes)
+async function getDirectorySize(dirPath) {
+  let totalSize = 0;
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        totalSize += await getDirectorySize(fullPath);
+      } else {
+        const stat = await fs.stat(fullPath);
+        totalSize += stat.size;
+      }
+    }
+  } catch {
+    // Directory doesn't exist
+  }
+  return totalSize;
+}
+
 // GET /api/reader/catalog — list published comics for the reader app store
 router.get('/catalog', async (req, res) => {
   try {
     const comics = await Comic.find({ published: true }).lean();
 
-    const catalog = comics.map(comic => {
+    const catalog = await Promise.all(comics.map(async (comic) => {
       const comicSlug = sanitizeTitle(comic.title);
       const totalPages = (comic.pages || []).length + (comic.cover?.image ? 1 : 0);
       const coverImage = comic.cover?.bakedImage || comic.cover?.image || '';
+
+      // Calculate export directory size
+      const exportDir = path.join(PROJECTS_DIR, comic.id, 'export', comicSlug);
+      const sizeBytes = await getDirectorySize(exportDir);
+      const sizeMB = Math.round(sizeBytes / (1024 * 1024) * 10) / 10;
 
       return {
         id: `comic-${comicSlug}`,
@@ -26,7 +51,7 @@ router.get('/catalog', async (req, res) => {
         totalPages,
         estimatedMinutes: totalPages * 2,
         language: comic.language || 'es',
-        fileSizeMB: 0,
+        fileSizeMB: sizeMB,
         version: '1.0',
         downloadUrl: `/api/reader/comics/${comic.id}`,
         // Include collection info for grouping
@@ -34,7 +59,7 @@ router.get('/catalog', async (req, res) => {
         ...(comic.collectionTitle && { collectionTitle: comic.collectionTitle }),
         ...(comic.episodeNumber && { episodeNumber: comic.episodeNumber })
       };
-    });
+    }));
 
     res.json({
       comics: catalog,
