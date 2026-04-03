@@ -90,7 +90,7 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-image-preview',
+      model: 'gemini-3-pro-image',
       contents: parts,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],

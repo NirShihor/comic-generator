@@ -441,6 +441,7 @@ function PageEditor({ isCover = false }) {
 
   // Sidebar tab state
   const [sidebarTab, setSidebarTab] = useState('panels'); // 'panels', 'prompts', 'generate'
+  const [promptSettingsOpen, setPromptSettingsOpen] = useState(false);
 
   // Prompt settings (loaded from collection or comic via resolver)
   const [promptSettings, setPromptSettings] = useState({
@@ -2564,7 +2565,7 @@ function PageEditor({ isCover = false }) {
 
     setPanelImages(prev => ({
       ...prev,
-      [panel.id]: { ...prev[panel.id], generating: provider, error: null }
+      [panel.id]: { ...prev[panel.id], generating: provider, error: null, previousPath: currentPath }
     }));
 
     try {
@@ -5805,7 +5806,7 @@ function PageEditor({ isCover = false }) {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[pause]'].map(tag => {
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[pause]'].map(tag => {
                                 const tagKey = `${sentence.id}-${tag}`;
                                 const isCopied = copiedTag === tagKey;
                                 return (
@@ -6359,6 +6360,14 @@ function PageEditor({ isCover = false }) {
                                 </div>
                               )}
 
+                              {(sentence.words || []).length > 0 && (
+                                <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.15rem' }}>
+                                  <span style={{ flex: 1, minWidth: 0, fontSize: '0.65rem', color: '#999', paddingLeft: '0.25rem' }}>Word</span>
+                                  <span style={{ flex: 1, minWidth: 0, fontSize: '0.65rem', color: '#999', paddingLeft: '0.25rem' }}>Meaning</span>
+                                  <span style={{ flex: 1, minWidth: 0, fontSize: '0.65rem', color: '#999', paddingLeft: '0.25rem' }}>Base Form</span>
+                                  <span style={{ width: '110px', flexShrink: 0 }}></span>
+                                </div>
+                              )}
                               {(sentence.words || []).map((word, wIdx) => (
                                 <div key={word.id} style={{
                                   display: 'flex',
@@ -6518,6 +6527,23 @@ function PageEditor({ isCover = false }) {
                           }}
                         >
                           + Add Sentence
+                        </button>
+
+                        <button
+                          onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { locked: !bubble.locked }); }}
+                          style={{
+                            padding: '0.3rem 0.6rem',
+                            background: bubble.locked ? '#e67e22' : '#95a5a6',
+                            border: 'none',
+                            borderRadius: '3px',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            width: '100%',
+                            marginTop: '0.5rem'
+                          }}
+                        >
+                          {bubble.locked ? 'Unlock Bubble' : 'Lock Bubble'}
                         </button>
                       </div>
                       )}
@@ -6706,16 +6732,24 @@ function PageEditor({ isCover = false }) {
           {sidebarTab === 'prompts' && (
             <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2 style={{ color: '#333' }}>Prompt Settings</h2>
-                <button
-                  className="btn btn-primary"
-                  onClick={savePromptSettings}
-                  style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+                <h3
+                  style={{ color: '#888', cursor: 'pointer', userSelect: 'none', fontSize: '0.95rem' }}
+                  onClick={() => setPromptSettingsOpen(prev => !prev)}
                 >
-                  Save Settings
-                </button>
+                  {promptSettingsOpen ? '▼' : '▶'} Global Prompt Settings
+                </h3>
+                {promptSettingsOpen && (
+                  <button
+                    className="btn btn-primary"
+                    onClick={savePromptSettings}
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+                  >
+                    Save Settings
+                  </button>
+                )}
               </div>
 
+              {promptSettingsOpen && <>
               {/* Style Bible */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
@@ -6889,6 +6923,8 @@ function PageEditor({ isCover = false }) {
                   </button>
                 </div>
               </div>
+
+              </>}
 
               {/* Panel Contents (also used for cover) */}
               <div style={{ marginBottom: '1.5rem' }}>
@@ -7442,9 +7478,32 @@ function PageEditor({ isCover = false }) {
                           </>
                         )}
                       </div>
+                      {/* Generating indicator */}
+                      {panelImages[panel.id]?.generating && (
+                        <div style={{
+                          marginTop: '0.5rem',
+                          padding: '0.5rem',
+                          background: '#f0f0f0',
+                          borderRadius: '4px',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{
+                            height: '3px',
+                            background: 'linear-gradient(90deg, #e94560 0%, #e94560 30%, #eee 30%, #eee 70%, #e94560 70%)',
+                            backgroundSize: '200% 100%',
+                            borderRadius: '2px',
+                            animation: 'shimmer 1.5s infinite linear',
+                            marginBottom: '0.4rem'
+                          }} />
+                          <span style={{ fontSize: '0.75rem', color: '#666' }}>
+                            Generating with {panelImages[panel.id].generating === 'openai' ? 'ChatGPT' : 'Gemini'}...
+                          </span>
+                          <style>{`@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+                        </div>
+                      )}
                       {/* Panel image preview + refinement */}
                       {panelImages[panel.id]?.path && (
-                        <div style={{ marginTop: '0.5rem' }}>
+                        <div style={{ marginTop: '0.5rem', position: 'relative' }}>
                           <img
                             src={`http://localhost:3001${panelImages[panel.id].path}`}
                             alt={`Panel ${i + 1}`}
@@ -7455,7 +7514,9 @@ function PageEditor({ isCover = false }) {
                               objectFit: 'contain',
                               borderRadius: '4px',
                               border: '1px solid #ddd',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              opacity: panelImages[panel.id]?.generating ? 0.4 : 1,
+                              transition: 'opacity 0.3s'
                             }}
                           />
                           <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.4rem' }}>
@@ -7510,6 +7571,64 @@ function PageEditor({ isCover = false }) {
                             >
                               {panelImages[panel.id]?.generating === 'gemini' ? '⏳...' : 'Refine (Gemini)'}
                             </button>
+                            {panelImages[panel.id]?.previousPath && (
+                              <button
+                                onClick={() => {
+                                  const prevPath = panelImages[panel.id].previousPath;
+                                  setPanelImages(prev => ({
+                                    ...prev,
+                                    [panel.id]: { ...prev[panel.id], path: prevPath, previousPath: null }
+                                  }));
+                                  updatePanelArtwork(panel.id, prevPath);
+                                }}
+                                disabled={panelImages[panel.id]?.generating}
+                                style={{
+                                  padding: '0.4rem 0.6rem',
+                                  background: '#e67e22',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  color: '#fff',
+                                  cursor: panelImages[panel.id]?.generating ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.75rem',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                Revert
+                              </button>
+                            )}
+                            {(() => {
+                              const currentPath = panelImages[panel.id]?.path;
+                              const alreadyRef = (panelImages[panel.id]?.refImages || []).includes(currentPath);
+                              return (
+                                <button
+                                  onClick={() => {
+                                    if (!alreadyRef) {
+                                      setPanelImages(prev => ({
+                                        ...prev,
+                                        [panel.id]: {
+                                          ...prev[panel.id],
+                                          refImages: [...(prev[panel.id]?.refImages || []), currentPath]
+                                        }
+                                      }));
+                                    }
+                                  }}
+                                  disabled={alreadyRef || panelImages[panel.id]?.generating}
+                                  title={alreadyRef ? 'Already added as ref' : 'Use this generated image as a reference image'}
+                                  style={{
+                                    padding: '0.4rem 0.6rem',
+                                    background: alreadyRef ? '#ccc' : '#27ae60',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    color: '#fff',
+                                    cursor: alreadyRef || panelImages[panel.id]?.generating ? 'not-allowed' : 'pointer',
+                                    fontSize: '0.75rem',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {alreadyRef ? 'Ref Added' : 'Use as Ref'}
+                                </button>
+                              );
+                            })()}
                           </div>
                         </div>
                       )}

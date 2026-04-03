@@ -154,6 +154,55 @@ function ComicEditor() {
     }
   };
 
+  const downloadWordList = () => {
+    if (!comic) return;
+    const rows = [];
+    for (const page of (comic.pages || [])) {
+      // Bubbles live at the page level
+      for (const bubble of (page.bubbles || [])) {
+        for (const sentence of (bubble.sentences || [])) {
+          for (const word of (sentence.words || [])) {
+            if (!word.text || word.text.trim() === '') continue;
+            rows.push({
+              word: word.text,
+              meaning: word.meaning || '',
+              baseForm: word.baseForm || '',
+              page: page.pageNumber || '',
+              sentence: sentence.text || ''
+            });
+          }
+        }
+      }
+    }
+
+    // Deduplicate by word text (keep first occurrence for context)
+    const seen = new Map();
+    const unique = [];
+    for (const row of rows) {
+      const key = row.word.toLowerCase();
+      if (!seen.has(key)) {
+        seen.set(key, true);
+        unique.push(row);
+      }
+    }
+
+    unique.sort((a, b) => a.word.localeCompare(b.word));
+
+    const csvHeader = 'Word,Meaning,Base Form,Page,Sentence';
+    const csvRows = unique.map(r =>
+      `"${r.word.replace(/"/g, '""')}","${r.meaning.replace(/"/g, '""')}","${r.baseForm.replace(/"/g, '""')}",${r.page},"${r.sentence.replace(/"/g, '""')}"`
+    );
+    const csv = [csvHeader, ...csvRows].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${comic.title.toLowerCase().replace(/\s+/g, '_')}_words.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const exportComicJson = async () => {
     try {
       const response = await api.get(`/comics/${id}/export`);
@@ -1204,27 +1253,26 @@ function ComicEditor() {
             <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
               Group this comic into a collection with other episodes. Leave empty for standalone comics.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Collection ID</label>
-                <input
-                  type="text"
-                  value={comic.collectionId || ''}
-                  onChange={(e) => setComic({ ...comic, collectionId: e.target.value || undefined })}
-                  placeholder="e.g. collection-el_visitante"
-                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Collection Title</label>
-                <input
-                  type="text"
-                  value={comic.collectionTitle || ''}
-                  onChange={(e) => setComic({ ...comic, collectionTitle: e.target.value || undefined })}
-                  placeholder="e.g. EL VISITANTE"
-                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
-              </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Collection Title</label>
+              <input
+                type="text"
+                value={comic.collectionTitle || ''}
+                onChange={(e) => {
+                  const title = e.target.value || undefined;
+                  const collectionId = title
+                    ? title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+                    : undefined;
+                  setComic({ ...comic, collectionTitle: title, collectionId });
+                }}
+                placeholder="e.g. EL VISITANTE"
+                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+              />
+              {comic.collectionId && (
+                <span style={{ fontSize: '0.75rem', color: '#999', marginTop: '0.3rem', display: 'block' }}>
+                  ID: {comic.collectionId}
+                </span>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'end' }}>
               <div>
@@ -1261,7 +1309,7 @@ function ComicEditor() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
             <button
               className="btn btn-secondary"
               onClick={exportComicJson}
@@ -1276,6 +1324,13 @@ function ComicEditor() {
               style={{ padding: '0.75rem 1.5rem' }}
             >
               {exporting ? 'Exporting...' : 'Export Full Package'}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={downloadWordList}
+              style={{ padding: '0.75rem 1.5rem' }}
+            >
+              Download Word List
             </button>
           </div>
 
