@@ -233,34 +233,32 @@ function ComicEditor() {
     }
   };
 
-  const saveSettings = async () => {
+  const saveSettings = async (settingsToSave, silent = false) => {
+    const data = settingsToSave || settings;
     setSaving(true);
     try {
       if (settingsSource === 'collection' && settingsCollectionId) {
-        // Save to collection
         await api.put(`/collections/${settingsCollectionId}`, {
           title: comic.collectionTitle || '',
-          promptSettings: settings
+          promptSettings: data
         });
-        alert('Collection settings saved! (shared across all episodes)');
+        if (!silent) alert('Collection settings saved! (shared across all episodes)');
       } else if (comic.collectionId && settingsSource === 'comic') {
-        // Comic has a collectionId but no Collection document yet — create one
         await api.put(`/collections/${comic.collectionId}`, {
           title: comic.collectionTitle || '',
-          promptSettings: settings
+          promptSettings: data
         });
         setSettingsSource('collection');
         setSettingsCollectionId(comic.collectionId);
-        alert('Collection created and settings saved! (now shared across all episodes)');
+        if (!silent) alert('Collection created and settings saved! (now shared across all episodes)');
       } else {
-        // Save to comic directly
-        await api.put(`/comics/${id}`, { promptSettings: settings });
-        setComic({ ...comic, promptSettings: settings });
-        alert('Settings saved!');
+        await api.put(`/comics/${id}`, { promptSettings: data });
+        setComic({ ...comic, promptSettings: data });
+        if (!silent) alert('Settings saved!');
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
-      alert('Failed to save settings');
+      if (!silent) alert('Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -272,18 +270,26 @@ function ComicEditor() {
 
   const addCharacter = () => {
     if (!newCharacter.name.trim()) return;
-    setSettings(prev => ({
-      ...prev,
-      characters: [...prev.characters, { ...newCharacter, id: `char-${Date.now()}` }]
-    }));
+    setSettings(prev => {
+      const updated = {
+        ...prev,
+        characters: [...prev.characters, { ...newCharacter, id: `char-${Date.now()}` }]
+      };
+      saveSettings(updated, true);
+      return updated;
+    });
     setNewCharacter({ name: '', description: '' });
   };
 
   const removeCharacter = (index) => {
-    setSettings(prev => ({
-      ...prev,
-      characters: prev.characters.filter((_, i) => i !== index)
-    }));
+    setSettings(prev => {
+      const updated = {
+        ...prev,
+        characters: prev.characters.filter((_, i) => i !== index)
+      };
+      saveSettings(updated, true);
+      return updated;
+    });
   };
 
   const updateCharacter = (index, field, value) => {
@@ -464,15 +470,20 @@ function ComicEditor() {
         savePayload.comicId = id;
       }
       const response = await api.post('/images/save-reference', savePayload);
-      setSettings(prev => ({
-        ...prev,
-        styleBibleImages: [...(prev.styleBibleImages || []), {
-          id: `style-img-${Date.now()}`,
-          name: name.trim(),
-          image: response.data.path,
-          description: lastAssistant.content
-        }]
-      }));
+      const newImage = {
+        id: `style-img-${Date.now()}`,
+        name: name.trim(),
+        image: response.data.path,
+        description: lastAssistant.content
+      };
+      setSettings(prev => {
+        const updated = {
+          ...prev,
+          styleBibleImages: [...(prev.styleBibleImages || []), newImage]
+        };
+        saveSettings(updated, true);
+        return updated;
+      });
       setSettingsTab('style');
     } catch (error) {
       console.error('Failed to save reference image:', error);
@@ -790,10 +801,14 @@ function ComicEditor() {
                             />
                             <button
                               onClick={() => {
-                                setSettings(prev => ({
-                                  ...prev,
-                                  styleBibleImages: prev.styleBibleImages.filter((_, i) => i !== index)
-                                }));
+                                setSettings(prev => {
+                                  const updated = {
+                                    ...prev,
+                                    styleBibleImages: prev.styleBibleImages.filter((_, i) => i !== index)
+                                  };
+                                  saveSettings(updated, true);
+                                  return updated;
+                                });
                               }}
                               style={{
                                 marginLeft: '0.5rem',

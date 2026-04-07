@@ -361,7 +361,15 @@ function PageEditor({ isCover = false }) {
 
   // Panel-by-panel generation state
   // Each panel can have: { path, generating, error, fitMode: 'stretch'|'crop', cropX: 0, cropY: 0, zoom: 1, brightness: 1, contrast: 1, saturation: 1 }
-  const [panelImages, setPanelImages] = useState({});
+  const [panelImages, setPanelImagesRaw] = useState({});
+  const panelImagesRef = useRef({});
+  const setPanelImages = (valOrFn) => {
+    setPanelImagesRaw(prev => {
+      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      panelImagesRef.current = next;
+      return next;
+    });
+  };
   const abortControllers = useRef({}); // { [panelId]: AbortController }
   const [panelRefinePrompts, setPanelRefinePrompts] = useState({});
   // Per-panel framing options (checkboxes): { [panelId]: { subjectSmall: true, ... } }
@@ -370,6 +378,26 @@ function PageEditor({ isCover = false }) {
   const [showOtherPages, setShowOtherPages] = useState({});
   const [generatingAllPanels, setGeneratingAllPanels] = useState(false);
   const [biblePickerPanelId, setBiblePickerPanelId] = useState(null);
+  const [pageBibleRefs, setPageBibleRefsRaw] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`page-bible-refs-${id}-${pageId || 'cover'}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const setPageBibleRefs = (valOrFn) => {
+    setPageBibleRefsRaw(prev => {
+      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      try { localStorage.setItem(`page-bible-refs-${id}-${pageId || 'cover'}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const [showPageBiblePicker, setShowPageBiblePicker] = useState(false);
+  const [expandedPanelControls, setExpandedPanelControls] = useState({});
+  const [showPanelRefs, setShowPanelRefs] = useState({});
+  const [borderThickness, setBorderThickness] = useState(100); // percentage: 0=none, 100=default, 1500=15x thicker
+  const borderThicknessRef = useRef(100);
+  const [panelMargin, setPanelMargin] = useState(100); // percentage: 0=no gap, 100=default, 300=3x
+  const panelMarginRef = useRef(100);
   const [showCompositePreview, setShowCompositePreview] = useState(false);
   const compositeCanvasRef = useRef(null);
 
@@ -414,6 +442,8 @@ function PageEditor({ isCover = false }) {
   });
   const [chatInput, setChatInput] = useState('');
   const [comicNotes, setComicNotes] = useState('');
+  const notesTextareaRef = useRef(null);
+  const notesScrollRestored = useRef(false);
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [chatImages, setChatImages] = useState([]); // Images to send with next message
   const chatFileInputRef = useRef(null);
@@ -495,6 +525,13 @@ function PageEditor({ isCover = false }) {
   useEffect(() => {
     loadComic();
   }, [id, pageId, isCover]);
+
+  // Auto-composite cover when panelImages are loaded
+  useEffect(() => {
+    if (isCover && panelImages['cover-panel-1']?.path && compositeCanvasRef.current) {
+      setTimeout(() => compositePageFromPanels(), 200);
+    }
+  }, [isCover, panelImages['cover-panel-1']?.path]);
 
   // Audio generation functions (voices come from comic.voices configured in ComicEditor)
   const generateAudio = async (bubbleId, sentenceId, text) => {
@@ -836,6 +873,24 @@ function PageEditor({ isCover = false }) {
         setPage(coverPage);
         setPanels(coverPage.panels);
         setPanelsComputed(true);
+        // Initialize panelImages for cover panel so crop controls appear
+        if (response.data.cover?.image) {
+          const cover = response.data.cover;
+          setPanelImages({
+            'cover-panel-1': {
+              path: cover.image,
+              generating: null,
+              error: null,
+              fitMode: cover.fitMode || 'stretch',
+              cropX: cover.cropX ?? 0,
+              cropY: cover.cropY ?? 0,
+              zoom: cover.zoom ?? 1,
+              brightness: cover.brightness ?? 1,
+              contrast: cover.contrast ?? 1,
+              saturation: cover.saturation ?? 1
+            }
+          });
+        }
         if (response.data.cover?.bubbles) {
           setBubbles(response.data.cover.bubbles);
         }
@@ -2017,12 +2072,22 @@ function PageEditor({ isCover = false }) {
   // Auto-save panel adjustment values to DB (debounced)
   const adjustmentTimers = useRef({});
   const savePanelAdjustments = (panelId, adjustments) => {
-    if (isCover) return; // Cover doesn't persist panel adjustments
     clearTimeout(adjustmentTimers.current[panelId]);
     adjustmentTimers.current[panelId] = setTimeout(() => {
-      api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, adjustments).catch(err => {
-        console.error('Failed to auto-save panel adjustments:', err);
-      });
+      if (isCover) {
+        // Persist cover adjustments to the cover object
+        const coverUpdate = {};
+        Object.entries(adjustments).forEach(([key, val]) => {
+          coverUpdate[`cover.${key}`] = val;
+        });
+        api.put(`/comics/${id}`, coverUpdate).catch(err => {
+          console.error('Failed to auto-save cover adjustments:', err);
+        });
+      } else {
+        api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, adjustments).catch(err => {
+          console.error('Failed to auto-save panel adjustments:', err);
+        });
+      }
     }, 500);
   };
 
@@ -2065,6 +2130,49 @@ function PageEditor({ isCover = false }) {
     if (panel?.content) {
       updatePanelContent(panelId, panel.content.replace(/[\u2060\u2061]/g, ''));
     }
+  };
+
+  // Restore notes scroll position after load
+  useEffect(() => {
+    if (comicNotes && notesTextareaRef.current && !notesScrollRestored.current) {
+      notesScrollRestored.current = true;
+      try {
+        const saved = sessionStorage.getItem(`notes-scroll-${id}`);
+        if (saved) {
+          requestAnimationFrame(() => {
+            if (notesTextareaRef.current) {
+              notesTextareaRef.current.scrollTop = parseInt(saved, 10);
+            }
+          });
+        }
+      } catch {}
+    }
+  }, [comicNotes, id]);
+
+  // Notes highlight functions
+  const toggleNotesHighlight = () => {
+    const textarea = notesTextareaRef.current;
+    if (!textarea) return;
+    const { selectionStart, selectionEnd, value } = textarea;
+    if (selectionStart === selectionEnd) return;
+
+    const before = value.substring(0, selectionStart);
+    const after = value.substring(selectionEnd);
+
+    let newValue;
+    if (before.endsWith(HL_START) && after.startsWith(HL_END)) {
+      newValue = before.slice(0, -1) + value.substring(selectionStart, selectionEnd) + after.slice(1);
+    } else {
+      newValue = before + HL_START + value.substring(selectionStart, selectionEnd) + HL_END + after;
+    }
+    setComicNotes(newValue);
+    setComic(prev => prev ? { ...prev, notes: newValue } : prev);
+  };
+
+  const clearNotesHighlights = () => {
+    const cleaned = comicNotes.replace(/[\u2060\u2061]/g, '');
+    setComicNotes(cleaned);
+    setComic(prev => prev ? { ...prev, notes: cleaned } : prev);
   };
 
   const savePage = async () => {
@@ -2194,8 +2302,8 @@ function PageEditor({ isCover = false }) {
       prompt += `🎨 STYLE BIBLE\n${settings.styleBible}\n\n`;
     }
 
-    // Style Bible Reference Images — only selected ones
-    const selectedRefs = panel.selectedBibleRefs || [];
+    // Style Bible Reference Images — merge page-level + panel-level refs
+    const selectedRefs = [...new Set([...(pageBibleRefs || []), ...(panel.selectedBibleRefs || [])])];
     if (settings.styleBibleImages && settings.styleBibleImages.length > 0 && selectedRefs.length > 0) {
       const selectedStyleImages = settings.styleBibleImages.filter(
         img => selectedRefs.includes(String(img.id))
@@ -2336,12 +2444,12 @@ function PageEditor({ isCover = false }) {
     ));
   };
 
-  // Collect reference image paths for a specific panel (only selected bible refs)
+  // Collect reference image paths for a specific panel (page-level + panel-level bible refs)
   const getRefImagePaths = (panelId) => {
     const paths = [];
     const settings = promptSettings;
     const panel = panels.find(p => p.id === panelId);
-    const selectedRefs = panel?.selectedBibleRefs || [];
+    const selectedRefs = [...new Set([...(pageBibleRefs || []), ...(panel?.selectedBibleRefs || [])])];
     if (selectedRefs.length === 0) return paths;
     if (settings.styleBibleImages) {
       settings.styleBibleImages.forEach(img => {
@@ -2356,9 +2464,9 @@ function PageEditor({ isCover = false }) {
     return paths;
   };
 
-  // For full-page generation: union of all panels' selected refs
+  // For full-page generation: union of page-level + all panels' selected refs
   const getAllSelectedRefImagePaths = () => {
-    const allSelectedIds = new Set();
+    const allSelectedIds = new Set(pageBibleRefs || []);
     panels.forEach(p => {
       (p.selectedBibleRefs || []).forEach(refId => allSelectedIds.add(refId));
     });
@@ -2401,9 +2509,10 @@ function PageEditor({ isCover = false }) {
     const controller = new AbortController();
     abortControllers.current[panel.id] = controller;
 
+    const currentPath = panelImages[panel.id]?.path;
     setPanelImages(prev => ({
       ...prev,
-      [panel.id]: { ...prev[panel.id], generating: provider, error: null }
+      [panel.id]: { ...prev[panel.id], generating: provider, error: null, ...(currentPath ? { previousPath: currentPath } : {}) }
     }));
 
     try {
@@ -2640,17 +2749,20 @@ function PageEditor({ isCover = false }) {
   const compositePageFromPanels = async () => {
     const canvas = compositeCanvasRef.current;
     if (!canvas) return null;
+    // Read from ref to avoid stale closure issues
+    const panelImages = panelImagesRef.current;
 
     const ctx = canvas.getContext('2d');
-    const canvasWidth = 1024;
-    const canvasHeight = 1536;
+    const canvasWidth = 2048;
+    const canvasHeight = 3072;
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
 
     // Gutter size in pixels (margin between panels)
-    const gutterSize = 16;
+    const marginScale = panelMarginRef.current / 100;
+    const gutterSize = 16 * marginScale;
     // Outer margin for the entire page
-    const outerMargin = 12;
+    const outerMargin = 12 * marginScale;
 
     // Load and draw each panel image
     const loadImage = (src) => {
@@ -3025,17 +3137,21 @@ function PageEditor({ isCover = false }) {
       const blY = adjustedY + adjustedH + (bottomDiag ? bottomDiag.startOffset : 0);
 
       // Draw multiple passes for thicker, more organic look
-      for (let pass = 0; pass < 3; pass++) {
-        ctx.lineWidth = 2 + Math.random() * 1.5;
+      const bt = borderThicknessRef.current;
+      if (bt > 0) {
+        const borderScale = bt / 100;
+        for (let pass = 0; pass < 3; pass++) {
+          ctx.lineWidth = (2 + Math.random() * 1.5) * borderScale;
 
-        // Top edge (TL → TR)
-        drawWobblyLine(tlX, tlY, trX, trY);
-        // Right edge (TR → BR)
-        drawWobblyLine(trX, trY, brX, brY);
-        // Bottom edge (BR → BL)
-        drawWobblyLine(brX, brY, blX, blY);
-        // Left edge (BL → TL)
-        drawWobblyLine(blX, blY, tlX, tlY);
+          // Top edge (TL → TR)
+          drawWobblyLine(tlX, tlY, trX, trY);
+          // Right edge (TR → BR)
+          drawWobblyLine(trX, trY, brX, brY);
+          // Bottom edge (BR → BL)
+          drawWobblyLine(brX, brY, blX, blY);
+          // Left edge (BL → TL)
+          drawWobblyLine(blX, blY, tlX, tlY);
+        }
       }
     }
 
@@ -3150,13 +3266,17 @@ function PageEditor({ isCover = false }) {
       ctx.restore();
 
       // Draw wobbly border along each edge of the polygon
-      ctx.strokeStyle = borderColor;
-      for (let pass = 0; pass < 3; pass++) {
-        ctx.lineWidth = 2.5 + Math.random() * 1.5;
-        for (let i = 0; i < innerCorners.length; i++) {
-          const from = innerCorners[i];
-          const to = innerCorners[(i + 1) % innerCorners.length];
-          drawWobblyLine(from.x, from.y, to.x, to.y);
+      const btFloat = borderThicknessRef.current;
+      if (btFloat > 0) {
+        const borderScale = btFloat / 100;
+        ctx.strokeStyle = borderColor;
+        for (let pass = 0; pass < 3; pass++) {
+          ctx.lineWidth = (2.5 + Math.random() * 1.5) * borderScale;
+          for (let i = 0; i < innerCorners.length; i++) {
+            const from = innerCorners[i];
+            const to = innerCorners[(i + 1) % innerCorners.length];
+            drawWobblyLine(from.x, from.y, to.x, to.y);
+          }
         }
       }
     }
@@ -5806,7 +5926,7 @@ function PageEditor({ isCover = false }) {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[pause]'].map(tag => {
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[sighs]', '[pause]'].map(tag => {
                                 const tagKey = `${sentence.id}-${tag}`;
                                 const isCopied = copiedTag === tagKey;
                                 return (
@@ -6926,6 +7046,114 @@ function PageEditor({ isCover = false }) {
 
               </>}
 
+              {/* Page-level Bible Refs (shared by all panels) */}
+              {(promptSettings.styleBibleImages?.length > 0 || (promptSettings.characters || []).some(c => c.image)) && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <button
+                    onClick={() => setShowPageBiblePicker(!showPageBiblePicker)}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      fontSize: '0.8rem',
+                      background: pageBibleRefs.length > 0 ? '#e8d5f5' : '#f0f0f0',
+                      color: pageBibleRefs.length > 0 ? '#6c3483' : '#555',
+                      border: `1px solid ${pageBibleRefs.length > 0 ? '#6c3483' : '#ccc'}`,
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      width: '100%'
+                    }}
+                  >
+                    Page Refs{pageBibleRefs.length > 0 ? ` (${pageBibleRefs.length} selected — shared by all panels)` : ' (none — click to select)'}
+                  </button>
+                  {showPageBiblePicker && (
+                    <div style={{
+                      background: '#fff', border: '1px solid #ccc', borderRadius: '8px',
+                      padding: '0.75rem', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      marginTop: '0.5rem', maxHeight: '300px', overflowY: 'auto'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <span style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#333' }}>Page-level Refs (all panels)</span>
+                        <div style={{ display: 'flex', gap: '0.3rem' }}>
+                          <button onClick={() => {
+                            const allIds = [
+                              ...(promptSettings.styleBibleImages || []).map(img => String(img.id)),
+                              ...(promptSettings.characters || []).filter(c => c.image).map(c => String(c.id))
+                            ];
+                            setPageBibleRefs(allIds);
+                          }}
+                            style={{ fontSize: '0.65rem', background: 'none', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', padding: '0.1rem 0.3rem' }}>
+                            All
+                          </button>
+                          <button onClick={() => setPageBibleRefs([])}
+                            style={{ fontSize: '0.65rem', background: 'none', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', padding: '0.1rem 0.3rem' }}>
+                            None
+                          </button>
+                          <button onClick={() => setShowPageBiblePicker(false)}
+                            style={{ fontSize: '0.65rem', background: 'none', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', padding: '0.1rem 0.3rem' }}>
+                            Close
+                          </button>
+                        </div>
+                      </div>
+                      {(promptSettings.styleBibleImages || []).length > 0 && (
+                        <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '0.3rem', fontWeight: 'bold' }}>Scenes</div>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        {(promptSettings.styleBibleImages || []).map(img => {
+                          const isSelected = pageBibleRefs.includes(String(img.id));
+                          return (
+                            <div key={img.id}
+                              onClick={() => {
+                                setPageBibleRefs(prev => isSelected
+                                  ? prev.filter(id => id !== String(img.id))
+                                  : [...prev, String(img.id)]
+                                );
+                              }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                cursor: 'pointer', border: isSelected ? '2px solid #6c3483' : '2px solid transparent',
+                                borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
+                              }}>
+                              <img src={`http://localhost:3001${img.image}`} alt={img.name}
+                                style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
+                              <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {img.name || (img.description ? img.description.split(',')[0].substring(0, 40) : 'Style ref')}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {(promptSettings.characters || []).filter(c => c.image).length > 0 && (
+                        <div style={{ fontSize: '0.7rem', color: '#888', marginTop: '0.5rem', marginBottom: '0.3rem', fontWeight: 'bold' }}>Characters</div>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        {(promptSettings.characters || []).filter(c => c.image).map(char => {
+                          const isSelected = pageBibleRefs.includes(String(char.id));
+                          return (
+                            <div key={char.id}
+                              onClick={() => {
+                                setPageBibleRefs(prev => isSelected
+                                  ? prev.filter(id => id !== String(char.id))
+                                  : [...prev, String(char.id)]
+                                );
+                              }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                cursor: 'pointer', border: isSelected ? '2px solid #6c3483' : '2px solid transparent',
+                                borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
+                              }}>
+                              <img src={`http://localhost:3001${char.image}`} alt={char.name}
+                                style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
+                              <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {char.name}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Panel Contents (also used for cover) */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
@@ -7212,13 +7440,34 @@ function PageEditor({ isCover = false }) {
                         )}
                       </div>
                       {/* Per-panel reference images */}
-                      <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => setShowPanelRefs(prev => ({ ...prev, [panel.id]: !prev[panel.id] }))}
+                        style={{
+                          marginTop: '0.4rem',
+                          padding: '0.2rem 0.5rem',
+                          fontSize: '0.7rem',
+                          background: (panelImages[panel.id]?.refImages?.length > 0 || panel.selectedBibleRefs?.length > 0) ? '#e8d5f5' : '#f5f5f5',
+                          color: '#555',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          width: '100%',
+                          textAlign: 'left'
+                        }}
+                      >
+                        {showPanelRefs[panel.id] ? '▾' : '▸'} Ref Images
+                        {(panelImages[panel.id]?.refImages?.length > 0 || panel.selectedBibleRefs?.length > 0)
+                          ? ` (${(panelImages[panel.id]?.refImages?.length || 0) + (panel.selectedBibleRefs?.length || 0)})`
+                          : ''}
+                      </button>
+                      {showPanelRefs[panel.id] && <div style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
                         {(panelImages[panel.id]?.refImages || []).map((refPath, ri) => (
                           <div key={ri} style={{ position: 'relative', display: 'inline-block' }}>
                             <img
                               src={`http://localhost:3001${refPath}`}
                               alt={`Ref ${ri + 1}`}
-                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ccc' }}
+                              onClick={() => setLightboxImage(`http://localhost:3001${refPath}`)}
+                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ccc', cursor: 'pointer' }}
                             />
                             <button
                               onClick={() => removePanelRefImage(panel.id, ri)}
@@ -7352,7 +7601,7 @@ function PageEditor({ isCover = false }) {
                             })}
                           </>
                         )}
-                      </div>
+                      </div>}
                       {/* Framing options */}
                       <div style={{ marginTop: '0.3rem', display: 'flex', flexWrap: 'wrap', gap: '0.15rem 0.5rem', alignItems: 'center' }}>
                         {(() => {
@@ -7519,7 +7768,7 @@ function PageEditor({ isCover = false }) {
                               transition: 'opacity 0.3s'
                             }}
                           />
-                          <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.4rem' }}>
+                          <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
                             <input
                               type="text"
                               value={panelRefinePrompts[panel.id] || ''}
@@ -7924,6 +8173,54 @@ function PageEditor({ isCover = false }) {
                         </button>
                       </div>
 
+                      {/* Border Thickness Slider */}
+                      {panels.some(p => panelImages[p.id]?.path) && !isCover && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#666', width: '100px' }}>Border Thickness:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1500"
+                            step="10"
+                            value={borderThickness}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setBorderThickness(val);
+                              borderThicknessRef.current = val;
+                              setTimeout(() => compositePageFromPanels(), 50);
+                            }}
+                            style={{ flex: 1 }}
+                          />
+                          <span style={{ fontSize: '0.7rem', color: '#999', width: '35px' }}>
+                            {borderThickness === 0 ? 'Off' : `${borderThickness}%`}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Panel Margin Slider */}
+                      {panels.some(p => panelImages[p.id]?.path) && !isCover && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#666', width: '100px' }}>Panel Margin:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="300"
+                            step="10"
+                            value={panelMargin}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setPanelMargin(val);
+                              panelMarginRef.current = val;
+                              setTimeout(() => compositePageFromPanels(), 50);
+                            }}
+                            style={{ flex: 1 }}
+                          />
+                          <span style={{ fontSize: '0.7rem', color: '#999', width: '35px' }}>
+                            {panelMargin === 0 ? 'None' : `${panelMargin}%`}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Composite Canvas */}
                       <canvas
                         ref={compositeCanvasRef}
@@ -7940,15 +8237,27 @@ function PageEditor({ isCover = false }) {
                       {/* Crop Controls for each panel */}
                       {panels.some(p => panelImages[p.id]?.path) && (
                         <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#f9f9f9', borderRadius: '4px', border: '1px solid #eee' }}>
-                          <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Panel Fit & Position</h4>
+                          <h4 style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>{isCover ? 'Cover' : 'Panel'} Fit & Position</h4>
                           {panels.map((panel, i) => {
                             const panelData = panelImages[panel.id];
                             if (!panelData?.path) return null;
+                            const isExpanded = isCover || expandedPanelControls[panel.id];
 
                             return (
                               <div key={panel.id} style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#fff', borderRadius: '4px', border: '1px solid #ddd' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                  <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#333', minWidth: '55px' }}>Panel {i + 1}</span>
+                                <div
+                                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: isCover ? 'default' : 'pointer', userSelect: 'none' }}
+                                  onClick={() => !isCover && setExpandedPanelControls(prev => ({ ...prev, [panel.id]: !prev[panel.id] }))}
+                                >
+                                  {!isCover && <span style={{ fontSize: '0.7rem', color: '#999' }}>{expandedPanelControls[panel.id] ? '▼' : '▶'}</span>}
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#333', flex: 1 }}>{isCover ? 'Cover' : `Panel ${i + 1}`}</span>
+                                  <span style={{ fontSize: '0.7rem', color: '#888' }}>
+                                    {panelData?.fitMode === 'crop' ? 'Crop' : 'Stretch'}
+                                    {((panelData?.brightness ?? 1) !== 1 || (panelData?.contrast ?? 1) !== 1 || (panelData?.saturation ?? 1) !== 1) ? ' · Adjusted' : ''}
+                                  </span>
+                                </div>
+                                {isExpanded && <>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                                   <button
                                     onClick={() => {
                                       setPanelImages(prev => ({
@@ -8229,6 +8538,7 @@ function PageEditor({ isCover = false }) {
                                     </span>
                                   </div>
                                 </div>
+                                </>}
                               </div>
                             );
                           })}
@@ -8572,26 +8882,109 @@ function PageEditor({ isCover = false }) {
               Save
             </button>
           </div>
-          <textarea
-            value={comicNotes}
-            onChange={(e) => {
-              setComicNotes(e.target.value);
-              setComic(prev => prev ? { ...prev, notes: e.target.value } : prev);
-            }}
-            placeholder="Paste or type notes here... (shared across all pages in this comic)"
-            style={{
-              flex: 1,
-              width: '100%',
-              padding: '0.5rem',
-              borderRadius: '6px',
-              border: '1px solid #ccc',
-              fontSize: '0.8rem',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-              lineHeight: '1.4',
-              resize: 'none',
-              boxSizing: 'border-box'
-            }}
-          />
+          <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem' }}>
+            <button
+              onClick={toggleNotesHighlight}
+              title="Highlight selected text (select text first)"
+              style={{
+                padding: '0.15rem 0.4rem',
+                fontSize: '0.7rem',
+                background: '#ffe066',
+                color: '#333',
+                border: '1px solid #e6c800',
+                borderRadius: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              Highlight
+            </button>
+            {hasHighlights(comicNotes) && (
+              <button
+                onClick={clearNotesHighlights}
+                title="Clear all highlights"
+                style={{
+                  padding: '0.15rem 0.4rem',
+                  fontSize: '0.7rem',
+                  background: '#eee',
+                  color: '#666',
+                  border: '1px solid #ccc',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+            {hasHighlights(comicNotes) && (
+              <div
+                aria-hidden="true"
+                ref={(el) => {
+                  if (el && notesTextareaRef.current) {
+                    el.scrollTop = notesTextareaRef.current.scrollTop;
+                  }
+                }}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  padding: '0.5rem',
+                  fontSize: '0.8rem',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                  lineHeight: '1.4',
+                  whiteSpace: 'pre-wrap',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word',
+                  overflow: 'hidden',
+                  pointerEvents: 'none',
+                  borderRadius: '6px',
+                  border: '1px solid transparent',
+                  boxSizing: 'border-box',
+                  color: 'transparent'
+                }}
+                dangerouslySetInnerHTML={{
+                  __html: (comicNotes || '')
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/\u2060([\s\S]*?)\u2061/g, '<mark style="background:#ffe066;color:transparent;border-radius:2px">$1</mark>')
+                }}
+              />
+            )}
+            <textarea
+              ref={notesTextareaRef}
+              value={comicNotes}
+              onChange={(e) => {
+                setComicNotes(e.target.value);
+                setComic(prev => prev ? { ...prev, notes: e.target.value } : prev);
+              }}
+              onScroll={(e) => {
+                // Sync highlight overlay scroll
+                const overlay = e.target.previousSibling;
+                if (overlay) overlay.scrollTop = e.target.scrollTop;
+                // Save scroll position
+                try { sessionStorage.setItem(`notes-scroll-${id}`, e.target.scrollTop); } catch {}
+              }}
+              placeholder="Paste or type notes here... (shared across all pages in this comic)"
+              style={{
+                position: 'relative',
+                zIndex: 1,
+                width: '100%',
+                height: '100%',
+                padding: '0.5rem',
+                borderRadius: '6px',
+                border: '1px solid #ccc',
+                background: hasHighlights(comicNotes) ? 'transparent' : '#fff',
+                caretColor: '#333',
+                fontSize: '0.8rem',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                lineHeight: '1.4',
+                resize: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
         </div>
       </div>
 
