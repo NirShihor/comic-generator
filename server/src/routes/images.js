@@ -90,7 +90,7 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image',
+      model: 'gemini-3-pro-image-preview',
       contents: parts,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
@@ -561,7 +561,7 @@ router.post('/generate-panel', (req, res) => {
         allRefStreams = [...sourceStreams];
       } else {
         const linkedRefStreams = linkedRefs.length > 0
-          ? await loadReferenceImages(linkedRefs)
+          ? (isRefinement ? await loadReferenceImages(linkedRefs) : await loadBlurredReferenceImages(linkedRefs))
           : [];
         const styleRefStreams = styleRefs.length > 0
           ? await loadReferenceImages(styleRefs)

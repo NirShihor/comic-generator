@@ -11,6 +11,100 @@ function sanitizeTitle(title) {
     .substring(0, 50);
 }
 
+// Compute actual corners for grid panels by checking if divider lines are diagonal.
+// Mirrors the composite rendering logic in PageEditor.jsx.
+function computePanelCorners(panel, lines) {
+  // Floating panels already have corners
+  if (panel.floating && panel.corners && panel.corners.length === 4) {
+    return panel.corners.map(c => ({ x: c.x, y: c.y }));
+  }
+
+  if (!panel.tapZone) return null;
+
+  const tolerance = 0.02;
+  const { x, y, width, height } = panel.tapZone;
+
+  function findMatchingLine(edge) {
+    if (!lines || !lines.length) return null;
+    if (edge === 'top') {
+      if (y < tolerance) return null;
+      return lines.find(l => l.type === 'horizontal' && Math.abs(l.y - y) < tolerance && l.x1 <= x + tolerance && l.x2 >= x + width - tolerance) || null;
+    }
+    if (edge === 'bottom') {
+      if (y + height > 1 - tolerance) return null;
+      return lines.find(l => l.type === 'horizontal' && Math.abs(l.y - (y + height)) < tolerance && l.x1 <= x + tolerance && l.x2 >= x + width - tolerance) || null;
+    }
+    if (edge === 'left') {
+      if (x < tolerance) return null;
+      return lines.find(l => l.type === 'vertical' && Math.abs(l.x - x) < tolerance && l.y1 <= y + tolerance && l.y2 >= y + height - tolerance) || null;
+    }
+    if (edge === 'right') {
+      if (x + width > 1 - tolerance) return null;
+      return lines.find(l => l.type === 'vertical' && Math.abs(l.x - (x + width)) < tolerance && l.y1 <= y + tolerance && l.y2 >= y + height - tolerance) || null;
+    }
+    return null;
+  }
+
+  // Returns normalized offsets (not pixel) for diagonal edges
+  function getDiagonalOffsets(line, edge) {
+    if (line.type === 'horizontal') {
+      const ly1 = line.y1 != null ? line.y1 : line.y;
+      const ly2 = line.y2 != null ? line.y2 : line.y;
+      if (Math.abs(ly1 - ly2) < 0.001) return null;
+      const lineSpan = line.x2 - line.x1;
+      if (lineSpan < 0.001) return null;
+      const tStart = (x - line.x1) / lineSpan;
+      const tEnd = (x + width - line.x1) / lineSpan;
+      const yAtStart = ly1 + (ly2 - ly1) * tStart;
+      const yAtEnd = ly1 + (ly2 - ly1) * tEnd;
+      const baseY = line.y;
+      return { startOffset: yAtStart - baseY, endOffset: yAtEnd - baseY };
+    } else {
+      const lx1 = line.x1 != null ? line.x1 : line.x;
+      const lx2 = line.x2 != null ? line.x2 : line.x;
+      if (Math.abs(lx1 - lx2) < 0.001) return null;
+      const lineSpan = line.y2 - line.y1;
+      if (lineSpan < 0.001) return null;
+      const tStart = (y - line.y1) / lineSpan;
+      const tEnd = (y + height - line.y1) / lineSpan;
+      const xAtStart = lx1 + (lx2 - lx1) * tStart;
+      const xAtEnd = lx1 + (lx2 - lx1) * tEnd;
+      const baseX = line.x;
+      return { startOffset: xAtStart - baseX, endOffset: xAtEnd - baseX };
+    }
+  }
+
+  const topLine = findMatchingLine('top');
+  const bottomLine = findMatchingLine('bottom');
+  const leftLine = findMatchingLine('left');
+  const rightLine = findMatchingLine('right');
+
+  const topDiag = topLine ? getDiagonalOffsets(topLine, 'top') : null;
+  const bottomDiag = bottomLine ? getDiagonalOffsets(bottomLine, 'bottom') : null;
+  const leftDiag = leftLine ? getDiagonalOffsets(leftLine, 'left') : null;
+  const rightDiag = rightLine ? getDiagonalOffsets(rightLine, 'right') : null;
+
+  const hasDiagonals = topDiag || bottomDiag || leftDiag || rightDiag;
+  if (!hasDiagonals) return null; // Rectangular panel — no corners needed
+
+  // Compute 4 corners in normalized coordinates
+  const tlX = x + (leftDiag ? leftDiag.startOffset : 0);
+  const tlY = y + (topDiag ? topDiag.startOffset : 0);
+  const trX = x + width + (rightDiag ? rightDiag.startOffset : 0);
+  const trY = y + (topDiag ? topDiag.endOffset : 0);
+  const brX = x + width + (rightDiag ? rightDiag.endOffset : 0);
+  const brY = y + height + (bottomDiag ? bottomDiag.endOffset : 0);
+  const blX = x + (leftDiag ? leftDiag.endOffset : 0);
+  const blY = y + height + (bottomDiag ? bottomDiag.startOffset : 0);
+
+  return [
+    { x: tlX, y: tlY },
+    { x: trX, y: trY },
+    { x: brX, y: brY },
+    { x: blX, y: blY }
+  ];
+}
+
 function transformToReaderFormat(comic, comicSlug) {
   let wordCounter = 1;
   let sentenceCounter = 1;
@@ -87,9 +181,15 @@ function transformToReaderFormat(comic, comicSlug) {
       panels: (page.panels || []).map(panel => {
         const panelNum = panel.panelOrder;
         const hasBakedPage = page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage;
+        const panelCorners = computePanelCorners(panel, page.lines);
+
+        // If this page has floating panels, skip bubble assignment for the
+        // full-page background panel — floating panels carry their own bubbles.
+        const pageHasFloating = (page.panels || []).some(p => p.floating);
+        const isBackground = !panel.floating && pageHasFloating;
 
         // Check if any part of the bubble overlaps the panel tap zone
-        const panelBubbles = (page.bubbles || []).filter(bubble => {
+        const panelBubbles = isBackground ? [] : (page.bubbles || []).filter(bubble => {
           const bx = bubble.x || 0;
           const by = bubble.y || 0;
           const bw = bubble.width || 0;
@@ -117,7 +217,7 @@ function transformToReaderFormat(comic, comicSlug) {
             noTextImage: `${comicSlug}_p${page.pageNumber}_s${panelNum}_no_text`
           }),
           ...(panel.floating && { floating: true }),
-          ...(panel.corners && panel.corners.length === 4 && { corners: panel.corners.map(c => ({ x: c.x, y: c.y })) }),
+          ...(panelCorners && { corners: panelCorners }),
           panelOrder: panelNum,
           tapZone: {
             x: panel.tapZone.x,
@@ -233,4 +333,4 @@ function transformToReaderFormat(comic, comicSlug) {
   };
 }
 
-module.exports = { sanitizeTitle, sanitizeWordForFilename, transformToReaderFormat };
+module.exports = { sanitizeTitle, sanitizeWordForFilename, transformToReaderFormat, computePanelCorners };

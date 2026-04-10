@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs').promises;
 const path = require('path');
+const archiver = require('archiver');
+const sharp = require('sharp');
 const Comic = require('../models/Comic');
 const { sanitizeTitle, transformToReaderFormat } = require('../services/readerFormat');
 
@@ -46,7 +48,7 @@ router.get('/catalog', async (req, res) => {
         id: `comic-${comicSlug}`,
         title: comic.title,
         description: comic.description || '',
-        coverThumbnailUrl: coverImage,
+        coverThumbnailUrl: coverImage ? `/api/reader/cover-thumbnail/${comic.id}` : '',
         level: comic.level || 'beginner',
         totalPages,
         estimatedMinutes: totalPages * 2,
@@ -151,6 +153,110 @@ router.get('/comics/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Reader comic error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/reader/comics/:id/bundle — download comic as a single ZIP file
+router.get('/comics/:id/bundle', async (req, res) => {
+  console.log(`[BUNDLE] Request received for comic: ${req.params.id}`);
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const comicObj = comic.toObject();
+    const comicSlug = sanitizeTitle(comicObj.title);
+    const exportDir = path.join(PROJECTS_DIR, req.params.id, 'export', comicSlug);
+
+    // Check if export directory exists
+    try {
+      await fs.access(exportDir);
+    } catch {
+      return res.status(409).json({
+        error: 'Comic has not been exported yet. Please run Export Full Package first.'
+      });
+    }
+
+    // Generate reader format and write comic.json into the export dir
+    const readerComic = transformToReaderFormat(comicObj, comicSlug);
+    const comicJsonPath = path.join(exportDir, 'comic.json');
+    await fs.writeFile(comicJsonPath, JSON.stringify(readerComic, null, 2));
+
+    // Build ZIP to a temp file first so we can send Content-Length
+    const os = require('os');
+    const fsSync = require('fs');
+    const tmpZipPath = path.join(os.tmpdir(), `${comicSlug}-${Date.now()}.zip`);
+    const output = fsSync.createWriteStream(tmpZipPath);
+
+    const archive = archiver('zip', { zlib: { level: 0 } }); // Store only — PNGs/MP3s are already compressed
+
+    await new Promise((resolve, reject) => {
+      output.on('close', resolve);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.directory(exportDir, false);
+      archive.finalize();
+    });
+
+    // Send the file with Content-Length so the client can track progress
+    const stat = await fs.stat(tmpZipPath);
+    const zipFileName = `${comicSlug}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
+
+    console.log(`[BUNDLE] ZIP ready: ${stat.size} bytes, sending to client...`);
+    const fileStream = fsSync.createReadStream(tmpZipPath);
+    fileStream.pipe(res);
+
+    // Clean up temp file after response is done
+    res.on('finish', () => {
+      fs.unlink(tmpZipPath).catch(() => {});
+    });
+    res.on('error', () => {
+      fs.unlink(tmpZipPath).catch(() => {});
+    });
+  } catch (error) {
+    console.error('Bundle error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+});
+
+// GET /api/reader/cover-thumbnail/:id — serve a small JPEG thumbnail of the cover
+router.get('/cover-thumbnail/:id', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id }).lean();
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const coverPath = comic.cover?.bakedImage || comic.cover?.image;
+    if (!coverPath) {
+      return res.status(404).json({ error: 'No cover image' });
+    }
+
+    const fullPath = path.join(__dirname, '../..', coverPath);
+    try {
+      await fs.access(fullPath);
+    } catch {
+      return res.status(404).json({ error: 'Cover file not found' });
+    }
+
+    const thumbnail = await sharp(fullPath)
+      .resize(240, 360, { fit: 'cover' })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(thumbnail);
+  } catch (error) {
+    console.error('Cover thumbnail error:', error);
     res.status(500).json({ error: error.message });
   }
 });

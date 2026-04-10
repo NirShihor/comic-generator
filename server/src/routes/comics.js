@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
 const Comic = require('../models/Comic');
 const ArchivedPage = require('../models/ArchivedPage');
-const { sanitizeTitle, sanitizeWordForFilename, transformToReaderFormat } = require('../services/readerFormat');
+const { sanitizeTitle, sanitizeWordForFilename, transformToReaderFormat, computePanelCorners } = require('../services/readerFormat');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
@@ -613,12 +613,24 @@ router.post('/:id/export-full', async (req, res) => {
 
           for (const panel of page.panels || []) {
             const panelNum = panel.panelOrder;
+            // Compute crop region: use corners bounding box if diagonal dividers exist
+            const corners = computePanelCorners(panel, page.lines);
+            let cropRegion = panel.tapZone;
+            if (corners && !panel.floating) {
+              const xs = corners.map(c => c.x);
+              const ys = corners.map(c => c.y);
+              const minX = Math.max(0, Math.min(...xs));
+              const minY = Math.max(0, Math.min(...ys));
+              const maxX = Math.min(1, Math.max(...xs));
+              const maxY = Math.min(1, Math.max(...ys));
+              cropRegion = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+            }
             // Panel crop from baked image (with text)
             const sceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}.png`);
             const cropped = await cropAndSaveScene(
               sourceImagePath,
               sceneDestPath,
-              panel.tapZone,
+              cropRegion,
               imgWidth,
               imgHeight
             );
@@ -635,7 +647,7 @@ router.post('/:id/export-full', async (req, res) => {
                 const rawCropped = await cropAndSaveScene(
                   noTextFullPath,
                   noTextSceneDestPath,
-                  panel.tapZone,
+                  cropRegion,
                   noTextMeta.width,
                   noTextMeta.height
                 );

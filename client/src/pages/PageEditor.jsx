@@ -396,6 +396,10 @@ function PageEditor({ isCover = false }) {
   const [showPanelRefs, setShowPanelRefs] = useState({});
   const [borderThickness, setBorderThickness] = useState(100); // percentage: 0=none, 100=default, 1500=15x thicker
   const borderThicknessRef = useRef(100);
+  const [floatingBorderThickness, setFloatingBorderThickness] = useState(100);
+  const floatingBorderThicknessRef = useRef(100);
+  const [borderColorOverride, setBorderColorOverride] = useState('');
+  const borderColorOverrideRef = useRef('');
   const [panelMargin, setPanelMargin] = useState(100); // percentage: 0=no gap, 100=default, 300=3x
   const panelMarginRef = useRef(100);
   const [showCompositePreview, setShowCompositePreview] = useState(false);
@@ -2757,6 +2761,8 @@ function PageEditor({ isCover = false }) {
     const canvasHeight = 3072;
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     // Gutter size in pixels (margin between panels)
     const marginScale = panelMarginRef.current / 100;
@@ -3091,6 +3097,11 @@ function PageEditor({ isCover = false }) {
       borderColor = `rgb(${darkR}, ${darkG}, ${darkB})`;
     }
 
+    // Allow manual override of border color
+    if (borderColorOverrideRef.current) {
+      borderColor = borderColorOverrideRef.current;
+    }
+
     // Draw hand-drawn style panel borders for regular panels
     ctx.strokeStyle = borderColor;
     ctx.lineCap = 'round';
@@ -3266,7 +3277,7 @@ function PageEditor({ isCover = false }) {
       ctx.restore();
 
       // Draw wobbly border along each edge of the polygon
-      const btFloat = borderThicknessRef.current;
+      const btFloat = floatingBorderThicknessRef.current;
       if (btFloat > 0) {
         const borderScale = btFloat / 100;
         ctx.strokeStyle = borderColor;
@@ -8193,6 +8204,62 @@ function PageEditor({ isCover = false }) {
                           />
                           <span style={{ fontSize: '0.7rem', color: '#999', width: '35px' }}>
                             {borderThickness === 0 ? 'Off' : `${borderThickness}%`}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Border Color Override */}
+                      {panels.some(p => panelImages[p.id]?.path) && !isCover && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#666', width: '100px' }}>Border Color:</span>
+                          <input
+                            type="color"
+                            value={borderColorOverride || '#1a1a1a'}
+                            onChange={(e) => {
+                              setBorderColorOverride(e.target.value);
+                              borderColorOverrideRef.current = e.target.value;
+                              setTimeout(() => compositePageFromPanels(), 50);
+                            }}
+                            style={{ width: '30px', height: '24px', border: 'none', padding: 0, cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                            {borderColorOverride || 'Auto'}
+                          </span>
+                          {borderColorOverride && (
+                            <button
+                              onClick={() => {
+                                setBorderColorOverride('');
+                                borderColorOverrideRef.current = '';
+                                setTimeout(() => compositePageFromPanels(), 50);
+                              }}
+                              style={{ fontSize: '0.65rem', padding: '2px 6px', background: '#eee', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer' }}
+                            >
+                              Auto
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Floating Panel Border Thickness Slider */}
+                      {panels.some(p => p.floating && panelImages[p.id]?.path) && !isCover && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#666', width: '100px' }}>Floating Border:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1500"
+                            step="10"
+                            value={floatingBorderThickness}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setFloatingBorderThickness(val);
+                              floatingBorderThicknessRef.current = val;
+                              setTimeout(() => compositePageFromPanels(), 50);
+                            }}
+                            style={{ flex: 1 }}
+                          />
+                          <span style={{ fontSize: '0.7rem', color: '#999', width: '35px' }}>
+                            {floatingBorderThickness === 0 ? 'Off' : `${floatingBorderThickness}%`}
                           </span>
                         </div>
                       )}
