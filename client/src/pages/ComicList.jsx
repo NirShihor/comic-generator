@@ -257,7 +257,7 @@ function ComicList() {
               <input
                 type="text"
                 value={newComic.title}
-                onChange={e => setNewComic({ ...newComic, title: e.target.value })}
+                onChange={e => setNewComic({ ...newComic, title: e.target.value.toUpperCase() })}
                 placeholder="e.g., El Superviviente"
               />
             </div>
@@ -329,7 +329,7 @@ function ComicList() {
               <input
                 type="text"
                 value={renameTitle}
-                onChange={e => setRenameTitle(e.target.value)}
+                onChange={e => setRenameTitle(e.target.value.toUpperCase())}
                 onKeyDown={e => e.key === 'Enter' && renameComic()}
                 autoFocus
               />

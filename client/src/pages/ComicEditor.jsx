@@ -1274,7 +1274,7 @@ function ComicEditor() {
                 type="text"
                 value={comic.collectionTitle || ''}
                 onChange={(e) => {
-                  const title = e.target.value || undefined;
+                  const title = e.target.value ? e.target.value.toUpperCase() : undefined;
                   const collectionId = title
                     ? title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
                     : undefined;

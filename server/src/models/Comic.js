@@ -97,6 +97,19 @@ const PanelSchema = new mongoose.Schema({
   brightness: { type: Number, default: 1 },
   contrast: { type: Number, default: 1 },
   saturation: { type: Number, default: 1 },
+  annotations: [{
+    id: Number,
+    x: Number,
+    y: Number
+  }],
+  refImages: [{
+    path: String,
+    annotations: [{
+      id: Number,
+      x: Number,
+      y: Number
+    }]
+  }],
   bubbles: [BubbleSchema]
 }, { _id: false });
 

@@ -9,7 +9,7 @@ const sharp = require('sharp');
 const { GoogleGenAI } = require('@google/genai');
 
 // Generate image using Gemini API
-async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [], isAngleChange = false, aspectRatio = 'square') {
+async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [], isAngleChange = false, aspectRatio = 'square', annotationsMap = {}) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('Gemini API key not configured. Add GEMINI_API_KEY to .env file.');
   }
@@ -26,10 +26,14 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
     const fullPath = path.join(__dirname, '../..', imgPath);
     try {
       await fs.access(fullPath);
-      const resizedBuffer = await sharp(fullPath)
+      let resizedBuffer = await sharp(fullPath)
         .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toBuffer();
+      // Burn annotations if present for this image
+      if (annotationsMap[imgPath] && annotationsMap[imgPath].length > 0) {
+        resizedBuffer = await burnAnnotationsOntoImage(resizedBuffer, annotationsMap[imgPath]);
+      }
       parts.push({
         inlineData: {
           mimeType: 'image/jpeg',
@@ -127,8 +131,35 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
   }
 }
 
+// Burn numbered annotation circles onto an image buffer using SVG composite
+async function burnAnnotationsOntoImage(imageBuffer, annotations) {
+  if (!annotations || annotations.length === 0) return imageBuffer;
+
+  const metadata = await sharp(imageBuffer).metadata();
+  const { width, height } = metadata;
+  const circleRadius = Math.round(Math.min(width, height) * 0.04);
+  const fontSize = Math.round(circleRadius * 1.4);
+
+  const circles = annotations.map(ann => {
+    const cx = Math.round(ann.x * width);
+    const cy = Math.round(ann.y * height);
+    return `<circle cx="${cx}" cy="${cy}" r="${circleRadius}" fill="#e74c3c" stroke="white" stroke-width="2"/>
+      <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central"
+            font-family="Arial,sans-serif" font-size="${fontSize}" font-weight="bold" fill="white">${ann.id}</text>`;
+  }).join('\n');
+
+  const svgOverlay = Buffer.from(
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${circles}</svg>`
+  );
+
+  return sharp(imageBuffer)
+    .composite([{ input: svgOverlay, top: 0, left: 0 }])
+    .jpeg({ quality: 80 })
+    .toBuffer();
+}
+
 // Load reference images from disk, resize to reduce payload, and return as File objects
-async function loadReferenceImages(imagePaths) {
+async function loadReferenceImages(imagePaths, annotationsMap) {
   const files = [];
   for (const imgPath of imagePaths) {
     // imgPath is like /projects/comic-xxx/images/ref-xxx.png
@@ -136,10 +167,14 @@ async function loadReferenceImages(imagePaths) {
     try {
       await fs.access(fullPath);
       // Resize to max 512px on longest side and convert to JPEG for smaller payload
-      const resizedBuffer = await sharp(fullPath)
+      let resizedBuffer = await sharp(fullPath)
         .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toBuffer();
+      // Burn annotations if present for this image
+      if (annotationsMap && annotationsMap[imgPath] && annotationsMap[imgPath].length > 0) {
+        resizedBuffer = await burnAnnotationsOntoImage(resizedBuffer, annotationsMap[imgPath]);
+      }
       const filename = path.basename(fullPath, path.extname(fullPath)) + '.jpg';
       files.push(new File([resizedBuffer], filename, { type: 'image/jpeg' }));
     } catch (err) {
@@ -170,6 +205,38 @@ async function loadBlurredReferenceImages(imagePaths) {
     }
   }
   return files;
+}
+
+// Create an inpainting mask PNG: opaque black everywhere, transparent in the rectangle.
+// OpenAI images.edit() expects: transparent pixels (alpha=0) = area to repaint.
+// rect: { x, y, width, height } in normalized 0-1 coordinates.
+async function createInpaintMask(sourceImagePath, rect) {
+  const fullPath = path.join(__dirname, '../..', sourceImagePath);
+  const metadata = await sharp(fullPath).metadata();
+  const imgW = metadata.width;
+  const imgH = metadata.height;
+
+  // Convert normalized coords to pixel coords
+  const rx = Math.max(0, Math.round(rect.x * imgW));
+  const ry = Math.max(0, Math.round(rect.y * imgH));
+  const rw = Math.min(imgW - rx, Math.round(rect.width * imgW));
+  const rh = Math.min(imgH - ry, Math.round(rect.height * imgH));
+
+  // Build raw RGBA buffer: opaque black everywhere, transparent in rectangle
+  const pixels = Buffer.alloc(imgW * imgH * 4, 0);
+  for (let i = 0; i < imgW * imgH; i++) {
+    pixels[i * 4 + 3] = 255; // alpha = opaque
+  }
+  // Punch transparent hole at rect coords
+  for (let row = ry; row < ry + rh && row < imgH; row++) {
+    for (let col = rx; col < rx + rw && col < imgW; col++) {
+      pixels[(row * imgW + col) * 4 + 3] = 0; // alpha = transparent
+    }
+  }
+
+  return sharp(pixels, { raw: { width: imgW, height: imgH, channels: 4 } })
+    .png()
+    .toBuffer();
 }
 
 // Helper: wrap a long-running async operation with periodic keep-alive writes
@@ -481,10 +548,20 @@ Generate this image now.`
 // Generate single panel image (OpenAI or Gemini)
 router.post('/generate-panel', (req, res) => {
   withKeepAlive(res, async () => {
-    const { prompt, panelId, aspectRatio = 'square', referenceImages, linkedPanelImages, isRefinement, isAngleChange, angleSourceImage, angleDegrees, panelContent, provider = 'openai' } = req.body;
+    const { prompt, panelId, aspectRatio = 'square', referenceImages, linkedPanelImages, refAnnotations, isRefinement, isAngleChange, angleSourceImage, angleDegrees, panelContent, provider = 'openai' } = req.body;
 
     const styleRefs = referenceImages || [];
     const linkedRefs = linkedPanelImages || [];
+
+    // Build annotations lookup map: imagePath -> annotations array
+    const annotationsMap = {};
+    if (refAnnotations && Array.isArray(refAnnotations)) {
+      refAnnotations.forEach(ra => {
+        if (ra.path && ra.annotations && ra.annotations.length > 0) {
+          annotationsMap[ra.path] = ra.annotations;
+        }
+      });
+    }
 
     let finalPrompt = prompt;
     let buffer;
@@ -517,7 +594,7 @@ router.post('/generate-panel', (req, res) => {
       const geminiLinkedRefs = isAngleChange && angleSourceImage
         ? [angleSourceImage]
         : linkedRefs;
-      buffer = await generateWithGemini(finalPrompt, geminiStyleRefs, geminiLinkedRefs, isAngleChange, aspectRatio);
+      buffer = await generateWithGemini(finalPrompt, geminiStyleRefs, geminiLinkedRefs, isAngleChange, aspectRatio, annotationsMap);
       // Enforce target dimensions — Gemini may not respect aspect ratio from prompt alone
       let targetWidth = 1024, targetHeight = 1024;
       if (aspectRatio === 'portrait') { targetWidth = 1024; targetHeight = 1536; }
@@ -561,7 +638,7 @@ router.post('/generate-panel', (req, res) => {
         allRefStreams = [...sourceStreams];
       } else {
         const linkedRefStreams = linkedRefs.length > 0
-          ? (isRefinement ? await loadReferenceImages(linkedRefs) : await loadBlurredReferenceImages(linkedRefs))
+          ? (isRefinement ? await loadReferenceImages(linkedRefs, annotationsMap) : await loadBlurredReferenceImages(linkedRefs))
           : [];
         const styleRefStreams = styleRefs.length > 0
           ? await loadReferenceImages(styleRefs)
@@ -635,6 +712,200 @@ Other attached images are style/character references — use them for art style 
       filename,
       path: `/uploads/${filename}`
     };
+  });
+});
+
+// Inpaint a region of an existing panel image
+router.post('/inpaint-region', (req, res) => {
+  withKeepAlive(res, async () => {
+    const {
+      sourceImagePath,
+      rect,
+      prompt,
+      panelId,
+      referenceImages,
+      refAnnotations,
+      provider = 'openai'
+    } = req.body;
+
+    if (!sourceImagePath || !rect || !prompt) {
+      return { error: 'sourceImagePath, rect, and prompt are required' };
+    }
+
+    const fullSourcePath = path.join(__dirname, '../..', sourceImagePath);
+    await fs.access(fullSourcePath);
+
+    // Build annotations map from refAnnotations
+    const annotationsMap = {};
+    if (refAnnotations && Array.isArray(refAnnotations)) {
+      refAnnotations.forEach(ra => {
+        if (ra.path && ra.annotations?.length > 0) {
+          annotationsMap[ra.path] = ra.annotations;
+        }
+      });
+    }
+
+    const pctLeft = Math.round(rect.x * 100);
+    const pctTop = Math.round(rect.y * 100);
+    const pctRight = Math.round((rect.x + rect.width) * 100);
+    const pctBottom = Math.round((rect.y + rect.height) * 100);
+
+    let buffer;
+
+    if (provider === 'gemini') {
+      // Gemini path: prompt-guided inpainting (no native mask support)
+      if (!process.env.GEMINI_API_KEY) {
+        return { error: 'Gemini API key not configured.' };
+      }
+
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+      const sourceBuffer = await sharp(fullSourcePath)
+        .resize(1536, 1536, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+
+      const parts = [];
+
+      // Source image first
+      parts.push({
+        inlineData: { mimeType: 'image/jpeg', data: sourceBuffer.toString('base64') }
+      });
+
+      // Add style/character reference images
+      const styleRefs = referenceImages || [];
+      for (const imgPath of styleRefs) {
+        const refFullPath = path.join(__dirname, '../..', imgPath);
+        try {
+          await fs.access(refFullPath);
+          let refBuffer = await sharp(refFullPath)
+            .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          if (annotationsMap[imgPath]?.length > 0) {
+            refBuffer = await burnAnnotationsOntoImage(refBuffer, annotationsMap[imgPath]);
+          }
+          parts.push({
+            inlineData: { mimeType: 'image/jpeg', data: refBuffer.toString('base64') }
+          });
+        } catch (err) {
+          console.log(`Inpaint: ref image not found, skipping: ${refFullPath}`);
+        }
+      }
+
+      const spatialPrompt = `INPAINTING TASK: Look at the FIRST attached image. ` +
+        `In the rectangular region from (${pctLeft}% from left, ${pctTop}% from top) ` +
+        `to (${pctRight}% from left, ${pctBottom}% from top), ` +
+        `replace the content with: ${prompt}\n\n` +
+        `CRITICAL RULES:\n` +
+        `1. Keep EVERYTHING outside this rectangle EXACTLY the same — do not change any other part of the image.\n` +
+        `2. The new content must blend naturally with the surrounding scene (matching lighting, perspective, art style).\n` +
+        `3. Generate the COMPLETE image with the modification applied.\n` +
+        (styleRefs.length > 0 ? `4. Additional attached images are character/style references for visual consistency.\n` : '');
+
+      parts.push({ text: spatialPrompt });
+
+      console.log(`Inpaint (Gemini): region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], prompt: ${prompt.substring(0, 80)}...`);
+
+      const maxRetries = 3;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3-pro-image-preview',
+          contents: parts,
+          config: { responseModalities: ['TEXT', 'IMAGE'] }
+        });
+
+        const candidate = response.candidates?.[0];
+        if (candidate?.content?.parts) {
+          for (const part of candidate.content.parts) {
+            if (part.inlineData) {
+              buffer = Buffer.from(part.inlineData.data, 'base64');
+              break;
+            }
+          }
+        }
+        if (buffer) break;
+        if (attempt < maxRetries) await new Promise(r => setTimeout(r, 1000 * attempt));
+      }
+      if (!buffer) throw new Error('Gemini returned no image after retries');
+
+      // Resize to match source dimensions
+      const sourceMeta = await sharp(fullSourcePath).metadata();
+      const meta = await sharp(buffer).metadata();
+      if (meta.width !== sourceMeta.width || meta.height !== sourceMeta.height) {
+        buffer = await sharp(buffer)
+          .resize(sourceMeta.width, sourceMeta.height, { fit: 'cover', position: 'centre' })
+          .png()
+          .toBuffer();
+      }
+
+    } else {
+      // OpenAI path: mask-based inpainting
+      if (!process.env.OPENAI_API_KEY) {
+        return { error: 'OpenAI API key not configured.' };
+      }
+
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      // Create the mask
+      const maskBuffer = await createInpaintMask(sourceImagePath, rect);
+
+      // Load source image as PNG File
+      const sourceBuffer = await sharp(fullSourcePath).png().toBuffer();
+      const sourceFile = new File([sourceBuffer], 'source.png', { type: 'image/png' });
+      const maskFile = new File([maskBuffer], 'mask.png', { type: 'image/png' });
+
+      // Load reference images
+      const refFiles = referenceImages?.length > 0
+        ? await loadReferenceImages(referenceImages, annotationsMap)
+        : [];
+
+      // Source image first, then refs
+      const allImages = [sourceFile, ...refFiles];
+
+      const inpaintPrompt = `INPAINTING: The mask defines the region to repaint. ` +
+        `In the masked region (from ${pctLeft}% to ${pctRight}% horizontally, ${pctTop}% to ${pctBottom}% vertically), generate: ${prompt}\n\n` +
+        `The new content must blend seamlessly with the existing image ` +
+        `(matching lighting, perspective, and art style). ` +
+        `Preserve the rest of the image exactly as it is.` +
+        (refFiles.length > 0 ? `\n\nAdditional images are character/style references for visual consistency.` : '');
+
+      // Determine size from source image dimensions
+      const sourceMeta = await sharp(fullSourcePath).metadata();
+      let size = '1024x1024';
+      if (sourceMeta.width > sourceMeta.height * 1.2) size = '1536x1024';
+      else if (sourceMeta.height > sourceMeta.width * 1.2) size = '1024x1536';
+
+      console.log(`Inpaint (OpenAI): region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], size: ${size}, prompt: ${prompt.substring(0, 80)}...`);
+
+      const response = await openai.images.edit({
+        model: 'gpt-image-1',
+        image: allImages,
+        mask: maskFile,
+        prompt: inpaintPrompt,
+        n: 1,
+        size: size,
+        quality: 'high'
+      });
+
+      const imageData = response.data[0];
+      if (imageData.b64_json) {
+        buffer = Buffer.from(imageData.b64_json, 'base64');
+      } else if (imageData.url) {
+        const imageResponse = await fetch(imageData.url);
+        buffer = Buffer.from(await imageResponse.arrayBuffer());
+      }
+    }
+
+    if (!buffer) throw new Error('No image generated');
+
+    // Save result
+    const filename = `panel-${panelId}-inpaint-${uuidv4()}.png`;
+    const filePath = path.join(__dirname, '../../uploads', filename);
+    await fs.writeFile(filePath, buffer);
+
+    console.log(`Panel ${panelId} inpainted: ${filename}`);
+    return { panelId, filename, path: `/uploads/${filename}` };
   });
 });
 

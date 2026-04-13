@@ -3,6 +3,10 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import html2canvas from 'html2canvas';
 
+// Ref image helpers — backward compat with plain string entries
+const getRefPath = (ref) => typeof ref === 'string' ? ref : ref.path;
+const getRefAnnotations = (ref) => typeof ref === 'string' ? [] : (ref.annotations || []);
+
 // Simple color picker popup with swatches + custom hex input
 function ColorPicker({ value, onChange, onClick, disabled, style }) {
   const [open, setOpen] = useState(false);
@@ -503,6 +507,21 @@ function PageEditor({ isCover = false }) {
   // Toast notification
   const [toast, setToast] = useState(null);
   const [lightboxImage, setLightboxImage] = useState(null);
+  const [lightboxRefContext, setLightboxRefContext] = useState(null); // { panelId, refIndex }
+  // Inpaint mode state
+  const [inpaintMode, setInpaintMode] = useState(null); // { panelId, panelIndex, panel }
+  const [inpaintRect, setInpaintRect] = useState(null); // { x, y, width, height } normalized 0-1
+  const [inpaintDrawing, setInpaintDrawing] = useState(false);
+  const [inpaintStart, setInpaintStart] = useState(null); // { x, y } start point
+  const [inpaintPrompt, setInpaintPrompt] = useState('');
+  const [inpaintGenerating, setInpaintGenerating] = useState(null); // null|'openai'|'gemini'
+  // Global mouseup handler for inpaint rect drawing (handles mouse-up outside image)
+  useEffect(() => {
+    if (!inpaintDrawing) return;
+    const handleMouseUp = () => setInpaintDrawing(false);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [inpaintDrawing]);
   const toastTimer = useRef(null);
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -950,9 +969,9 @@ function PageEditor({ isCover = false }) {
         // Restore panel images from saved artworkImage
         const restored = {};
         currentPage.panels.forEach(p => {
-          if (p.artworkImage) {
+          if (p.artworkImage || (p.refImages && p.refImages.length > 0)) {
             restored[p.id] = {
-              path: p.artworkImage,
+              path: p.artworkImage || null,
               generating: null,
               error: null,
               fitMode: p.fitMode || 'stretch',
@@ -961,7 +980,9 @@ function PageEditor({ isCover = false }) {
               zoom: p.zoom ?? 1,
               brightness: p.brightness ?? 1,
               contrast: p.contrast ?? 1,
-              saturation: p.saturation ?? 1
+              saturation: p.saturation ?? 1,
+              refImages: p.refImages || [],
+              annotations: p.annotations || []
             };
           }
         });
@@ -1424,7 +1445,7 @@ function PageEditor({ isCover = false }) {
       tailY: 0.08,  // tip offset from bubble center (positive = below)
       tailBaseX: 0.5, // where tail joins bubble (0 = left edge, 1 = right edge)
       tailSide: 'bottom', // which side tail connects: 'top', 'bottom', 'left', 'right'
-      tailWidth: 0.25, // width of tail base as percentage of bubble width
+      tailWidth: 0.15, // width of tail base as percentage of bubble width
       showTail: true,
       // Rotation (for speech bubbles - rotates the whole bubble+tail)
       rotation: 0, // degrees, 0 = tail at bottom
@@ -2095,6 +2116,33 @@ function PageEditor({ isCover = false }) {
     }, 500);
   };
 
+  // Auto-save refImages and annotations to DB (debounced) — watches panelImages for changes
+  const refImageTimers = useRef({});
+  const prevRefDataRef = useRef({});
+  useEffect(() => {
+    if (isCover) return;
+    for (const panelId of Object.keys(panelImages)) {
+      const refs = panelImages[panelId]?.refImages;
+      const annotations = panelImages[panelId]?.annotations;
+      const serialized = JSON.stringify({ refs, annotations });
+      if (prevRefDataRef.current[panelId] !== serialized) {
+        // Skip initial load (first time we see this panel's data)
+        if (prevRefDataRef.current[panelId] !== undefined) {
+          clearTimeout(refImageTimers.current[panelId]);
+          refImageTimers.current[panelId] = setTimeout(() => {
+            const update = {};
+            if (refs) update.refImages = refs;
+            if (annotations) update.annotations = annotations;
+            api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, update).catch(err => {
+              console.error('Failed to auto-save refImages/annotations:', err);
+            });
+          }, 500);
+        }
+        prevRefDataRef.current[panelId] = serialized;
+      }
+    }
+  }, [panelImages]);
+
   // Zero-width Unicode markers for highlights (invisible in textarea, survive copy-paste)
   const HL_START = '\u2060'; // Word Joiner
   const HL_END = '\u2061';   // Function Application
@@ -2526,7 +2574,11 @@ function PageEditor({ isCover = false }) {
       console.log(`Generating panel ${panelIndex + 1} (${panel.id}), aspect: ${aspectRatio}, angleChange: ${isAngleChange}`);
 
       // Separate per-panel linked refs from selected style/character refs
-      const linkedPanelImages = panelImages[panel.id]?.refImages || [];
+      const rawRefs = panelImages[panel.id]?.refImages || [];
+      const linkedPanelImages = rawRefs.map(getRefPath);
+      const refAnnotations = rawRefs
+        .filter(r => getRefAnnotations(r).length > 0)
+        .map(r => ({ path: getRefPath(r), annotations: getRefAnnotations(r) }));
       const referenceImages = getRefImagePaths(panel.id);
 
       // For angle changes, send the current panel image separately as the
@@ -2544,6 +2596,7 @@ function PageEditor({ isCover = false }) {
         aspectRatio,
         referenceImages,
         linkedPanelImages,
+        refAnnotations,
         isAngleChange,
         angleSourceImage,
         angleDegrees,
@@ -2650,7 +2703,7 @@ function PageEditor({ isCover = false }) {
         ...prev,
         [panelId]: {
           ...prev[panelId],
-          refImages: [...(prev[panelId]?.refImages || []), response.data.path]
+          refImages: [...(prev[panelId]?.refImages || []), { path: response.data.path, annotations: [] }]
         }
       }));
     } catch (error) {
@@ -2718,6 +2771,91 @@ function PageEditor({ isCover = false }) {
         }
       }));
     }
+  };
+
+  // Start inpaint mode for a panel
+  const startInpaintMode = (panel, panelIndex) => {
+    const imagePath = panelImages[panel.id]?.path;
+    if (!imagePath) return;
+    setInpaintMode({ panelId: panel.id, panelIndex, panel });
+    setInpaintRect(null);
+    setInpaintPrompt('');
+    setInpaintGenerating(null);
+    setInpaintDrawing(false);
+    setInpaintStart(null);
+    setLightboxImage(`http://localhost:3001${imagePath}`);
+    setLightboxRefContext(null);
+  };
+
+  // Execute inpainting on a region
+  const executeInpaint = async (provider = 'openai') => {
+    if (!inpaintMode || !inpaintRect || !inpaintPrompt.trim()) return;
+    const { panelId, panel } = inpaintMode;
+    const currentPath = panelImages[panelId]?.path;
+    if (!currentPath) return;
+
+    setInpaintGenerating(provider);
+    setPanelImages(prev => ({
+      ...prev,
+      [panelId]: { ...prev[panelId], generating: provider, previousPath: currentPath }
+    }));
+
+    try {
+      const referenceImages = getRefImagePaths(panelId);
+      const rawRefs = panelImages[panelId]?.refImages || [];
+      const refAnnotations = rawRefs
+        .filter(r => getRefAnnotations(r).length > 0)
+        .map(r => ({ path: getRefPath(r), annotations: getRefAnnotations(r) }));
+
+      const response = await api.post('/images/inpaint-region', {
+        sourceImagePath: currentPath,
+        rect: inpaintRect,
+        prompt: inpaintPrompt,
+        panelId,
+        referenceImages,
+        refAnnotations,
+        provider
+      }, { timeout: 600000 });
+
+      setPanelImages(prev => ({
+        ...prev,
+        [panelId]: {
+          ...prev[panelId],
+          path: response.data.path,
+          generating: null,
+          error: null
+        }
+      }));
+      updatePanelArtwork(panelId, response.data.path);
+
+      // Update lightbox to show result; clear rect for another pass
+      setLightboxImage(`http://localhost:3001${response.data.path}`);
+      setInpaintRect(null);
+      setInpaintPrompt('');
+      setInpaintGenerating(null);
+    } catch (error) {
+      console.error('Inpaint failed:', error);
+      setPanelImages(prev => ({
+        ...prev,
+        [panelId]: {
+          ...prev[panelId],
+          generating: null,
+          error: error.response?.data?.error || error.message
+        }
+      }));
+      setInpaintGenerating(null);
+    }
+  };
+
+  // Exit inpaint mode
+  const exitInpaintMode = () => {
+    setInpaintMode(null);
+    setInpaintRect(null);
+    setInpaintPrompt('');
+    setInpaintDrawing(false);
+    setInpaintStart(null);
+    setInpaintGenerating(null);
+    setLightboxImage(null);
   };
 
   // Generate all panels sequentially
@@ -3698,19 +3836,250 @@ function PageEditor({ isCover = false }) {
       )}
       {lightboxImage && (
         <div
-          onClick={() => setLightboxImage(null)}
+          onClick={() => {
+            if (inpaintMode) { exitInpaintMode(); }
+            else { setLightboxImage(null); setLightboxRefContext(null); }
+          }}
           style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             background: 'rgba(0,0,0,0.85)', zIndex: 10001,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer'
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            cursor: (lightboxRefContext || inpaintMode) ? 'default' : 'pointer'
           }}
         >
-          <img
-            src={lightboxImage}
-            alt="Full size preview"
-            style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '4px' }}
-          />
+          {/* Close button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (inpaintMode) { exitInpaintMode(); }
+              else { setLightboxImage(null); setLightboxRefContext(null); }
+            }}
+            style={{
+              position: 'absolute', top: '16px', right: '16px',
+              width: '36px', height: '36px', borderRadius: '50%',
+              background: 'rgba(255,255,255,0.2)', color: '#fff',
+              border: '2px solid rgba(255,255,255,0.5)',
+              fontSize: '18px', cursor: 'pointer', zIndex: 2,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 0, lineHeight: 1
+            }}
+          >✕</button>
+
+          {/* Instruction text for annotation mode */}
+          {lightboxRefContext && !inpaintMode && (
+            <div style={{
+              position: 'absolute', top: '16px', left: '50%',
+              transform: 'translateX(-50%)',
+              color: '#fff', fontSize: '0.9rem', fontWeight: 'bold',
+              background: 'rgba(0,0,0,0.6)',
+              padding: '0.4rem 1rem', borderRadius: '6px',
+              pointerEvents: 'none', zIndex: 2
+            }}>
+              Click to place markers (1, 2, 3...) — Click a marker to remove it
+            </div>
+          )}
+
+          {/* Image container with annotations / inpaint rect */}
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', display: 'inline-block' }}>
+            <img
+              src={lightboxImage}
+              alt="Full size preview"
+              draggable={false}
+              onClick={lightboxRefContext && !inpaintMode ? (e) => {
+                e.stopPropagation();
+                const rect = e.target.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+                const { panelId, refIndex } = lightboxRefContext;
+                setPanelImages(prev => {
+                  if (refIndex === -1) {
+                    const existing = prev[panelId]?.annotations || [];
+                    const nextId = existing.length > 0 ? Math.max(...existing.map(a => a.id)) + 1 : 1;
+                    return { ...prev, [panelId]: { ...prev[panelId], annotations: [...existing, { id: nextId, x, y }] } };
+                  } else {
+                    const refs = [...(prev[panelId]?.refImages || [])];
+                    const ref = typeof refs[refIndex] === 'string'
+                      ? { path: refs[refIndex], annotations: [] }
+                      : { ...refs[refIndex] };
+                    const nextId = ref.annotations.length > 0
+                      ? Math.max(...ref.annotations.map(a => a.id)) + 1
+                      : 1;
+                    refs[refIndex] = { ...ref, annotations: [...ref.annotations, { id: nextId, x, y }] };
+                    return { ...prev, [panelId]: { ...prev[panelId], refImages: refs } };
+                  }
+                });
+              } : undefined}
+              onMouseDown={inpaintMode && !inpaintGenerating ? (e) => {
+                e.preventDefault();
+                const rect = e.target.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+                setInpaintDrawing(true);
+                setInpaintStart({ x, y });
+                setInpaintRect(null);
+              } : undefined}
+              onMouseMove={inpaintDrawing ? (e) => {
+                const rect = e.target.getBoundingClientRect();
+                const currentX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                const currentY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+                setInpaintRect({
+                  x: Math.min(inpaintStart.x, currentX),
+                  y: Math.min(inpaintStart.y, currentY),
+                  width: Math.abs(currentX - inpaintStart.x),
+                  height: Math.abs(currentY - inpaintStart.y)
+                });
+              } : undefined}
+              onMouseUp={inpaintDrawing ? () => setInpaintDrawing(false) : undefined}
+              style={{
+                maxWidth: '90vw', maxHeight: inpaintMode ? '75vh' : '90vh',
+                display: 'block', borderRadius: '4px',
+                cursor: (lightboxRefContext || inpaintMode) ? 'crosshair' : 'default',
+                userSelect: inpaintMode ? 'none' : undefined
+              }}
+            />
+
+            {/* Inpaint rectangle overlay */}
+            {inpaintMode && inpaintRect && (
+              <div style={{
+                position: 'absolute',
+                left: `${inpaintRect.x * 100}%`,
+                top: `${inpaintRect.y * 100}%`,
+                width: `${inpaintRect.width * 100}%`,
+                height: `${inpaintRect.height * 100}%`,
+                border: '2px dashed #00ff88',
+                background: 'rgba(0, 255, 136, 0.15)',
+                pointerEvents: 'none',
+                boxSizing: 'border-box'
+              }} />
+            )}
+
+            {/* Annotation circles */}
+            {lightboxRefContext && !inpaintMode && (() => {
+              const { panelId, refIndex } = lightboxRefContext;
+              const annotations = refIndex === -1
+                ? (panelImages[panelId]?.annotations || [])
+                : getRefAnnotations((panelImages[panelId]?.refImages || [])[refIndex]);
+              return annotations.map(ann => (
+                <div
+                  key={ann.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPanelImages(prev => {
+                      if (refIndex === -1) {
+                        return { ...prev, [panelId]: { ...prev[panelId], annotations: (prev[panelId]?.annotations || []).filter(a => a.id !== ann.id) } };
+                      } else {
+                        const refs = [...(prev[panelId]?.refImages || [])];
+                        const ref = typeof refs[refIndex] === 'string'
+                          ? { path: refs[refIndex], annotations: [] }
+                          : { ...refs[refIndex] };
+                        refs[refIndex] = { ...ref, annotations: ref.annotations.filter(a => a.id !== ann.id) };
+                        return { ...prev, [panelId]: { ...prev[panelId], refImages: refs } };
+                      }
+                    });
+                  }}
+                  title={`Click to remove #${ann.id}`}
+                  style={{
+                    position: 'absolute',
+                    left: `${ann.x * 100}%`, top: `${ann.y * 100}%`,
+                    transform: 'translate(-50%, -50%)',
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: '#e74c3c', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '14px', fontWeight: 'bold',
+                    border: '2px solid #fff',
+                    cursor: 'pointer', zIndex: 2,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.5)'
+                  }}
+                >{ann.id}</div>
+              ));
+            })()}
+          </div>
+
+          {/* Inpaint controls panel */}
+          {inpaintMode && (
+            <div onClick={(e) => e.stopPropagation()} style={{
+              background: 'rgba(0,0,0,0.85)',
+              padding: '0.75rem 1rem', borderRadius: '8px',
+              display: 'flex', flexDirection: 'column', gap: '0.5rem',
+              minWidth: '400px', maxWidth: '600px',
+              marginTop: '12px'
+            }}>
+              {!inpaintRect ? (
+                <div style={{ color: '#ccc', fontSize: '0.9rem', textAlign: 'center' }}>
+                  Draw a rectangle on the image to select the region to inpaint
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={inpaintPrompt}
+                    onChange={(e) => setInpaintPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && inpaintPrompt.trim() && !inpaintGenerating) {
+                        executeInpaint('openai');
+                      }
+                    }}
+                    placeholder="Describe what to generate in this region..."
+                    disabled={!!inpaintGenerating}
+                    style={{
+                      padding: '0.5rem', borderRadius: '4px',
+                      border: '1px solid #555', background: '#222', color: '#fff',
+                      fontSize: '0.85rem'
+                    }}
+                    autoFocus
+                  />
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                    <button
+                      onClick={() => executeInpaint('openai')}
+                      disabled={!inpaintPrompt.trim() || !!inpaintGenerating}
+                      style={{
+                        padding: '0.4rem 1rem', fontSize: '0.8rem',
+                        background: inpaintGenerating ? '#95a5a6' : '#27ae60',
+                        color: '#fff', border: 'none', borderRadius: '4px',
+                        cursor: inpaintGenerating ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {inpaintGenerating === 'openai' ? 'Inpainting...' : 'Inpaint (ChatGPT)'}
+                    </button>
+                    <button
+                      onClick={() => executeInpaint('gemini')}
+                      disabled={!inpaintPrompt.trim() || !!inpaintGenerating}
+                      style={{
+                        padding: '0.4rem 1rem', fontSize: '0.8rem',
+                        background: inpaintGenerating ? '#95a5a6' : '#4285f4',
+                        color: '#fff', border: 'none', borderRadius: '4px',
+                        cursor: inpaintGenerating ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {inpaintGenerating === 'gemini' ? 'Inpainting...' : 'Inpaint (Gemini)'}
+                    </button>
+                    <button
+                      onClick={() => { setInpaintRect(null); setInpaintPrompt(''); }}
+                      disabled={!!inpaintGenerating}
+                      style={{
+                        padding: '0.4rem 0.8rem', fontSize: '0.8rem',
+                        background: '#555', color: '#fff', border: 'none',
+                        borderRadius: '4px', cursor: 'pointer'
+                      }}
+                    >
+                      Redraw
+                    </button>
+                    <button
+                      onClick={exitInpaintMode}
+                      disabled={!!inpaintGenerating}
+                      style={{
+                        padding: '0.4rem 0.8rem', fontSize: '0.8rem',
+                        background: '#e74c3c', color: '#fff', border: 'none',
+                        borderRadius: '4px', cursor: 'pointer'
+                      }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
       <div className="page-header">
@@ -4010,7 +4379,7 @@ function PageEditor({ isCover = false }) {
                   pointerEvents: 'auto'
                 }}
               >
-                {i + 1}
+                {panels.indexOf(panel) + 1}
               </div>
             ))}
 
@@ -4342,7 +4711,7 @@ function PageEditor({ isCover = false }) {
                         dominantBaseline="central"
                         style={{ pointerEvents: 'none' }}
                       >
-                        F
+                        {panels.indexOf(panel) + 1}
                       </text>
                       {/* Corner handles */}
                       {panel.corners.map((c, ci) => (
@@ -4406,7 +4775,7 @@ function PageEditor({ isCover = false }) {
                     const rotation = bubble.rotation ?? 0; // degrees
 
                     // Tail properties
-                    const tailWidth = (bubble.tailWidth ?? 0.25) * bw; // wide tail base
+                    const tailWidth = (bubble.tailWidth ?? 0.15) * bw; // wide tail base
                     const halfTailWidth = tailWidth / 2;
                     const tailLength = (bubble.tailLength ?? 0.35) * bh;
 
@@ -5350,7 +5719,7 @@ function PageEditor({ isCover = false }) {
               style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
             >
               <div style={{ flex: 1 }}>
-                <h4>{panel.floating ? 'Floating Panel' : `Panel ${i + 1}`}{panel.floating && <span style={{ color: '#e67e22', fontSize: '0.7rem', marginLeft: '0.3rem' }}>(F)</span>}</h4>
+                <h4>Panel {i + 1}{panel.floating && <span style={{ color: '#e67e22', fontSize: '0.7rem', marginLeft: '0.3rem' }}>(floating)</span>}</h4>
                 <small style={{ color: '#888' }}>
                   {(panel.tapZone.width * 100).toFixed(0)}% × {(panel.tapZone.height * 100).toFixed(0)}%
                 </small>
@@ -6769,6 +7138,22 @@ function PageEditor({ isCover = false }) {
                             />
                           </div>
 
+                          {/* Tail Width */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Width: {Math.round((bubble.tailWidth ?? 0.15) * 100)}%
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="50"
+                              value={Math.round((bubble.tailWidth ?? 0.15) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailWidth: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
                           {/* Tail Length */}
                           <div style={{ marginBottom: '0.5rem' }}>
                             <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
@@ -6780,22 +7165,6 @@ function PageEditor({ isCover = false }) {
                               max="300"
                               value={Math.round((bubble.tailLength ?? 0.35) * 100)}
                               onChange={(e) => updateBubble(bubble.id, { tailLength: parseInt(e.target.value) / 100 })}
-                              onClick={(e) => e.stopPropagation()}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-
-                          {/* Tail Width */}
-                          <div style={{ marginBottom: '0.5rem' }}>
-                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
-                              Tail Width: {Math.round((bubble.tailWidth ?? 0.25) * 100)}%
-                            </label>
-                            <input
-                              type="range"
-                              min="10"
-                              max="50"
-                              value={Math.round((bubble.tailWidth ?? 0.25) * 100)}
-                              onChange={(e) => updateBubble(bubble.id, { tailWidth: parseInt(e.target.value) / 100 })}
                               onClick={(e) => e.stopPropagation()}
                               style={{ width: '100%' }}
                             />
@@ -6911,20 +7280,24 @@ function PageEditor({ isCover = false }) {
                   <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
                     Style Reference Images ({promptSettings.styleBibleImages.length})
                   </label>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', padding: '0.5rem', background: '#fff', borderRadius: '4px', border: '1px solid #ccc' }}>
-                    {promptSettings.styleBibleImages.map((img, idx) => (
-                      <img
-                        key={img.id || idx}
-                        src={`http://localhost:3001${img.image}`}
-                        alt={`Style ref ${idx + 1}`}
-                        title={img.description?.substring(0, 100) + '...'}
-                        style={{ height: '60px', borderRadius: '4px', border: '1px solid #999' }}
-                      />
-                    ))}
-                  </div>
-                  <p style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.25rem' }}>
-                    These images are sent to the AI as visual references when generating panels.
-                  </p>
+                  {promptSettings.styleBibleImages.map((img, idx) => (
+                    <div key={img.id || idx} style={{ background: '#fff', borderRadius: '4px', padding: '0.75rem', marginBottom: '0.75rem', border: '1px solid #ccc' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                        <img
+                          src={`http://localhost:3001${img.image}`}
+                          alt={img.name || `Style ref ${idx + 1}`}
+                          style={{ height: '80px', borderRadius: '4px', border: '1px solid #999', flexShrink: 0, cursor: 'pointer' }}
+                          onClick={() => { setLightboxImage(`http://localhost:3001${img.image}`); setLightboxRefContext(null); }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#333', marginBottom: '0.25rem' }}>{img.name || `Style ref ${idx + 1}`}</div>
+                          <p style={{ fontSize: '0.8rem', color: '#666', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '80px', overflow: 'hidden' }}>
+                            {img.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -7176,7 +7549,7 @@ function PageEditor({ isCover = false }) {
                   </p>
                 ) : (
                   panels.map((panel, i) => (
-                    <div key={panel.id} style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>
+                    <div key={panel.id} style={{ marginBottom: '1rem', padding: '0.75rem', background: i % 2 === 0 ? '#f0f0f0' : '#fff', borderRadius: '8px', border: '2px solid #bbb' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                         <label style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>
                           {isCover ? 'Cover' : `Panel ${i + 1}`}
@@ -7472,14 +7845,29 @@ function PageEditor({ isCover = false }) {
                           : ''}
                       </button>
                       {showPanelRefs[panel.id] && <div style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
-                        {(panelImages[panel.id]?.refImages || []).map((refPath, ri) => (
+                        {(panelImages[panel.id]?.refImages || []).map((ref, ri) => (
                           <div key={ri} style={{ position: 'relative', display: 'inline-block' }}>
                             <img
-                              src={`http://localhost:3001${refPath}`}
+                              src={`http://localhost:3001${getRefPath(ref)}`}
                               alt={`Ref ${ri + 1}`}
-                              onClick={() => setLightboxImage(`http://localhost:3001${refPath}`)}
+                              onClick={() => {
+                                setLightboxImage(`http://localhost:3001${getRefPath(ref)}`);
+                                setLightboxRefContext({ panelId: panel.id, refIndex: ri });
+                              }}
                               style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ccc', cursor: 'pointer' }}
                             />
+                            {getRefAnnotations(ref).map(ann => (
+                              <div key={ann.id} style={{
+                                position: 'absolute',
+                                left: `${ann.x * 100}%`, top: `${ann.y * 100}%`,
+                                transform: 'translate(-50%, -50%)',
+                                width: '12px', height: '12px', borderRadius: '50%',
+                                background: '#e74c3c', color: '#fff',
+                                fontSize: '7px', fontWeight: 'bold',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                border: '1px solid #fff', pointerEvents: 'none'
+                              }}>{ann.id}</div>
+                            ))}
                             <button
                               onClick={() => removePanelRefImage(panel.id, ri)}
                               style={{
@@ -7524,7 +7912,7 @@ function PageEditor({ isCover = false }) {
                             <span style={{ fontSize: '0.6rem', color: '#999', marginLeft: '0.2rem' }}>|</span>
                             {panels.map((p, pi) => {
                               if (p.id === panel.id || !panelImages[p.id]?.path) return null;
-                              const alreadyLinked = (panelImages[panel.id]?.refImages || []).includes(panelImages[p.id].path);
+                              const alreadyLinked = (panelImages[panel.id]?.refImages || []).some(r => getRefPath(r) === panelImages[p.id].path);
                               return (
                                 <button
                                   key={p.id}
@@ -7534,7 +7922,7 @@ function PageEditor({ isCover = false }) {
                                         ...prev,
                                         [panel.id]: {
                                           ...prev[panel.id],
-                                          refImages: [...(prev[panel.id]?.refImages || []), panelImages[p.id].path]
+                                          refImages: [...(prev[panel.id]?.refImages || []), { path: panelImages[p.id].path, annotations: panelImages[p.id]?.annotations || [] }]
                                         }
                                       }));
                                     }
@@ -7578,7 +7966,7 @@ function PageEditor({ isCover = false }) {
                               {showOtherPages[panel.id] ? '▾' : '▸'} Other pages
                             </button>
                             {showOtherPages[panel.id] && otherPagePanels.map((op) => {
-                              const alreadyLinked = (panelImages[panel.id]?.refImages || []).includes(op.artworkImage);
+                              const alreadyLinked = (panelImages[panel.id]?.refImages || []).some(r => getRefPath(r) === op.artworkImage);
                               return (
                                 <button
                                   key={op.panelId}
@@ -7588,7 +7976,7 @@ function PageEditor({ isCover = false }) {
                                         ...prev,
                                         [panel.id]: {
                                           ...prev[panel.id],
-                                          refImages: [...(prev[panel.id]?.refImages || []), op.artworkImage]
+                                          refImages: [...(prev[panel.id]?.refImages || []), { path: op.artworkImage, annotations: [] }]
                                         }
                                       }));
                                     }
@@ -7763,22 +8151,37 @@ function PageEditor({ isCover = false }) {
                       )}
                       {/* Panel image preview + refinement */}
                       {panelImages[panel.id]?.path && (
-                        <div style={{ marginTop: '0.5rem', position: 'relative' }}>
-                          <img
-                            src={`http://localhost:3001${panelImages[panel.id].path}`}
-                            alt={`Panel ${i + 1}`}
-                            onClick={() => setLightboxImage(`http://localhost:3001${panelImages[panel.id].path}`)}
-                            style={{
-                              width: '100%',
-                              maxHeight: '150px',
-                              objectFit: 'contain',
-                              borderRadius: '4px',
-                              border: '1px solid #ddd',
-                              cursor: 'pointer',
-                              opacity: panelImages[panel.id]?.generating ? 0.4 : 1,
-                              transition: 'opacity 0.3s'
-                            }}
-                          />
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <div style={{ position: 'relative', display: 'inline-block' }}>
+                            <img
+                              src={`http://localhost:3001${panelImages[panel.id].path}`}
+                              alt={`Panel ${i + 1}`}
+                              onClick={() => { setLightboxImage(`http://localhost:3001${panelImages[panel.id].path}`); setLightboxRefContext({ panelId: panel.id, refIndex: -1 }); }}
+                              style={{
+                                maxWidth: '100%',
+                                maxHeight: '150px',
+                                display: 'block',
+                                borderRadius: '4px',
+                                border: '1px solid #ddd',
+                                cursor: 'pointer',
+                                opacity: panelImages[panel.id]?.generating ? 0.4 : 1,
+                                transition: 'opacity 0.3s'
+                              }}
+                            />
+                            {(panelImages[panel.id]?.annotations || []).map(ann => (
+                              <div key={ann.id} style={{
+                                position: 'absolute',
+                                left: `${ann.x * 100}%`, top: `${ann.y * 100}%`,
+                                transform: 'translate(-50%, -50%)',
+                                width: '18px', height: '18px', borderRadius: '50%',
+                                background: '#e74c3c', color: '#fff',
+                                fontSize: '10px', fontWeight: 'bold',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                border: '1.5px solid #fff', pointerEvents: 'none',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.4)'
+                              }}>{ann.id}</div>
+                            ))}
+                          </div>
                           <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
                             <input
                               type="text"
@@ -7856,9 +8259,25 @@ function PageEditor({ isCover = false }) {
                                 Revert
                               </button>
                             )}
+                            <button
+                              onClick={() => startInpaintMode(panel, i)}
+                              disabled={panelImages[panel.id]?.generating || !panelImages[panel.id]?.path}
+                              style={{
+                                padding: '0.4rem 0.6rem',
+                                background: (!panelImages[panel.id]?.path || panelImages[panel.id]?.generating) ? '#ccc' : '#8e44ad',
+                                border: 'none',
+                                borderRadius: '4px',
+                                color: '#fff',
+                                cursor: (!panelImages[panel.id]?.path || panelImages[panel.id]?.generating) ? 'not-allowed' : 'pointer',
+                                fontSize: '0.75rem',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              Inpaint Region
+                            </button>
                             {(() => {
                               const currentPath = panelImages[panel.id]?.path;
-                              const alreadyRef = (panelImages[panel.id]?.refImages || []).includes(currentPath);
+                              const alreadyRef = (panelImages[panel.id]?.refImages || []).some(r => getRefPath(r) === currentPath);
                               return (
                                 <button
                                   onClick={() => {
@@ -7867,7 +8286,7 @@ function PageEditor({ isCover = false }) {
                                         ...prev,
                                         [panel.id]: {
                                           ...prev[panel.id],
-                                          refImages: [...(prev[panel.id]?.refImages || []), currentPath]
+                                          refImages: [...(prev[panel.id]?.refImages || []), { path: currentPath, annotations: prev[panel.id]?.annotations || [] }]
                                         }
                                       }));
                                     }
@@ -9103,7 +9522,7 @@ function PageEditor({ isCover = false }) {
                     const cx = bx + bw / 2;
                     const cy = by + bh / 2;
                     const rotation = bubble.rotation ?? 0;
-                    const tailWidth = (bubble.tailWidth ?? 0.25) * bw;
+                    const tailWidth = (bubble.tailWidth ?? 0.15) * bw;
                     const halfTailWidth = tailWidth / 2;
                     const tailLength = (bubble.tailLength ?? 0.35) * bh;
                     const tailCurve = bubble.tailCurve ?? 0;
