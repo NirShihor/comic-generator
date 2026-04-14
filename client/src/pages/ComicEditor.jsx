@@ -431,27 +431,35 @@ function ComicEditor() {
         savePayload.comicId = id;
       }
       const response = await api.post('/images/save-reference', savePayload);
-      setSettings(prev => ({
-        ...prev,
-        characters: [...prev.characters, {
-          id: `char-${Date.now()}`,
-          name: name.trim(),
-          description: lastAssistant.content,
-          image: response.data.path
-        }]
-      }));
+      setSettings(prev => {
+        const updated = {
+          ...prev,
+          characters: [...prev.characters, {
+            id: `char-${Date.now()}`,
+            name: name.trim(),
+            description: lastAssistant.content,
+            image: response.data.path
+          }]
+        };
+        saveSettings(updated, true);
+        return updated;
+      });
       setSettingsTab('characters');
     } catch (error) {
       console.error('Failed to save reference image:', error);
       // Still add the entry without the image
-      setSettings(prev => ({
-        ...prev,
-        characters: [...prev.characters, {
-          id: `char-${Date.now()}`,
-          name: name.trim(),
-          description: lastAssistant.content
-        }]
-      }));
+      setSettings(prev => {
+        const updated = {
+          ...prev,
+          characters: [...prev.characters, {
+            id: `char-${Date.now()}`,
+            name: name.trim(),
+            description: lastAssistant.content
+          }]
+        };
+        saveSettings(updated, true);
+        return updated;
+      });
       setSettingsTab('characters');
     }
   };
@@ -593,14 +601,6 @@ function ComicEditor() {
                 {tab.label}
               </button>
             ))}
-            <button
-              className="btn btn-primary"
-              onClick={saveSettings}
-              disabled={saving}
-              style={{ marginLeft: 'auto', padding: '0.4rem 1rem', fontSize: '0.85rem' }}
-            >
-              {saving ? 'Saving...' : settingsSource === 'collection' || comic.collectionId ? 'Save to Collection' : 'Save Settings'}
-            </button>
           </div>
         </>
       )}

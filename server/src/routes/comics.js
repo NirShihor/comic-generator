@@ -460,11 +460,13 @@ router.put('/:id/cover', async (req, res) => {
     }
 
     if (req.body.image) {
+      // Strip cache-busting query strings (e.g. ?t=123456) from image paths
+      const cleanImage = req.body.image.split('?')[0];
       let sourceImagePath;
-      if (req.body.image.startsWith('/uploads/')) {
-        sourceImagePath = path.join(UPLOADS_DIR, req.body.image.replace('/uploads/', ''));
-      } else if (req.body.image.startsWith('/projects/')) {
-        sourceImagePath = path.join(PROJECTS_DIR, req.body.image.replace('/projects/', ''));
+      if (cleanImage.startsWith('/uploads/')) {
+        sourceImagePath = path.join(UPLOADS_DIR, cleanImage.replace('/uploads/', ''));
+      } else if (cleanImage.startsWith('/projects/')) {
+        sourceImagePath = path.join(PROJECTS_DIR, cleanImage.replace('/projects/', ''));
       }
 
       if (sourceImagePath) {
@@ -480,6 +482,11 @@ router.put('/:id/cover', async (req, res) => {
           const coverSceneImagePath = path.join(imagesDir, coverSceneFilename);
           await fs.copyFile(sourceImagePath, coverSceneImagePath);
           comic.cover.sceneImage = `/projects/${req.params.id}/images/${coverSceneFilename}`;
+
+          // Clear stale baked image when a new upload replaces the cover
+          if (cleanImage.startsWith('/uploads/')) {
+            comic.cover.bakedImage = '';
+          }
 
           console.log(`Saved cover images: ${coverFilename}, ${coverSceneFilename}`);
         } catch (err) {

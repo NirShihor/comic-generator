@@ -548,7 +548,7 @@ Generate this image now.`
 // Generate single panel image (OpenAI or Gemini)
 router.post('/generate-panel', (req, res) => {
   withKeepAlive(res, async () => {
-    const { prompt, panelId, aspectRatio = 'square', referenceImages, linkedPanelImages, refAnnotations, isRefinement, isAngleChange, angleSourceImage, angleDegrees, panelContent, provider = 'openai' } = req.body;
+    const { prompt, panelId, aspectRatio = 'square', referenceImages, linkedPanelImages, refAnnotations, isRefinement, isAngleChange, angleSourceImage, angleDegrees, panelContent, provider = 'openai', openaiQuality = 'high' } = req.body;
 
     const styleRefs = referenceImages || [];
     const linkedRefs = linkedPanelImages || [];
@@ -652,7 +652,7 @@ router.post('/generate-panel', (req, res) => {
         finalPrompt = finalPrompt.substring(0, maxPromptLen);
       }
 
-      console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, prompt length: ${finalPrompt.length}, angle-change: ${!!isAngleChange}, source: ${angleSourceImage ? 1 : 0}, linked refs: ${linkedRefs.length}, style refs: ${styleRefs.length}`);
+      console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, quality: ${openaiQuality}, prompt length: ${finalPrompt.length}, angle-change: ${!!isAngleChange}, source: ${angleSourceImage ? 1 : 0}, linked refs: ${linkedRefs.length}, style refs: ${styleRefs.length}`);
 
       let response;
       if (allRefStreams.length > 0) {
@@ -679,7 +679,7 @@ Other attached images are style/character references — use them for art style 
           prompt: refInstructions + finalPrompt,
           n: 1,
           size: size,
-          quality: 'high'
+          quality: openaiQuality
         });
       } else {
         response = await openai.images.generate({
@@ -687,7 +687,7 @@ Other attached images are style/character references — use them for art style 
           prompt: finalPrompt,
           n: 1,
           size: size,
-          quality: 'high'
+          quality: openaiQuality
         });
       }
 
@@ -725,7 +725,8 @@ router.post('/inpaint-region', (req, res) => {
       panelId,
       referenceImages,
       refAnnotations,
-      provider = 'openai'
+      provider = 'openai',
+      openaiQuality = 'high'
     } = req.body;
 
     if (!sourceImagePath || !rect || !prompt) {
@@ -876,7 +877,7 @@ router.post('/inpaint-region', (req, res) => {
       if (sourceMeta.width > sourceMeta.height * 1.2) size = '1536x1024';
       else if (sourceMeta.height > sourceMeta.width * 1.2) size = '1024x1536';
 
-      console.log(`Inpaint (OpenAI): region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], size: ${size}, prompt: ${prompt.substring(0, 80)}...`);
+      console.log(`Inpaint (OpenAI): region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], size: ${size}, quality: ${openaiQuality}, prompt: ${prompt.substring(0, 80)}...`);
 
       const response = await openai.images.edit({
         model: 'gpt-image-1',
@@ -885,7 +886,7 @@ router.post('/inpaint-region', (req, res) => {
         prompt: inpaintPrompt,
         n: 1,
         size: size,
-        quality: 'high'
+        quality: openaiQuality
       });
 
       const imageData = response.data[0];

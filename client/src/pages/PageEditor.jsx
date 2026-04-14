@@ -493,6 +493,7 @@ function PageEditor({ isCover = false }) {
   const [promptSettingsSource, setPromptSettingsSource] = useState('comic');
   const [promptSettingsCollectionId, setPromptSettingsCollectionId] = useState(null);
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
+  const [openaiQuality, setOpenaiQuality] = useState('high'); // 'high' or 'medium'
 
   // Default bubble style (comic-level)
   const [defaultBubbleStyle, setDefaultBubbleStyle] = useState({
@@ -2080,10 +2081,10 @@ function PageEditor({ isCover = false }) {
     ));
     // Auto-save to DB
     if (isCover) {
-      const updatedCover = { ...comic.cover, image: imagePath };
+      const updatedCover = { ...comic.cover, image: imagePath, bakedImage: '' };
       api.put(`/comics/${id}`, { cover: updatedCover }).then(() => {
         setComic(prev => ({ ...prev, cover: updatedCover }));
-        setPage(prev => ({ ...prev, masterImage: imagePath + `?t=${Date.now()}` }));
+        setPage(prev => ({ ...prev, masterImage: imagePath + `?t=${Date.now()}`, bakedImage: '' }));
       }).catch(err => {
         console.error('Failed to auto-save cover artwork:', err);
       });
@@ -2601,7 +2602,8 @@ function PageEditor({ isCover = false }) {
         angleSourceImage,
         angleDegrees,
         panelContent: panel.content,
-        provider
+        provider,
+        openaiQuality
       }, { timeout: 600000, signal: controller.signal });
 
       delete abortControllers.current[panel.id];
@@ -2747,7 +2749,8 @@ function PageEditor({ isCover = false }) {
         referenceImages: getRefImagePaths(panel.id),
         linkedPanelImages: [currentPath],
         isRefinement: true,
-        provider
+        provider,
+        openaiQuality
       }, { timeout: 600000 });
 
       setPanelImages(prev => ({
@@ -2814,7 +2817,8 @@ function PageEditor({ isCover = false }) {
         panelId,
         referenceImages,
         refAnnotations,
-        provider
+        provider,
+        openaiQuality
       }, { timeout: 600000 });
 
       setPanelImages(prev => ({
@@ -2989,7 +2993,7 @@ function PageEditor({ isCover = false }) {
     // Helper function to draw a wobbly/hand-drawn line
     const drawWobblyLine = (x1, y1, x2, y2) => {
       const segments = 12; // Number of segments for the wobble
-      const wobbleAmount = 1.5; // Max pixels of wobble
+      const wobbleAmount = 1.5 + (ctx.lineWidth * 0.15); // Scale wobble with line thickness
 
       ctx.beginPath();
       ctx.moveTo(x1, y1);
@@ -3289,8 +3293,9 @@ function PageEditor({ isCover = false }) {
       const bt = borderThicknessRef.current;
       if (bt > 0) {
         const borderScale = bt / 100;
+        const baseLine = 6 + Math.random() * 3; // 6-9px base at 2048-wide canvas
         for (let pass = 0; pass < 3; pass++) {
-          ctx.lineWidth = (2 + Math.random() * 1.5) * borderScale;
+          ctx.lineWidth = baseLine * borderScale;
 
           // Top edge (TL → TR)
           drawWobblyLine(tlX, tlY, trX, trY);
@@ -3419,8 +3424,9 @@ function PageEditor({ isCover = false }) {
       if (btFloat > 0) {
         const borderScale = btFloat / 100;
         ctx.strokeStyle = borderColor;
+        const baseLineFloat = 6 + Math.random() * 3;
         for (let pass = 0; pass < 3; pass++) {
-          ctx.lineWidth = (2.5 + Math.random() * 1.5) * borderScale;
+          ctx.lineWidth = baseLineFloat * borderScale;
           for (let i = 0; i < innerCorners.length; i++) {
             const from = innerCorners[i];
             const to = innerCorners[(i + 1) % innerCorners.length];
@@ -3456,10 +3462,10 @@ function PageEditor({ isCover = false }) {
       if (isCover) {
         // Save to project as cover
         const savedPath = uploadResponse.data.path;
-        const updatedCover = { ...comic.cover, image: savedPath };
+        const updatedCover = { ...comic.cover, image: savedPath, bakedImage: '' };
         await api.put(`/comics/${id}`, { cover: updatedCover });
         setComic(prev => ({ ...prev, cover: updatedCover }));
-        setPage(prev => ({ ...prev, masterImage: savedPath + `?t=${Date.now()}` }));
+        setPage(prev => ({ ...prev, masterImage: savedPath + `?t=${Date.now()}`, bakedImage: '' }));
         showToast('Cover image updated!');
       } else {
         // Save to project as page
@@ -3637,10 +3643,10 @@ function PageEditor({ isCover = false }) {
       if (isCover) {
         const savedPath = saveResponse.data.path;
         const coverPrompt = panels[0]?.content || '';
-        const updatedCover = { ...comic.cover, image: savedPath, prompt: coverPrompt };
+        const updatedCover = { ...comic.cover, image: savedPath, prompt: coverPrompt, bakedImage: '' };
         await api.put(`/comics/${id}`, { cover: updatedCover });
         setComic(prev => ({ ...prev, cover: updatedCover }));
-        setPage(prev => ({ ...prev, masterImage: savedPath + `?t=${Date.now()}` }));
+        setPage(prev => ({ ...prev, masterImage: savedPath + `?t=${Date.now()}`, bakedImage: '' }));
         showToast('Image saved to cover!');
         return;
       }
@@ -4898,6 +4904,7 @@ function PageEditor({ isCover = false }) {
                             e.stopPropagation();
                             setSelectedBubbleId(bubble.id);
                             setEditorMode('bubbles');
+                            setSidebarTab('panels');
                           }}
                           style={{ pointerEvents: 'auto', cursor: editorMode === 'bubbles' ? (bubble.locked ? 'default' : (isDraggingBubble ? 'grabbing' : 'grab')) : 'default' }}
                         >
@@ -5145,6 +5152,7 @@ function PageEditor({ isCover = false }) {
                       e.stopPropagation();
                       setSelectedBubbleId(bubble.id);
                       setEditorMode('bubbles');
+                      setSidebarTab('panels');
                     }}
                     style={{
                       position: 'absolute',
@@ -7429,6 +7437,41 @@ function PageEditor({ isCover = false }) {
               </div>
 
               </>}
+
+              {/* ChatGPT Quality Toggle */}
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.8rem', color: '#888' }}>ChatGPT Quality:</label>
+                <button
+                  onClick={() => setOpenaiQuality('high')}
+                  style={{
+                    padding: '0.2rem 0.6rem',
+                    fontSize: '0.75rem',
+                    background: openaiQuality === 'high' ? '#27ae60' : '#e0e0e0',
+                    color: openaiQuality === 'high' ? '#fff' : '#666',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    fontWeight: openaiQuality === 'high' ? 'bold' : 'normal'
+                  }}
+                >
+                  High
+                </button>
+                <button
+                  onClick={() => setOpenaiQuality('medium')}
+                  style={{
+                    padding: '0.2rem 0.6rem',
+                    fontSize: '0.75rem',
+                    background: openaiQuality === 'medium' ? '#e67e22' : '#e0e0e0',
+                    color: openaiQuality === 'medium' ? '#fff' : '#666',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    fontWeight: openaiQuality === 'medium' ? 'bold' : 'normal'
+                  }}
+                >
+                  Medium (~4x cheaper)
+                </button>
+              </div>
 
               {/* Page-level Bible Refs (shared by all panels) */}
               {(promptSettings.styleBibleImages?.length > 0 || (promptSettings.characters || []).some(c => c.image)) && (

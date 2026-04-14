@@ -253,7 +253,7 @@ router.get('/cover-thumbnail/:id', async (req, res) => {
       .toBuffer();
 
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'no-cache');
     res.send(thumbnail);
   } catch (error) {
     console.error('Cover thumbnail error:', error);
