@@ -179,46 +179,55 @@ router.get('/comics/:id/bundle', async (req, res) => {
       });
     }
 
-    // Generate reader format and write comic.json into the export dir
-    const readerComic = transformToReaderFormat(comicObj, comicSlug);
-    const comicJsonPath = path.join(exportDir, 'comic.json');
-    await fs.writeFile(comicJsonPath, JSON.stringify(readerComic, null, 2));
-
-    // Build ZIP to a temp file first so we can send Content-Length
-    const os = require('os');
     const fsSync = require('fs');
-    const tmpZipPath = path.join(os.tmpdir(), `${comicSlug}-${Date.now()}.zip`);
-    const output = fsSync.createWriteStream(tmpZipPath);
 
-    const archive = archiver('zip', { zlib: { level: 0 } }); // Store only — PNGs/MP3s are already compressed
+    // Use pre-built ZIP from export if available
+    const prebuiltZipPath = path.join(exportDir, '..', `${comicSlug}.zip`);
+    let zipPath;
+    let tempZip = false;
 
-    await new Promise((resolve, reject) => {
-      output.on('close', resolve);
-      archive.on('error', reject);
-      archive.pipe(output);
-      archive.directory(exportDir, false);
-      archive.finalize();
-    });
+    try {
+      await fs.access(prebuiltZipPath);
+      zipPath = prebuiltZipPath;
+      console.log(`[BUNDLE] Using pre-built ZIP: ${prebuiltZipPath}`);
+    } catch {
+      // Fallback: build ZIP on the fly
+      console.log(`[BUNDLE] No pre-built ZIP found, building on the fly...`);
+      const readerComic = transformToReaderFormat(comicObj, comicSlug);
+      const comicJsonPath = path.join(exportDir, 'comic.json');
+      await fs.writeFile(comicJsonPath, JSON.stringify(readerComic, null, 2));
+
+      const os = require('os');
+      zipPath = path.join(os.tmpdir(), `${comicSlug}-${Date.now()}.zip`);
+      tempZip = true;
+      const output = fsSync.createWriteStream(zipPath);
+      const archive = archiver('zip', { zlib: { level: 0 } });
+
+      await new Promise((resolve, reject) => {
+        output.on('close', resolve);
+        archive.on('error', reject);
+        archive.pipe(output);
+        archive.directory(exportDir, false);
+        archive.finalize();
+      });
+    }
 
     // Send the file with Content-Length so the client can track progress
-    const stat = await fs.stat(tmpZipPath);
-    const zipFileName = `${comicSlug}.zip`;
+    const stat = await fs.stat(zipPath);
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Length', stat.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${comicSlug}.zip"`);
 
     console.log(`[BUNDLE] ZIP ready: ${stat.size} bytes, sending to client...`);
-    const fileStream = fsSync.createReadStream(tmpZipPath);
+    const fileStream = fsSync.createReadStream(zipPath);
     fileStream.pipe(res);
 
-    // Clean up temp file after response is done
-    res.on('finish', () => {
-      fs.unlink(tmpZipPath).catch(() => {});
-    });
-    res.on('error', () => {
-      fs.unlink(tmpZipPath).catch(() => {});
-    });
+    // Clean up temp file after response is done (only if we built it on the fly)
+    if (tempZip) {
+      res.on('finish', () => { fs.unlink(zipPath).catch(() => {}); });
+      res.on('error', () => { fs.unlink(zipPath).catch(() => {}); });
+    }
   } catch (error) {
     console.error('Bundle error:', error);
     if (!res.headersSent) {

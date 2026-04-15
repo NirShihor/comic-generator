@@ -18,15 +18,25 @@ async function cropAndSaveScene(sourceImagePath, outputPath, region, imageWidth,
     const width = Math.round(region.width * imageWidth);
     const height = Math.round(region.height * imageHeight);
 
-    await sharp(sourceImagePath)
-      .extract({ left, top, width, height })
-      .toFile(outputPath);
+    const pipeline = sharp(sourceImagePath)
+      .extract({ left, top, width, height });
+
+    if (outputPath.endsWith('.jpg')) {
+      await pipeline.jpeg({ quality: 85 }).toFile(outputPath);
+    } else {
+      await pipeline.toFile(outputPath);
+    }
 
     return true;
   } catch (error) {
     console.error('Error cropping scene:', error);
     return false;
   }
+}
+
+// Convert a source image to JPEG and save to outputPath
+async function convertToJpeg(sourcePath, outputPath) {
+  await sharp(sourcePath).jpeg({ quality: 85 }).toFile(outputPath);
 }
 
 async function ensureProjectDirs(comicId) {
@@ -537,6 +547,18 @@ router.post('/:id/export-full', async (req, res) => {
     await fs.mkdir(imagesDir, { recursive: true });
     await fs.mkdir(audioDir, { recursive: true });
 
+    // Clean up old PNG images from previous exports (now using JPEG)
+    try {
+      const existingFiles = await fs.readdir(imagesDir);
+      for (const file of existingFiles) {
+        if (file.endsWith('.png')) {
+          await fs.unlink(path.join(imagesDir, file));
+        }
+      }
+    } catch (e) {
+      // Directory might not exist yet
+    }
+
     const exportedComic = transformToReaderFormat(comicObj, comicSlug);
 
     const copiedImages = [];
@@ -547,10 +569,10 @@ router.post('/:id/export-full', async (req, res) => {
       const coverImage = comicObj.cover.bakedImage || comicObj.cover.image;
       const cleanCoverImage = coverImage.split('?')[0];
       const coverSourcePath = path.join(__dirname, '../..', cleanCoverImage);
-      const coverDestPath = path.join(imagesDir, `${comicSlug}_cover.png`);
+      const coverDestPath = path.join(imagesDir, `${comicSlug}_cover.jpg`);
       try {
-        await fs.copyFile(coverSourcePath, coverDestPath);
-        copiedImages.push(`${comicSlug}_cover.png`);
+        await convertToJpeg(coverSourcePath, coverDestPath);
+        copiedImages.push(`${comicSlug}_cover.jpg`);
       } catch (e) {
         console.log('Cover image not found:', coverSourcePath);
       }
@@ -563,10 +585,10 @@ router.post('/:id/export-full', async (req, res) => {
         const cleanPageImage = pageImage.split('?')[0];
         const sourceImagePath = path.join(__dirname, '../..', cleanPageImage);
 
-        const masterDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}.png`);
+        const masterDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}.jpg`);
         try {
-          await fs.copyFile(sourceImagePath, masterDestPath);
-          copiedImages.push(`${comicSlug}_p${pageNum}.png`);
+          await convertToJpeg(sourceImagePath, masterDestPath);
+          copiedImages.push(`${comicSlug}_p${pageNum}.jpg`);
 
           // If there's a baked image, also export the raw master as _no_text variant
           // for Speaking Practice Mode in the reader app
@@ -579,7 +601,7 @@ router.post('/:id/export-full', async (req, res) => {
           const rawImagePath = hasBakedImage ? rawMasterPath : sourceImagePath;
 
           if (hasBakedImage && rawMasterPath) {
-            const noTextDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_no_text.png`);
+            const noTextDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_no_text.jpg`);
             try {
               // Get image bubbles from this page
               const pageBubbles = page.bubbles || [];
@@ -603,12 +625,12 @@ router.post('/:id/export-full', async (req, res) => {
                     console.log('Image bubble source not found, skipping:', imgPath);
                   }
                 }
-                await sharp(rawMasterPath).composite(composites).toFile(noTextDestPath);
+                await sharp(rawMasterPath).composite(composites).jpeg({ quality: 85 }).toFile(noTextDestPath);
               } else {
-                // No image bubbles — just copy the raw master
-                await fs.copyFile(rawMasterPath, noTextDestPath);
+                // No image bubbles — just convert the raw master
+                await convertToJpeg(rawMasterPath, noTextDestPath);
               }
-              copiedImages.push(`${comicSlug}_p${pageNum}_no_text.png`);
+              copiedImages.push(`${comicSlug}_p${pageNum}_no_text.jpg`);
             } catch (e) {
               console.log('Raw master image not found for no_text:', rawMasterPath);
             }
@@ -633,7 +655,7 @@ router.post('/:id/export-full', async (req, res) => {
               cropRegion = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
             }
             // Panel crop from baked image (with text)
-            const sceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}.png`);
+            const sceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}.jpg`);
             const cropped = await cropAndSaveScene(
               sourceImagePath,
               sceneDestPath,
@@ -642,14 +664,14 @@ router.post('/:id/export-full', async (req, res) => {
               imgHeight
             );
             if (cropped) {
-              copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}.png`);
+              copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}.jpg`);
             }
 
             // Panel crop from no_text image (master + image bubbles) for Speaking Practice Mode
             if (hasBakedImage && rawMasterPath) {
-              const noTextSceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}_no_text.png`);
+              const noTextSceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}_no_text.jpg`);
               try {
-                const noTextFullPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_no_text.png`);
+                const noTextFullPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_no_text.jpg`);
                 const noTextMeta = await sharp(noTextFullPath).metadata();
                 const rawCropped = await cropAndSaveScene(
                   noTextFullPath,
@@ -659,7 +681,7 @@ router.post('/:id/export-full', async (req, res) => {
                   noTextMeta.height
                 );
                 if (rawCropped) {
-                  copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}_no_text.png`);
+                  copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}_no_text.jpg`);
                 }
               } catch (e) {
                 console.log('Failed to crop no_text panel:', e.message);
@@ -730,6 +752,25 @@ router.post('/:id/export-full', async (req, res) => {
     const comicJsonPath = path.join(exportDir, 'comic.json');
     await fs.writeFile(comicJsonPath, JSON.stringify(exportedComic, null, 2));
 
+    // Pre-build ZIP bundle for fast downloads
+    const archiver = require('archiver');
+    const fsSync = require('fs');
+    const zipPath = path.join(exportDir, '..', `${comicSlug}.zip`);
+    const zipOutput = fsSync.createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 0 } });
+
+    await new Promise((resolve, reject) => {
+      zipOutput.on('close', resolve);
+      archive.on('error', reject);
+      archive.pipe(zipOutput);
+      archive.directory(exportDir, false);
+      archive.finalize();
+    });
+
+    const zipStat = await fs.stat(zipPath);
+    const zipSizeMB = Math.round(zipStat.size / (1024 * 1024) * 10) / 10;
+    console.log(`Pre-built ZIP: ${zipPath} (${zipSizeMB} MB)`);
+
     res.json({
       success: true,
       exportDir,
@@ -737,7 +778,8 @@ router.post('/:id/export-full', async (req, res) => {
       copiedImages,
       copiedAudio,
       copiedWordAudio,
-      message: `Exported to ${exportDir}`
+      zipSizeMB,
+      message: `Exported to ${exportDir} (ZIP: ${zipSizeMB} MB)`
     });
   } catch (error) {
     console.error('Export error:', error);

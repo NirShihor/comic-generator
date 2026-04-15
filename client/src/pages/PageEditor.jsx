@@ -711,9 +711,9 @@ function PageEditor({ isCover = false }) {
         const existing = existingWords.find(w => normWord(w.text) === normalised);
         return {
           id: existing?.id || `word-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          text: existing?.text || t.word,
-          meaning: cleanWord(existing?.meaning || ''),
-          baseForm: cleanWord(existing?.baseForm || ''),
+          text: cleanWord(existing?.text || t.word).toLowerCase(),
+          meaning: existing?.meaning || '',
+          baseForm: cleanWord(existing?.baseForm || '').toLowerCase(),
           startTimeMs: t.startMs,
           endTimeMs: t.endMs,
           vocabQuiz: existing?.vocabQuiz || false
@@ -735,8 +735,8 @@ function PageEditor({ isCover = false }) {
           if (Array.isArray(lookupResults)) {
             wordsNeedingLookup.forEach((w, i) => {
               if (lookupResults[i] && !lookupResults[i].isName) {
-                w.meaning = cleanWord(lookupResults[i].meaning || '');
-                w.baseForm = cleanWord(lookupResults[i].baseForm || '');
+                w.meaning = lookupResults[i].meaning || '';
+                w.baseForm = cleanWord(lookupResults[i].baseForm || '').toLowerCase();
               }
             });
           }
@@ -946,6 +946,14 @@ function PageEditor({ isCover = false }) {
         console.error('Page not found:', pageId);
         return;
       }
+      // Reset all page state before loading new page data
+      // (prevents stale state from previous page leaking into empty/new pages)
+      setLines([]);
+      setPanels([]);
+      setPanelsComputed(false);
+      setPanelImages({});
+      setBubbles([]);
+
       setPage(currentPage);
       if (currentPage?.lines) {
         setLines(currentPage.lines);
@@ -1614,9 +1622,9 @@ function PageEditor({ isCover = false }) {
               ...s,
               words: [...(s.words || []), {
                 id: `word-${Date.now()}`,
-                text: response.data.text || selectedText,
+                text: (response.data.text || selectedText || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim(),
                 meaning: response.data.meaning || '',
-                baseForm: response.data.baseForm || ''
+                baseForm: (response.data.baseForm || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim()
               }]
             };
           })
@@ -1825,24 +1833,52 @@ function PageEditor({ isCover = false }) {
       } else if (isResizingBubble && selectedBubbleId) {
         const bubble = bubbles.find(b => b.id === selectedBubbleId);
         if (bubble) {
+          const rotation = bubble.rotation || 0;
           let newWidth = bubble.width;
           let newHeight = bubble.height;
           let newX = bubble.x;
           let newY = bubble.y;
 
-          if (resizeCorner.includes('right')) {
-            newWidth = Math.max(0.05, coords.x - bubble.x);
-          }
-          if (resizeCorner.includes('left')) {
-            newWidth = Math.max(0.05, bubble.x + bubble.width - coords.x);
-            newX = coords.x;
-          }
-          if (resizeCorner.includes('bottom')) {
-            newHeight = Math.max(0.03, coords.y - bubble.y);
-          }
-          if (resizeCorner.includes('top')) {
-            newHeight = Math.max(0.03, bubble.y + bubble.height - coords.y);
-            newY = coords.y;
+          if (rotation !== 0) {
+            // Symmetric center-anchored resize for rotated bubbles:
+            // Project mouse distance from center onto the bubble's local axes
+            const cx = bubble.x + bubble.width / 2;
+            const cy = bubble.y + bubble.height / 2;
+            const rad = -rotation * Math.PI / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+            const dx = coords.x - cx;
+            const dy = coords.y - cy;
+            // Mouse position in bubble's local (un-rotated) frame, relative to center
+            const localDx = dx * cos - dy * sin;
+            const localDy = dx * sin + dy * cos;
+
+            if (resizeCorner.includes('right') || resizeCorner.includes('left')) {
+              const newHalfW = Math.max(0.025, Math.abs(localDx));
+              newWidth = newHalfW * 2;
+              newX = cx - newHalfW;
+            }
+            if (resizeCorner.includes('bottom') || resizeCorner.includes('top')) {
+              const newHalfH = Math.max(0.015, Math.abs(localDy));
+              newHeight = newHalfH * 2;
+              newY = cy - newHalfH;
+            }
+          } else {
+            // Standard one-sided resize for un-rotated bubbles
+            if (resizeCorner.includes('right')) {
+              newWidth = Math.max(0.05, coords.x - bubble.x);
+            }
+            if (resizeCorner.includes('left')) {
+              newWidth = Math.max(0.05, bubble.x + bubble.width - coords.x);
+              newX = coords.x;
+            }
+            if (resizeCorner.includes('bottom')) {
+              newHeight = Math.max(0.03, coords.y - bubble.y);
+            }
+            if (resizeCorner.includes('top')) {
+              newHeight = Math.max(0.03, bubble.y + bubble.height - coords.y);
+              newY = coords.y;
+            }
           }
 
           updateBubble(selectedBubbleId, {
@@ -4930,115 +4966,87 @@ function PageEditor({ isCover = false }) {
                             opacity={0.7}
                           />
                         )}
-                        {/* Text inside bubble (not rotated - stays readable) */}
-                        <foreignObject x={bx} y={by} width={bw} height={bh}>
-                          <div
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: '6px 8px',
-                              boxSizing: 'border-box'
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
-                                fontSize: `${bubble.fontSize}px`,
-                                fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
-                                fontStyle: bubble.italic ? 'italic' : 'normal',
-                                color: bubble.textColor || '#000000',
-                                textAlign: bubble.textAlign || 'center',
-                                width: '100%',
-                                wordBreak: 'break-word',
-                                lineHeight: 1.3,
-                                letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
-                                textTransform: bubble.uppercase ? 'uppercase' : 'none',
-                                pointerEvents: 'none',
-                                userSelect: 'none',
-                                transform: `rotate(${bubble.textAngle ?? 0}deg)`,
-                                display: 'inline-block'
-                              }}
-                            >
-                              {getBubbleDisplayText(bubble) || (editorMode === 'bubbles' ? '...' : '')}
-                            </span>
-                          </div>
-                        </foreignObject>
+                        {/* Text inside bubble — use rotated bounding box so text flows along the visual width */}
+                        {(() => {
+                          const rotR = (rotation || 0) * Math.PI / 180;
+                          const cosR = Math.cos(rotR);
+                          const sinR = Math.sin(rotR);
+                          const halfW = bw / 2;
+                          const halfH = bh / 2;
+                          const textW = rotation ? 2 * Math.sqrt((halfW * cosR) ** 2 + (halfH * sinR) ** 2) : bw;
+                          const textH = rotation ? 2 * Math.sqrt((halfW * sinR) ** 2 + (halfH * cosR) ** 2) : bh;
+                          const textX = cx - textW / 2;
+                          const textY = cy - textH / 2;
+                          return (
+                            <foreignObject x={textX} y={textY} width={textW} height={textH}>
+                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px 8px', boxSizing: 'border-box' }}>
+                                <span
+                                  style={{
+                                    fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                                    fontSize: `${bubble.fontSize}px`,
+                                    fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                                    fontStyle: bubble.italic ? 'italic' : 'normal',
+                                    color: bubble.textColor || '#000000',
+                                    textAlign: bubble.textAlign || 'center',
+                                    width: '100%',
+                                    wordBreak: 'break-word',
+                                    lineHeight: 1.3,
+                                    letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                                    textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                                    pointerEvents: 'none',
+                                    userSelect: 'none',
+                                    transform: `rotate(${bubble.textAngle ?? 0}deg)`,
+                                    display: 'inline-block'
+                                  }}
+                                >
+                                  {getBubbleDisplayText(bubble) || (editorMode === 'bubbles' ? '...' : '')}
+                                </span>
+                              </div>
+                            </foreignObject>
+                          );
+                        })()}
                       </svg>
                     );
                   })()}
 
-                  {/* Resize handles for speech bubbles with tail */}
-                  {bubble.type === 'speech' && bubble.showTail !== false && editorMode === 'bubbles' && selectedBubbleId === bubble.id && (
-                    <>
+                  {/* Resize handles for speech bubbles with tail — edge midpoints for independent axis control */}
+                  {bubble.type === 'speech' && bubble.showTail !== false && editorMode === 'bubbles' && selectedBubbleId === bubble.id && (() => {
+                    const rot = (bubble.rotation || 0) * Math.PI / 180;
+                    const cosR = Math.cos(rot);
+                    const sinR = Math.sin(rot);
+                    const cx = bubble.x + bubble.width / 2;
+                    const cy = bubble.y + bubble.height / 2;
+                    const rotatePoint = (px, py) => {
+                      const dx = px - cx;
+                      const dy = py - cy;
+                      return { x: cx + dx * cosR - dy * sinR, y: cy + dx * sinR + dy * cosR };
+                    };
+                    const edges = [
+                      { corner: 'right',  ...rotatePoint(bubble.x + bubble.width, bubble.y + bubble.height / 2) },
+                      { corner: 'left',   ...rotatePoint(bubble.x, bubble.y + bubble.height / 2) },
+                      { corner: 'bottom', ...rotatePoint(bubble.x + bubble.width / 2, bubble.y + bubble.height) },
+                      { corner: 'top',    ...rotatePoint(bubble.x + bubble.width / 2, bubble.y) }
+                    ];
+                    return edges.map(c => (
                       <div
+                        key={c.corner}
                         data-resize-handle="true"
-                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-right')}
+                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, c.corner)}
                         style={{
                           position: 'absolute',
-                          left: `${(bubble.x + bubble.width) * 100}%`,
-                          top: `${(bubble.y + bubble.height) * 100}%`,
+                          left: `${c.x * 100}%`,
+                          top: `${c.y * 100}%`,
                           width: 10,
                           height: 10,
                           background: '#00ff00',
-                          cursor: 'nwse-resize',
+                          cursor: 'crosshair',
                           borderRadius: '50%',
                           transform: 'translate(-50%, -50%)',
                           zIndex: 60
                         }}
                       />
-                      <div
-                        data-resize-handle="true"
-                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-left')}
-                        style={{
-                          position: 'absolute',
-                          left: `${bubble.x * 100}%`,
-                          top: `${(bubble.y + bubble.height) * 100}%`,
-                          width: 10,
-                          height: 10,
-                          background: '#00ff00',
-                          cursor: 'nesw-resize',
-                          borderRadius: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          zIndex: 60
-                        }}
-                      />
-                      <div
-                        data-resize-handle="true"
-                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-right')}
-                        style={{
-                          position: 'absolute',
-                          left: `${(bubble.x + bubble.width) * 100}%`,
-                          top: `${bubble.y * 100}%`,
-                          width: 10,
-                          height: 10,
-                          background: '#00ff00',
-                          cursor: 'nesw-resize',
-                          borderRadius: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          zIndex: 60
-                        }}
-                      />
-                      <div
-                        data-resize-handle="true"
-                        onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-left')}
-                        style={{
-                          position: 'absolute',
-                          left: `${bubble.x * 100}%`,
-                          top: `${bubble.y * 100}%`,
-                          width: 10,
-                          height: 10,
-                          background: '#00ff00',
-                          cursor: 'nwse-resize',
-                          borderRadius: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          zIndex: 60
-                        }}
-                      />
-                    </>
-                  )}
+                    ));
+                  })()}
 
                   {/* Thought bubble trail (ooo circles) */}
                   {bubble.type === 'thought' && bubble.showTail !== false && (() => {
@@ -5222,63 +5230,67 @@ function PageEditor({ isCover = false }) {
                     </span>
                     )}
 
-                    {/* Resize handles (only in bubble mode and when selected) */}
+                    {/* Resize handles — edge midpoints for independent axis control */}
                     {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (
                       <>
                         <div
                           data-resize-handle="true"
-                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-right')}
+                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'right')}
                           style={{
                             position: 'absolute',
                             right: -4,
+                            top: '50%',
+                            width: 8,
+                            height: 8,
+                            background: '#00ff00',
+                            cursor: 'crosshair',
+                            borderRadius: '50%',
+                            transform: 'translateY(-50%)'
+                          }}
+                        />
+                        <div
+                          data-resize-handle="true"
+                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'left')}
+                          style={{
+                            position: 'absolute',
+                            left: -4,
+                            top: '50%',
+                            width: 8,
+                            height: 8,
+                            background: '#00ff00',
+                            cursor: 'crosshair',
+                            borderRadius: '50%',
+                            transform: 'translateY(-50%)'
+                          }}
+                        />
+                        <div
+                          data-resize-handle="true"
+                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom')}
+                          style={{
+                            position: 'absolute',
+                            left: '50%',
                             bottom: -4,
                             width: 8,
                             height: 8,
                             background: '#00ff00',
-                            cursor: 'nwse-resize',
-                            borderRadius: '50%'
+                            cursor: 'crosshair',
+                            borderRadius: '50%',
+                            transform: 'translateX(-50%)'
                           }}
                         />
                         <div
                           data-resize-handle="true"
-                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'bottom-left')}
+                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top')}
                           style={{
                             position: 'absolute',
-                            left: -4,
-                            bottom: -4,
-                            width: 8,
-                            height: 8,
-                            background: '#00ff00',
-                            cursor: 'nesw-resize',
-                            borderRadius: '50%'
-                          }}
-                        />
-                        <div
-                          data-resize-handle="true"
-                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-right')}
-                          style={{
-                            position: 'absolute',
-                            right: -4,
+                            left: '50%',
                             top: -4,
                             width: 8,
                             height: 8,
                             background: '#00ff00',
-                            cursor: 'nesw-resize',
-                            borderRadius: '50%'
-                          }}
-                        />
-                        <div
-                          data-resize-handle="true"
-                          onMouseDown={(e) => handleResizeMouseDown(e, bubble, 'top-left')}
-                          style={{
-                            position: 'absolute',
-                            left: -4,
-                            top: -4,
-                            width: 8,
-                            height: 8,
-                            background: '#00ff00',
-                            cursor: 'nwse-resize',
-                            borderRadius: '50%'
+                            cursor: 'crosshair',
+                            borderRadius: '50%',
+                            transform: 'translateX(-50%)'
                           }}
                         />
                       </>
@@ -6603,9 +6615,9 @@ function PageEditor({ isCover = false }) {
                                         const existing = existingWords.find(ew => normWord(ew.text) === normalised);
                                         return {
                                           id: existing?.id || `word-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                                          text: w,
-                                          meaning: '',
-                                          baseForm: '',
+                                          text: cleanWord(w).toLowerCase(),
+                                          meaning: existing?.meaning || '',
+                                          baseForm: existing?.baseForm || '',
                                           startTimeMs: existing?.startTimeMs,
                                           endTimeMs: existing?.endTimeMs,
                                           vocabQuiz: existing?.vocabQuiz || false
@@ -6627,8 +6639,8 @@ function PageEditor({ isCover = false }) {
                                           if (Array.isArray(lookupResults)) {
                                             wordsNeedingLookup.forEach((w, i) => {
                                               if (lookupResults[i] && !lookupResults[i].isName) {
-                                                w.meaning = cleanWord(lookupResults[i].meaning || '');
-                                                w.baseForm = cleanWord(lookupResults[i].baseForm || '');
+                                                w.meaning = lookupResults[i].meaning || '';
+                                                w.baseForm = cleanWord(lookupResults[i].baseForm || '').toLowerCase();
                                               }
                                             });
                                           }
@@ -9608,38 +9620,49 @@ function PageEditor({ isCover = false }) {
                             <path d={path} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke={bubble.noBorder ? 'none' : borderColorVal} strokeWidth={borderWidthVal} strokeLinejoin="round" filter={`url(#roughBubble${filtSuffix}-${bubble.id})`} />
                           </g>
                         </svg>
-                        <div style={{
-                          position: 'absolute',
-                          left: bx,
-                          top: by,
-                          width: bw,
-                          height: bh,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '6px 8px',
-                          boxSizing: 'border-box',
-                          zIndex: 51,
-                          pointerEvents: 'none'
-                        }}>
-                          <span style={{
-                            fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
-                            fontSize: `${bubble.fontSize}px`,
-                            fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
-                            fontStyle: bubble.italic ? 'italic' : 'normal',
-                            color: bubble.textColor || '#000000',
-                            textAlign: bubble.textAlign || 'center',
-                            width: '100%',
-                            wordBreak: 'break-word',
-                            lineHeight: 1.3,
-                            letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
-                            textTransform: bubble.uppercase ? 'uppercase' : 'none',
-                            transform: `rotate(${bubble.textAngle ?? 0}deg)`,
-                            display: 'inline-block'
-                          }}>
-                            {getBubbleDisplayText(bubble)}
-                          </span>
-                        </div>
+                        {(() => {
+                          const rotR = (rotation || 0) * Math.PI / 180;
+                          const cosR2 = Math.cos(rotR);
+                          const sinR2 = Math.sin(rotR);
+                          const halfW2 = bw / 2;
+                          const halfH2 = bh / 2;
+                          const tW = rotation ? 2 * Math.sqrt((halfW2 * cosR2) ** 2 + (halfH2 * sinR2) ** 2) : bw;
+                          const tH = rotation ? 2 * Math.sqrt((halfW2 * sinR2) ** 2 + (halfH2 * cosR2) ** 2) : bh;
+                          return (
+                            <div style={{
+                              position: 'absolute',
+                              left: cx - tW / 2,
+                              top: cy - tH / 2,
+                              width: tW,
+                              height: tH,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '6px 8px',
+                              boxSizing: 'border-box',
+                              zIndex: 51,
+                              pointerEvents: 'none'
+                            }}>
+                              <span style={{
+                                fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
+                                fontSize: `${bubble.fontSize}px`,
+                                fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
+                                fontStyle: bubble.italic ? 'italic' : 'normal',
+                                color: bubble.textColor || '#000000',
+                                textAlign: bubble.textAlign || 'center',
+                                width: '100%',
+                                wordBreak: 'break-word',
+                                lineHeight: 1.3,
+                                letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
+                                textTransform: bubble.uppercase ? 'uppercase' : 'none',
+                                transform: `rotate(${bubble.textAngle ?? 0}deg)`,
+                                display: 'inline-block'
+                              }}>
+                                {getBubbleDisplayText(bubble)}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </>
                     );
                   })()}
