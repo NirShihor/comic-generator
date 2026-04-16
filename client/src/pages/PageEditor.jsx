@@ -409,8 +409,10 @@ function PageEditor({ isCover = false }) {
   const [showCompositePreview, setShowCompositePreview] = useState(false);
   const compositeCanvasRef = useRef(null);
   const [colorMatchRefPanel, setColorMatchRefPanel] = useState(null);
+  const [colorMatchRefExternal, setColorMatchRefExternal] = useState(null); // { path, label } for cross-page ref
   const [colorMatchStrength, setColorMatchStrength] = useState(0.75);
   const [colorMatching, setColorMatching] = useState(false);
+  const [showColorMatchOtherPages, setShowColorMatchOtherPages] = useState(false);
 
   // Audio generation state (voices come from comic.voices)
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
@@ -2903,19 +2905,22 @@ function PageEditor({ isCover = false }) {
 
   // Color match: apply reference panel's color profile to all other panels
   const applyColorMatch = async () => {
-    if (!colorMatchRefPanel) return;
-    const refPanelData = panelImages[colorMatchRefPanel];
-    if (!refPanelData?.path) return;
+    // Determine reference image path: local panel or external cross-page panel
+    const refPath = colorMatchRefPanel
+      ? panelImages[colorMatchRefPanel]?.path
+      : colorMatchRefExternal?.path;
+    if (!refPath) return;
 
     setColorMatching(true);
     try {
       const analyzeResponse = await api.post('/images/style-enforcer/analyze', {
-        referenceImages: [refPanelData.path]
+        referenceImages: [refPath]
       });
       const profile = analyzeResponse.data.profile;
 
-      const otherPanels = panels.filter(p => p.id !== colorMatchRefPanel && panelImages[p.id]?.path);
-      for (const panel of otherPanels) {
+      // When ref is external, match ALL local panels; when local, skip the ref panel
+      const targetPanels = panels.filter(p => p.id !== colorMatchRefPanel && panelImages[p.id]?.path);
+      for (const panel of targetPanels) {
         const currentPath = panelImages[panel.id].path;
         const enforceResponse = await api.post('/images/style-enforcer/enforce', {
           imagePath: currentPath,
@@ -2935,7 +2940,7 @@ function PageEditor({ isCover = false }) {
       }
 
       setTimeout(() => compositePageFromPanels(), 100);
-      showToast(`Colors matched (${otherPanels.length} panels updated)`);
+      showToast(`Colors matched (${targetPanels.length} panels updated)`);
     } catch (error) {
       console.error('Color match failed:', error);
       alert('Color match failed: ' + (error.response?.data?.error || error.message));
@@ -8969,10 +8974,10 @@ function PageEditor({ isCover = false }) {
                       )}
 
                       {/* Color Match */}
-                      {panels.filter(p => panelImages[p.id]?.path).length >= 2 && !isCover && (
+                      {panels.some(p => panelImages[p.id]?.path) && !isCover && (
                         <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#f8f4ff', borderRadius: '6px', border: '1px solid #e0d4f0' }}>
                           <div style={{ fontSize: '0.75rem', color: '#666', marginBottom: '0.4rem', fontWeight: 'bold' }}>Color Match:</div>
-                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.4rem' }}>
                             {panels.map((panel, i) => {
                               const panelData = panelImages[panel.id];
                               if (!panelData?.path) return null;
@@ -8982,7 +8987,10 @@ function PageEditor({ isCover = false }) {
                                   src={`http://localhost:3001${panelData.path}`}
                                   alt={`Panel ${i + 1}`}
                                   title={`Panel ${i + 1}${colorMatchRefPanel === panel.id ? ' (reference)' : ''}`}
-                                  onClick={() => setColorMatchRefPanel(prev => prev === panel.id ? null : panel.id)}
+                                  onClick={() => {
+                                    setColorMatchRefPanel(prev => prev === panel.id ? null : panel.id);
+                                    setColorMatchRefExternal(null);
+                                  }}
                                   style={{
                                     width: '40px', height: '40px', objectFit: 'cover',
                                     borderRadius: '4px', cursor: 'pointer',
@@ -8991,7 +8999,63 @@ function PageEditor({ isCover = false }) {
                                 />
                               );
                             })}
+                            <span style={{ color: '#ccc', fontSize: '0.7rem' }}>|</span>
+                            <button
+                              onClick={() => setShowColorMatchOtherPages(prev => !prev)}
+                              style={{
+                                padding: '0.15rem 0.4rem', fontSize: '0.6rem',
+                                background: showColorMatchOtherPages ? '#d5e8d4' : '#f5f5f5',
+                                border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer'
+                              }}
+                            >
+                              {showColorMatchOtherPages ? '▾' : '▸'} Other pages
+                            </button>
                           </div>
+                          {showColorMatchOtherPages && (
+                            <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                              {otherPagePanels
+                                .filter(op => op.pageNumber !== (page?.pageNumber || 0))
+                                .map(op => {
+                                  const isSelected = colorMatchRefExternal?.path === op.artworkImage;
+                                  return (
+                                    <button
+                                      key={op.panelId}
+                                      onClick={() => {
+                                        if (isSelected) {
+                                          setColorMatchRefExternal(null);
+                                        } else {
+                                          setColorMatchRefExternal({ path: op.artworkImage, label: `Pg${op.pageNumber}-P${op.panelIndex + 1}` });
+                                          setColorMatchRefPanel(null);
+                                        }
+                                      }}
+                                      title={`Page ${op.pageNumber}, Panel ${op.panelIndex + 1}`}
+                                      style={{
+                                        padding: '0.15rem 0.35rem', fontSize: '0.6rem',
+                                        background: isSelected ? '#8e44ad' : '#e8f0fc',
+                                        color: isSelected ? '#fff' : '#6a1b9a',
+                                        border: `1px solid ${isSelected ? '#8e44ad' : '#6a1b9a'}`,
+                                        borderRadius: '3px', cursor: 'pointer'
+                                      }}
+                                    >
+                                      Pg{op.pageNumber}-P{op.panelIndex + 1}
+                                    </button>
+                                  );
+                                })}
+                              {otherPagePanels.filter(op => op.pageNumber !== (page?.pageNumber || 0)).length === 0 && (
+                                <span style={{ fontSize: '0.65rem', color: '#999' }}>No panels with images on other pages</span>
+                              )}
+                            </div>
+                          )}
+                          {colorMatchRefExternal && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                              <img
+                                src={`http://localhost:3001${colorMatchRefExternal.path}`}
+                                alt="External ref"
+                                style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '3px solid #8e44ad' }}
+                              />
+                              <span style={{ fontSize: '0.7rem', color: '#8e44ad', fontWeight: 'bold' }}>{colorMatchRefExternal.label} (reference)</span>
+                            </div>
+                          )}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
                             <span style={{ fontSize: '0.7rem', color: '#666', width: '60px' }}>Strength:</span>
                             <input
@@ -9005,12 +9069,12 @@ function PageEditor({ isCover = false }) {
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <button
                               onClick={applyColorMatch}
-                              disabled={!colorMatchRefPanel || colorMatching}
+                              disabled={(!colorMatchRefPanel && !colorMatchRefExternal) || colorMatching}
                               style={{
                                 padding: '0.3rem 0.6rem', fontSize: '0.75rem',
-                                background: (!colorMatchRefPanel || colorMatching) ? '#ccc' : '#8e44ad',
+                                background: ((!colorMatchRefPanel && !colorMatchRefExternal) || colorMatching) ? '#ccc' : '#8e44ad',
                                 color: 'white', border: 'none', borderRadius: '4px',
-                                cursor: (!colorMatchRefPanel || colorMatching) ? 'not-allowed' : 'pointer'
+                                cursor: ((!colorMatchRefPanel && !colorMatchRefExternal) || colorMatching) ? 'not-allowed' : 'pointer'
                               }}
                             >
                               {colorMatching ? 'Matching...' : 'Match Colors'}
