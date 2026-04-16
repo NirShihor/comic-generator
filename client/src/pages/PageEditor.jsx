@@ -413,6 +413,7 @@ function PageEditor({ isCover = false }) {
   const [colorMatchStrength, setColorMatchStrength] = useState(0.75);
   const [colorMatching, setColorMatching] = useState(false);
   const [showColorMatchOtherPages, setShowColorMatchOtherPages] = useState(false);
+  const [showEnforcerControls, setShowEnforcerControls] = useState(false);
 
   // Audio generation state (voices come from comic.voices)
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
@@ -927,11 +928,20 @@ function PageEditor({ isCover = false }) {
         const pages = response.data.pages || [];
         const otherPanels = [];
         pages.forEach((pg, pgIdx) => {
+          const pgNum = pg.pageNumber || pgIdx + 1;
+          if (pg.masterImage) {
+            otherPanels.push({
+              pageNumber: pgNum,
+              panelIndex: -1,
+              panelId: `page-master-${pg.id}`,
+              artworkImage: pg.masterImage
+            });
+          }
           if (!pg.panels || pg.panels.length === 0) return;
           pg.panels.forEach((pnl, pnlIdx) => {
             if (pnl.artworkImage) {
               otherPanels.push({
-                pageNumber: pg.pageNumber || pgIdx + 1,
+                pageNumber: pgNum,
                 panelIndex: pnlIdx,
                 panelId: pnl.id,
                 artworkImage: pnl.artworkImage
@@ -1011,11 +1021,21 @@ function PageEditor({ isCover = false }) {
       pages.forEach((pg, pgIdx) => {
         if (pg.id === pageId) return; // skip current page
         if (pgIdx > currentPageIndex) return; // only previous pages
+        const pgNum = pg.pageNumber || pgIdx + 1;
+        // Include page master image as a whole-page reference option
+        if (pg.masterImage) {
+          otherPanels.push({
+            pageNumber: pgNum,
+            panelIndex: -1,
+            panelId: `page-master-${pg.id}`,
+            artworkImage: pg.masterImage
+          });
+        }
         if (!pg.panels || pg.panels.length === 0) return;
         pg.panels.forEach((pnl, pnlIdx) => {
           if (pnl.artworkImage) {
             otherPanels.push({
-              pageNumber: pg.pageNumber || pgIdx + 1,
+              pageNumber: pgNum,
               panelIndex: pnlIdx,
               panelId: pnl.id,
               artworkImage: pnl.artworkImage
@@ -5828,7 +5848,14 @@ function PageEditor({ isCover = false }) {
 
           {/* Style Enforcer controls */}
           {!isCover && comic?.styleEnforcer?.profile?.channels?.length >= 3 && (
-            <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#1a1a2e', borderRadius: '6px' }}>
+            <div style={{ marginBottom: '0.75rem', background: '#1a1a2e', borderRadius: '6px' }}>
+              <button
+                onClick={() => setShowEnforcerControls(prev => !prev)}
+                style={{ width: '100%', padding: '0.5rem', background: '#2a2a4e', border: '1px solid #444', borderRadius: '6px', color: '#ccc', fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold' }}
+              >
+                <span>{showEnforcerControls ? '▾' : '▸'} Color Enforcer</span>
+              </button>
+              {showEnforcerControls && <div style={{ padding: '0 0.5rem 0.5rem' }}>
               {[
                 { label: 'Strength', value: enforcerStrength, set: setEnforcerStrength, min: 0, max: 100, convert: v => v * 100, parse: v => v / 100 },
                 { label: 'Brightness', value: enforcerBrightness, set: setEnforcerBrightness, min: -50, max: 50, convert: v => v * 100, parse: v => v / 100 },
@@ -5877,6 +5904,7 @@ function PageEditor({ isCover = false }) {
                   Show Preview
                 </button>
               )}
+              </div>}
             </div>
           )}
           {/* Sidebar Tabs */}
@@ -9024,11 +9052,12 @@ function PageEditor({ isCover = false }) {
                                         if (isSelected) {
                                           setColorMatchRefExternal(null);
                                         } else {
-                                          setColorMatchRefExternal({ path: op.artworkImage, label: `Pg${op.pageNumber}-P${op.panelIndex + 1}` });
+                                          const label = op.panelIndex === -1 ? `Pg${op.pageNumber}` : `Pg${op.pageNumber}-P${op.panelIndex + 1}`;
+                                          setColorMatchRefExternal({ path: op.artworkImage, label });
                                           setColorMatchRefPanel(null);
                                         }
                                       }}
-                                      title={`Page ${op.pageNumber}, Panel ${op.panelIndex + 1}`}
+                                      title={op.panelIndex === -1 ? `Page ${op.pageNumber} (full page)` : `Page ${op.pageNumber}, Panel ${op.panelIndex + 1}`}
                                       style={{
                                         padding: '0.15rem 0.35rem', fontSize: '0.6rem',
                                         background: isSelected ? '#8e44ad' : '#e8f0fc',
@@ -9037,7 +9066,7 @@ function PageEditor({ isCover = false }) {
                                         borderRadius: '3px', cursor: 'pointer'
                                       }}
                                     >
-                                      Pg{op.pageNumber}-P{op.panelIndex + 1}
+                                      {op.panelIndex === -1 ? `Pg${op.pageNumber}` : `Pg${op.pageNumber}-P${op.panelIndex + 1}`}
                                     </button>
                                   );
                                 })}
