@@ -129,6 +129,7 @@ const PageSchema = new mongoose.Schema({
   id: String,
   pageNumber: Number,
   masterImage: String,
+  originalMasterImage: String,
   bakedImage: String,
   lines: [LineSchema],
   // Legacy format support
@@ -210,6 +211,19 @@ const ComicSchema = new mongoose.Schema({
     borderWidth: Number,
     fontId: String,
     fontSize: Number
+  },
+  styleEnforcer: {
+    referenceImages: [String],
+    profile: {
+      channels: [{
+        mean: Number,
+        stdev: Number
+      }],
+      dominant: { r: Number, g: Number, b: Number },
+      brightness: Number,
+      contrast: Number,
+      saturation: Number
+    }
   },
   notes: String,
   collectionId: String,

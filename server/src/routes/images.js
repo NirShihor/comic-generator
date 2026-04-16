@@ -991,4 +991,253 @@ router.post('/flip', async (req, res) => {
   }
 });
 
+// ============================================================
+// Style Enforcer endpoints
+// ============================================================
+
+// POST /style-enforcer/analyze — extract color profile from reference images
+router.post('/style-enforcer/analyze', async (req, res) => {
+  try {
+    const { referenceImages } = req.body;
+    if (!referenceImages || referenceImages.length === 0) {
+      return res.status(400).json({ error: 'No reference images provided' });
+    }
+
+    const allStats = [];
+    for (const rawPath of referenceImages) {
+      const imgPath = rawPath.split('?')[0]; // strip cache-buster
+      const fullPath = path.join(__dirname, '../..', imgPath);
+      try {
+        await fs.access(fullPath);
+        const stats = await sharp(fullPath).stats();
+        allStats.push(stats);
+      } catch (err) {
+        console.log(`Style enforcer: skipping missing image ${imgPath}`);
+      }
+    }
+
+    if (allStats.length === 0) {
+      return res.status(400).json({ error: 'No valid reference images found' });
+    }
+
+    // Average per-channel stats across all reference images (R, G, B = channels 0, 1, 2)
+    const channels = [0, 1, 2].map(i => {
+      const means = allStats.map(s => s.channels[i].mean);
+      const stdevs = allStats.map(s => s.channels[i].stdev);
+      return {
+        mean: means.reduce((a, b) => a + b, 0) / means.length,
+        stdev: stdevs.reduce((a, b) => a + b, 0) / stdevs.length
+      };
+    });
+
+    // Average dominant color
+    const dominant = {
+      r: Math.round(allStats.reduce((a, s) => a + s.dominant.r, 0) / allStats.length),
+      g: Math.round(allStats.reduce((a, s) => a + s.dominant.g, 0) / allStats.length),
+      b: Math.round(allStats.reduce((a, s) => a + s.dominant.b, 0) / allStats.length)
+    };
+
+    // Derived metrics
+    const avgMean = (channels[0].mean + channels[1].mean + channels[2].mean) / 3;
+    const brightness = avgMean / 128; // normalized around 1.0
+    const avgStdev = (channels[0].stdev + channels[1].stdev + channels[2].stdev) / 3;
+    const contrast = avgStdev / 64; // normalized around 1.0
+
+    // Estimate saturation from channel spread (high spread = more saturated)
+    const maxMean = Math.max(channels[0].mean, channels[1].mean, channels[2].mean);
+    const minMean = Math.min(channels[0].mean, channels[1].mean, channels[2].mean);
+    const saturation = avgMean > 0 ? (maxMean - minMean) / avgMean : 0;
+
+    const profile = { channels, dominant, brightness, contrast, saturation };
+    res.json({ profile });
+  } catch (error) {
+    console.error('Style enforcer analyze error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /style-enforcer/enforce — apply color profile to a single image
+router.post('/style-enforcer/enforce', async (req, res) => {
+  try {
+    const { imagePath: rawImagePath, profile, strength = 0.75, brightness = 0, contrast = 0, saturation = 0 } = req.body;
+    if (!rawImagePath || !profile) {
+      return res.status(400).json({ error: 'imagePath and profile are required' });
+    }
+    if (!profile.channels || profile.channels.length < 3) {
+      return res.status(400).json({ error: 'Profile has no channel data. Please re-analyze your reference images first.' });
+    }
+    const imagePath = rawImagePath.split('?')[0]; // strip cache-buster
+
+    const fullPath = path.join(__dirname, '../..', imagePath);
+    try {
+      await fs.access(fullPath);
+    } catch {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Get stats of the source image
+    const srcStats = await sharp(fullPath).stats();
+    const srcChannels = [0, 1, 2].map(i => ({
+      mean: srcStats.channels[i].mean,
+      stdev: srcStats.channels[i].stdev
+    }));
+
+    // Compute per-channel linear transform: output = a * input + b
+    const channelA = [];
+    const channelB = [];
+    for (let i = 0; i < 3; i++) {
+      const targetMean = profile.channels[i].mean;
+      const targetStdev = profile.channels[i].stdev;
+      const srcMean = srcChannels[i].mean;
+      const srcStdev = srcChannels[i].stdev;
+
+      const a = srcStdev > 0 ? targetStdev / srcStdev : 1;
+      const b = targetMean - a * srcMean;
+
+      channelA.push(1 + (a - 1) * strength);
+      channelB.push(b * strength);
+    }
+
+    // Apply the transform + B/C/S adjustments
+    const ext = path.extname(fullPath);
+    const basename = path.basename(fullPath, ext);
+    const filename = `${basename}-enforced-${uuidv4()}${ext === '.png' ? '.jpg' : ext}`;
+    const outputPath = path.join(__dirname, '../../uploads', filename);
+
+    let pipeline = sharp(fullPath).linear(channelA, channelB);
+
+    // Apply brightness/contrast/saturation if any are non-zero
+    const modOpts = {};
+    if (brightness !== 0) modOpts.brightness = 1 + brightness; // -1..+1 -> 0..2
+    if (saturation !== 0) modOpts.saturation = 1 + saturation;
+    if (Object.keys(modOpts).length > 0) pipeline = pipeline.modulate(modOpts);
+
+    // Contrast: apply via linear scaling around midpoint
+    if (contrast !== 0) {
+      const cFactor = 1 + contrast; // -1..+1 -> 0..2
+      const cOffset = 128 * (1 - cFactor);
+      pipeline = pipeline.linear([cFactor, cFactor, cFactor], [cOffset, cOffset, cOffset]);
+    }
+
+    await pipeline.jpeg({ quality: 90 }).toFile(outputPath);
+
+    res.json({ path: `/uploads/${filename}` });
+  } catch (error) {
+    console.error('Style enforcer enforce error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /style-enforcer/enforce-batch — apply color profile to all pages
+router.post('/style-enforcer/enforce-batch', async (req, res) => {
+  try {
+    const { comicId, profile, strength = 0.75, brightness = 0, contrast = 0, saturation = 0 } = req.body;
+    if (!comicId || !profile) {
+      return res.status(400).json({ error: 'comicId and profile are required' });
+    }
+    if (!profile.channels || profile.channels.length < 3) {
+      return res.status(400).json({ error: 'Profile has no channel data. Please re-analyze your reference images first.' });
+    }
+
+    const Comic = require('../models/Comic');
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const results = [];
+    for (const page of comic.pages) {
+      const imagePath = (page.masterImage || '').split('?')[0]; // strip cache-buster
+      if (!imagePath) continue;
+
+      const fullPath = path.join(__dirname, '../..', imagePath);
+      try {
+        await fs.access(fullPath);
+      } catch {
+        results.push({ pageNumber: page.pageNumber, status: 'skipped', reason: 'image not found' });
+        continue;
+      }
+
+      // Store original if not already stored
+      if (!page.originalMasterImage) {
+        page.originalMasterImage = imagePath;
+      }
+
+      // Compute and apply transform
+      const srcStats = await sharp(fullPath).stats();
+      const channelA = [];
+      const channelB = [];
+      for (let i = 0; i < 3; i++) {
+        const a = srcStats.channels[i].stdev > 0
+          ? profile.channels[i].stdev / srcStats.channels[i].stdev : 1;
+        const b = profile.channels[i].mean - a * srcStats.channels[i].mean;
+        channelA.push(1 + (a - 1) * strength);
+        channelB.push(b * strength);
+      }
+
+      const ext = path.extname(fullPath);
+      const basename = path.basename(fullPath, ext);
+      const filename = `${basename}-enforced${ext === '.png' ? '.jpg' : ext}`;
+      const outputPath = path.join(__dirname, '../../uploads', filename);
+
+      let pipeline = sharp(fullPath).linear(channelA, channelB);
+
+      // Apply brightness/contrast/saturation if any are non-zero
+      const modOpts = {};
+      if (brightness !== 0) modOpts.brightness = 1 + brightness;
+      if (saturation !== 0) modOpts.saturation = 1 + saturation;
+      if (Object.keys(modOpts).length > 0) pipeline = pipeline.modulate(modOpts);
+
+      if (contrast !== 0) {
+        const cFactor = 1 + contrast;
+        const cOffset = 128 * (1 - cFactor);
+        pipeline = pipeline.linear([cFactor, cFactor, cFactor], [cOffset, cOffset, cOffset]);
+      }
+
+      await pipeline.jpeg({ quality: 90 }).toFile(outputPath);
+
+      page.masterImage = `/uploads/${filename}`;
+      page.bakedImage = '';
+      results.push({ pageNumber: page.pageNumber, status: 'enforced', path: `/uploads/${filename}` });
+    }
+
+    await comic.save();
+    res.json({ results, pagesProcessed: results.filter(r => r.status === 'enforced').length });
+  } catch (error) {
+    console.error('Style enforcer batch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /style-enforcer/revert-batch — revert all enforced pages to originals
+router.post('/style-enforcer/revert-batch', async (req, res) => {
+  try {
+    const { comicId } = req.body;
+    if (!comicId) {
+      return res.status(400).json({ error: 'comicId is required' });
+    }
+
+    const Comic = require('../models/Comic');
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    let reverted = 0;
+    for (const page of comic.pages) {
+      if (page.originalMasterImage) {
+        page.masterImage = page.originalMasterImage;
+        page.originalMasterImage = '';
+        reverted++;
+      }
+    }
+
+    await comic.save();
+    res.json({ pagesReverted: reverted });
+  } catch (error) {
+    console.error('Style enforcer revert-batch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

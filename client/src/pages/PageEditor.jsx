@@ -3539,6 +3539,14 @@ function PageEditor({ isCover = false }) {
   const [showBakedPreview, setShowBakedPreview] = useState(false);
   const bakeTargetRef = useRef(null);
 
+  // Style Enforcer state
+  const [enforcingStyle, setEnforcingStyle] = useState(false);
+  const [enforcerStrength, setEnforcerStrength] = useState(0.75);
+  const [enforcerBrightness, setEnforcerBrightness] = useState(0);
+  const [enforcerContrast, setEnforcerContrast] = useState(0);
+  const [enforcerSaturation, setEnforcerSaturation] = useState(0);
+  const [showEnforcerPreview, setShowEnforcerPreview] = useState(true);
+
   const bakeBubblesToImage = async () => {
     if (!page.masterImage || bubbles.length === 0) {
       alert('Need a page image and at least one bubble to bake.');
@@ -3562,6 +3570,25 @@ function PageEditor({ isCover = false }) {
 
     // Extra frame to let fonts apply to rendered elements
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    // Ensure the master image in the bake target is fully loaded (not cached stale version)
+    if (page.masterImage) {
+      const imgUrl = `http://localhost:3001${page.masterImage}`;
+      await new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = resolve;
+        img.onerror = resolve;
+        img.src = imgUrl;
+      });
+      // Also force the bake target's img to reload
+      const bakeImg = bakeTargetRef.current?.querySelector('img');
+      if (bakeImg && !bakeImg.src.includes(page.masterImage.split('?')[0])) {
+        bakeImg.src = imgUrl;
+        await new Promise(r => { bakeImg.onload = r; bakeImg.onerror = r; });
+      }
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
 
     try {
       const targetEl = bakeTargetRef.current;
@@ -4224,6 +4251,65 @@ function PageEditor({ isCover = false }) {
             {showBakedPreview ? 'Hide Baked' : 'View Baked'}
           </button>
         )}
+        {!isCover && page.masterImage && comic?.styleEnforcer?.profile?.channels?.length >= 3 && (
+          <button
+            className="btn btn-secondary"
+            disabled={enforcingStyle}
+            onClick={async () => {
+              setEnforcingStyle(true);
+              try {
+                const imgPath = page.masterImage.split('?')[0];
+                const response = await api.post('/images/style-enforcer/enforce', {
+                  imagePath: imgPath,
+                  profile: comic.styleEnforcer.profile,
+                  strength: enforcerStrength,
+                  brightness: enforcerBrightness,
+                  contrast: enforcerContrast,
+                  saturation: enforcerSaturation
+                });
+                const newPath = response.data.path;
+                const updatedComic = { ...comic };
+                const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+                if (!updatedComic.pages[pageIndex].originalMasterImage) {
+                  updatedComic.pages[pageIndex].originalMasterImage = imgPath;
+                }
+                updatedComic.pages[pageIndex].masterImage = newPath;
+                updatedComic.pages[pageIndex].bakedImage = '';
+                await api.put(`/comics/${id}`, updatedComic);
+                setComic(updatedComic);
+                setPage(prev => ({ ...prev, masterImage: `${newPath}?t=${Date.now()}`, originalMasterImage: prev.originalMasterImage || imgPath, bakedImage: '' }));
+                showToast('Style enforced! Re-bake bubbles to update the baked version.');
+              } catch (error) {
+                console.error('Failed to enforce style:', error);
+                alert('Failed: ' + (error.response?.data?.error || error.message));
+              } finally {
+                setEnforcingStyle(false);
+              }
+            }}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: enforcingStyle ? '#ccc' : '#8e44ad', color: '#fff', border: 'none' }}
+          >
+            {enforcingStyle ? 'Enforcing...' : 'Enforce Style'}
+          </button>
+        )}
+        {!isCover && page.originalMasterImage && (
+          <button
+            className="btn btn-secondary"
+            onClick={async () => {
+              const originalPath = page.originalMasterImage;
+              const updatedComic = { ...comic };
+              const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+              updatedComic.pages[pageIndex].masterImage = originalPath;
+              updatedComic.pages[pageIndex].originalMasterImage = '';
+              await api.put(`/comics/${id}`, updatedComic);
+              setComic(updatedComic);
+              setPage(prev => ({ ...prev, masterImage: `${originalPath}?t=${Date.now()}`, originalMasterImage: '' }));
+              showToast('Reverted to original');
+            }}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#e67e22', color: '#fff', border: 'none' }}
+          >
+            Revert Original
+          </button>
+        )}
         {!isCover && (
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
           {selectedLineIndex !== null && (
@@ -4354,7 +4440,10 @@ function PageEditor({ isCover = false }) {
                   objectFit: 'cover',
                   position: 'absolute',
                   opacity: 0.4,
-                  pointerEvents: 'none'
+                  pointerEvents: 'none',
+                  filter: (enforcerBrightness !== 0 || enforcerContrast !== 0 || enforcerSaturation !== 0)
+                    ? `brightness(${1 + enforcerBrightness}) contrast(${1 + enforcerContrast}) saturate(${1 + enforcerSaturation})`
+                    : undefined
                 }}
               />
             )}
@@ -5668,6 +5757,60 @@ function PageEditor({ isCover = false }) {
               {isCover ? 'Save Cover' : 'Save Page'}
             </button>
           </div>
+
+          {/* Style Enforcer controls */}
+          {!isCover && comic?.styleEnforcer?.profile?.channels?.length >= 3 && (
+            <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#1a1a2e', borderRadius: '6px' }}>
+              {[
+                { label: 'Strength', value: enforcerStrength, set: setEnforcerStrength, min: 0, max: 100, convert: v => v * 100, parse: v => v / 100 },
+                { label: 'Brightness', value: enforcerBrightness, set: setEnforcerBrightness, min: -50, max: 50, convert: v => v * 100, parse: v => v / 100 },
+                { label: 'Contrast', value: enforcerContrast, set: setEnforcerContrast, min: -50, max: 50, convert: v => v * 100, parse: v => v / 100 },
+                { label: 'Saturation', value: enforcerSaturation, set: setEnforcerSaturation, min: -50, max: 50, convert: v => v * 100, parse: v => v / 100 }
+              ].map(({ label, value, set, min, max, convert, parse }) => (
+                <div key={label} style={{ marginBottom: '0.3rem' }}>
+                  <label style={{ color: '#aaa', fontSize: '0.7rem', display: 'block' }}>
+                    {label}: {Math.round(convert(value))}
+                  </label>
+                  <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    value={Math.round(convert(value))}
+                    onChange={(e) => set(parse(parseInt(e.target.value)))}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              ))}
+              {/* Live preview thumbnail */}
+              {page.masterImage && showEnforcerPreview && (
+                <div style={{ marginTop: '0.5rem', borderRadius: '4px', overflow: 'hidden', border: '1px solid #333', position: 'relative' }}>
+                  <button
+                    onClick={() => setShowEnforcerPreview(false)}
+                    style={{ position: 'absolute', top: 4, right: 4, zIndex: 1, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.15rem 0.4rem', cursor: 'pointer', fontSize: '0.7rem' }}
+                  >
+                    Close
+                  </button>
+                  <img
+                    src={`http://localhost:3001${page.masterImage}`}
+                    alt="Preview"
+                    style={{
+                      width: '100%',
+                      display: 'block',
+                      filter: `brightness(${1 + enforcerBrightness}) contrast(${1 + enforcerContrast}) saturate(${1 + enforcerSaturation})`
+                    }}
+                  />
+                </div>
+              )}
+              {page.masterImage && !showEnforcerPreview && (
+                <button
+                  onClick={() => setShowEnforcerPreview(true)}
+                  style={{ marginTop: '0.5rem', padding: '0.3rem 0.6rem', fontSize: '0.7rem', background: '#333', color: '#aaa', border: '1px solid #444', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  Show Preview
+                </button>
+              )}
+            </div>
+          )}
           {/* Sidebar Tabs */}
           <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem', borderBottom: '2px solid #ddd', paddingBottom: '0.5rem' }}>
             <button
@@ -9544,6 +9687,7 @@ function PageEditor({ isCover = false }) {
           >
             {page.masterImage && (
               <img
+                key={page.masterImage}
                 src={`http://localhost:3001${page.masterImage}`}
                 alt="Page preview"
                 crossOrigin="anonymous"

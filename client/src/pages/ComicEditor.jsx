@@ -41,6 +41,18 @@ function ComicEditor() {
   const refFileInputRef = useRef(null);
   const refMessagesEndRef = useRef(null);
 
+  // Style Enforcer state
+  const [enforcerImages, setEnforcerImages] = useState([]);
+  const [enforcerProfile, setEnforcerProfile] = useState(null);
+  const [enforcerAnalyzing, setEnforcerAnalyzing] = useState(false);
+  const [enforcerEnforcing, setEnforcerEnforcing] = useState(false);
+  const [enforcerReverting, setEnforcerReverting] = useState(false);
+  const [enforcerStrength, setEnforcerStrength] = useState(0.75);
+  const [enforcerBrightness, setEnforcerBrightness] = useState(0);
+  const [enforcerContrast, setEnforcerContrast] = useState(0);
+  const [enforcerSaturation, setEnforcerSaturation] = useState(0);
+  const enforcerFileInputRef = useRef(null);
+
   // Chat state
   const [chatMessages, setChatMessages] = useState(() => {
     try {
@@ -87,6 +99,12 @@ function ComicEditor() {
     try {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
+
+      // Load style enforcer data
+      if (response.data.styleEnforcer) {
+        setEnforcerImages(response.data.styleEnforcer.referenceImages || []);
+        setEnforcerProfile(response.data.styleEnforcer.profile || null);
+      }
 
       // Load prompt settings from resolver (collection or comic)
       try {
@@ -517,7 +535,8 @@ function ComicEditor() {
     { id: 'camera', label: 'Camera & Inks' },
     { id: 'characters', label: 'Characters' },
     { id: 'donot', label: 'Do Not / Negatives' },
-    { id: 'reference', label: 'Reference Builder' }
+    { id: 'reference', label: 'Reference Builder' },
+    { id: 'enforcer', label: 'Color Enforcer' }
   ];
 
   return (
@@ -1198,6 +1217,322 @@ function ComicEditor() {
                   accept="image/*"
                   style={{ display: 'none' }}
                 />
+              </div>
+            )}
+
+            {settingsTab === 'enforcer' && (
+              <div>
+                <h2 style={{ marginBottom: '0.5rem' }}>Color Enforcer</h2>
+                <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                  Upload reference images that define your target color palette and style. The enforcer will analyze them and apply corrections to keep all pages consistent.
+                </p>
+
+                {/* Reference Images */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                    <h3 style={{ margin: 0, color: '#ccc' }}>Reference Images</h3>
+                    <button
+                      onClick={() => enforcerFileInputRef.current?.click()}
+                      className="btn btn-secondary"
+                      style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}
+                    >
+                      + Add Image
+                    </button>
+                  </div>
+
+                  {enforcerImages.length === 0 ? (
+                    <div style={{
+                      border: '2px dashed #333',
+                      borderRadius: '8px',
+                      padding: '2rem',
+                      textAlign: 'center',
+                      color: '#666',
+                      cursor: 'pointer'
+                    }} onClick={() => enforcerFileInputRef.current?.click()}>
+                      Click to add reference images that define the target color/style
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      {enforcerImages.map((imgPath, index) => (
+                        <div key={index} style={{ position: 'relative' }}>
+                          <img
+                            src={`http://localhost:3001${imgPath}`}
+                            alt={`Reference ${index + 1}`}
+                            style={{
+                              height: '120px',
+                              borderRadius: '6px',
+                              border: '1px solid #333'
+                            }}
+                          />
+                          <button
+                            onClick={async () => {
+                              const updated = enforcerImages.filter((_, i) => i !== index);
+                              setEnforcerImages(updated);
+                              setEnforcerProfile(null);
+                              await api.put(`/comics/${id}`, {
+                                styleEnforcer: { referenceImages: updated, profile: null }
+                              });
+                              setComic(prev => ({
+                                ...prev,
+                                styleEnforcer: { referenceImages: updated, profile: null }
+                              }));
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: '4px',
+                              right: '4px',
+                              background: 'rgba(192, 57, 43, 0.9)',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '20px',
+                              height: '20px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    ref={enforcerFileInputRef}
+                    onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = async (event) => {
+                        const base64 = event.target.result.split(',')[1];
+                        try {
+                          const response = await api.post('/images/save-reference', {
+                            image: base64,
+                            comicId: id
+                          });
+                          const updated = [...enforcerImages, response.data.path];
+                          setEnforcerImages(updated);
+                          setEnforcerProfile(null);
+                          await api.put(`/comics/${id}`, {
+                            styleEnforcer: { referenceImages: updated, profile: null }
+                          });
+                          setComic(prev => ({
+                            ...prev,
+                            styleEnforcer: { referenceImages: updated, profile: null }
+                          }));
+                        } catch (error) {
+                          console.error('Failed to save enforcer reference:', error);
+                          alert('Failed to upload image');
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                      e.target.value = '';
+                    }}
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                  />
+                </div>
+
+                {/* Analyze Button */}
+                {enforcerImages.length > 0 && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <button
+                      className="btn btn-primary"
+                      disabled={enforcerAnalyzing}
+                      onClick={async () => {
+                        setEnforcerAnalyzing(true);
+                        try {
+                          const response = await api.post('/images/style-enforcer/analyze', {
+                            referenceImages: enforcerImages
+                          });
+                          const profile = response.data.profile;
+                          setEnforcerProfile(profile);
+                          await api.put(`/comics/${id}`, {
+                            styleEnforcer: { referenceImages: enforcerImages, profile }
+                          });
+                          setComic(prev => ({
+                            ...prev,
+                            styleEnforcer: { referenceImages: enforcerImages, profile }
+                          }));
+                        } catch (error) {
+                          console.error('Failed to analyze style:', error);
+                          alert('Failed to analyze: ' + (error.response?.data?.error || error.message));
+                        } finally {
+                          setEnforcerAnalyzing(false);
+                        }
+                      }}
+                      style={{ padding: '0.6rem 1.2rem' }}
+                    >
+                      {enforcerAnalyzing ? 'Analyzing...' : enforcerProfile ? 'Re-Analyze Style' : 'Analyze Style'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Profile Preview */}
+                {enforcerProfile && (
+                  <div style={{
+                    background: '#1a1a2e',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    marginBottom: '1.5rem'
+                  }}>
+                    <h3 style={{ margin: '0 0 0.75rem', color: '#ccc' }}>Extracted Profile</h3>
+                    <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                      {/* Dominant Color Swatch */}
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{
+                          width: '60px',
+                          height: '60px',
+                          borderRadius: '8px',
+                          border: '1px solid #444',
+                          background: `rgb(${enforcerProfile.dominant?.r || 0}, ${enforcerProfile.dominant?.g || 0}, ${enforcerProfile.dominant?.b || 0})`
+                        }} />
+                        <small style={{ color: '#888', display: 'block', marginTop: '0.3rem' }}>Dominant</small>
+                      </div>
+
+                      {/* Channel Means as color bars */}
+                      <div>
+                        <small style={{ color: '#888', display: 'block', marginBottom: '0.4rem' }}>Channel Means</small>
+                        {['R', 'G', 'B'].map((ch, i) => (
+                          <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                            <span style={{ color: ['#e74c3c', '#27ae60', '#3498db'][i], width: '12px', fontWeight: 'bold', fontSize: '0.8rem' }}>{ch}</span>
+                            <div style={{
+                              height: '10px',
+                              width: `${(enforcerProfile.channels?.[i]?.mean || 0) / 255 * 150}px`,
+                              background: ['#e74c3c', '#27ae60', '#3498db'][i],
+                              borderRadius: '3px',
+                              minWidth: '2px'
+                            }} />
+                            <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                              {(enforcerProfile.channels?.[i]?.mean || 0).toFixed(1)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Brightness / Contrast / Saturation */}
+                      <div>
+                        <small style={{ color: '#888', display: 'block', marginBottom: '0.4rem' }}>Properties</small>
+                        {[
+                          { label: 'Brightness', value: enforcerProfile.brightness },
+                          { label: 'Contrast', value: enforcerProfile.contrast },
+                          { label: 'Saturation', value: enforcerProfile.saturation }
+                        ].map(({ label, value }) => (
+                          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                            <span style={{ color: '#aaa', fontSize: '0.8rem', width: '70px' }}>{label}</span>
+                            <div style={{
+                              height: '10px',
+                              width: `${Math.min((value || 0) / 2 * 100, 150)}px`,
+                              background: '#8e44ad',
+                              borderRadius: '3px',
+                              minWidth: '2px'
+                            }} />
+                            <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                              {(value || 0).toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Strength Slider + Enforce All */}
+                {enforcerProfile && (
+                  <div style={{
+                    background: '#1a1a2e',
+                    borderRadius: '8px',
+                    padding: '1rem'
+                  }}>
+                    {/* Sliders */}
+                    {[
+                      { label: 'Color Strength', value: enforcerStrength, set: setEnforcerStrength, min: 0, max: 100, unit: '%', desc: 'How aggressively to shift colors toward the reference profile', convert: v => v * 100, parse: v => v / 100 },
+                      { label: 'Brightness', value: enforcerBrightness, set: setEnforcerBrightness, min: -50, max: 50, unit: '', desc: null, convert: v => v * 100, parse: v => v / 100 },
+                      { label: 'Contrast', value: enforcerContrast, set: setEnforcerContrast, min: -50, max: 50, unit: '', desc: null, convert: v => v * 100, parse: v => v / 100 },
+                      { label: 'Saturation', value: enforcerSaturation, set: setEnforcerSaturation, min: -50, max: 50, unit: '', desc: null, convert: v => v * 100, parse: v => v / 100 }
+                    ].map(({ label, value, set, min, max, unit, desc, convert, parse }) => (
+                      <div key={label} style={{ marginBottom: '0.75rem' }}>
+                        <label style={{ color: '#ccc', display: 'block', marginBottom: '0.2rem', fontSize: '0.85rem' }}>
+                          {label}: {Math.round(convert(value))}{unit}
+                        </label>
+                        <input
+                          type="range"
+                          min={min}
+                          max={max}
+                          value={Math.round(convert(value))}
+                          onChange={(e) => set(parse(parseInt(e.target.value)))}
+                          style={{ width: '100%', maxWidth: '300px' }}
+                        />
+                        {desc && <small style={{ color: '#666', display: 'block', marginTop: '0.1rem' }}>{desc}</small>}
+                      </div>
+                    ))}
+
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+                      <button
+                        className="btn btn-primary"
+                        disabled={enforcerEnforcing}
+                        onClick={async () => {
+                          if (!confirm('This will apply color corrections to ALL pages. Original images will be preserved. Continue?')) return;
+                          setEnforcerEnforcing(true);
+                          try {
+                            const response = await api.post('/images/style-enforcer/enforce-batch', {
+                              comicId: id,
+                              profile: enforcerProfile,
+                              strength: enforcerStrength,
+                              brightness: enforcerBrightness,
+                              contrast: enforcerContrast,
+                              saturation: enforcerSaturation
+                            }, { timeout: 300000 });
+                            alert(`Done! Processed ${response.data.pagesProcessed} pages.`);
+                            await loadComic();
+                          } catch (error) {
+                            console.error('Failed to enforce batch:', error);
+                            alert('Failed: ' + (error.response?.data?.error || error.message));
+                          } finally {
+                            setEnforcerEnforcing(false);
+                          }
+                        }}
+                        style={{ padding: '0.6rem 1.2rem', background: enforcerEnforcing ? '#666' : '#8e44ad' }}
+                      >
+                        {enforcerEnforcing ? 'Enforcing... please wait' : 'Enforce All Pages'}
+                      </button>
+
+                      {comic.pages?.some(p => p.originalMasterImage) && (
+                        <button
+                          className="btn btn-secondary"
+                          disabled={enforcerReverting}
+                          onClick={async () => {
+                            if (!confirm('Revert ALL pages to their original images?')) return;
+                            setEnforcerReverting(true);
+                            try {
+                              const response = await api.post('/images/style-enforcer/revert-batch', { comicId: id });
+                              alert(`Reverted ${response.data.pagesReverted} pages to originals.`);
+                              await loadComic();
+                            } catch (error) {
+                              console.error('Failed to revert:', error);
+                              alert('Failed: ' + (error.response?.data?.error || error.message));
+                            } finally {
+                              setEnforcerReverting(false);
+                            }
+                          }}
+                          style={{ padding: '0.6rem 1.2rem', background: enforcerReverting ? '#666' : '#e67e22' }}
+                        >
+                          {enforcerReverting ? 'Reverting...' : 'Revert All Pages'}
+                        </button>
+                      )}
+                    </div>
+                    {enforcerEnforcing && (
+                      <p style={{ color: '#c4b5fd', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                        Processing all pages — this may take a moment. An alert will appear when done.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
