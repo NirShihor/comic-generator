@@ -408,6 +408,9 @@ function PageEditor({ isCover = false }) {
   const panelMarginRef = useRef(100);
   const [showCompositePreview, setShowCompositePreview] = useState(false);
   const compositeCanvasRef = useRef(null);
+  const [colorMatchRefPanel, setColorMatchRefPanel] = useState(null);
+  const [colorMatchStrength, setColorMatchStrength] = useState(0.75);
+  const [colorMatching, setColorMatching] = useState(false);
 
   // Audio generation state (voices come from comic.voices)
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
@@ -2896,6 +2899,66 @@ function PageEditor({ isCover = false }) {
     setInpaintStart(null);
     setInpaintGenerating(null);
     setLightboxImage(null);
+  };
+
+  // Color match: apply reference panel's color profile to all other panels
+  const applyColorMatch = async () => {
+    if (!colorMatchRefPanel) return;
+    const refPanelData = panelImages[colorMatchRefPanel];
+    if (!refPanelData?.path) return;
+
+    setColorMatching(true);
+    try {
+      const analyzeResponse = await api.post('/images/style-enforcer/analyze', {
+        referenceImages: [refPanelData.path]
+      });
+      const profile = analyzeResponse.data.profile;
+
+      const otherPanels = panels.filter(p => p.id !== colorMatchRefPanel && panelImages[p.id]?.path);
+      for (const panel of otherPanels) {
+        const currentPath = panelImages[panel.id].path;
+        const enforceResponse = await api.post('/images/style-enforcer/enforce', {
+          imagePath: currentPath,
+          profile,
+          strength: colorMatchStrength
+        });
+        const newPath = enforceResponse.data.path;
+        setPanelImages(prev => ({
+          ...prev,
+          [panel.id]: {
+            ...prev[panel.id],
+            path: newPath,
+            previousPath: prev[panel.id].previousPath || currentPath
+          }
+        }));
+        updatePanelArtwork(panel.id, newPath);
+      }
+
+      setTimeout(() => compositePageFromPanels(), 100);
+      showToast(`Colors matched (${otherPanels.length} panels updated)`);
+    } catch (error) {
+      console.error('Color match failed:', error);
+      alert('Color match failed: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setColorMatching(false);
+    }
+  };
+
+  // Revert color-matched panels to originals
+  const revertColorMatch = () => {
+    const updatedPanels = {};
+    for (const panel of panels) {
+      const panelData = panelImages[panel.id];
+      if (panelData?.previousPath) {
+        updatedPanels[panel.id] = { ...panelData, path: panelData.previousPath, previousPath: null };
+        updatePanelArtwork(panel.id, panelData.previousPath);
+      }
+    }
+    if (Object.keys(updatedPanels).length > 0) {
+      setPanelImages(prev => ({ ...prev, ...updatedPanels }));
+      setTimeout(() => compositePageFromPanels(), 100);
+      showToast('Color match reverted');
+    }
   };
 
   // Generate all panels sequentially
@@ -5786,9 +5849,9 @@ function PageEditor({ isCover = false }) {
                 <div style={{ marginTop: '0.5rem', borderRadius: '4px', overflow: 'hidden', border: '1px solid #333', position: 'relative' }}>
                   <button
                     onClick={() => setShowEnforcerPreview(false)}
-                    style={{ position: 'absolute', top: 4, right: 4, zIndex: 1, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.15rem 0.4rem', cursor: 'pointer', fontSize: '0.7rem' }}
+                    style={{ position: 'absolute', top: 4, right: 4, zIndex: 2, background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.25rem 0.5rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}
                   >
-                    Close
+                    ✕
                   </button>
                   <img
                     src={`http://localhost:3001${page.masterImage}`}
@@ -8902,6 +8965,70 @@ function PageEditor({ isCover = false }) {
                           <span style={{ fontSize: '0.7rem', color: '#999', width: '35px' }}>
                             {panelMargin === 0 ? 'None' : `${panelMargin}%`}
                           </span>
+                        </div>
+                      )}
+
+                      {/* Color Match */}
+                      {panels.filter(p => panelImages[p.id]?.path).length >= 2 && !isCover && (
+                        <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#f8f4ff', borderRadius: '6px', border: '1px solid #e0d4f0' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#666', marginBottom: '0.4rem', fontWeight: 'bold' }}>Color Match:</div>
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                            {panels.map((panel, i) => {
+                              const panelData = panelImages[panel.id];
+                              if (!panelData?.path) return null;
+                              return (
+                                <img
+                                  key={panel.id}
+                                  src={`http://localhost:3001${panelData.path}`}
+                                  alt={`Panel ${i + 1}`}
+                                  title={`Panel ${i + 1}${colorMatchRefPanel === panel.id ? ' (reference)' : ''}`}
+                                  onClick={() => setColorMatchRefPanel(prev => prev === panel.id ? null : panel.id)}
+                                  style={{
+                                    width: '40px', height: '40px', objectFit: 'cover',
+                                    borderRadius: '4px', cursor: 'pointer',
+                                    border: colorMatchRefPanel === panel.id ? '3px solid #8e44ad' : '2px solid #ddd'
+                                  }}
+                                />
+                              );
+                            })}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                            <span style={{ fontSize: '0.7rem', color: '#666', width: '60px' }}>Strength:</span>
+                            <input
+                              type="range" min="0" max="100"
+                              value={Math.round(colorMatchStrength * 100)}
+                              onChange={(e) => setColorMatchStrength(parseInt(e.target.value) / 100)}
+                              style={{ flex: 1 }}
+                            />
+                            <span style={{ fontSize: '0.7rem', color: '#999', width: '35px' }}>{Math.round(colorMatchStrength * 100)}%</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              onClick={applyColorMatch}
+                              disabled={!colorMatchRefPanel || colorMatching}
+                              style={{
+                                padding: '0.3rem 0.6rem', fontSize: '0.75rem',
+                                background: (!colorMatchRefPanel || colorMatching) ? '#ccc' : '#8e44ad',
+                                color: 'white', border: 'none', borderRadius: '4px',
+                                cursor: (!colorMatchRefPanel || colorMatching) ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              {colorMatching ? 'Matching...' : 'Match Colors'}
+                            </button>
+                            {panels.some(p => panelImages[p.id]?.previousPath) && (
+                              <button
+                                onClick={revertColorMatch}
+                                disabled={colorMatching}
+                                style={{
+                                  padding: '0.3rem 0.6rem', fontSize: '0.75rem',
+                                  background: '#e67e22', color: 'white', border: 'none',
+                                  borderRadius: '4px', cursor: 'pointer'
+                                }}
+                              >
+                                Revert All
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
 
