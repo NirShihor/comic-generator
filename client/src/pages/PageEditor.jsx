@@ -2135,24 +2135,27 @@ function PageEditor({ isCover = false }) {
     ));
   };
 
-  // Update panel's artworkImage and auto-save to DB
-  const updatePanelArtwork = (panelId, imagePath) => {
+  // Update panel's artworkImage and auto-save to DB (returns promise)
+  const pendingSavesRef = useRef(0);
+  const updatePanelArtwork = async (panelId, imagePath) => {
     setPanels(prev => prev.map(p =>
       p.id === panelId ? { ...p, artworkImage: imagePath } : p
     ));
-    // Auto-save to DB
-    if (isCover) {
-      const updatedCover = { ...comic.cover, image: imagePath, bakedImage: '' };
-      api.put(`/comics/${id}`, { cover: updatedCover }).then(() => {
+    // Save to DB and track pending saves
+    pendingSavesRef.current++;
+    try {
+      if (isCover) {
+        const updatedCover = { ...comic.cover, image: imagePath, bakedImage: '' };
+        await api.put(`/comics/${id}`, { cover: updatedCover });
         setComic(prev => ({ ...prev, cover: updatedCover }));
         setPage(prev => ({ ...prev, masterImage: imagePath + `?t=${Date.now()}`, bakedImage: '' }));
-      }).catch(err => {
-        console.error('Failed to auto-save cover artwork:', err);
-      });
-    } else {
-      api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, { artworkImage: imagePath }).catch(err => {
-        console.error('Failed to auto-save panel artwork:', err);
-      });
+      } else {
+        await api.patch(`/comics/${id}/pages/${pageId}/panels/${panelId}`, { artworkImage: imagePath });
+      }
+    } catch (err) {
+      console.error('Failed to auto-save panel artwork:', err);
+    } finally {
+      pendingSavesRef.current--;
     }
   };
 
@@ -2686,7 +2689,7 @@ function PageEditor({ isCover = false }) {
         }
       }));
 
-      updatePanelArtwork(panel.id, response.data.path);
+      await updatePanelArtwork(panel.id, response.data.path);
       console.log(`Panel ${panelIndex + 1} generated:`, response.data.path);
     } catch (error) {
       delete abortControllers.current[panel.id];
@@ -2739,7 +2742,7 @@ function PageEditor({ isCover = false }) {
           saturation: prev[panel.id]?.saturation ?? 1
         }
       }));
-      updatePanelArtwork(panel.id, response.data.path);
+      await updatePanelArtwork(panel.id, response.data.path);
     } catch (error) {
       console.error('Panel image upload failed:', error);
       setPanelImages(prev => ({
@@ -2823,7 +2826,7 @@ function PageEditor({ isCover = false }) {
           error: null
         }
       }));
-      updatePanelArtwork(panel.id, response.data.path);
+      await updatePanelArtwork(panel.id, response.data.path);
     } catch (error) {
       console.error(`Panel ${panelIndex + 1} refinement failed:`, error);
       setPanelImages(prev => ({
@@ -4241,22 +4244,41 @@ function PageEditor({ isCover = false }) {
       )}
       <div className="page-header">
         <div>
-          <Link to={`/comic/${id}`} style={{ color: '#888', textDecoration: 'none', marginBottom: '0.5rem', display: 'block' }}>
+          <a
+            href={`/comic/${id}`}
+            onClick={async (e) => {
+              e.preventDefault();
+              while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
+              navigate(`/comic/${id}`);
+            }}
+            style={{ color: '#888', textDecoration: 'none', marginBottom: '0.5rem', display: 'block', cursor: 'pointer' }}
+          >
             ← Back to {comic.title}
-          </Link>
+          </a>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <h1 style={{ margin: 0 }}>{isCover ? 'Cover' : `Page ${page.pageNumber}`}</h1>
             {!isCover && sortedPages.length > 0 && (
               <div style={{ display: 'flex', gap: '0.25rem' }}>
                 <button
-                  onClick={() => prevPage && navigate(`/comic/${id}/page/${prevPage.id}`)}
+                  onClick={async () => {
+                    if (prevPage) {
+                      // Wait for any pending panel saves before navigating
+                      while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
+                      navigate(`/comic/${id}/page/${prevPage.id}`);
+                    }
+                  }}
                   disabled={!prevPage}
                   style={{ padding: '0.3rem 0.6rem', fontSize: '0.85rem', background: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: prevPage ? 'pointer' : 'default', opacity: prevPage ? 1 : 0.4 }}
                 >
                   ← Prev
                 </button>
                 <button
-                  onClick={() => nextPage && navigate(`/comic/${id}/page/${nextPage.id}`)}
+                  onClick={async () => {
+                    if (nextPage) {
+                      while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
+                      navigate(`/comic/${id}/page/${nextPage.id}`);
+                    }
+                  }}
                   disabled={!nextPage}
                   style={{ padding: '0.3rem 0.6rem', fontSize: '0.85rem', background: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: nextPage ? 'pointer' : 'default', opacity: nextPage ? 1 : 0.4 }}
                 >
@@ -9218,7 +9240,7 @@ function PageEditor({ isCover = false }) {
                                           ...prev,
                                           [panel.id]: { ...prev[panel.id], path: response.data.path }
                                         }));
-                                        updatePanelArtwork(panel.id, response.data.path);
+                                        await updatePanelArtwork(panel.id, response.data.path);
                                         setTimeout(() => compositePageFromPanels(), 50);
                                       } catch (err) {
                                         console.error('Flip failed:', err);
