@@ -9040,34 +9040,39 @@ function PageEditor({ isCover = false }) {
                             </button>
                           </div>
                           {showColorMatchOtherPages && (
-                            <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
                               {otherPagePanels
                                 .filter(op => op.pageNumber !== (page?.pageNumber || 0))
                                 .map(op => {
                                   const isSelected = colorMatchRefExternal?.path === op.artworkImage;
+                                  const label = op.panelIndex === -1 ? `Pg${op.pageNumber}` : `Pg${op.pageNumber}-P${op.panelIndex + 1}`;
                                   return (
-                                    <button
+                                    <div
                                       key={op.panelId}
                                       onClick={() => {
                                         if (isSelected) {
                                           setColorMatchRefExternal(null);
                                         } else {
-                                          const label = op.panelIndex === -1 ? `Pg${op.pageNumber}` : `Pg${op.pageNumber}-P${op.panelIndex + 1}`;
                                           setColorMatchRefExternal({ path: op.artworkImage, label });
                                           setColorMatchRefPanel(null);
                                         }
                                       }}
                                       title={op.panelIndex === -1 ? `Page ${op.pageNumber} (full page)` : `Page ${op.pageNumber}, Panel ${op.panelIndex + 1}`}
                                       style={{
-                                        padding: '0.15rem 0.35rem', fontSize: '0.6rem',
-                                        background: isSelected ? '#8e44ad' : '#e8f0fc',
-                                        color: isSelected ? '#fff' : '#6a1b9a',
-                                        border: `1px solid ${isSelected ? '#8e44ad' : '#6a1b9a'}`,
-                                        borderRadius: '3px', cursor: 'pointer'
+                                        cursor: 'pointer', textAlign: 'center',
+                                        border: isSelected ? '3px solid #8e44ad' : '2px solid #ddd',
+                                        borderRadius: '4px', overflow: 'hidden', background: '#fff'
                                       }}
                                     >
-                                      {op.panelIndex === -1 ? `Pg${op.pageNumber}` : `Pg${op.pageNumber}-P${op.panelIndex + 1}`}
-                                    </button>
+                                      <img
+                                        src={`http://localhost:3001${op.artworkImage}`}
+                                        alt={label}
+                                        style={{ width: '50px', height: '50px', objectFit: 'cover', display: 'block' }}
+                                      />
+                                      <div style={{ fontSize: '0.55rem', color: isSelected ? '#8e44ad' : '#666', padding: '1px', fontWeight: isSelected ? 'bold' : 'normal' }}>
+                                        {label}
+                                      </div>
+                                    </div>
                                   );
                                 })}
                               {otherPagePanels.filter(op => op.pageNumber !== (page?.pageNumber || 0)).length === 0 && (
