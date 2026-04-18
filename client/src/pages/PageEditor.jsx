@@ -494,7 +494,8 @@ function PageEditor({ isCover = false }) {
     cameraInks: '',
     characters: [],
     globalDoNot: '',
-    hardNegatives: ''
+    hardNegatives: '',
+    masterStyleImage: ''
   });
   const [promptSettingsSource, setPromptSettingsSource] = useState('comic');
   const [promptSettingsCollectionId, setPromptSettingsCollectionId] = useState(null);
@@ -7535,6 +7536,26 @@ function PageEditor({ isCover = false }) {
               </div>
 
               {promptSettingsOpen && <>
+              {/* Master Style Image */}
+              <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f8f4ff', borderRadius: '6px', border: '1px solid #e0d4f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: '#8e44ad', fontWeight: 'bold' }}>
+                    Master Style Image
+                  </label>
+                  {promptSettings.masterStyleImage ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <img
+                        src={`http://localhost:3001${promptSettings.masterStyleImage}`}
+                        alt="Master style"
+                        style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '2px solid #8e44ad' }}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: '#666' }}>Active — included in all generations</span>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '0.75rem', color: '#999' }}>Not set — configure in Comic Editor → Style Bible</span>
+                  )}
+                </div>
+              </div>
               {/* Style Bible */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ fontSize: '0.95rem', color: '#e94560', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
