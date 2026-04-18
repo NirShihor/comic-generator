@@ -8,7 +8,8 @@ const DEFAULT_SETTINGS = {
   cameraInks: '',
   characters: [],
   globalDoNot: '',
-  hardNegatives: ''
+  hardNegatives: '',
+  masterStyleImage: ''
 };
 
 function ComicEditor() {
@@ -750,6 +751,71 @@ function ComicEditor() {
           <div style={{ background: '#0f3460', borderRadius: '8px', padding: '1.5rem' }}>
             {settingsTab === 'style' && (
               <div>
+                {/* Master Style Image */}
+                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#16213e', borderRadius: '8px', border: '1px solid #1a3a5c' }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '0.3rem', fontSize: '1rem' }}>Master Style Image</h3>
+                  <p style={{ color: '#888', fontSize: '0.8rem', marginBottom: '0.75rem', marginTop: 0 }}>
+                    A global style reference included in every generation — used for visual style guidance only
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {settings.masterStyleImage && (
+                      <div style={{ position: 'relative' }}>
+                        <img
+                          src={`http://localhost:3001${settings.masterStyleImage}`}
+                          alt="Master style"
+                          style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '6px', border: '2px solid #8e44ad' }}
+                        />
+                        <button
+                          onClick={() => {
+                            const updated = { ...settings, masterStyleImage: '' };
+                            setSettings(updated);
+                            saveSettings(updated, true);
+                          }}
+                          style={{ position: 'absolute', top: -6, right: -6, background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', lineHeight: '20px', textAlign: 'center', padding: 0 }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                    <label style={{
+                      padding: '0.5rem 1rem', background: '#8e44ad', color: '#fff',
+                      borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem'
+                    }}>
+                      {settings.masterStyleImage ? 'Replace' : 'Upload Image'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = async (event) => {
+                            const base64 = event.target.result.split(',')[1];
+                            try {
+                              const savePayload = { image: base64 };
+                              if (settingsSource === 'collection' && settingsCollectionId) {
+                                savePayload.collectionId = settingsCollectionId;
+                              } else {
+                                savePayload.comicId = id;
+                              }
+                              const response = await api.post('/images/save-reference', savePayload);
+                              const updated = { ...settings, masterStyleImage: response.data.path };
+                              setSettings(updated);
+                              saveSettings(updated, true);
+                            } catch (error) {
+                              console.error('Failed to upload master style image:', error);
+                              alert('Failed to upload image');
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
                 <h2 style={{ marginBottom: '0.5rem' }}>Style Bible</h2>
                 <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
                   Define the visual style for all pages in this comic

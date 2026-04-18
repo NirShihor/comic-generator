@@ -33,7 +33,8 @@ const CollectionSchema = new mongoose.Schema({
     cameraInks: String,
     characters: [CharacterSchema],
     globalDoNot: String,
-    hardNegatives: String
+    hardNegatives: String,
+    masterStyleImage: String
   }
 }, {
   timestamps: true,

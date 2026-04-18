@@ -194,7 +194,8 @@ const ComicSchema = new mongoose.Schema({
     cameraInks: String,
     characters: [CharacterSchema],
     globalDoNot: String,
-    hardNegatives: String
+    hardNegatives: String,
+    masterStyleImage: String
   },
   promptSettings: {
     styleBible: String,
@@ -202,7 +203,8 @@ const ComicSchema = new mongoose.Schema({
     cameraInks: String,
     characters: [CharacterSchema],
     globalDoNot: String,
-    hardNegatives: String
+    hardNegatives: String,
+    masterStyleImage: String
   },
   defaultBubbleStyle: {
     bgColor: String,

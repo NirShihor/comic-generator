@@ -2565,6 +2565,8 @@ function PageEditor({ isCover = false }) {
   const getRefImagePaths = (panelId) => {
     const paths = [];
     const settings = promptSettings;
+    // Always include master style image first (global style guide)
+    if (settings.masterStyleImage) paths.push(settings.masterStyleImage);
     const panel = panels.find(p => p.id === panelId);
     const selectedRefs = [...new Set([...(pageBibleRefs || []), ...(panel?.selectedBibleRefs || [])])];
     if (selectedRefs.length === 0) return paths;
@@ -2587,8 +2589,10 @@ function PageEditor({ isCover = false }) {
     panels.forEach(p => {
       (p.selectedBibleRefs || []).forEach(refId => allSelectedIds.add(refId));
     });
-    if (allSelectedIds.size === 0) return [];
     const paths = [];
+    // Always include master style image first (global style guide)
+    if (promptSettings.masterStyleImage) paths.push(promptSettings.masterStyleImage);
+    if (allSelectedIds.size === 0) return paths;
     const settings = promptSettings;
     if (settings.styleBibleImages) {
       settings.styleBibleImages.forEach(img => {
