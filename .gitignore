@@ -28,6 +28,7 @@ Thumbs.db
 # Uploads and generated content
 uploads/
 projects/
+backups/
 
 # Cache
 .cache/

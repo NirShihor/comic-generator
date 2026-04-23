@@ -23,6 +23,7 @@ function ComicEditor() {
   const [settingsCollectionId, setSettingsCollectionId] = useState(null);
   const [settingsTab, setSettingsTab] = useState('style');
   const [saving, setSaving] = useState(false);
+  const settingsRef = useRef(DEFAULT_SETTINGS);
   const [newCharacter, setNewCharacter] = useState({ name: '', description: '' });
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState(null);
@@ -53,6 +54,25 @@ function ComicEditor() {
   const [enforcerContrast, setEnforcerContrast] = useState(0);
   const [enforcerSaturation, setEnforcerSaturation] = useState(0);
   const enforcerFileInputRef = useRef(null);
+
+  // Studio tab state
+  const [studioPrompt, setStudioPrompt] = useState('');
+  const [studioProvider, setStudioProvider] = useState('gemini');
+  const [studioAspectRatio, setStudioAspectRatio] = useState('square');
+  const [studioGenerating, setStudioGenerating] = useState(false);
+  const [studioGallery, setStudioGallery] = useState([]);
+  const [studioSelectedImage, setStudioSelectedImage] = useState(null);
+  const [studioRefImages, setStudioRefImages] = useState([]);
+  const [studioUploadedRefs, setStudioUploadedRefs] = useState([]);
+  const [studioUseMasterStyle, setStudioUseMasterStyle] = useState(true);
+  const [studioInpaintMode, setStudioInpaintMode] = useState(false);
+  const [studioInpaintRect, setStudioInpaintRect] = useState(null);
+  const [studioInpaintDrawing, setStudioInpaintDrawing] = useState(false);
+  const [studioInpaintStart, setStudioInpaintStart] = useState(null);
+  const [studioInpaintPrompt, setStudioInpaintPrompt] = useState('');
+  const [studioInpaintGenerating, setStudioInpaintGenerating] = useState(null);
+  const studioFileInputRef = useRef(null);
+  const studioImageRef = useRef(null);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState(() => {
@@ -91,6 +111,16 @@ function ComicEditor() {
     }
     chatMessagesRef.current = chatMessages;
   }, [chatMessages, id]);
+
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  // Studio inpaint: global mouseup listener
+  useEffect(() => {
+    if (!studioInpaintDrawing) return;
+    const handleMouseUp = () => setStudioInpaintDrawing(false);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [studioInpaintDrawing]);
 
   useEffect(() => {
     loadComic();
@@ -540,6 +570,169 @@ function ComicEditor() {
     { id: 'enforcer', label: 'Color Enforcer' }
   ];
 
+  // Studio handlers
+  const studioGenerate = async () => {
+    if (!studioPrompt.trim() || studioGenerating) return;
+    setStudioGenerating(true);
+    try {
+      const allRefs = [...studioRefImages, ...studioUploadedRefs];
+      if (studioUseMasterStyle && settings.masterStyleImage) {
+        allRefs.unshift(settings.masterStyleImage);
+      }
+      const response = await api.post('/images/generate-studio', {
+        prompt: studioPrompt,
+        provider: studioProvider,
+        aspectRatio: studioAspectRatio,
+        referenceImages: allRefs.length > 0 ? allRefs : undefined,
+        hasMasterStyleImage: studioUseMasterStyle && !!settings.masterStyleImage
+      }, { timeout: 600000 });
+      const newItem = {
+        path: response.data.path,
+        prompt: studioPrompt,
+        provider: studioProvider,
+        aspectRatio: studioAspectRatio,
+        timestamp: Date.now()
+      };
+      setStudioGallery(prev => [newItem, ...prev]);
+      setStudioSelectedImage(0);
+    } catch (error) {
+      alert('Generation failed: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setStudioGenerating(false);
+    }
+  };
+
+  const studioSaveAsReference = async (galleryIndex) => {
+    const item = studioGallery[galleryIndex];
+    if (!item) return;
+    const name = prompt('Name for this reference:');
+    if (!name || !name.trim()) return;
+    try {
+      const imgResponse = await fetch(`http://localhost:3001${item.path}`);
+      const blob = await imgResponse.blob();
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result.split(',')[1];
+        const savePayload = { image: base64 };
+        if (settingsSource === 'collection' && settingsCollectionId) {
+          savePayload.collectionId = settingsCollectionId;
+        } else {
+          savePayload.comicId = id;
+        }
+        const resp = await api.post('/images/save-reference', savePayload);
+        setSettings(prev => {
+          const updated = {
+            ...prev,
+            characters: [...prev.characters, {
+              id: `char-${Date.now()}`,
+              name: name.trim(),
+              description: `Generated in Studio: "${item.prompt.substring(0, 80)}"`,
+              image: resp.data.path
+            }]
+          };
+          saveSettings(updated, true);
+          return updated;
+        });
+        alert('Saved as reference!');
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      alert('Failed to save: ' + error.message);
+    }
+  };
+
+  const studioDownload = (galleryIndex) => {
+    const item = studioGallery[galleryIndex];
+    if (!item) return;
+    const a = document.createElement('a');
+    a.href = `http://localhost:3001${item.path}`;
+    a.download = `studio-${item.timestamp}.png`;
+    a.click();
+  };
+
+  const studioUploadRef = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target.result.split(',')[1];
+      try {
+        const savePayload = { image: base64, comicId: id };
+        const resp = await api.post('/images/save-reference', savePayload);
+        setStudioUploadedRefs(prev => [...prev, resp.data.path]);
+      } catch (error) {
+        alert('Upload failed: ' + error.message);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const studioExecuteInpaint = async (provider) => {
+    if (studioSelectedImage == null || !studioInpaintRect || !studioInpaintPrompt.trim()) return;
+    const item = studioGallery[studioSelectedImage];
+    if (!item) return;
+    setStudioInpaintGenerating(provider);
+    try {
+      const allRefs = [...studioRefImages, ...studioUploadedRefs];
+      const response = await api.post('/images/inpaint-region', {
+        sourceImagePath: item.path,
+        rect: studioInpaintRect,
+        prompt: studioInpaintPrompt,
+        panelId: 'studio',
+        referenceImages: allRefs.length > 0 ? allRefs : undefined,
+        provider
+      }, { timeout: 600000 });
+      const newItem = {
+        path: response.data.path,
+        prompt: `[Inpaint] ${studioInpaintPrompt}`,
+        provider,
+        aspectRatio: item.aspectRatio,
+        timestamp: Date.now()
+      };
+      setStudioGallery(prev => [newItem, ...prev]);
+      setStudioSelectedImage(0);
+      setStudioInpaintRect(null);
+      setStudioInpaintPrompt('');
+    } catch (error) {
+      alert('Inpaint failed: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setStudioInpaintGenerating(null);
+    }
+  };
+
+  const studioToggleRef = (path) => {
+    setStudioRefImages(prev =>
+      prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path]
+    );
+  };
+
+  const studioHandleMouseDown = (e) => {
+    if (!studioInpaintMode) return;
+    const img = studioImageRef.current;
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    setStudioInpaintStart({ x, y });
+    setStudioInpaintRect({ x, y, width: 0, height: 0 });
+    setStudioInpaintDrawing(true);
+  };
+
+  const studioHandleMouseMove = (e) => {
+    if (!studioInpaintDrawing || !studioInpaintStart) return;
+    const img = studioImageRef.current;
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    const left = Math.max(0, Math.min(studioInpaintStart.x, x));
+    const top = Math.max(0, Math.min(studioInpaintStart.y, y));
+    const right = Math.min(1, Math.max(studioInpaintStart.x, x));
+    const bottom = Math.min(1, Math.max(studioInpaintStart.y, y));
+    setStudioInpaintRect({ x: left, y: top, width: right - left, height: bottom - top });
+  };
+
   return (
     <div style={{ maxWidth: 'none', width: 'calc(100vw - 4rem)' }}>
       <div className="page-header">
@@ -586,6 +779,13 @@ function ComicEditor() {
           style={{ padding: '0.6rem 1.2rem' }}
         >
           Voices ({(comic.voices || []).length})
+        </button>
+        <button
+          className={`btn ${activeTab === 'studio' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('studio')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Studio
         </button>
       </div>
 
@@ -766,10 +966,26 @@ function ComicEditor() {
                           style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '6px', border: '2px solid #8e44ad' }}
                         />
                         <button
-                          onClick={() => {
-                            const updated = { ...settings, masterStyleImage: '' };
+                          onClick={async () => {
+                            const updated = { ...settingsRef.current, masterStyleImage: '' };
                             setSettings(updated);
-                            saveSettings(updated, true);
+                            try {
+                              if (settingsSource === 'collection' && settingsCollectionId) {
+                                await api.put(`/collections/${settingsCollectionId}`, {
+                                  title: comic?.collectionTitle || '',
+                                  promptSettings: updated
+                                });
+                              } else if (comic?.collectionId) {
+                                await api.put(`/collections/${comic.collectionId}`, {
+                                  title: comic?.collectionTitle || '',
+                                  promptSettings: updated
+                                });
+                              } else {
+                                await api.put(`/comics/${id}`, { promptSettings: updated });
+                              }
+                            } catch (err) {
+                              console.error('Failed to remove master style image:', err);
+                            }
                           }}
                           style={{ position: 'absolute', top: -6, right: -6, background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', lineHeight: '20px', textAlign: 'center', padding: 0 }}
                         >
@@ -800,12 +1016,33 @@ function ComicEditor() {
                                 savePayload.comicId = id;
                               }
                               const response = await api.post('/images/save-reference', savePayload);
-                              const updated = { ...settings, masterStyleImage: response.data.path };
+                              const imagePath = response.data.path;
+                              // Use ref to get latest settings, avoiding stale closure
+                              const updated = { ...settingsRef.current, masterStyleImage: imagePath };
                               setSettings(updated);
-                              saveSettings(updated, true);
+                              // Save directly to DB
+                              try {
+                                if (settingsSource === 'collection' && settingsCollectionId) {
+                                  await api.put(`/collections/${settingsCollectionId}`, {
+                                    title: comic?.collectionTitle || '',
+                                    promptSettings: updated
+                                  });
+                                } else if (comic?.collectionId) {
+                                  await api.put(`/collections/${comic.collectionId}`, {
+                                    title: comic?.collectionTitle || '',
+                                    promptSettings: updated
+                                  });
+                                } else {
+                                  await api.put(`/comics/${id}`, { promptSettings: updated });
+                                }
+                                alert('Master style image saved!');
+                              } catch (saveErr) {
+                                console.error('Failed to save master style image:', saveErr);
+                                alert('Failed to save master style image: ' + saveErr.message);
+                              }
                             } catch (error) {
                               console.error('Failed to upload master style image:', error);
-                              alert('Failed to upload image');
+                              alert('Failed to upload image: ' + error.message);
                             }
                           };
                           reader.readAsDataURL(file);
@@ -2088,6 +2325,238 @@ function ComicEditor() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Studio Tab */}
+      {activeTab === 'studio' && (
+        <div style={{ maxWidth: '800px' }}>
+          <h2 style={{ marginBottom: '0.5rem' }}>Image Studio</h2>
+          <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            Generate standalone images using the API directly. Select references from this comic's characters and style bible.
+          </p>
+
+          {/* Prompt */}
+          <textarea
+            value={studioPrompt}
+            onChange={(e) => setStudioPrompt(e.target.value)}
+            placeholder="Describe the image you want to generate..."
+            rows={4}
+            style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.95rem', marginBottom: '0.75rem', resize: 'vertical' }}
+          />
+
+          {/* Controls row */}
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <span style={{ fontSize: '0.85rem', color: '#666', marginRight: '0.25rem' }}>Provider:</span>
+              <button className={`btn btn-sm ${studioProvider === 'gemini' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStudioProvider('gemini')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Gemini</button>
+              <button className={`btn btn-sm ${studioProvider === 'openai' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStudioProvider('openai')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>OpenAI</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <span style={{ fontSize: '0.85rem', color: '#666', marginRight: '0.25rem' }}>Aspect:</span>
+              <button className={`btn btn-sm ${studioAspectRatio === 'square' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStudioAspectRatio('square')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Square</button>
+              <button className={`btn btn-sm ${studioAspectRatio === 'portrait' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStudioAspectRatio('portrait')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Portrait</button>
+              <button className={`btn btn-sm ${studioAspectRatio === 'landscape' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStudioAspectRatio('landscape')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Landscape</button>
+            </div>
+            {settings.masterStyleImage && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem', color: '#666', cursor: 'pointer' }}>
+                <input type="checkbox" checked={studioUseMasterStyle} onChange={(e) => setStudioUseMasterStyle(e.target.checked)} />
+                Master style
+              </label>
+            )}
+          </div>
+
+          {/* Reference images picker */}
+          <details style={{ marginBottom: '0.75rem', border: '1px solid #e0e0e0', borderRadius: '6px', padding: '0.5rem 0.75rem' }}>
+            <summary style={{ cursor: 'pointer', color: '#555', fontSize: '0.9rem', userSelect: 'none' }}>
+              Reference Images ({studioRefImages.length + studioUploadedRefs.length} selected)
+            </summary>
+            <div style={{ marginTop: '0.5rem' }}>
+              {/* Characters */}
+              {settings.characters.filter(c => c.image).length > 0 && (
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <small style={{ color: '#888' }}>Characters</small>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                    {settings.characters.filter(c => c.image).map(char => (
+                      <div key={char.id} onClick={() => studioToggleRef(char.image)} style={{
+                        border: studioRefImages.includes(char.image) ? '3px solid #27ae60' : '2px solid #ddd',
+                        borderRadius: '6px', cursor: 'pointer', padding: '2px', textAlign: 'center'
+                      }}>
+                        <img src={`http://localhost:3001${char.image}`} alt={char.name} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                        <div style={{ fontSize: '0.65rem', color: '#666', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{char.name}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Style Bible images */}
+              {(settings.styleBibleImages || []).length > 0 && (
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <small style={{ color: '#888' }}>Style Bible</small>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                    {settings.styleBibleImages.map((img, idx) => (
+                      <div key={idx} onClick={() => studioToggleRef(img)} style={{
+                        border: studioRefImages.includes(img) ? '3px solid #27ae60' : '2px solid #ddd',
+                        borderRadius: '6px', cursor: 'pointer', padding: '2px'
+                      }}>
+                        <img src={`http://localhost:3001${img}`} alt={`Style ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Uploaded refs */}
+              {studioUploadedRefs.length > 0 && (
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <small style={{ color: '#888' }}>Uploaded</small>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                    {studioUploadedRefs.map((img, idx) => (
+                      <div key={idx} style={{ position: 'relative', border: '2px solid #3498db', borderRadius: '6px', padding: '2px' }}>
+                        <img src={`http://localhost:3001${img}`} alt={`Upload ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                        <button onClick={() => setStudioUploadedRefs(prev => prev.filter((_, i) => i !== idx))} style={{
+                          position: 'absolute', top: '-6px', right: '-6px', background: '#e74c3c', color: '#fff',
+                          border: 'none', borderRadius: '50%', width: '18px', height: '18px', fontSize: '0.7rem',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>x</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button onClick={() => studioFileInputRef.current?.click()} className="btn btn-secondary btn-sm" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>+ Upload Reference</button>
+              <input type="file" ref={studioFileInputRef} onChange={studioUploadRef} accept="image/*" style={{ display: 'none' }} />
+            </div>
+          </details>
+
+          {/* Generate button */}
+          <button
+            onClick={studioGenerate}
+            disabled={studioGenerating || !studioPrompt.trim()}
+            className="btn btn-primary"
+            style={{ padding: '0.6rem 1.5rem', marginBottom: '1.5rem' }}
+          >
+            {studioGenerating ? 'Generating...' : 'Generate Image'}
+          </button>
+
+          {/* Gallery */}
+          {studioGallery.length > 0 && (
+            <div style={{ marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Gallery ({studioGallery.length})</h3>
+              <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+                {studioGallery.map((item, idx) => (
+                  <img
+                    key={idx}
+                    src={`http://localhost:3001${item.path}`}
+                    alt={item.prompt.substring(0, 30)}
+                    onClick={() => { setStudioSelectedImage(idx); setStudioInpaintMode(false); setStudioInpaintRect(null); }}
+                    style={{
+                      height: '80px', borderRadius: '4px', cursor: 'pointer', flexShrink: 0,
+                      border: studioSelectedImage === idx ? '3px solid #3498db' : '2px solid #ddd'
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Selected image viewer */}
+          {studioSelectedImage != null && studioGallery[studioSelectedImage] && (
+            <div>
+              <div style={{ position: 'relative', display: 'inline-block', marginBottom: '0.5rem' }}>
+                <img
+                  ref={studioImageRef}
+                  src={`http://localhost:3001${studioGallery[studioSelectedImage].path}`}
+                  alt="Selected"
+                  onMouseDown={studioHandleMouseDown}
+                  onMouseMove={studioHandleMouseMove}
+                  draggable={false}
+                  style={{
+                    maxWidth: '100%', maxHeight: '500px', borderRadius: '6px',
+                    cursor: studioInpaintMode ? 'crosshair' : 'default', userSelect: 'none'
+                  }}
+                />
+                {/* Inpaint rect overlay */}
+                {studioInpaintMode && studioInpaintRect && studioInpaintRect.width > 0 && studioInpaintRect.height > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    left: `${studioInpaintRect.x * 100}%`,
+                    top: `${studioInpaintRect.y * 100}%`,
+                    width: `${studioInpaintRect.width * 100}%`,
+                    height: `${studioInpaintRect.height * 100}%`,
+                    border: '2px dashed #00ff88',
+                    background: 'rgba(0,255,136,0.15)',
+                    pointerEvents: 'none'
+                  }} />
+                )}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.5rem' }}>
+                {studioGallery[studioSelectedImage].prompt} ({studioGallery[studioSelectedImage].provider})
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                <button onClick={() => studioSaveAsReference(studioSelectedImage)} className="btn btn-secondary btn-sm" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                  Save as Reference
+                </button>
+                <button onClick={() => studioDownload(studioSelectedImage)} className="btn btn-secondary btn-sm" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                  Download
+                </button>
+                <button
+                  onClick={() => { setStudioInpaintMode(!studioInpaintMode); setStudioInpaintRect(null); setStudioInpaintPrompt(''); }}
+                  className={`btn btn-sm ${studioInpaintMode ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                >
+                  {studioInpaintMode ? 'Cancel Inpaint' : 'Inpaint'}
+                </button>
+              </div>
+
+              {/* Inpaint controls */}
+              {studioInpaintMode && (
+                <div style={{ background: '#f8f9fa', border: '1px solid #e0e0e0', borderRadius: '6px', padding: '0.75rem', marginBottom: '1rem' }}>
+                  {!studioInpaintRect || studioInpaintRect.width === 0 ? (
+                    <p style={{ color: '#888', fontSize: '0.85rem', margin: 0 }}>Draw a rectangle on the image to select the region to inpaint</p>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={studioInpaintPrompt}
+                        onChange={(e) => setStudioInpaintPrompt(e.target.value)}
+                        placeholder="Describe what to generate in the selected region..."
+                        onKeyDown={(e) => { if (e.key === 'Enter' && studioInpaintPrompt.trim()) studioExecuteInpaint('gemini'); }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem', marginBottom: '0.5rem' }}
+                        autoFocus
+                      />
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => studioExecuteInpaint('openai')}
+                          disabled={!!studioInpaintGenerating || !studioInpaintPrompt.trim()}
+                          className="btn btn-sm btn-secondary"
+                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                        >
+                          {studioInpaintGenerating === 'openai' ? 'Inpainting...' : 'Inpaint (ChatGPT)'}
+                        </button>
+                        <button
+                          onClick={() => studioExecuteInpaint('gemini')}
+                          disabled={!!studioInpaintGenerating || !studioInpaintPrompt.trim()}
+                          className="btn btn-sm btn-secondary"
+                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                        >
+                          {studioInpaintGenerating === 'gemini' ? 'Inpainting...' : 'Inpaint (Gemini)'}
+                        </button>
+                        <button
+                          onClick={() => { setStudioInpaintRect(null); setStudioInpaintPrompt(''); }}
+                          className="btn btn-sm btn-secondary"
+                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                        >
+                          Redraw
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

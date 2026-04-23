@@ -516,6 +516,7 @@ function PageEditor({ isCover = false }) {
   const [toast, setToast] = useState(null);
   const [lightboxImage, setLightboxImage] = useState(null);
   const [lightboxRefContext, setLightboxRefContext] = useState(null); // { panelId, refIndex }
+  const [refPreviewImage, setRefPreviewImage] = useState(null); // URL for full-size ref image preview
   // Inpaint mode state
   const [inpaintMode, setInpaintMode] = useState(null); // { panelId, panelIndex, panel }
   const [inpaintRect, setInpaintRect] = useState(null); // { x, y, width, height } normalized 0-1
@@ -523,6 +524,8 @@ function PageEditor({ isCover = false }) {
   const [inpaintStart, setInpaintStart] = useState(null); // { x, y } start point
   const [inpaintPrompt, setInpaintPrompt] = useState('');
   const [inpaintGenerating, setInpaintGenerating] = useState(null); // null|'openai'|'gemini'
+  const [inpaintSaved, setInpaintSaved] = useState(false);
+  const [inpaintAnnotations, setInpaintAnnotations] = useState([]); // [{id, x, y}] numbered dots for spatial reference
   // Global mouseup handler for inpaint rect drawing (handles mouse-up outside image)
   useEffect(() => {
     if (!inpaintDrawing) return;
@@ -1017,12 +1020,13 @@ function PageEditor({ isCover = false }) {
         setBubbles(currentPage.bubbles);
       }
       // Build list of panels from other pages that have artwork
-      const currentPageIndex = pages.findIndex(p => p.id === pageId);
+      const currentPage_ = pages.find(p => p.id === pageId);
+      const currentPageNum = currentPage_?.pageNumber || 0;
       const otherPanels = [];
       pages.forEach((pg, pgIdx) => {
         if (pg.id === pageId) return; // skip current page
-        if (pgIdx > currentPageIndex) return; // only previous pages
         const pgNum = pg.pageNumber || pgIdx + 1;
+        if (pgNum > currentPageNum) return; // only previous pages
         // Include page master image as a whole-page reference option
         if (pg.masterImage) {
           otherPanels.push({
@@ -2089,7 +2093,38 @@ function PageEditor({ isCover = false }) {
     const regularPanels = panels.filter(p => !p.floating);
     const panelsWithContent = newPanels.map((newPanel, idx) => {
       const existing = regularPanels[idx];
-      return existing ? { ...newPanel, content: existing.content || '' } : newPanel;
+      if (!existing) return newPanel;
+      return {
+        ...newPanel,
+        content: existing.content || '',
+        artworkImage: existing.artworkImage,
+        fitMode: existing.fitMode,
+        cropX: existing.cropX,
+        cropY: existing.cropY,
+        zoom: existing.zoom,
+        brightness: existing.brightness,
+        contrast: existing.contrast,
+        saturation: existing.saturation,
+        refImages: existing.refImages,
+        annotations: existing.annotations,
+      };
+    });
+    // Remap panelImages from old IDs to new IDs
+    setPanelImages(prev => {
+      const remapped = {};
+      newPanels.forEach((newPanel, idx) => {
+        const oldPanel = regularPanels[idx];
+        if (oldPanel && prev[oldPanel.id]) {
+          remapped[newPanel.id] = prev[oldPanel.id];
+        } else if (prev[newPanel.id]) {
+          remapped[newPanel.id] = prev[newPanel.id];
+        }
+      });
+      // Keep floating panel images
+      for (const fp of floatingPanels) {
+        if (prev[fp.id]) remapped[fp.id] = prev[fp.id];
+      }
+      return remapped;
     });
     setPanels([...panelsWithContent, ...floatingPanels]);
     setPanelsComputed(true);
@@ -2098,11 +2133,20 @@ function PageEditor({ isCover = false }) {
   const movePanelUp = (index) => {
     if (index === 0) return;
     const newPanels = [...panels];
+    const oldIds = newPanels.map(p => p.id);
     [newPanels[index - 1], newPanels[index]] = [newPanels[index], newPanels[index - 1]];
-    // Update panel orders (preserve floating panel IDs)
     newPanels.forEach((p, i) => {
       p.panelOrder = i + 1;
       if (!p.floating) p.id = `${pageId}-panel-${i + 1}`;
+    });
+    // Remap panelImages to new IDs
+    setPanelImages(prev => {
+      const remapped = {};
+      newPanels.forEach((p, i) => {
+        if (prev[oldIds[i]]) remapped[p.id] = prev[oldIds[i]];
+        else if (prev[p.id]) remapped[p.id] = prev[p.id];
+      });
+      return remapped;
     });
     setPanels(newPanels);
   };
@@ -2110,11 +2154,20 @@ function PageEditor({ isCover = false }) {
   const movePanelDown = (index) => {
     if (index === panels.length - 1) return;
     const newPanels = [...panels];
+    const oldIds = newPanels.map(p => p.id);
     [newPanels[index], newPanels[index + 1]] = [newPanels[index + 1], newPanels[index]];
-    // Update panel orders (preserve floating panel IDs)
     newPanels.forEach((p, i) => {
       p.panelOrder = i + 1;
       if (!p.floating) p.id = `${pageId}-panel-${i + 1}`;
+    });
+    // Remap panelImages to new IDs
+    setPanelImages(prev => {
+      const remapped = {};
+      newPanels.forEach((p, i) => {
+        if (prev[oldIds[i]]) remapped[p.id] = prev[oldIds[i]];
+        else if (prev[p.id]) remapped[p.id] = prev[p.id];
+      });
+      return remapped;
     });
     setPanels(newPanels);
   };
@@ -2310,8 +2363,43 @@ function PageEditor({ isCover = false }) {
       let panelsToSave = panels;
       if (!panelsComputed) {
         const floatingPanels = panels.filter(p => p.floating);
+        const regularPanels = panels.filter(p => !p.floating);
         const recomputed = computePanelsFromLines(lines, pageId);
-        panelsToSave = [...recomputed, ...floatingPanels];
+        const recomputedWithContent = recomputed.map((newPanel, idx) => {
+          const existing = regularPanels[idx];
+          if (!existing) return newPanel;
+          return {
+            ...newPanel,
+            content: existing.content || '',
+            artworkImage: existing.artworkImage,
+            fitMode: existing.fitMode,
+            cropX: existing.cropX,
+            cropY: existing.cropY,
+            zoom: existing.zoom,
+            brightness: existing.brightness,
+            contrast: existing.contrast,
+            saturation: existing.saturation,
+            refImages: existing.refImages,
+            annotations: existing.annotations,
+          };
+        });
+        // Remap panelImages from old IDs to new IDs
+        setPanelImages(prev => {
+          const remapped = {};
+          recomputed.forEach((newPanel, idx) => {
+            const oldPanel = regularPanels[idx];
+            if (oldPanel && prev[oldPanel.id]) {
+              remapped[newPanel.id] = prev[oldPanel.id];
+            } else if (prev[newPanel.id]) {
+              remapped[newPanel.id] = prev[newPanel.id];
+            }
+          });
+          for (const fp of floatingPanels) {
+            if (prev[fp.id]) remapped[fp.id] = prev[fp.id];
+          }
+          return remapped;
+        });
+        panelsToSave = [...recomputedWithContent, ...floatingPanels];
         setPanels(panelsToSave);
         setPanelsComputed(true);
       }
@@ -2672,7 +2760,8 @@ function PageEditor({ isCover = false }) {
         angleDegrees,
         panelContent: panel.content,
         provider,
-        openaiQuality
+        openaiQuality,
+        hasMasterStyleImage: !!(promptSettings.masterStyleImage)
       }, { timeout: 600000, signal: controller.signal });
 
       delete abortControllers.current[panel.id];
@@ -2819,7 +2908,8 @@ function PageEditor({ isCover = false }) {
         linkedPanelImages: [currentPath],
         isRefinement: true,
         provider,
-        openaiQuality
+        openaiQuality,
+        hasMasterStyleImage: !!(promptSettings.masterStyleImage)
       }, { timeout: 600000 });
 
       setPanelImages(prev => ({
@@ -2887,7 +2977,8 @@ function PageEditor({ isCover = false }) {
         referenceImages,
         refAnnotations,
         provider,
-        openaiQuality
+        openaiQuality,
+        sourceAnnotations: inpaintAnnotations.length > 0 ? inpaintAnnotations : undefined
       }, { timeout: 600000 });
 
       setPanelImages(prev => ({
@@ -2901,10 +2992,11 @@ function PageEditor({ isCover = false }) {
       }));
       updatePanelArtwork(panelId, response.data.path);
 
-      // Update lightbox to show result; clear rect for another pass
+      // Update lightbox to show result; clear rect and annotations for another pass
       setLightboxImage(`http://localhost:3001${response.data.path}`);
       setInpaintRect(null);
       setInpaintPrompt('');
+      setInpaintAnnotations([]);
       setInpaintGenerating(null);
     } catch (error) {
       console.error('Inpaint failed:', error);
@@ -2928,6 +3020,7 @@ function PageEditor({ isCover = false }) {
     setInpaintDrawing(false);
     setInpaintStart(null);
     setInpaintGenerating(null);
+    setInpaintAnnotations([]);
     setLightboxImage(null);
   };
 
@@ -3999,6 +4092,23 @@ function PageEditor({ isCover = false }) {
           {toast.message}
         </div>
       )}
+      {refPreviewImage && (
+        <div
+          onClick={() => setRefPreviewImage(null)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.8)', zIndex: 10002,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer'
+          }}>
+          <img
+            src={refPreviewImage}
+            alt="Reference preview"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px', cursor: 'default' }}
+          />
+        </div>
+      )}
       {lightboxImage && (
         <div
           onClick={() => {
@@ -4076,17 +4186,25 @@ function PageEditor({ isCover = false }) {
               } : undefined}
               onMouseDown={inpaintMode && !inpaintGenerating ? (e) => {
                 e.preventDefault();
-                const rect = e.target.getBoundingClientRect();
-                const x = (e.clientX - rect.left) / rect.width;
-                const y = (e.clientY - rect.top) / rect.height;
-                setInpaintDrawing(true);
-                setInpaintStart({ x, y });
-                setInpaintRect(null);
+                const imgRect = e.target.getBoundingClientRect();
+                const x = (e.clientX - imgRect.left) / imgRect.width;
+                const y = (e.clientY - imgRect.top) / imgRect.height;
+                if (inpaintRect) {
+                  // Rect already drawn — place a numbered annotation dot
+                  setInpaintAnnotations(prev => {
+                    const nextId = prev.length > 0 ? Math.max(...prev.map(a => a.id)) + 1 : 1;
+                    return [...prev, { id: nextId, x, y }];
+                  });
+                } else {
+                  // No rect yet — start drawing one
+                  setInpaintDrawing(true);
+                  setInpaintStart({ x, y });
+                }
               } : undefined}
               onMouseMove={inpaintDrawing ? (e) => {
-                const rect = e.target.getBoundingClientRect();
-                const currentX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                const currentY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+                const imgRect = e.target.getBoundingClientRect();
+                const currentX = Math.max(0, Math.min(1, (e.clientX - imgRect.left) / imgRect.width));
+                const currentY = Math.max(0, Math.min(1, (e.clientY - imgRect.top) / imgRect.height));
                 setInpaintRect({
                   x: Math.min(inpaintStart.x, currentX),
                   y: Math.min(inpaintStart.y, currentY),
@@ -4117,6 +4235,30 @@ function PageEditor({ isCover = false }) {
                 boxSizing: 'border-box'
               }} />
             )}
+
+            {/* Inpaint annotation dots */}
+            {inpaintMode && inpaintAnnotations.map(ann => (
+              <div
+                key={ann.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setInpaintAnnotations(prev => prev.filter(a => a.id !== ann.id));
+                }}
+                title={`Point #${ann.id} — click to remove`}
+                style={{
+                  position: 'absolute',
+                  left: `${ann.x * 100}%`, top: `${ann.y * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width: '28px', height: '28px', borderRadius: '50%',
+                  background: '#e74c3c', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '14px', fontWeight: 'bold',
+                  border: '2px solid #fff',
+                  cursor: 'pointer', zIndex: 2,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.5)'
+                }}
+              >{ann.id}</div>
+            ))}
 
             {/* Annotation circles */}
             {lightboxRefContext && !inpaintMode && (() => {
@@ -4169,12 +4311,16 @@ function PageEditor({ isCover = false }) {
               minWidth: '400px', maxWidth: '600px',
               marginTop: '12px'
             }}>
-              {!inpaintRect ? (
+              {!inpaintRect && (
                 <div style={{ color: '#ccc', fontSize: '0.9rem', textAlign: 'center' }}>
                   Draw a rectangle on the image to select the region to inpaint
                 </div>
-              ) : (
+              )}
+              {inpaintRect && (
                 <>
+                  <div style={{ color: '#999', fontSize: '0.75rem', textAlign: 'center' }}>
+                    Click on the image to place numbered reference points{inpaintAnnotations.length > 0 ? ` (${inpaintAnnotations.length} placed)` : ''}
+                  </div>
                   <input
                     type="text"
                     value={inpaintPrompt}
@@ -4184,7 +4330,9 @@ function PageEditor({ isCover = false }) {
                         executeInpaint('openai');
                       }
                     }}
-                    placeholder="Describe what to generate in this region..."
+                    placeholder={inpaintAnnotations.length > 0
+                      ? 'e.g. "Turn his head towards point 1"'
+                      : 'Describe what to generate in this region...'}
                     disabled={!!inpaintGenerating}
                     style={{
                       padding: '0.5rem', borderRadius: '4px',
@@ -4219,7 +4367,7 @@ function PageEditor({ isCover = false }) {
                       {inpaintGenerating === 'gemini' ? 'Inpainting...' : 'Inpaint (Gemini)'}
                     </button>
                     <button
-                      onClick={() => { setInpaintRect(null); setInpaintPrompt(''); }}
+                      onClick={() => { setInpaintRect(null); setInpaintPrompt(''); setInpaintAnnotations([]); }}
                       disabled={!!inpaintGenerating}
                       style={{
                         padding: '0.4rem 0.8rem', fontSize: '0.8rem',
@@ -4229,20 +4377,69 @@ function PageEditor({ isCover = false }) {
                     >
                       Redraw
                     </button>
-                    <button
-                      onClick={exitInpaintMode}
-                      disabled={!!inpaintGenerating}
-                      style={{
-                        padding: '0.4rem 0.8rem', fontSize: '0.8rem',
-                        background: '#e74c3c', color: '#fff', border: 'none',
-                        borderRadius: '4px', cursor: 'pointer'
-                      }}
-                    >
-                      Done
-                    </button>
                   </div>
                 </>
               )}
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                <button
+                  onClick={() => {
+                    const { panelId } = inpaintMode;
+                    const currentPath = panelImages[panelId]?.path;
+                    if (currentPath) {
+                      setPanelImages(prev => ({
+                        ...prev,
+                        [panelId]: { ...prev[panelId], previousPath: currentPath }
+                      }));
+                      setInpaintSaved(true);
+                      setTimeout(() => setInpaintSaved(false), 1500);
+                    }
+                  }}
+                  disabled={!!inpaintGenerating}
+                  style={{
+                    padding: '0.4rem 0.8rem', fontSize: '0.8rem',
+                    background: inpaintSaved ? '#1e8449' : '#27ae60', color: '#fff', border: 'none',
+                    borderRadius: '4px', cursor: 'pointer',
+                    transition: 'background 0.3s'
+                  }}
+                >
+                  {inpaintSaved ? 'Saved!' : 'Save Version'}
+                </button>
+                {panelImages[inpaintMode.panelId]?.previousPath && (
+                  <button
+                    onClick={() => {
+                      const { panelId } = inpaintMode;
+                      const prevPath = panelImages[panelId].previousPath;
+                      setPanelImages(prev => ({
+                        ...prev,
+                        [panelId]: { ...prev[panelId], path: prevPath, previousPath: null }
+                      }));
+                      updatePanelArtwork(panelId, prevPath);
+                      setLightboxImage(`http://localhost:3001${prevPath}`);
+                      setInpaintRect(null);
+                      setInpaintPrompt('');
+                    }}
+                    disabled={!!inpaintGenerating}
+                    style={{
+                      padding: '0.4rem 0.8rem', fontSize: '0.8rem',
+                      background: '#e67e22', color: '#fff', border: 'none',
+                      borderRadius: '4px', cursor: 'pointer'
+                    }}
+                  >
+                    Revert
+                  </button>
+                )}
+                <button
+                  onClick={exitInpaintMode}
+                  disabled={!!inpaintGenerating}
+                  style={{
+                    padding: '0.4rem 0.8rem', fontSize: '0.8rem',
+                    background: '#e74c3c', color: '#fff', border: 'none',
+                    borderRadius: '4px', cursor: 'pointer'
+                  }}
+                >
+                  Done
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -4366,7 +4563,7 @@ function PageEditor({ isCover = false }) {
             {showBakedPreview ? 'Hide Baked' : 'View Baked'}
           </button>
         )}
-        {!isCover && page.masterImage && comic?.styleEnforcer?.profile?.channels?.length >= 3 && (
+        {page.masterImage && comic?.styleEnforcer?.profile?.channels?.length >= 3 && (
           <button
             className="btn btn-secondary"
             disabled={enforcingStyle}
@@ -4383,15 +4580,24 @@ function PageEditor({ isCover = false }) {
                   saturation: enforcerSaturation
                 });
                 const newPath = response.data.path;
-                const updatedComic = { ...comic };
-                const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
-                if (!updatedComic.pages[pageIndex].originalMasterImage) {
-                  updatedComic.pages[pageIndex].originalMasterImage = imgPath;
+                if (isCover) {
+                  const updatedCover = { ...comic.cover, image: newPath, bakedImage: '' };
+                  if (!updatedCover.originalImage) {
+                    updatedCover.originalImage = imgPath;
+                  }
+                  await api.put(`/comics/${id}`, { cover: updatedCover });
+                  setComic(prev => ({ ...prev, cover: updatedCover }));
+                } else {
+                  const updatedComic = { ...comic };
+                  const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+                  if (!updatedComic.pages[pageIndex].originalMasterImage) {
+                    updatedComic.pages[pageIndex].originalMasterImage = imgPath;
+                  }
+                  updatedComic.pages[pageIndex].masterImage = newPath;
+                  updatedComic.pages[pageIndex].bakedImage = '';
+                  await api.put(`/comics/${id}`, updatedComic);
+                  setComic(updatedComic);
                 }
-                updatedComic.pages[pageIndex].masterImage = newPath;
-                updatedComic.pages[pageIndex].bakedImage = '';
-                await api.put(`/comics/${id}`, updatedComic);
-                setComic(updatedComic);
                 setPage(prev => ({ ...prev, masterImage: `${newPath}?t=${Date.now()}`, originalMasterImage: prev.originalMasterImage || imgPath, bakedImage: '' }));
                 showToast('Style enforced! Re-bake bubbles to update the baked version.');
               } catch (error) {
@@ -4406,17 +4612,23 @@ function PageEditor({ isCover = false }) {
             {enforcingStyle ? 'Enforcing...' : 'Enforce Style'}
           </button>
         )}
-        {!isCover && page.originalMasterImage && (
+        {(page.originalMasterImage || (isCover && comic?.cover?.originalImage)) && (
           <button
             className="btn btn-secondary"
             onClick={async () => {
-              const originalPath = page.originalMasterImage;
-              const updatedComic = { ...comic };
-              const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
-              updatedComic.pages[pageIndex].masterImage = originalPath;
-              updatedComic.pages[pageIndex].originalMasterImage = '';
-              await api.put(`/comics/${id}`, updatedComic);
-              setComic(updatedComic);
+              const originalPath = isCover ? (comic?.cover?.originalImage || page.originalMasterImage) : page.originalMasterImage;
+              if (isCover) {
+                const updatedCover = { ...comic.cover, image: originalPath, originalImage: '' };
+                await api.put(`/comics/${id}`, { cover: updatedCover });
+                setComic(prev => ({ ...prev, cover: updatedCover }));
+              } else {
+                const updatedComic = { ...comic };
+                const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+                updatedComic.pages[pageIndex].masterImage = originalPath;
+                updatedComic.pages[pageIndex].originalMasterImage = '';
+                await api.put(`/comics/${id}`, updatedComic);
+                setComic(updatedComic);
+              }
               setPage(prev => ({ ...prev, masterImage: `${originalPath}?t=${Date.now()}`, originalMasterImage: '' }));
               showToast('Reverted to original');
             }}
@@ -5874,7 +6086,7 @@ function PageEditor({ isCover = false }) {
           </div>
 
           {/* Style Enforcer controls */}
-          {!isCover && comic?.styleEnforcer?.profile?.channels?.length >= 3 && (
+          {comic?.styleEnforcer?.profile?.channels?.length >= 3 && (
             <div style={{ marginBottom: '0.75rem', background: '#1a1a2e', borderRadius: '6px' }}>
               <button
                 onClick={() => setShowEnforcerControls(prev => !prev)}
@@ -8039,7 +8251,8 @@ function PageEditor({ isCover = false }) {
                                     borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
                                   }}>
                                   <img src={`http://localhost:3001${img.image}`} alt={img.name}
-                                    style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
+                                    onClick={(e) => { e.stopPropagation(); setRefPreviewImage(`http://localhost:3001${img.image}`); }}
+                                    style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0, cursor: 'zoom-in' }} />
                                   <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {img.name || (img.description ? img.description.split(',')[0].substring(0, 40) : 'Style ref')}
                                   </span>
@@ -8057,7 +8270,8 @@ function PageEditor({ isCover = false }) {
                                     borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
                                   }}>
                                   <img src={`http://localhost:3001${char.image}`} alt={char.name}
-                                    style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
+                                    onClick={(e) => { e.stopPropagation(); setRefPreviewImage(`http://localhost:3001${char.image}`); }}
+                                    style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0, cursor: 'zoom-in' }} />
                                   <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {char.name}
                                   </span>

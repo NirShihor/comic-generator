@@ -276,6 +276,9 @@ router.post('/:id/pages', async (req, res) => {
       // Insert after the specified page number
       page.pageNumber = afterPageNumber + 1;
 
+      // Find the insertion array index BEFORE renumbering
+      const insertIdx = comic.pages.findIndex(p => p.pageNumber === afterPageNumber + 1);
+
       // Renumber all pages that come after the insertion point
       comic.pages.forEach(p => {
         if (p.pageNumber > afterPageNumber) {
@@ -284,7 +287,6 @@ router.post('/:id/pages', async (req, res) => {
       });
 
       // Insert at the correct position in the array
-      const insertIdx = comic.pages.findIndex(p => p.pageNumber === afterPageNumber + 2);
       if (insertIdx >= 0) {
         comic.pages.splice(insertIdx, 0, page);
       } else {
@@ -547,11 +549,11 @@ router.post('/:id/export-full', async (req, res) => {
     await fs.mkdir(imagesDir, { recursive: true });
     await fs.mkdir(audioDir, { recursive: true });
 
-    // Clean up old PNG images from previous exports (now using JPEG)
+    // Clean up old images from previous exports (PNGs and stale _no_text JPEGs)
     try {
       const existingFiles = await fs.readdir(imagesDir);
       for (const file of existingFiles) {
-        if (file.endsWith('.png')) {
+        if (file.endsWith('.png') || file.endsWith('.jpg')) {
           await fs.unlink(path.join(imagesDir, file));
         }
       }

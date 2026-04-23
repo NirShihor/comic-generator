@@ -135,21 +135,30 @@ function transformToReaderFormat(comic, comicSlug) {
             },
             sentences: (bubble.sentences || []).map(sentence => {
               const sentenceId = `${comicSlug}-s${sentenceCounter++}`;
+              const sentenceText = sentence.text || '';
+              const originalWords = sentenceText.match(/[\p{L}\p{N}]+/gu) || [];
               return {
                 id: sentenceId,
-                text: sentence.text || '',
+                text: sentenceText,
                 translation: sentence.translation || '',
                 audioUrl: sentence.audioUrl || '',
                 ...(sentence.alternatives?.length > 0 && {
                   alternativeTexts: sentence.alternatives.map(a => a.text),
                   alternativeAudioUrls: sentence.alternatives.filter(a => a.audioUrl).map(a => a.audioUrl)
                 }),
-                words: (sentence.words || []).map(word => {
+                words: (sentence.words || []).map((word, wIdx) => {
                   const wText = sanitizeWordForFilename(word.text);
                   const wBase = sanitizeWordForFilename(word.baseForm || word.text);
+                  let displayText = word.text || '';
+                  if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === (word.text || '').toLowerCase()) {
+                    displayText = originalWords[wIdx];
+                  } else {
+                    const match = originalWords.find(ow => ow.toLowerCase() === (word.text || '').toLowerCase());
+                    if (match) displayText = match;
+                  }
                   return {
                     id: `${comicSlug}-w${wordCounter++}`,
-                    text: word.text || '',
+                    text: displayText,
                     meaning: word.meaning || '',
                     baseForm: word.baseForm || word.text || '',
                     ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),
@@ -170,6 +179,23 @@ function transformToReaderFormat(comic, comicSlug) {
 
   for (const page of comic.pages) {
     const pageNum = pages.length + 1;
+
+    // Track which bubbles are claimed by floating panels to avoid duplicates
+    const claimedBubbleIds = new Set();
+    const pageHasFloating = (page.panels || []).some(p => p.floating);
+
+    if (pageHasFloating) {
+      for (const fp of (page.panels || []).filter(p => p.floating)) {
+        for (const bubble of (page.bubbles || [])) {
+          const bx = bubble.x || 0, by = bubble.y || 0, bw = bubble.width || 0, bh = bubble.height || 0;
+          const tx = fp.tapZone.x, ty = fp.tapZone.y, tw = fp.tapZone.width, th = fp.tapZone.height;
+          if (bx + bw > tx && bx < tx + tw && by + bh > ty && by < ty + th) {
+            claimedBubbleIds.add(bubble._id?.toString() || `${bx}-${by}`);
+          }
+        }
+      }
+    }
+
     const exportedPage = {
       id: `${comicSlug}-page-${page.pageNumber}`,
       pageNumber: pageNum,
@@ -183,13 +209,8 @@ function transformToReaderFormat(comic, comicSlug) {
         const hasBakedPage = page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage;
         const panelCorners = computePanelCorners(panel, page.lines);
 
-        // If this page has floating panels, skip bubble assignment for the
-        // full-page background panel — floating panels carry their own bubbles.
-        const pageHasFloating = (page.panels || []).some(p => p.floating);
-        const isBackground = !panel.floating && pageHasFloating;
-
         // Check if any part of the bubble overlaps the panel tap zone
-        const panelBubbles = isBackground ? [] : (page.bubbles || []).filter(bubble => {
+        const panelBubbles = (page.bubbles || []).filter(bubble => {
           const bx = bubble.x || 0;
           const by = bubble.y || 0;
           const bw = bubble.width || 0;
@@ -198,8 +219,15 @@ function transformToReaderFormat(comic, comicSlug) {
           const ty = panel.tapZone.y;
           const tw = panel.tapZone.width;
           const th = panel.tapZone.height;
-          return bx + bw > tx && bx < tx + tw &&
+          const overlaps = bx + bw > tx && bx < tx + tw &&
                  by + bh > ty && by < ty + th;
+          if (!overlaps) return false;
+          // For background panels, skip bubbles already claimed by a floating panel
+          if (!panel.floating && pageHasFloating) {
+            const bubbleKey = bubble._id?.toString() || `${bx}-${by}`;
+            if (claimedBubbleIds.has(bubbleKey)) return false;
+          }
+          return true;
         }).sort((a, b) => {
           // Sort by reading order: top-to-bottom, left-to-right as tiebreaker
           const ay = a.y || 0;
@@ -240,21 +268,35 @@ function transformToReaderFormat(comic, comicSlug) {
               },
               sentences: (bubble.sentences || []).map((sentence, sIdx) => {
                 const sentenceId = `${comicSlug}-s${sentenceCounter++}`;
+
+                // Extract original-cased words from sentence text for display
+                const sentenceText = sentence.text || '';
+                const originalWords = sentenceText.match(/[\p{L}\p{N}]+/gu) || [];
+
                 return {
                   id: sentenceId,
-                  text: sentence.text || '',
+                  text: sentenceText,
                   translation: sentence.translation || '',
                   audioUrl: sentence.audioUrl || '',
                   ...(sentence.alternatives?.length > 0 && {
                   alternativeTexts: sentence.alternatives.map(a => a.text),
                   alternativeAudioUrls: sentence.alternatives.filter(a => a.audioUrl).map(a => a.audioUrl)
                 }),
-                  words: (sentence.words || []).map(word => {
+                  words: (sentence.words || []).map((word, wIdx) => {
                     const wText = sanitizeWordForFilename(word.text);
                     const wBase = sanitizeWordForFilename(word.baseForm || word.text);
+                    // Find matching original word by position or case-insensitive match
+                    let displayText = word.text || '';
+                    if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === (word.text || '').toLowerCase()) {
+                      displayText = originalWords[wIdx];
+                    } else {
+                      // Fallback: search for a case-insensitive match anywhere in remaining words
+                      const match = originalWords.find(ow => ow.toLowerCase() === (word.text || '').toLowerCase());
+                      if (match) displayText = match;
+                    }
                     return {
                       id: `${comicSlug}-w${wordCounter++}`,
-                      text: word.text || '',
+                      text: displayText,
                       meaning: word.meaning || '',
                       baseForm: word.baseForm || word.text || '',
                       ...(word.startTimeMs != null && { startTimeMs: word.startTimeMs }),

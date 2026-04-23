@@ -9,7 +9,7 @@ const sharp = require('sharp');
 const { GoogleGenAI } = require('@google/genai');
 
 // Generate image using Gemini API
-async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [], isAngleChange = false, aspectRatio = 'square', annotationsMap = {}) {
+async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [], isAngleChange = false, aspectRatio = 'square', annotationsMap = {}, hasMasterStyleImage = false) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('Gemini API key not configured. Add GEMINI_API_KEY to .env file.');
   }
@@ -27,8 +27,8 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
     try {
       await fs.access(fullPath);
       let resizedBuffer = await sharp(fullPath)
-        .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 80 })
+        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85 })
         .toBuffer();
       // Burn annotations if present for this image
       if (annotationsMap[imgPath] && annotationsMap[imgPath].length > 0) {
@@ -52,8 +52,8 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
     try {
       await fs.access(fullPath);
       const resizedBuffer = await sharp(fullPath)
-        .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 80 })
+        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85 })
         .toBuffer();
       parts.push({
         inlineData: {
@@ -74,7 +74,17 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
     const styleNote = styleCount > 0 ? `\n\nThe remaining ${styleCount} image(s) are style references for art consistency only.` : '';
     textPrompt = `${angleNote}${styleNote}\n\n${prompt}`;
   } else if (styleCount > 0) {
-    const styleNote = `IMPORTANT: ${styleCount} of the attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.`;
+    let styleNote;
+    if (hasMasterStyleImage) {
+      const otherRefs = styleCount - 1;
+      styleNote = `IMPORTANT: The FIRST attached image is a MASTER STYLE GUIDE. Use it ONLY to match the art technique, line work, shading, ink style, and overall aesthetic. Do NOT copy any characters, subjects, scenes, or content from this image — extract ONLY the visual drawing style.`;
+      if (otherRefs > 0) {
+        styleNote += `\nThe remaining ${otherRefs} image(s) are CHARACTER and STYLE REFERENCES — use them to match character appearance and visual consistency.`;
+      }
+      styleNote += `\nGenerate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.`;
+    } else {
+      styleNote = `IMPORTANT: ${styleCount} of the attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.`;
+    }
     textPrompt = `${styleNote}\n\n${prompt}`;
   }
   // Add aspect ratio instructions
@@ -166,10 +176,10 @@ async function loadReferenceImages(imagePaths, annotationsMap) {
     const fullPath = path.join(__dirname, '../..', imgPath);
     try {
       await fs.access(fullPath);
-      // Resize to max 512px on longest side and convert to JPEG for smaller payload
+      // Resize to max 1024px on longest side and convert to JPEG
       let resizedBuffer = await sharp(fullPath)
-        .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 80 })
+        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85 })
         .toBuffer();
       // Burn annotations if present for this image
       if (annotationsMap && annotationsMap[imgPath] && annotationsMap[imgPath].length > 0) {
@@ -321,7 +331,7 @@ router.post('/generate', async (req, res) => {
       console.log('Generating with OpenAI, prompt length:', fullPrompt.length);
 
       const response = await openai.images.generate({
-        model: 'gpt-image-1',
+        model: 'gpt-image-2',
         prompt: fullPrompt,
         n: 1,
         size: '1024x1536',
@@ -387,7 +397,7 @@ router.post('/generate-page', (req, res) => {
       if (refStreams.length > 0) {
         const refPrompt = `IMPORTANT: The attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n${finalPrompt}`;
         response = await openai.images.edit({
-          model: 'gpt-image-1',
+          model: 'gpt-image-2',
           image: refStreams,
           prompt: refPrompt,
           n: 1,
@@ -396,7 +406,7 @@ router.post('/generate-page', (req, res) => {
         });
       } else {
         response = await openai.images.generate({
-          model: 'gpt-image-1',
+          model: 'gpt-image-2',
           prompt: finalPrompt,
           n: 1,
           size: '1024x1536',
@@ -548,7 +558,7 @@ Generate this image now.`
 // Generate single panel image (OpenAI or Gemini)
 router.post('/generate-panel', (req, res) => {
   withKeepAlive(res, async () => {
-    const { prompt, panelId, aspectRatio = 'square', referenceImages, linkedPanelImages, refAnnotations, isRefinement, isAngleChange, angleSourceImage, angleDegrees, panelContent, provider = 'openai', openaiQuality = 'high' } = req.body;
+    const { prompt, panelId, aspectRatio = 'square', referenceImages, linkedPanelImages, refAnnotations, isRefinement, isAngleChange, angleSourceImage, angleDegrees, panelContent, provider = 'openai', openaiQuality = 'high', hasMasterStyleImage = false } = req.body;
 
     const styleRefs = referenceImages || [];
     const linkedRefs = linkedPanelImages || [];
@@ -594,7 +604,7 @@ router.post('/generate-panel', (req, res) => {
       const geminiLinkedRefs = isAngleChange && angleSourceImage
         ? [angleSourceImage]
         : linkedRefs;
-      buffer = await generateWithGemini(finalPrompt, geminiStyleRefs, geminiLinkedRefs, isAngleChange, aspectRatio, annotationsMap);
+      buffer = await generateWithGemini(finalPrompt, geminiStyleRefs, geminiLinkedRefs, isAngleChange, aspectRatio, annotationsMap, hasMasterStyleImage);
       // Enforce target dimensions — Gemini may not respect aspect ratio from prompt alone
       let targetWidth = 1024, targetHeight = 1024;
       if (aspectRatio === 'portrait') { targetWidth = 1024; targetHeight = 1536; }
@@ -670,11 +680,18 @@ Other attached images are style/character references ONLY — do NOT add charact
 Some attached images are SCENE REFERENCES — use them to match the setting, environment, color palette, lighting, and art style.
 Maintain visual consistency with the reference scene while following the prompt below for the specific action and composition.
 Other attached images are style/character references — use them for art style and character appearance consistency only.\n\n`;
+        } else if (hasMasterStyleImage) {
+          const otherRefs = styleRefs.length - 1;
+          refInstructions = `IMPORTANT: The FIRST attached image is a MASTER STYLE GUIDE. Use it ONLY to match the art technique, line work, shading, ink style, and overall aesthetic. Do NOT copy any characters, subjects, scenes, or content from this image — extract ONLY the visual drawing style.`;
+          if (otherRefs > 0) {
+            refInstructions += `\nThe remaining ${otherRefs} image(s) are CHARACTER and STYLE REFERENCES — use them to match character appearance and visual consistency.`;
+          }
+          refInstructions += `\nGenerate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n`;
         } else {
           refInstructions = `IMPORTANT: The attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n`;
         }
         response = await openai.images.edit({
-          model: 'gpt-image-1',
+          model: 'gpt-image-2',
           image: allRefStreams,
           prompt: refInstructions + finalPrompt,
           n: 1,
@@ -683,7 +700,7 @@ Other attached images are style/character references — use them for art style 
         });
       } else {
         response = await openai.images.generate({
-          model: 'gpt-image-1',
+          model: 'gpt-image-2',
           prompt: finalPrompt,
           n: 1,
           size: size,
@@ -715,6 +732,97 @@ Other attached images are style/character references — use them for art style 
   });
 });
 
+// Standalone image generation (Studio tab)
+router.post('/generate-studio', (req, res) => {
+  withKeepAlive(res, async () => {
+    const { prompt, provider = 'gemini', aspectRatio = 'square', referenceImages, hasMasterStyleImage = false, openaiQuality = 'high' } = req.body;
+
+    if (!prompt) {
+      return { error: 'Prompt is required.' };
+    }
+
+    const styleRefs = referenceImages || [];
+    let buffer;
+
+    // Map aspect ratio to OpenAI size
+    let size = '1024x1024';
+    if (aspectRatio === 'portrait') size = '1024x1536';
+    else if (aspectRatio === 'landscape') size = '1536x1024';
+
+    console.log(`Studio generate: provider=${provider}, aspect=${aspectRatio}, refs=${styleRefs.length}, prompt=${prompt.substring(0, 80)}...`);
+
+    if (provider === 'gemini') {
+      buffer = await generateWithGemini(prompt, styleRefs, [], false, aspectRatio, {}, hasMasterStyleImage);
+      // Enforce target dimensions
+      let targetWidth = 1024, targetHeight = 1024;
+      if (aspectRatio === 'portrait') { targetWidth = 1024; targetHeight = 1536; }
+      else if (aspectRatio === 'landscape') { targetWidth = 1536; targetHeight = 1024; }
+      const meta = await sharp(buffer).metadata();
+      if (meta.width !== targetWidth || meta.height !== targetHeight) {
+        buffer = await sharp(buffer)
+          .resize(targetWidth, targetHeight, { fit: 'cover', position: 'centre' })
+          .png()
+          .toBuffer();
+      }
+    } else {
+      // OpenAI path
+      if (!process.env.OPENAI_API_KEY) {
+        return { error: 'OpenAI API key not configured.' };
+      }
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      let response;
+      if (styleRefs.length > 0) {
+        const allRefStreams = await loadReferenceImages(styleRefs);
+        let refInstructions;
+        if (hasMasterStyleImage) {
+          const otherRefs = styleRefs.length - 1;
+          refInstructions = `IMPORTANT: The FIRST attached image is a MASTER STYLE GUIDE. Use it ONLY to match the art technique, line work, shading, ink style, and overall aesthetic. Do NOT copy any characters, subjects, scenes, or content from this image — extract ONLY the visual drawing style.`;
+          if (otherRefs > 0) {
+            refInstructions += `\nThe remaining ${otherRefs} image(s) are CHARACTER and STYLE REFERENCES — use them to match character appearance and visual consistency.`;
+          }
+          refInstructions += `\nGenerate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n`;
+        } else {
+          refInstructions = `IMPORTANT: The attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n`;
+        }
+        response = await openai.images.edit({
+          model: 'gpt-image-2',
+          image: allRefStreams,
+          prompt: refInstructions + prompt,
+          n: 1,
+          size: size,
+          quality: openaiQuality
+        });
+      } else {
+        response = await openai.images.generate({
+          model: 'gpt-image-2',
+          prompt: prompt,
+          n: 1,
+          size: size,
+          quality: openaiQuality
+        });
+      }
+
+      const imageData = response.data[0];
+      if (imageData.b64_json) {
+        buffer = Buffer.from(imageData.b64_json, 'base64');
+      } else if (imageData.url) {
+        const imageResponse = await fetch(imageData.url);
+        buffer = Buffer.from(await imageResponse.arrayBuffer());
+      }
+    }
+
+    if (!buffer) throw new Error('No image generated');
+
+    const filename = `generated-${uuidv4()}.png`;
+    const filePath = path.join(__dirname, '../../uploads', filename);
+    await fs.writeFile(filePath, buffer);
+
+    console.log(`Studio image generated: ${filename}`);
+    return { filename, path: `/uploads/${filename}` };
+  });
+});
+
 // Inpaint a region of an existing panel image
 router.post('/inpaint-region', (req, res) => {
   withKeepAlive(res, async () => {
@@ -726,7 +834,8 @@ router.post('/inpaint-region', (req, res) => {
       referenceImages,
       refAnnotations,
       provider = 'openai',
-      openaiQuality = 'high'
+      openaiQuality = 'high',
+      sourceAnnotations
     } = req.body;
 
     if (!sourceImagePath || !rect || !prompt) {
@@ -768,7 +877,7 @@ router.post('/inpaint-region', (req, res) => {
 
       const parts = [];
 
-      // Source image first
+      // Source image first (Gemini works better with image before prompt)
       parts.push({
         inlineData: { mimeType: 'image/jpeg', data: sourceBuffer.toString('base64') }
       });
@@ -794,16 +903,30 @@ router.post('/inpaint-region', (req, res) => {
         }
       }
 
-      const spatialPrompt = `INPAINTING TASK: Look at the FIRST attached image. ` +
-        `In the rectangular region from (${pctLeft}% from left, ${pctTop}% from top) ` +
-        `to (${pctRight}% from left, ${pctBottom}% from top), ` +
-        `replace the content with: ${prompt}\n\n` +
-        `CRITICAL RULES:\n` +
-        `1. Keep EVERYTHING outside this rectangle EXACTLY the same — do not change any other part of the image.\n` +
-        `2. The new content must blend naturally with the surrounding scene (matching lighting, perspective, art style).\n` +
-        `3. Generate the COMPLETE image with the modification applied.\n` +
-        (styleRefs.length > 0 ? `4. Additional attached images are character/style references for visual consistency.\n` : '');
+      const hasAnnotations = sourceAnnotations && sourceAnnotations.length > 0;
+      let annotationNote = '';
+      if (hasAnnotations) {
+        const pointDescriptions = sourceAnnotations.map(a =>
+          `Point ${a.id}: ${Math.round(a.x * 100)}% from left, ${Math.round(a.y * 100)}% from top`
+        ).join('. ');
+        annotationNote = `\nREFERENCE POINTS on the image: ${pointDescriptions}. ` +
+          `The user's prompt may refer to these points by number (e.g. "point 1"). ` +
+          `Use them to understand spatial references and target locations.\n`;
+      }
 
+      const spatialPrompt = `INPAINTING TASK: Look at the FIRST attached image. ` +
+        `The highlighted area is approximately from (${pctLeft}% from left, ${pctTop}% from top) ` +
+        `to (${pctRight}% from left, ${pctBottom}% from top). ` +
+        `In and around this area: ${prompt}\n` +
+        annotationNote + `\n` +
+        `RULES:\n` +
+        `1. Focus the change on the indicated area, but if the modification naturally extends slightly beyond it (e.g. limbs, clothing, shadows), that is fine — complete the change so it looks natural.\n` +
+        `2. Keep the rest of the image as close to the original as possible.\n` +
+        `3. The new content must blend naturally with the surrounding scene (matching lighting, perspective, art style).\n` +
+        `4. Generate the COMPLETE image with the modification applied.\n` +
+        (styleRefs.length > 0 ? `5. Additional attached images are character/style references for visual consistency.\n` : '');
+
+      // Prompt after images (original working order)
       parts.push({ text: spatialPrompt });
 
       console.log(`Inpaint (Gemini): region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], prompt: ${prompt.substring(0, 80)}...`);
@@ -830,15 +953,16 @@ router.post('/inpaint-region', (req, res) => {
       }
       if (!buffer) throw new Error('Gemini returned no image after retries');
 
-      // Resize to match source dimensions
-      const sourceMeta = await sharp(fullSourcePath).metadata();
+      // Resize Gemini output to match source dimensions
+      const srcMeta = await sharp(fullSourcePath).metadata();
       const meta = await sharp(buffer).metadata();
-      if (meta.width !== sourceMeta.width || meta.height !== sourceMeta.height) {
+      if (meta.width !== srcMeta.width || meta.height !== srcMeta.height) {
         buffer = await sharp(buffer)
-          .resize(sourceMeta.width, sourceMeta.height, { fit: 'cover', position: 'centre' })
+          .resize(srcMeta.width, srcMeta.height, { fit: 'cover', position: 'centre' })
           .png()
           .toBuffer();
       }
+
 
     } else {
       // OpenAI path: mask-based inpainting
@@ -851,7 +975,7 @@ router.post('/inpaint-region', (req, res) => {
       // Create the mask
       const maskBuffer = await createInpaintMask(sourceImagePath, rect);
 
-      // Load source image as PNG File
+      // Load source image as PNG File (clean — no annotation dots burned in)
       const sourceBuffer = await sharp(fullSourcePath).png().toBuffer();
       const sourceFile = new File([sourceBuffer], 'source.png', { type: 'image/png' });
       const maskFile = new File([maskBuffer], 'mask.png', { type: 'image/png' });
@@ -864,11 +988,23 @@ router.post('/inpaint-region', (req, res) => {
       // Source image first, then refs
       const allImages = [sourceFile, ...refFiles];
 
-      const inpaintPrompt = `INPAINTING: The mask defines the region to repaint. ` +
-        `In the masked region (from ${pctLeft}% to ${pctRight}% horizontally, ${pctTop}% to ${pctBottom}% vertically), generate: ${prompt}\n\n` +
-        `The new content must blend seamlessly with the existing image ` +
-        `(matching lighting, perspective, and art style). ` +
-        `Preserve the rest of the image exactly as it is.` +
+      const hasAnnotations2 = sourceAnnotations && sourceAnnotations.length > 0;
+      let annotationNote2 = '';
+      if (hasAnnotations2) {
+        const pointDescriptions2 = sourceAnnotations.map(a =>
+          `Point ${a.id}: ${Math.round(a.x * 100)}% from left, ${Math.round(a.y * 100)}% from top`
+        ).join('. ');
+        annotationNote2 = `\nREFERENCE POINTS: ${pointDescriptions2}. ` +
+          `The prompt may refer to these by number. Use them for spatial references.\n`;
+      }
+
+      const inpaintPrompt = `INPAINTING — modify the masked area. ` +
+        `The mask highlights a region (approximately ${pctLeft}%-${pctRight}% horizontally, ${pctTop}%-${pctBottom}% vertically). ` +
+        `In and around this area: ${prompt}\n` +
+        annotationNote2 + `\n` +
+        `Preserve the rest of the image as closely as possible. ` +
+        `The new content must blend seamlessly with the surrounding area ` +
+        `(matching lighting, perspective, line work, and art style).` +
         (refFiles.length > 0 ? `\n\nAdditional images are character/style references for visual consistency.` : '');
 
       // Determine size from source image dimensions
@@ -880,7 +1016,7 @@ router.post('/inpaint-region', (req, res) => {
       console.log(`Inpaint (OpenAI): region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], size: ${size}, quality: ${openaiQuality}, prompt: ${prompt.substring(0, 80)}...`);
 
       const response = await openai.images.edit({
-        model: 'gpt-image-1',
+        model: 'gpt-image-2',
         image: allImages,
         mask: maskFile,
         prompt: inpaintPrompt,
@@ -896,9 +1032,31 @@ router.post('/inpaint-region', (req, res) => {
         const imageResponse = await fetch(imageData.url);
         buffer = Buffer.from(await imageResponse.arrayBuffer());
       }
+
+      if (!buffer) throw new Error('OpenAI returned no image');
+
+      // Resize OpenAI output to match source dimensions
+      const sourceMeta2 = await sharp(fullSourcePath).metadata();
+      const openaiMeta = await sharp(buffer).metadata();
+      if (openaiMeta.width !== sourceMeta2.width || openaiMeta.height !== sourceMeta2.height) {
+        buffer = await sharp(buffer)
+          .resize(sourceMeta2.width, sourceMeta2.height, { fit: 'cover', position: 'centre' })
+          .png()
+          .toBuffer();
+      }
     }
 
     if (!buffer) throw new Error('No image generated');
+
+    // Resize AI output to match source dimensions if needed
+    const finalMeta = await sharp(fullSourcePath).metadata();
+    const aiMeta = await sharp(buffer).metadata();
+    if (aiMeta.width !== finalMeta.width || aiMeta.height !== finalMeta.height) {
+      buffer = await sharp(buffer)
+        .resize(finalMeta.width, finalMeta.height, { fit: 'cover', position: 'centre' })
+        .png()
+        .toBuffer();
+    }
 
     // Save result
     const filename = `panel-${panelId}-inpaint-${uuidv4()}.png`;
