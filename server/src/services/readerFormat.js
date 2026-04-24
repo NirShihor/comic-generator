@@ -11,6 +11,19 @@ function sanitizeTitle(title) {
     .substring(0, 50);
 }
 
+// Ray-casting point-in-polygon test for diagonal panel edges
+function pointInPolygon(px, py, corners) {
+  let inside = false;
+  for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
+    const xi = corners[i].x, yi = corners[i].y;
+    const xj = corners[j].x, yj = corners[j].y;
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 // Compute actual corners for grid panels by checking if divider lines are diagonal.
 // Mirrors the composite rendering logic in PageEditor.jsx.
 function computePanelCorners(panel, lines) {
@@ -136,6 +149,9 @@ function transformToReaderFormat(comic, comicSlug) {
             sentences: (bubble.sentences || []).map(sentence => {
               const sentenceId = `${comicSlug}-s${sentenceCounter++}`;
               const sentenceText = sentence.text || '';
+              // Extract tokens preserving attached punctuation (e.g. "¿Siempre" "aquí?")
+              const tokens = sentenceText.match(/\S+/g) || [];
+              // Also extract bare words for case-matching fallback
               const originalWords = sentenceText.match(/[\p{L}\p{N}]+/gu) || [];
               return {
                 id: sentenceId,
@@ -149,12 +165,22 @@ function transformToReaderFormat(comic, comicSlug) {
                 words: (sentence.words || []).map((word, wIdx) => {
                   const wText = sanitizeWordForFilename(word.text);
                   const wBase = sanitizeWordForFilename(word.baseForm || word.text);
+                  // Use token (with punctuation) if it matches the word
                   let displayText = word.text || '';
-                  if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === (word.text || '').toLowerCase()) {
+                  const wordLower = (word.text || '').toLowerCase();
+                  if (tokens[wIdx]) {
+                    // Strip punctuation from token to compare with word
+                    const tokenBare = tokens[wIdx].replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+                    if (tokenBare === wordLower) {
+                      displayText = tokens[wIdx]; // keeps attached punctuation
+                    } else if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === wordLower) {
+                      displayText = originalWords[wIdx];
+                    } else {
+                      const match = originalWords.find(ow => ow.toLowerCase() === wordLower);
+                      if (match) displayText = match;
+                    }
+                  } else if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === wordLower) {
                     displayText = originalWords[wIdx];
-                  } else {
-                    const match = originalWords.find(ow => ow.toLowerCase() === (word.text || '').toLowerCase());
-                    if (match) displayText = match;
                   }
                   return {
                     id: `${comicSlug}-w${wordCounter++}`,
@@ -209,19 +235,27 @@ function transformToReaderFormat(comic, comicSlug) {
         const hasBakedPage = page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage;
         const panelCorners = computePanelCorners(panel, page.lines);
 
-        // Check if any part of the bubble overlaps the panel tap zone
+        // Check if bubble center falls inside the panel (using actual corners for diagonal edges)
         const panelBubbles = (page.bubbles || []).filter(bubble => {
           const bx = bubble.x || 0;
           const by = bubble.y || 0;
           const bw = bubble.width || 0;
           const bh = bubble.height || 0;
-          const tx = panel.tapZone.x;
-          const ty = panel.tapZone.y;
-          const tw = panel.tapZone.width;
-          const th = panel.tapZone.height;
-          const overlaps = bx + bw > tx && bx < tx + tw &&
-                 by + bh > ty && by < ty + th;
-          if (!overlaps) return false;
+          const bcx = bx + bw / 2;
+          const bcy = by + bh / 2;
+
+          if (panelCorners) {
+            // Use point-in-polygon test for panels with diagonal edges
+            if (!pointInPolygon(bcx, bcy, panelCorners)) return false;
+          } else {
+            // Rectangular panel — simple bounds check
+            const tx = panel.tapZone.x;
+            const ty = panel.tapZone.y;
+            const tw = panel.tapZone.width;
+            const th = panel.tapZone.height;
+            const contains = bcx >= tx && bcx < tx + tw && bcy >= ty && bcy < ty + th;
+            if (!contains) return false;
+          }
           // For background panels, skip bubbles already claimed by a floating panel
           if (!panel.floating && pageHasFloating) {
             const bubbleKey = bubble._id?.toString() || `${bx}-${by}`;
@@ -271,7 +305,10 @@ function transformToReaderFormat(comic, comicSlug) {
 
                 // Extract original-cased words from sentence text for display
                 const sentenceText = sentence.text || '';
-                const originalWords = sentenceText.match(/[\p{L}\p{N}]+/gu) || [];
+                // Extract tokens preserving attached punctuation (e.g. "¿Siempre" "aquí?")
+              const tokens = sentenceText.match(/\S+/g) || [];
+              // Also extract bare words for case-matching fallback
+              const originalWords = sentenceText.match(/[\p{L}\p{N}]+/gu) || [];
 
                 return {
                   id: sentenceId,
@@ -285,14 +322,22 @@ function transformToReaderFormat(comic, comicSlug) {
                   words: (sentence.words || []).map((word, wIdx) => {
                     const wText = sanitizeWordForFilename(word.text);
                     const wBase = sanitizeWordForFilename(word.baseForm || word.text);
-                    // Find matching original word by position or case-insensitive match
+                    // Use token (with punctuation) if it matches the word
                     let displayText = word.text || '';
-                    if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === (word.text || '').toLowerCase()) {
+                    const wordLower = (word.text || '').toLowerCase();
+                    if (tokens[wIdx]) {
+                      // Strip punctuation from token to compare with word
+                      const tokenBare = tokens[wIdx].replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+                      if (tokenBare === wordLower) {
+                        displayText = tokens[wIdx]; // keeps attached punctuation
+                      } else if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === wordLower) {
+                        displayText = originalWords[wIdx];
+                      } else {
+                        const match = originalWords.find(ow => ow.toLowerCase() === wordLower);
+                        if (match) displayText = match;
+                      }
+                    } else if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === wordLower) {
                       displayText = originalWords[wIdx];
-                    } else {
-                      // Fallback: search for a case-insensitive match anywhere in remaining words
-                      const match = originalWords.find(ow => ow.toLowerCase() === (word.text || '').toLowerCase());
-                      if (match) displayText = match;
                     }
                     return {
                       id: `${comicSlug}-w${wordCounter++}`,

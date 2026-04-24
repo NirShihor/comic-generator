@@ -74,6 +74,17 @@ function ComicEditor() {
   const studioFileInputRef = useRef(null);
   const studioImageRef = useRef(null);
 
+  // Consistency tab state
+  const [consistencyCharId, setConsistencyCharId] = useState(null);
+  const [consistencyScope, setConsistencyScope] = useState('all');
+  const [consistencyResults, setConsistencyResults] = useState([]);
+  const [consistencyScanning, setConsistencyScanning] = useState(false);
+  const [consistencyScanProgress, setConsistencyScanProgress] = useState({ current: 0, total: 0 });
+  const [consistencySelected, setConsistencySelected] = useState({});
+  const [consistencyAdjusting, setConsistencyAdjusting] = useState(false);
+  const [consistencyAdjustProgress, setConsistencyAdjustProgress] = useState({ current: 0, total: 0 });
+  const [consistencyBeforeAfter, setConsistencyBeforeAfter] = useState({});
+
   // Chat state
   const [chatMessages, setChatMessages] = useState(() => {
     try {
@@ -733,6 +744,153 @@ function ComicEditor() {
     setStudioInpaintRect({ x: left, y: top, width: right - left, height: bottom - top });
   };
 
+  // Consistency handlers
+  const handleConsistencyScan = async () => {
+    if (!consistencyCharId || consistencyScanning) return;
+    const charIds = consistencyCharId === 'all'
+      ? settings.characters.filter(c => c.image).map(c => c.id)
+      : [consistencyCharId];
+
+    // Build list of panels to scan
+    const panelsToScan = [];
+    for (const page of (comic.pages || [])) {
+      if (consistencyScope !== 'all' && page.id !== consistencyScope) continue;
+      for (const panel of (page.panels || [])) {
+        if (!panel.artworkImage) continue;
+        for (const cId of charIds) {
+          const char = settings.characters.find(c => c.id === cId);
+          if (!char || !char.image) continue;
+          panelsToScan.push({ page, panel, character: char });
+        }
+      }
+    }
+
+    if (panelsToScan.length === 0) {
+      alert('No panels with artwork found in the selected scope.');
+      return;
+    }
+
+    setConsistencyScanning(true);
+    setConsistencyResults([]);
+    setConsistencySelected({});
+    setConsistencyBeforeAfter({});
+    setConsistencyScanProgress({ current: 0, total: panelsToScan.length });
+
+    const results = [];
+    for (let i = 0; i < panelsToScan.length; i++) {
+      const { page, panel, character } = panelsToScan[i];
+      setConsistencyScanProgress({ current: i + 1, total: panelsToScan.length });
+      try {
+        const resp = await api.post('/images/consistency/detect', {
+          panelImagePath: panel.artworkImage,
+          characterName: character.name,
+          characterDescription: character.description || '',
+          characterRefImagePath: character.image
+        }, { timeout: 120000 });
+
+        if (resp.data.detected) {
+          results.push({
+            pageId: page.id,
+            pageNumber: page.pageNumber,
+            panelId: panel.id,
+            panelImage: panel.artworkImage,
+            characterId: character.id,
+            characterName: character.name,
+            characterRefImage: character.image,
+            characterDescription: character.description || '',
+            boundingBox: resp.data.boundingBox,
+            matchScore: resp.data.matchScore,
+            discrepancies: resp.data.discrepancies || [],
+            notes: resp.data.notes || ''
+          });
+          setConsistencyResults([...results]);
+        }
+      } catch (err) {
+        console.error(`Consistency detect failed for panel ${panel.id}:`, err.response?.data || err.message);
+      }
+    }
+
+    setConsistencyResults(results);
+    setConsistencyScanning(false);
+  };
+
+  const handleConsistencyAdjust = async () => {
+    const selectedKeys = Object.keys(consistencySelected).filter(k => consistencySelected[k]);
+    if (selectedKeys.length === 0 || consistencyAdjusting) return;
+
+    setConsistencyAdjusting(true);
+    setConsistencyAdjustProgress({ current: 0, total: selectedKeys.length });
+
+    for (let i = 0; i < selectedKeys.length; i++) {
+      const idx = parseInt(selectedKeys[i]);
+      const result = consistencyResults[idx];
+      if (!result) continue;
+
+      setConsistencyAdjustProgress({ current: i + 1, total: selectedKeys.length });
+      try {
+        const resp = await api.post('/images/consistency/adjust', {
+          panelImagePath: result.panelImage,
+          boundingBox: result.boundingBox,
+          characterName: result.characterName,
+          characterDescription: result.characterDescription,
+          characterRefImagePath: result.characterRefImage,
+          discrepancies: result.discrepancies,
+          panelId: result.panelId
+        }, { timeout: 600000 });
+
+        // Update the panel in the DB
+        await api.patch(`/comics/${id}/pages/${result.pageId}/panels/${result.panelId}`, {
+          artworkImage: resp.data.path
+        });
+
+        // Store before/after
+        setConsistencyBeforeAfter(prev => ({
+          ...prev,
+          [result.panelId]: { before: result.panelImage, after: resp.data.path }
+        }));
+
+        // Update the result's panelImage to the new one
+        setConsistencyResults(prev => prev.map((r, ri) =>
+          ri === idx ? { ...r, panelImage: resp.data.path, adjusted: true } : r
+        ));
+
+        // Refresh comic data
+        const comicResp = await api.get(`/comics/${id}`);
+        setComic(comicResp.data);
+      } catch (err) {
+        console.error(`Consistency adjust failed for panel ${result.panelId}:`, err);
+        alert(`Adjust failed for P${result.pageNumber} panel ${result.panelId}: ${err.response?.data?.error || err.message}`);
+      }
+    }
+
+    setConsistencyAdjusting(false);
+  };
+
+  const handleConsistencyRevert = async (idx) => {
+    const result = consistencyResults[idx];
+    if (!result) return;
+    const ba = consistencyBeforeAfter[result.panelId];
+    if (!ba) return;
+
+    try {
+      await api.patch(`/comics/${id}/pages/${result.pageId}/panels/${result.panelId}`, {
+        artworkImage: ba.before
+      });
+      setConsistencyResults(prev => prev.map((r, ri) =>
+        ri === idx ? { ...r, panelImage: ba.before, adjusted: false } : r
+      ));
+      setConsistencyBeforeAfter(prev => {
+        const next = { ...prev };
+        delete next[result.panelId];
+        return next;
+      });
+      const comicResp = await api.get(`/comics/${id}`);
+      setComic(comicResp.data);
+    } catch (err) {
+      alert('Revert failed: ' + err.message);
+    }
+  };
+
   return (
     <div style={{ maxWidth: 'none', width: 'calc(100vw - 4rem)' }}>
       <div className="page-header">
@@ -786,6 +944,13 @@ function ComicEditor() {
           style={{ padding: '0.6rem 1.2rem' }}
         >
           Studio
+        </button>
+        <button
+          className={`btn ${activeTab === 'consistency' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('consistency')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Consistency
         </button>
       </div>
 
@@ -2555,6 +2720,208 @@ function ComicEditor() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Consistency Tab */}
+      {activeTab === 'consistency' && (
+        <div style={{ maxWidth: '900px' }}>
+          <h2 style={{ marginBottom: '0.5rem' }}>Character Consistency</h2>
+          <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            Scan panels for character consistency issues and fix them using AI.
+          </p>
+
+          {/* Controls */}
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Character</label>
+              <select
+                value={consistencyCharId || ''}
+                onChange={(e) => setConsistencyCharId(e.target.value || null)}
+                style={{ padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem', minWidth: '160px' }}
+              >
+                <option value="">Select character...</option>
+                <option value="all">All Characters</option>
+                {settings.characters.filter(c => c.image).map(char => (
+                  <option key={char.id} value={char.id}>{char.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {consistencyCharId && consistencyCharId !== 'all' && (() => {
+              const char = settings.characters.find(c => c.id === consistencyCharId);
+              return char?.image ? (
+                <img src={`http://localhost:3001${char.image}`} alt={char.name} style={{ height: '48px', borderRadius: '4px', border: '2px solid #3498db' }} />
+              ) : null;
+            })()}
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Scope</label>
+              <select
+                value={consistencyScope}
+                onChange={(e) => setConsistencyScope(e.target.value)}
+                style={{ padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem', minWidth: '140px' }}
+              >
+                <option value="all">All Pages</option>
+                {(comic.pages || []).map(p => (
+                  <option key={p.id} value={p.id}>Page {p.pageNumber}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleConsistencyScan}
+              disabled={!consistencyCharId || consistencyScanning}
+              className="btn btn-primary"
+              style={{ padding: '0.5rem 1.2rem' }}
+            >
+              {consistencyScanning ? `Scanning... (${consistencyScanProgress.current}/${consistencyScanProgress.total})` : 'Scan'}
+            </button>
+          </div>
+
+          {/* No characters warning */}
+          {settings.characters.filter(c => c.image).length === 0 && (
+            <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '6px', padding: '0.75rem', marginBottom: '1rem', color: '#856404' }}>
+              No characters with reference images found. Add characters with images in Prompt Settings &gt; Characters to use this feature.
+            </div>
+          )}
+
+          {/* Results */}
+          {consistencyResults.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>Results ({consistencyResults.length} found)</h3>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => {
+                      const all = {};
+                      consistencyResults.forEach((_, i) => { if (!consistencyResults[i].adjusted) all[i] = true; });
+                      setConsistencySelected(all);
+                    }}
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                  >Select All</button>
+                  <button
+                    onClick={() => setConsistencySelected({})}
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                  >Deselect</button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                {consistencyResults.map((result, idx) => {
+                  const ba = consistencyBeforeAfter[result.panelId];
+                  const scoreColor = result.matchScore >= 8 ? '#27ae60' : result.matchScore >= 5 ? '#f39c12' : '#e74c3c';
+                  return (
+                    <div key={idx} style={{ border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden', background: '#fff' }}>
+                      {/* Panel thumbnail with bounding box overlay */}
+                      <div style={{ position: 'relative', background: '#f0f0f0' }}>
+                        <img
+                          src={`http://localhost:3001${result.panelImage}?t=${Date.now()}`}
+                          alt={`P${result.pageNumber} ${result.panelId}`}
+                          style={{ width: '100%', display: 'block' }}
+                        />
+                        {result.boundingBox && !result.adjusted && (
+                          <div style={{
+                            position: 'absolute',
+                            left: `${result.boundingBox.x * 100}%`,
+                            top: `${result.boundingBox.y * 100}%`,
+                            width: `${result.boundingBox.width * 100}%`,
+                            height: `${result.boundingBox.height * 100}%`,
+                            border: '2px solid #e74c3c',
+                            pointerEvents: 'none'
+                          }} />
+                        )}
+                        {result.adjusted && (
+                          <div style={{
+                            position: 'absolute', top: '8px', right: '8px',
+                            background: '#27ae60', color: '#fff', padding: '2px 8px',
+                            borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold'
+                          }}>Adjusted</div>
+                        )}
+                      </div>
+
+                      <div style={{ padding: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                          <span style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>P{result.pageNumber} — {result.characterName}</span>
+                          <span style={{ background: scoreColor, color: '#fff', padding: '1px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                            {result.matchScore}/10
+                          </span>
+                        </div>
+
+                        {result.discrepancies.length > 0 && (
+                          <ul style={{ margin: '0 0 0.5rem 0', paddingLeft: '1.2rem', fontSize: '0.8rem', color: '#666' }}>
+                            {result.discrepancies.slice(0, 4).map((d, i) => <li key={i}>{d}</li>)}
+                            {result.discrepancies.length > 4 && <li>...and {result.discrepancies.length - 4} more</li>}
+                          </ul>
+                        )}
+
+                        {result.notes && (
+                          <p style={{ fontSize: '0.75rem', color: '#888', margin: '0 0 0.5rem 0', fontStyle: 'italic' }}>{result.notes}</p>
+                        )}
+
+                        {/* Before/After comparison */}
+                        {ba && result.adjusted && (
+                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <div style={{ flex: 1, textAlign: 'center' }}>
+                              <img src={`http://localhost:3001${ba.before}`} alt="Before" style={{ width: '100%', borderRadius: '4px' }} />
+                              <div style={{ fontSize: '0.65rem', color: '#888' }}>Before</div>
+                            </div>
+                            <div style={{ flex: 1, textAlign: 'center' }}>
+                              <img src={`http://localhost:3001${ba.after}`} alt="After" style={{ width: '100%', borderRadius: '4px' }} />
+                              <div style={{ fontSize: '0.65rem', color: '#888' }}>After</div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          {!result.adjusted ? (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={!!consistencySelected[idx]}
+                                onChange={(e) => setConsistencySelected(prev => ({ ...prev, [idx]: e.target.checked }))}
+                              />
+                              Select
+                            </label>
+                          ) : (
+                            <button
+                              onClick={() => handleConsistencyRevert(idx)}
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                            >Revert</button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Adjust button */}
+              {Object.values(consistencySelected).some(v => v) && (
+                <button
+                  onClick={handleConsistencyAdjust}
+                  disabled={consistencyAdjusting}
+                  className="btn btn-primary"
+                  style={{ padding: '0.6rem 1.5rem' }}
+                >
+                  {consistencyAdjusting
+                    ? `Adjusting... (${consistencyAdjustProgress.current}/${consistencyAdjustProgress.total})`
+                    : `Adjust Selected (${Object.values(consistencySelected).filter(v => v).length})`
+                  }
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Empty state after scan */}
+          {!consistencyScanning && consistencyResults.length === 0 && consistencyScanProgress.total > 0 && (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+              No character instances found in the scanned panels.
             </div>
           )}
         </div>

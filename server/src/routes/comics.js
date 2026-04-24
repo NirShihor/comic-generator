@@ -96,15 +96,43 @@ router.get('/:id/prompt-settings', async (req, res) => {
       const Collection = require('../models/Collection');
       const collection = await Collection.findOne({ id: comic.collectionId });
       if (collection && collection.promptSettings) {
+        // Check that the collection has meaningful data (not just an empty object)
+        const ps = collection.promptSettings;
+        const hasData = ps.styleBible || ps.styleBibleImages?.length > 0 ||
+          ps.characters?.length > 0 || ps.masterStyleImage ||
+          ps.cameraAndInks || ps.doNotInclude;
+        if (hasData) {
+          return res.json({
+            source: 'collection',
+            collectionId: comic.collectionId,
+            collectionTitle: collection.title || comic.collectionTitle || '',
+            promptSettings: collection.promptSettings
+          });
+        }
+        // Collection exists but is empty — fall through to check comic/sibling
+      }
+
+      // Collection is empty or doesn't exist — check if this comic has settings to promote
+      const comicPs = comic.promptSettings;
+      const comicHasData = comicPs && (comicPs.styleBible || comicPs.styleBibleImages?.length > 0 ||
+        comicPs.characters?.length > 0 || comicPs.masterStyleImage ||
+        comicPs.cameraAndInks || comicPs.doNotInclude);
+      if (comicHasData) {
+        // Auto-sync comic settings to collection
+        await Collection.findOneAndUpdate(
+          { id: comic.collectionId },
+          { $set: { promptSettings: comic.promptSettings, title: comic.collectionTitle || '' } },
+          { upsert: true }
+        );
         return res.json({
           source: 'collection',
           collectionId: comic.collectionId,
-          collectionTitle: collection.title || comic.collectionTitle || '',
-          promptSettings: collection.promptSettings
+          collectionTitle: comic.collectionTitle || '',
+          promptSettings: comic.promptSettings
         });
       }
 
-      // No Collection document yet — look for a sibling comic that has prompt settings
+      // No settings on this comic — look for a sibling comic that has prompt settings
       const sibling = await Comic.findOne({
         collectionId: comic.collectionId,
         id: { $ne: comic.id },
@@ -112,16 +140,15 @@ router.get('/:id/prompt-settings', async (req, res) => {
       });
       if (sibling && sibling.promptSettings) {
         // Auto-create the Collection document from the sibling's settings
-        const newCollection = new Collection({
-          id: comic.collectionId,
-          title: comic.collectionTitle || sibling.collectionTitle || '',
-          promptSettings: sibling.promptSettings
-        });
-        await newCollection.save();
+        await Collection.findOneAndUpdate(
+          { id: comic.collectionId },
+          { $set: { promptSettings: sibling.promptSettings, title: comic.collectionTitle || sibling.collectionTitle || '' } },
+          { upsert: true }
+        );
         return res.json({
           source: 'collection',
           collectionId: comic.collectionId,
-          collectionTitle: newCollection.title,
+          collectionTitle: comic.collectionTitle || sibling.collectionTitle || '',
           promptSettings: sibling.promptSettings
         });
       }

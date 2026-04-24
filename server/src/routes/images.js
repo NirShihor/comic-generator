@@ -1398,4 +1398,221 @@ router.post('/style-enforcer/revert-batch', async (req, res) => {
   }
 });
 
+// ============================================================
+// Character Consistency Agent endpoints
+// ============================================================
+
+// POST /consistency/detect — use GPT-4o vision to detect a character and assess match quality
+router.post('/consistency/detect', async (req, res) => {
+  try {
+    const { panelImagePath, characterName, characterDescription, characterRefImagePath } = req.body;
+    console.log(`Consistency detect: "${characterName}" in panel ${panelImagePath}`);
+    if (!panelImagePath || !characterName || !characterRefImagePath) {
+      return res.status(400).json({ error: 'panelImagePath, characterName, and characterRefImagePath are required' });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    // Load panel image as base64
+    const panelFullPath = path.join(__dirname, '../..', panelImagePath.split('?')[0]);
+    await fs.access(panelFullPath);
+    const panelBuffer = await sharp(panelFullPath)
+      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    const panelBase64 = panelBuffer.toString('base64');
+
+    // Load character reference image as base64
+    const refFullPath = path.join(__dirname, '../..', characterRefImagePath.split('?')[0]);
+    await fs.access(refFullPath);
+    const refBuffer = await sharp(refFullPath)
+      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    const refBase64 = refBuffer.toString('base64');
+
+    const descNote = characterDescription ? `\nCharacter description: ${characterDescription}` : '';
+
+    const response = await openai.responses.create({
+      model: 'gpt-5.4',
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_image',
+              image_url: `data:image/jpeg;base64,${refBase64}`
+            },
+            {
+              type: 'input_image',
+              image_url: `data:image/jpeg;base64,${panelBase64}`
+            },
+            {
+              type: 'input_text',
+              text: `You are a character consistency analyzer for comic books.
+
+IMAGE 1 (first image): This is the REFERENCE image showing what "${characterName}" should look like.${descNote}
+
+IMAGE 2 (second image): This is a comic panel that may contain "${characterName}".
+
+Analyze IMAGE 2 and determine:
+1. Is "${characterName}" present in this panel? Look carefully for characters matching the reference.
+2. If present, where are they? Provide a bounding box as percentages of the image dimensions.
+3. How well does their appearance match the reference? Score from 0 (completely different) to 10 (perfect match).
+4. List specific visual discrepancies (e.g. wrong hair color, missing glasses, different clothing, wrong proportions).
+
+Respond with ONLY a JSON object in this exact format (no markdown, no extra text):
+{"detected": true/false, "boundingBox": {"x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0}, "matchScore": 0, "discrepancies": ["list of specific differences"], "notes": "brief overall assessment"}
+
+If the character is NOT detected, use: {"detected": false, "boundingBox": null, "matchScore": null, "discrepancies": [], "notes": "reason not found"}
+
+The bounding box values should be decimals from 0 to 1 representing percentages of image width/height.`
+            }
+          ]
+        }
+      ]
+    });
+
+    const text = response.output_text || '';
+    // Parse the JSON from the response
+    let result;
+    try {
+      // Try to extract JSON from the response (handle potential markdown wrapping)
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      result = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(text);
+    } catch (parseErr) {
+      console.error('Failed to parse consistency detect response:', text);
+      return res.status(500).json({ error: 'Failed to parse AI response', raw: text });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Consistency detect error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /consistency/adjust — use GPT-4o Responses API with image_generation to fix character appearance
+// Uses the same approach as angle changes: the model sees the full image, reasons about
+// what to change, and generates a new image — preserving pose, position, and other characters.
+router.post('/consistency/adjust', (req, res) => {
+  withKeepAlive(res, async () => {
+    const {
+      panelImagePath,
+      boundingBox,
+      characterName,
+      characterDescription,
+      characterRefImagePath,
+      discrepancies,
+      panelId
+    } = req.body;
+
+    if (!panelImagePath || !boundingBox || !characterName || !characterRefImagePath || !panelId) {
+      return { error: 'panelImagePath, boundingBox, characterName, characterRefImagePath, and panelId are required' };
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return { error: 'OpenAI API key not configured.' };
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    // Load panel image as base64
+    const fullSourcePath = path.join(__dirname, '../..', panelImagePath.split('?')[0]);
+    const sourceMeta = await sharp(fullSourcePath).metadata();
+    const panelBuffer = await sharp(fullSourcePath)
+      .resize(1536, 1536, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+    const panelBase64 = panelBuffer.toString('base64');
+
+    // Load character reference image as base64
+    const refFullPath = path.join(__dirname, '../..', characterRefImagePath.split('?')[0]);
+    const refBuffer = await sharp(refFullPath)
+      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    const refBase64 = refBuffer.toString('base64');
+
+    // Build discrepancy description
+    const discrepancyList = (discrepancies || []).length > 0
+      ? `Specific issues to fix: ${discrepancies.join('; ')}.`
+      : `Ensure the character matches the reference image exactly.`;
+
+    const descNote = characterDescription ? ` (${characterDescription})` : '';
+    const bboxDesc = boundingBox
+      ? `"${characterName}" is located approximately at ${Math.round(boundingBox.x * 100)}%-${Math.round((boundingBox.x + boundingBox.width) * 100)}% horizontally and ${Math.round(boundingBox.y * 100)}%-${Math.round((boundingBox.y + boundingBox.height) * 100)}% vertically in the panel.`
+      : '';
+
+    console.log(`Consistency adjust (Responses API): "${characterName}" in panel ${panelId}, discrepancies: ${(discrepancies || []).length}`);
+
+    const response = await openai.responses.create({
+      model: 'gpt-5.4',
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_image',
+              image_url: `data:image/jpeg;base64,${refBase64}`
+            },
+            {
+              type: 'input_image',
+              image_url: `data:image/jpeg;base64,${panelBase64}`
+            },
+            {
+              type: 'input_text',
+              text: `IMAGE 1: Character reference sheet for "${characterName}"${descNote}.
+IMAGE 2: A comic panel containing "${characterName}".
+
+${bboxDesc}
+
+${discrepancyList}
+
+Recreate IMAGE 2 (the comic panel) with ONLY the following change: adjust "${characterName}"'s appearance to match the reference in IMAGE 1.
+
+CRITICAL RULES:
+1. The output must be virtually IDENTICAL to IMAGE 2 — same composition, same background, same lighting, same art style.
+2. ALL other characters must remain EXACTLY as they are — same appearance, same position, same pose. Do NOT remove, add, or modify any other character.
+3. "${characterName}"'s POSE and POSITION must stay exactly the same. Only change their visual appearance (face, hair, clothing details, proportions) to match the reference.
+4. This is a surgical fix — the viewer should only notice that "${characterName}" now looks more like their reference sheet. Everything else must be pixel-perfect identical.
+
+Generate the corrected panel now.`
+            }
+          ]
+        }
+      ],
+      tools: [{ type: 'image_generation', quality: 'high' }],
+    });
+
+    // Extract the generated image
+    const imageOutput = response.output.find(o => o.type === 'image_generation_call');
+    if (!imageOutput || !imageOutput.result) {
+      throw new Error('GPT-4o Responses API returned no image');
+    }
+
+    let buffer = Buffer.from(imageOutput.result, 'base64');
+
+    // Resize to match source dimensions
+    const aiMeta = await sharp(buffer).metadata();
+    if (aiMeta.width !== sourceMeta.width || aiMeta.height !== sourceMeta.height) {
+      buffer = await sharp(buffer)
+        .resize(sourceMeta.width, sourceMeta.height, { fit: 'cover', position: 'centre' })
+        .png()
+        .toBuffer();
+    }
+
+    const filename = `panel-${panelId}-consistency-${uuidv4()}.png`;
+    const filePath = path.join(__dirname, '../../uploads', filename);
+    await fs.writeFile(filePath, buffer);
+
+    console.log(`Panel ${panelId} consistency adjusted: ${filename}`);
+    return { panelId, filename, path: `/uploads/${filename}` };
+  });
+});
+
 module.exports = router;
