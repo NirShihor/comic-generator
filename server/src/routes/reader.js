@@ -5,6 +5,7 @@ const path = require('path');
 const archiver = require('archiver');
 const sharp = require('sharp');
 const Comic = require('../models/Comic');
+const Collection = require('../models/Collection');
 const { sanitizeTitle, transformToReaderFormat } = require('../services/readerFormat');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
@@ -34,6 +35,16 @@ router.get('/catalog', async (req, res) => {
   try {
     const comics = await Comic.find({ published: true }).lean();
 
+    // Look up collection metadata for enriching catalog entries
+    const collectionIds = [...new Set(comics.map(c => c.collectionId).filter(Boolean))];
+    const collections = collectionIds.length > 0
+      ? await Collection.find({ id: { $in: collectionIds } }).lean()
+      : [];
+    const collectionMap = {};
+    for (const col of collections) {
+      collectionMap[col.id] = col;
+    }
+
     const catalog = await Promise.all(comics.map(async (comic) => {
       const comicSlug = sanitizeTitle(comic.title);
       const totalPages = (comic.pages || []).length + (comic.cover?.image ? 1 : 0);
@@ -43,6 +54,9 @@ router.get('/catalog', async (req, res) => {
       const exportDir = path.join(PROJECTS_DIR, comic.id, 'export', comicSlug);
       const sizeBytes = await getDirectorySize(exportDir);
       const sizeMB = Math.round(sizeBytes / (1024 * 1024) * 10) / 10;
+
+      // Collection metadata
+      const collection = comic.collectionId ? collectionMap[comic.collectionId] : null;
 
       return {
         id: `comic-${comicSlug}`,
@@ -59,7 +73,9 @@ router.get('/catalog', async (req, res) => {
         // Include collection info for grouping
         ...(comic.collectionId && { collectionId: comic.collectionId }),
         ...(comic.collectionTitle && { collectionTitle: comic.collectionTitle }),
-        ...(comic.episodeNumber && { episodeNumber: comic.episodeNumber })
+        ...(comic.episodeNumber && { episodeNumber: comic.episodeNumber }),
+        ...(collection?.description && { collectionDescription: collection.description }),
+        ...(collection?.coverImage && { collectionCoverThumbnailUrl: `/api/reader/collection-thumbnail/${comic.collectionId}` })
       };
     }));
 
@@ -266,6 +282,35 @@ router.get('/cover-thumbnail/:id', async (req, res) => {
     res.send(thumbnail);
   } catch (error) {
     console.error('Cover thumbnail error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/reader/collection-thumbnail/:collectionId — serve a JPEG thumbnail of the collection cover
+router.get('/collection-thumbnail/:collectionId', async (req, res) => {
+  try {
+    const collection = await Collection.findOne({ id: req.params.collectionId }).lean();
+    if (!collection || !collection.coverImage) {
+      return res.status(404).json({ error: 'No collection cover image' });
+    }
+
+    const fullPath = path.join(__dirname, '../..', collection.coverImage);
+    try {
+      await fs.access(fullPath);
+    } catch {
+      return res.status(404).json({ error: 'Cover file not found' });
+    }
+
+    const thumbnail = await sharp(fullPath)
+      .resize(240, 360, { fit: 'cover' })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(thumbnail);
+  } catch (error) {
+    console.error('Collection thumbnail error:', error);
     res.status(500).json({ error: error.message });
   }
 });

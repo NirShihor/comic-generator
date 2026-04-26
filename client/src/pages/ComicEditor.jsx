@@ -21,6 +21,16 @@ function ComicEditor() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [settingsSource, setSettingsSource] = useState('comic'); // 'comic' or 'collection'
   const [settingsCollectionId, setSettingsCollectionId] = useState(null);
+  const [collectionDescription, setCollectionDescription] = useState('');
+  const [collectionCoverImage, setCollectionCoverImage] = useState('');
+  const [collectionCoverPrompt, setCollectionCoverPrompt] = useState('');
+  const [collectionCoverGenerating, setCollectionCoverGenerating] = useState(false);
+  const [collectionCoverRefs, setCollectionCoverRefs] = useState([]);
+  const [collectionCoverLightbox, setCollectionCoverLightbox] = useState(false);
+  const [collectionCoverBrightness, setCollectionCoverBrightness] = useState(1);
+  const [collectionCoverContrast, setCollectionCoverContrast] = useState(1);
+  const [collectionCoverSaturation, setCollectionCoverSaturation] = useState(1);
+  const collectionCoverAdjTimer = useRef(null);
   const [settingsTab, setSettingsTab] = useState('style');
   const [saving, setSaving] = useState(false);
   const settingsRef = useRef(DEFAULT_SETTINGS);
@@ -178,6 +188,21 @@ function ComicEditor() {
           setSettings(loadedSettings);
         }
       }
+
+      // Load collection metadata (description, coverImage)
+      if (response.data.collectionId) {
+        try {
+          const colRes = await api.get(`/collections/${response.data.collectionId}`);
+          setCollectionDescription(colRes.data.description || '');
+          setCollectionCoverImage(colRes.data.coverImage || '');
+          setCollectionCoverPrompt(colRes.data.coverPrompt || '');
+          setCollectionCoverBrightness(colRes.data.coverBrightness ?? 1);
+          setCollectionCoverContrast(colRes.data.coverContrast ?? 1);
+          setCollectionCoverSaturation(colRes.data.coverSaturation ?? 1);
+        } catch (colErr) {
+          // Collection may not exist yet
+        }
+      }
     } catch (error) {
       console.error('Failed to load comic:', error);
     } finally {
@@ -291,6 +316,19 @@ function ComicEditor() {
     } finally {
       setExporting(false);
     }
+  };
+
+  // Debounced save for collection cover adjustments
+  const saveCollectionCoverAdj = (adjustments) => {
+    clearTimeout(collectionCoverAdjTimer.current);
+    collectionCoverAdjTimer.current = setTimeout(() => {
+      if (comic?.collectionId) {
+        api.put(`/collections/${comic.collectionId}`, {
+          id: comic.collectionId,
+          ...adjustments
+        }).catch(err => console.error('Failed to save cover adjustments:', err));
+      }
+    }, 500);
   };
 
   const saveSettings = async (settingsToSave, silent = false) => {
@@ -2092,38 +2130,290 @@ function ComicEditor() {
                 </span>
               )}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'end' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Episode Number</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={comic.episodeNumber || ''}
-                  onChange={(e) => setComic({ ...comic, episodeNumber: e.target.value ? parseInt(e.target.value) : undefined })}
-                  placeholder="e.g. 1"
-                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
-              </div>
-              <div>
-                <button
-                  className="btn btn-primary"
-                  onClick={async () => {
-                    try {
-                      const collectionData = {};
-                      if (comic.collectionId) collectionData.collectionId = comic.collectionId;
-                      if (comic.collectionTitle) collectionData.collectionTitle = comic.collectionTitle;
-                      if (comic.episodeNumber) collectionData.episodeNumber = comic.episodeNumber;
-                      await api.put(`/comics/${id}`, collectionData);
-                      alert('Collection settings saved!');
-                    } catch (error) {
-                      alert('Failed to save collection settings');
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Episode Number</label>
+              <input
+                type="number"
+                min="1"
+                value={comic.episodeNumber || ''}
+                onChange={(e) => setComic({ ...comic, episodeNumber: e.target.value ? parseInt(e.target.value) : undefined })}
+                placeholder="e.g. 1"
+                style={{ width: '120px', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+              />
+            </div>
+            {comic.collectionId && (
+              <>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Collection Caption</label>
+                  <textarea
+                    value={collectionDescription}
+                    onChange={(e) => setCollectionDescription(e.target.value)}
+                    placeholder="Short description shown in the store, e.g. 'A coming-of-age story set in a busy restaurant...'"
+                    rows={2}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', resize: 'vertical' }}
+                  />
+                </div>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Collection Cover Image</label>
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                    {collectionCoverImage && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                        <img
+                          src={`${api.defaults.baseURL.replace('/api', '')}${collectionCoverImage}?t=${Date.now()}`}
+                          alt="Collection cover"
+                          onClick={() => setCollectionCoverLightbox(true)}
+                          style={{
+                            width: 100, height: 150, objectFit: 'cover', borderRadius: '6px', border: '1px solid #ccc',
+                            cursor: 'pointer',
+                            filter: `brightness(${collectionCoverBrightness}) contrast(${collectionCoverContrast}) saturate(${collectionCoverSaturation})`
+                          }}
+                        />
+                        {/* Adjustment controls */}
+                        <div style={{ width: 180 }}>
+                          <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.3rem' }}>
+                            <button
+                              onClick={() => {
+                                const newSat = collectionCoverSaturation === 0 ? 1 : 0;
+                                setCollectionCoverSaturation(newSat);
+                                saveCollectionCoverAdj({ coverSaturation: newSat });
+                              }}
+                              style={{ padding: '2px 6px', fontSize: '0.65rem', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', background: collectionCoverSaturation === 0 ? '#8e44ad' : '#fff', color: collectionCoverSaturation === 0 ? '#fff' : '#333' }}
+                            >B&W</button>
+                            {(collectionCoverBrightness !== 1 || collectionCoverContrast !== 1 || collectionCoverSaturation !== 1) && (
+                              <button
+                                onClick={() => {
+                                  setCollectionCoverBrightness(1); setCollectionCoverContrast(1); setCollectionCoverSaturation(1);
+                                  saveCollectionCoverAdj({ coverBrightness: 1, coverContrast: 1, coverSaturation: 1 });
+                                }}
+                                style={{ padding: '2px 6px', fontSize: '0.65rem', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', background: '#fff', color: '#333' }}
+                              >Reset</button>
+                            )}
+                          </div>
+                          {[
+                            { label: 'Bright', value: collectionCoverBrightness, set: setCollectionCoverBrightness, field: 'coverBrightness', min: 50, max: 300 },
+                            { label: 'Contrast', value: collectionCoverContrast, set: setCollectionCoverContrast, field: 'coverContrast', min: 50, max: 150 },
+                            { label: 'Saturtn', value: collectionCoverSaturation, set: setCollectionCoverSaturation, field: 'coverSaturation', min: 0, max: 200 }
+                          ].map(s => (
+                            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.15rem' }}>
+                              <span style={{ fontSize: '0.6rem', color: '#888', width: '40px' }}>{s.label}</span>
+                              <input type="range" min={s.min} max={s.max} value={Math.round(s.value * 100)}
+                                onChange={(e) => { const v = parseInt(e.target.value) / 100; s.set(v); saveCollectionCoverAdj({ [s.field]: v }); }}
+                                style={{ flex: 1, height: '12px' }}
+                              />
+                              <span style={{ fontSize: '0.6rem', color: '#888', width: '28px', textAlign: 'right' }}>{Math.round(s.value * 100)}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#555' }}>Cover Prompt</label>
+                      <textarea
+                        value={collectionCoverPrompt}
+                        onChange={(e) => setCollectionCoverPrompt(e.target.value)}
+                        placeholder="Describe the collection cover image, e.g. 'A dramatic portrait-style illustration of the main characters standing in front of the restaurant...'"
+                        rows={3}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', resize: 'vertical', fontSize: '0.85rem' }}
+                      />
+                      {/* Reference image selector */}
+                      {(() => {
+                        const availableChars = settings.characters?.filter(c => c.image) || [];
+                        const availableStyles = (settings.styleBibleImages || []).filter(img => img.image);
+                        const hasMaster = !!settings.masterStyleImage;
+                        if (availableChars.length === 0 && availableStyles.length === 0 && !hasMaster) return null;
+                        return (
+                          <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                            <small style={{ color: '#888' }}>Reference Images ({collectionCoverRefs.length} selected)</small>
+                            {hasMaster && (
+                              <div style={{ marginTop: '0.25rem', marginBottom: '0.25rem' }}>
+                                <small style={{ color: '#aaa', fontSize: '0.7rem' }}>Master Style</small>
+                                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.15rem' }}>
+                                  <div
+                                    onClick={() => setCollectionCoverRefs(prev => prev.includes(settings.masterStyleImage) ? prev.filter(p => p !== settings.masterStyleImage) : [...prev, settings.masterStyleImage])}
+                                    style={{ border: collectionCoverRefs.includes(settings.masterStyleImage) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', cursor: 'pointer', padding: '2px', textAlign: 'center' }}
+                                  >
+                                    <img src={`${api.defaults.baseURL.replace('/api', '')}${settings.masterStyleImage}`} alt="Master style" style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                                    <div style={{ fontSize: '0.65rem', color: '#666' }}>Master</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {availableChars.length > 0 && (
+                              <div style={{ marginTop: '0.25rem', marginBottom: '0.25rem' }}>
+                                <small style={{ color: '#aaa', fontSize: '0.7rem' }}>Characters</small>
+                                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.15rem' }}>
+                                  {availableChars.map(char => (
+                                    <div
+                                      key={char.id}
+                                      onClick={() => setCollectionCoverRefs(prev => prev.includes(char.image) ? prev.filter(p => p !== char.image) : [...prev, char.image])}
+                                      style={{ border: collectionCoverRefs.includes(char.image) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', cursor: 'pointer', padding: '2px', textAlign: 'center' }}
+                                    >
+                                      <img src={`${api.defaults.baseURL.replace('/api', '')}${char.image}`} alt={char.name} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                                      <div style={{ fontSize: '0.65rem', color: '#666', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{char.name}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {availableStyles.length > 0 && (
+                              <div style={{ marginTop: '0.25rem', marginBottom: '0.25rem' }}>
+                                <small style={{ color: '#aaa', fontSize: '0.7rem' }}>Style Bible</small>
+                                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.15rem' }}>
+                                  {availableStyles.map((img, idx) => (
+                                    <div
+                                      key={img.id || idx}
+                                      onClick={() => setCollectionCoverRefs(prev => prev.includes(img.image) ? prev.filter(p => p !== img.image) : [...prev, img.image])}
+                                      style={{ border: collectionCoverRefs.includes(img.image) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', cursor: 'pointer', padding: '2px', textAlign: 'center' }}
+                                    >
+                                      <img src={`${api.defaults.baseURL.replace('/api', '')}${img.image}`} alt={img.name || `Style ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                                      <div style={{ fontSize: '0.65rem', color: '#666', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.name || `Style ${idx + 1}`}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center' }}>
+                        <button
+                          className="btn btn-primary"
+                          disabled={collectionCoverGenerating || !collectionCoverPrompt.trim()}
+                          onClick={async () => {
+                            setCollectionCoverGenerating(true);
+                            try {
+                              // Build prompt with style bible context
+                              let fullPrompt = '';
+                              if (settings.styleBible) {
+                                fullPrompt += `ART STYLE GUIDE:\n${settings.styleBible}\n\n`;
+                              }
+                              if (settings.cameraAndInks) {
+                                fullPrompt += `CAMERA & INKS:\n${settings.cameraAndInks}\n\n`;
+                              }
+                              // Add character descriptions for selected characters only
+                              const selectedCharImages = collectionCoverRefs.filter(ref =>
+                                settings.characters?.some(c => c.image === ref)
+                              );
+                              const chars = settings.characters?.filter(c => c.name && c.description && (!c.image || selectedCharImages.includes(c.image))) || [];
+                              if (chars.length > 0) {
+                                fullPrompt += `CHARACTERS:\n`;
+                                chars.forEach(c => { fullPrompt += `- ${c.name}: ${c.description}\n`; });
+                                fullPrompt += '\n';
+                              }
+                              if (settings.doNotInclude) {
+                                fullPrompt += `DO NOT INCLUDE: ${settings.doNotInclude}\n\n`;
+                              }
+                              fullPrompt += `SCENE:\n${collectionCoverPrompt}\n\nThis is a COVER IMAGE for a comic collection. Make it dramatic and eye-catching, suitable for a book cover or movie poster. Portrait orientation.`;
+
+                              // Use selected reference images
+                              const referenceImages = [...collectionCoverRefs];
+                              const hasMasterSelected = settings.masterStyleImage && collectionCoverRefs.includes(settings.masterStyleImage);
+
+                              const response = await api.post('/images/generate-panel', {
+                                prompt: fullPrompt,
+                                panelId: `collection-cover-${comic.collectionId}`,
+                                aspectRatio: 'portrait',
+                                referenceImages,
+                                linkedPanelImages: [],
+                                provider: 'openai',
+                                openaiQuality: 'high',
+                                hasMasterStyleImage: !!hasMasterSelected
+                              }, { timeout: 600000 });
+
+                              // Copy from uploads to collection project folder
+                              const copyRes = await api.post('/images/copy-to-collection', {
+                                collectionId: comic.collectionId,
+                                sourcePath: response.data.path
+                              });
+
+                              const finalPath = copyRes.data.path;
+                              setCollectionCoverImage(finalPath);
+
+                              // Auto-save to collection
+                              await api.put(`/collections/${comic.collectionId}`, {
+                                id: comic.collectionId,
+                                coverImage: finalPath,
+                                coverPrompt: collectionCoverPrompt
+                              });
+                            } catch (err) {
+                              console.error('Collection cover generation failed:', err);
+                              alert('Failed to generate cover image: ' + (err.response?.data?.error || err.message));
+                            } finally {
+                              setCollectionCoverGenerating(false);
+                            }
+                          }}
+                          style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}
+                        >
+                          {collectionCoverGenerating ? 'Generating...' : (collectionCoverImage ? 'Regenerate' : 'Generate')}
+                        </button>
+                        <span style={{ fontSize: '0.75rem', color: '#999' }}>or</span>
+                        <label style={{ fontSize: '0.8rem', color: '#3498db', cursor: 'pointer' }}>
+                          Upload
+                          <input
+                            type="file"
+                            accept="image/*"
+                            style={{ display: 'none' }}
+                            onChange={async (e) => {
+                              const file = e.target.files[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = async (ev) => {
+                                try {
+                                  const base64 = ev.target.result.split(',')[1];
+                                  const res = await api.post('/images/save-reference', {
+                                    collectionId: comic.collectionId,
+                                    image: base64
+                                  });
+                                  setCollectionCoverImage(res.data.path);
+                                  await api.put(`/collections/${comic.collectionId}`, {
+                                    id: comic.collectionId,
+                                    coverImage: res.data.path
+                                  });
+                                } catch (err) {
+                                  alert('Failed to upload cover image');
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+            <div>
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  try {
+                    // Save comic-level collection fields
+                    const collectionData = {};
+                    if (comic.collectionId) collectionData.collectionId = comic.collectionId;
+                    if (comic.collectionTitle) collectionData.collectionTitle = comic.collectionTitle;
+                    if (comic.episodeNumber) collectionData.episodeNumber = comic.episodeNumber;
+                    await api.put(`/comics/${id}`, collectionData);
+
+                    // Save collection-level metadata (description, coverImage)
+                    if (comic.collectionId) {
+                      await api.put(`/collections/${comic.collectionId}`, {
+                        id: comic.collectionId,
+                        title: comic.collectionTitle,
+                        description: collectionDescription,
+                        coverImage: collectionCoverImage,
+                        coverPrompt: collectionCoverPrompt
+                      });
                     }
-                  }}
-                  style={{ padding: '0.5rem 1.5rem' }}
-                >
-                  Save Collection Settings
-                </button>
-              </div>
+                    alert('Collection settings saved!');
+                  } catch (error) {
+                    alert('Failed to save collection settings');
+                  }
+                }}
+                style={{ padding: '0.5rem 1.5rem' }}
+              >
+                Save Collection Settings
+              </button>
             </div>
           </div>
 
@@ -3167,6 +3457,39 @@ function ComicEditor() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Collection Cover Lightbox */}
+      {collectionCoverLightbox && collectionCoverImage && (
+        <div
+          onClick={() => setCollectionCoverLightbox(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.85)', zIndex: 10000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer'
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', cursor: 'default' }}>
+            <img
+              src={`${api.defaults.baseURL.replace('/api', '')}${collectionCoverImage}?t=${Date.now()}`}
+              alt="Collection cover"
+              style={{
+                maxHeight: '90vh', maxWidth: '90vw', borderRadius: '8px',
+                filter: `brightness(${collectionCoverBrightness}) contrast(${collectionCoverContrast}) saturate(${collectionCoverSaturation})`
+              }}
+            />
+            <button
+              onClick={() => setCollectionCoverLightbox(false)}
+              style={{
+                position: 'absolute', top: '-12px', right: '-12px',
+                background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%',
+                width: '30px', height: '30px', fontSize: '1.1rem', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}
+            >&times;</button>
           </div>
         </div>
       )}

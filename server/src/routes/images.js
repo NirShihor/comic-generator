@@ -479,7 +479,7 @@ async function generateAngleChange(imagePath, angleDegrees, panelContent) {
   // Step 1: Ask GPT-4o to analyze the scene and describe what the rotated
   // background should look like (without generating an image yet)
   const analysisResponse = await openai.responses.create({
-    model: 'gpt-5.4',
+    model: 'gpt-5.5',
     input: [
       {
         role: 'user',
@@ -509,7 +509,7 @@ The ENTIRE background perspective must also change to match the new camera posit
   // Step 2: Generate the image. Include the analysis directly in the generation prompt
   // so the model has the background description right next to the generation request.
   const response = await openai.responses.create({
-    model: 'gpt-5.4',
+    model: 'gpt-5.5',
     input: [
       {
         role: 'user',
@@ -1127,6 +1127,35 @@ router.post('/save-reference', async (req, res) => {
   }
 });
 
+// Copy a generated image from uploads to a collection's project folder
+router.post('/copy-to-collection', async (req, res) => {
+  try {
+    const { collectionId, sourcePath } = req.body;
+    if (!collectionId || !sourcePath) {
+      return res.status(400).json({ error: 'collectionId and sourcePath are required' });
+    }
+
+    const sourceFilename = path.basename(sourcePath);
+    const fullSourcePath = path.join(__dirname, '../..', sourcePath);
+    await fs.access(fullSourcePath);
+
+    const destDir = path.join(__dirname, '../../projects/collections', collectionId, 'images');
+    await fs.mkdir(destDir, { recursive: true });
+
+    const destFilename = `cover-${uuidv4()}.png`;
+    const destPath = path.join(destDir, destFilename);
+    await fs.copyFile(fullSourcePath, destPath);
+
+    res.json({
+      filename: destFilename,
+      path: `/projects/collections/${collectionId}/images/${destFilename}`
+    });
+  } catch (error) {
+    console.error('Copy to collection error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Flip an image horizontally
 router.post('/flip', async (req, res) => {
   try {
@@ -1438,7 +1467,7 @@ router.post('/consistency/detect', async (req, res) => {
     const descNote = characterDescription ? `\nCharacter description: ${characterDescription}` : '';
 
     const response = await openai.responses.create({
-      model: 'gpt-5.4',
+      model: 'gpt-5.5',
       input: [
         {
           role: 'user',
@@ -1551,7 +1580,7 @@ router.post('/consistency/adjust', (req, res) => {
     console.log(`Consistency adjust (Responses API): "${characterName}" in panel ${panelId}, discrepancies: ${(discrepancies || []).length}`);
 
     const response = await openai.responses.create({
-      model: 'gpt-5.4',
+      model: 'gpt-5.5',
       input: [
         {
           role: 'user',

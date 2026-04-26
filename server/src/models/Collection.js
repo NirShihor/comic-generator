@@ -26,6 +26,12 @@ const VoiceSchema = new mongoose.Schema({
 const CollectionSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
   title: String,
+  description: String,
+  coverImage: String,
+  coverPrompt: String,
+  coverBrightness: { type: Number, default: 1 },
+  coverContrast: { type: Number, default: 1 },
+  coverSaturation: { type: Number, default: 1 },
   voices: [VoiceSchema],
   promptSettings: {
     styleBible: String,

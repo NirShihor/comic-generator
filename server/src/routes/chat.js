@@ -64,10 +64,10 @@ router.post('/message', async (req, res) => {
     }
 
     console.log(`Chat request: ${messages.length} messages, ${images?.length || 0} images`);
-    console.log('Calling OpenAI API with model gpt-5.4...');
+    console.log('Calling OpenAI API with model gpt-5.5...');
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5.4',
+      model: 'gpt-5.5',
       messages: openaiMessages,
       max_completion_tokens: 16000,
       temperature: 0.7
@@ -151,7 +151,7 @@ Write in a direct, descriptive style. Use comma-separated visual tags where appr
     }
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5.4',
+      model: 'gpt-5.5',
       messages: openaiMessages,
       max_completion_tokens: 4000,
       temperature: 0.5
