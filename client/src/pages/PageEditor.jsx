@@ -550,6 +550,15 @@ function PageEditor({ isCover = false }) {
   const [resizeCorner, setResizeCorner] = useState(null);
   const [isAddingBubble, setIsAddingBubble] = useState(false);
 
+  // Hotspot state
+  const [hotspots, setHotspots] = useState([]);
+  const [selectedHotspotId, setSelectedHotspotId] = useState(null);
+  const [isAddingHotspot, setIsAddingHotspot] = useState(false);
+  const [isDraggingHotspot, setIsDraggingHotspot] = useState(false);
+  const [hotspotDragOffset, setHotspotDragOffset] = useState({ x: 0, y: 0 });
+  const [isResizingHotspot, setIsResizingHotspot] = useState(false);
+  const [hotspotResizeCorner, setHotspotResizeCorner] = useState(null);
+
   const canvasRef = useRef(null);
 
   const CANVAS_WIDTH = 400;
@@ -833,6 +842,69 @@ function PageEditor({ isCover = false }) {
     }
   };
 
+  // Generate English translation audio for a sentence
+  const generateTranslationAudio = async (bubbleId, sentenceId) => {
+    const bubble = bubbles.find(b => b.id === bubbleId);
+    const sentence = bubble?.sentences?.find(s => s.id === sentenceId);
+    if (!sentence?.translation) {
+      alert('Please ensure the sentence has a translation');
+      return;
+    }
+
+    const enKey = `${sentenceId}-en`;
+    setGeneratingAudio(prev => ({ ...prev, [enKey]: true }));
+    try {
+      // Generate audio for the English translation (always use dedicated EN voice)
+      const response = await api.post('/audio/generate', {
+        text: sentence.translation,
+        voice_id: 'GP1bgf0sjoFuuHkyrg8E',
+        model_id: 'eleven_v3',
+        ...audioSettings,
+        language_code: 'en'
+      });
+
+      // Save to project with _en suffix
+      const audioName = sentence.audioUrl ? `${sentence.audioUrl}_en` : `translation_${sentenceId}`;
+      await api.post('/audio/save-to-project', {
+        comicId: id,
+        filename: response.data.filename,
+        audioName
+      });
+
+      // Update sentence with translationAudioUrl
+      setBubbles(prev => {
+        const newBubbles = prev.map(b => {
+          if (b.id !== bubbleId) return b;
+          return { ...b, sentences: (b.sentences || []).map(s => {
+            if (s.id !== sentenceId) return s;
+            return { ...s, translationAudioUrl: audioName };
+          })};
+        });
+        // Persist to DB
+        const updatedComic = { ...comic };
+        if (isCover) {
+          updatedComic.cover = { ...updatedComic.cover, bubbles: newBubbles };
+          api.put(`/comics/${id}/cover`, { image: page.masterImage, prompt: panels[0]?.content || '', bubbles: newBubbles })
+            .catch(err => console.error('Failed to save translation audio:', err));
+        } else {
+          const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
+          if (pageIndex >= 0) {
+            updatedComic.pages[pageIndex] = { ...updatedComic.pages[pageIndex], bubbles: newBubbles };
+            api.put(`/comics/${id}`, updatedComic).catch(err => console.error('Failed to save translation audio:', err));
+          }
+        }
+        return newBubbles;
+      });
+
+      showToast('English audio saved!');
+    } catch (error) {
+      console.error('Failed to generate translation audio:', error);
+      alert('Failed to generate translation audio: ' + error.message);
+    } finally {
+      setGeneratingAudio(prev => ({ ...prev, [enKey]: false }));
+    }
+  };
+
   const fillDictionary = async (bubbleId, sentenceId) => {
     const bubble = bubbles.find(b => b.id === bubbleId);
     const sentence = bubble?.sentences?.find(s => s.id === sentenceId);
@@ -972,6 +1044,7 @@ function PageEditor({ isCover = false }) {
       setPanelsComputed(false);
       setPanelImages({});
       setBubbles([]);
+      setHotspots([]);
 
       setPage(currentPage);
       if (currentPage?.lines) {
@@ -1019,6 +1092,7 @@ function PageEditor({ isCover = false }) {
       if (currentPage?.bubbles) {
         setBubbles(currentPage.bubbles);
       }
+      setHotspots(currentPage?.hotspots || []);
       // Build list of panels from other pages that have artwork
       const currentPage_ = pages.find(p => p.id === pageId);
       const currentPageNum = currentPage_?.pageNumber || 0;
@@ -1681,6 +1755,98 @@ function PageEditor({ isCover = false }) {
     }
   };
 
+  // Hotspot management
+  const addHotspot = (coords) => {
+    const newHotspot = {
+      id: `hotspot-${Date.now()}`,
+      x: Math.max(0, coords.x - 0.075),
+      y: Math.max(0, coords.y - 0.05),
+      width: 0.15,
+      height: 0.1,
+      label: '',
+      slides: []
+    };
+    setHotspots(prev => [...prev, newHotspot]);
+    setSelectedHotspotId(newHotspot.id);
+    setSelectedBubbleId(null);
+    setIsAddingHotspot(false);
+  };
+
+  const updateHotspot = (hotspotId, updates) => {
+    setHotspots(prev => prev.map(h =>
+      h.id === hotspotId ? { ...h, ...updates } : h
+    ));
+  };
+
+  const deleteHotspot = (hotspotId) => {
+    setHotspots(prev => prev.filter(h => h.id !== hotspotId));
+    if (selectedHotspotId === hotspotId) setSelectedHotspotId(null);
+  };
+
+  const addHotspotSlide = (hotspotId) => {
+    setHotspots(prev => prev.map(h => {
+      if (h.id !== hotspotId) return h;
+      return {
+        ...h,
+        slides: [...(h.slides || []), {
+          id: `slide-${Date.now()}`,
+          imageUrl: '',
+          text: '',
+          translation: '',
+          audioUrl: '',
+          translationAudioUrl: '',
+          words: []
+        }]
+      };
+    }));
+  };
+
+  const updateHotspotSlide = (hotspotId, slideId, updates) => {
+    setHotspots(prev => prev.map(h => {
+      if (h.id !== hotspotId) return h;
+      return {
+        ...h,
+        slides: (h.slides || []).map(s =>
+          s.id === slideId ? { ...s, ...updates } : s
+        )
+      };
+    }));
+  };
+
+  const removeHotspotSlide = (hotspotId, slideId) => {
+    setHotspots(prev => prev.map(h => {
+      if (h.id !== hotspotId) return h;
+      return { ...h, slides: (h.slides || []).filter(s => s.id !== slideId) };
+    }));
+  };
+
+  const uploadSlideImage = async (hotspotId, slideId, event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const response = await api.post('/images/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      updateHotspotSlide(hotspotId, slideId, { imageUrl: response.data.path });
+    } catch (error) {
+      console.error('Failed to upload slide image:', error);
+      alert('Failed to upload image');
+    }
+  };
+
+  const handleHotspotMouseDown = (e, hotspot) => {
+    e.stopPropagation();
+    if (editorMode !== 'bubbles') return;
+    setSelectedHotspotId(hotspot.id);
+    setSelectedBubbleId(null);
+    const coords = getRelativeCoords(e);
+    if (!coords) return;
+    setIsDraggingHotspot(true);
+    setHotspotDragOffset({ x: coords.x - hotspot.x, y: coords.y - hotspot.y });
+  };
+
   // Generate an image for an image-type bubble
   const generateBubbleImage = async (bubbleId, prompt, provider = 'openai') => {
     if (!prompt.trim()) return;
@@ -1811,15 +1977,21 @@ function PageEditor({ isCover = false }) {
   const handleCanvasMouseDown = (e) => {
     if (editorMode === 'bubbles') {
       // Only add bubble if in "adding bubble" mode and clicking on empty space
-      if (isAddingBubble && !e.target.dataset.bubbleId && !e.target.dataset.resizeHandle) {
+      if (isAddingHotspot && !e.target.dataset.bubbleId && !e.target.dataset.resizeHandle && !e.target.dataset.hotspotId) {
+        const coords = getRelativeCoords(e);
+        if (coords) {
+          addHotspot(coords);
+        }
+      } else if (isAddingBubble && !e.target.dataset.bubbleId && !e.target.dataset.resizeHandle && !e.target.dataset.hotspotId) {
         const coords = getRelativeCoords(e);
         if (coords) {
           addBubble(coords);
           setIsAddingBubble(false); // Exit adding mode after placing bubble
         }
-      } else if (!e.target.dataset.bubbleId && !e.target.dataset.resizeHandle) {
-        // Clicking on empty space deselects current bubble
+      } else if (!e.target.dataset.bubbleId && !e.target.dataset.resizeHandle && !e.target.dataset.hotspotId && !e.target.dataset.hotspotResize) {
+        // Clicking on empty space deselects current bubble and hotspot
         setSelectedBubbleId(null);
+        setSelectedHotspotId(null);
       }
     } else {
       // Layout mode — check for floating panel corner handle or body drag
@@ -2055,6 +2227,21 @@ function PageEditor({ isCover = false }) {
             rotation: angle
           });
         }
+      } else if (isDraggingHotspot && selectedHotspotId) {
+        updateHotspot(selectedHotspotId, {
+          x: Math.max(0, Math.min(1, coords.x - hotspotDragOffset.x)),
+          y: Math.max(0, Math.min(1, coords.y - hotspotDragOffset.y))
+        });
+      } else if (isResizingHotspot && selectedHotspotId) {
+        const hotspot = hotspots.find(h => h.id === selectedHotspotId);
+        if (hotspot) {
+          let newX = hotspot.x, newY = hotspot.y, newW = hotspot.width, newH = hotspot.height;
+          if (hotspotResizeCorner.includes('right')) newW = Math.max(0.05, coords.x - hotspot.x);
+          if (hotspotResizeCorner.includes('left')) { newW = Math.max(0.05, hotspot.x + hotspot.width - coords.x); newX = coords.x; }
+          if (hotspotResizeCorner.includes('bottom')) newH = Math.max(0.03, coords.y - hotspot.y);
+          if (hotspotResizeCorner.includes('top')) { newH = Math.max(0.03, hotspot.y + hotspot.height - coords.y); newY = coords.y; }
+          updateHotspot(selectedHotspotId, { x: newX, y: newY, width: newW, height: newH });
+        }
       }
     } else {
       handleMouseMove(e);
@@ -2069,6 +2256,9 @@ function PageEditor({ isCover = false }) {
       setIsDraggingTail(false);
       setIsDraggingTailBase(false);
       setIsDraggingTailCtrl1(false);
+      setIsDraggingHotspot(false);
+      setIsResizingHotspot(false);
+      setHotspotResizeCorner(null);
       setIsDraggingTailCtrl2(false);
       setIsDraggingRotation(false);
     } else {
@@ -2414,7 +2604,8 @@ function PageEditor({ isCover = false }) {
         ...page,
         lines,
         panels: panelsToSave,
-        bubbles
+        bubbles,
+        hotspots
       };
 
       await api.put(`/comics/${id}`, updatedComic);
@@ -3313,7 +3504,8 @@ function PageEditor({ isCover = false }) {
       }
     };
 
-    // Now draw all the loaded images
+    // Now draw all the loaded images, sorted by zLayer
+    loadedImages.sort((a, b) => (a.panel.zLayer ?? a.panel.panelOrder ?? 0) - (b.panel.zLayer ?? b.panel.panelOrder ?? 0));
     for (const { panel, img } of loadedImages) {
       const { x, y, width, height } = panel.tapZone;
       const panelData = panelImages[panel.id];
@@ -3534,9 +3726,10 @@ function PageEditor({ isCover = false }) {
       }
     }
 
-    // Render floating panels ON TOP of regular panels
+    // Render floating panels ON TOP of regular panels, sorted by zLayer
     const floatingMargin = 3;
-    for (const panel of floatingPanels) {
+    const sortedFloating = [...floatingPanels].sort((a, b) => (a.zLayer ?? a.panelOrder ?? 0) - (b.zLayer ?? b.panelOrder ?? 0));
+    for (const panel of sortedFloating) {
       const panelData = panelImages[panel.id];
       if (!panelData?.path) continue;
 
@@ -4524,7 +4717,9 @@ function PageEditor({ isCover = false }) {
               ? (isDrawingFloatingPanel ? 'Draw a rectangle for the floating panel' : 'Draw lines by dragging | Drag lines to reposition')
               : isAddingBubble
                 ? 'Click on canvas to place bubble'
-                : 'Drag to reposition | Select to edit'}
+                : isAddingHotspot
+                  ? 'Click on canvas to place hotspot'
+                  : 'Drag to reposition | Select to edit'}
         </span>
         {editorMode === 'layout' && !isCover && (
           <button
@@ -4538,10 +4733,19 @@ function PageEditor({ isCover = false }) {
         {editorMode === 'bubbles' && (
           <button
             className={`btn ${isAddingBubble ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setIsAddingBubble(!isAddingBubble)}
+            onClick={() => { setIsAddingBubble(!isAddingBubble); setIsAddingHotspot(false); }}
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
           >
             {isAddingBubble ? 'Cancel' : '+ Add Bubble'}
+          </button>
+        )}
+        {editorMode === 'bubbles' && !isCover && (
+          <button
+            className={`btn ${isAddingHotspot ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => { setIsAddingHotspot(!isAddingHotspot); setIsAddingBubble(false); }}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: isAddingHotspot ? '#00bcd4' : undefined, border: isAddingHotspot ? 'none' : undefined, color: isAddingHotspot ? '#fff' : undefined }}
+          >
+            {isAddingHotspot ? 'Cancel' : '+ Hotspot'}
           </button>
         )}
         {editorMode === 'bubbles' && page.masterImage && bubbles.length > 0 && (
@@ -5344,7 +5548,7 @@ function PageEditor({ isCover = false }) {
                         <defs>
                           <filter id={`roughBubble-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
                             <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
-                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
                           </filter>
                         </defs>
                         {/* Unified bubble + tail shape with rotation around center */}
@@ -5468,6 +5672,11 @@ function PageEditor({ isCover = false }) {
                   {bubble.type === 'thought' && bubble.showTail !== false && (() => {
                     const tailBasePos = bubble.tailBaseX ?? 0.5;
                     const tailSide = bubble.tailSide || 'bottom';
+                    const thoughtRotation = bubble.rotation ?? 0;
+
+                    // Bubble center (pivot point for rotation)
+                    const bubbleCx = (bubble.x + bubble.width / 2) * CANVAS_WIDTH;
+                    const bubbleCy = (bubble.y + bubble.height / 2) * CANVAS_HEIGHT;
 
                     // Calculate start position based on which side the trail connects to
                     let startX, startY;
@@ -5509,22 +5718,26 @@ function PageEditor({ isCover = false }) {
                     const ctrlX = (startX + tipX) / 2 + perpX;
                     const ctrlY = (startY + tipY) / 2 + perpY;
 
-                    // Create 3 circles along the curved path using quadratic bezier interpolation
+                    // Create circles along the curved path, count based on tail length
                     const circles = [];
-                    const numCircles = 3;
-                    const spacing = 18;
+                    const numCircles = bubble.thoughtTailCircles ?? 3;
+                    const spacing = bubble.thoughtTailSpacing ?? 18;
+                    // Smallest circle is always 2px, each additional circle adds a larger one
+                    // 1: 2  |  2: 3.5, 2  |  3: 5, 3.5, 2  |  4: 6.5, 5, 3.5, 2  |  5: 8, 6.5, 5, 3.5, 2
+                    const minRadius = 2;
+                    const stepShrink = 1.5;
+                    const startRadius = minRadius + (numCircles - 1) * stepShrink;
 
                     for (let i = 0; i < numCircles; i++) {
-                      // Calculate t parameter for this circle (fixed distance along curve approximation)
                       const targetDist = (i + 1) * spacing;
-                      const t = Math.min(targetDist / Math.max(distance, 1), 0.9);
+                      const t = Math.min(targetDist / Math.max(distance, 1), 0.95);
 
                       // Quadratic bezier: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
                       const oneMinusT = 1 - t;
                       const cx = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * ctrlX + t * t * tipX;
                       const cy = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * ctrlY + t * t * tipY;
 
-                      const radius = 7 - (i * 2); // 7, 5, 3
+                      const radius = startRadius - i * stepShrink;
                       circles.push({ cx, cy, radius });
                     }
 
@@ -5551,6 +5764,7 @@ function PageEditor({ isCover = false }) {
                             <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
                           </filter>
                         </defs>
+                        <g transform={`rotate(${thoughtRotation} ${bubbleCx} ${bubbleCy})`}>
                         {circles.map((circle, i) => (
                           <circle
                             key={i}
@@ -5563,6 +5777,69 @@ function PageEditor({ isCover = false }) {
                             filter={`url(#roughCircles-${bubble.id})`}
                           />
                         ))}
+                        </g>
+                      </svg>
+                    );
+                  })()}
+
+                  {/* Thought bubble body — SVG rect with rough filter for hand-drawn look */}
+                  {bubble.type === 'thought' && (() => {
+                    const thoughtX = bubble.x * CANVAS_WIDTH;
+                    const thoughtY = bubble.y * CANVAS_HEIGHT;
+                    const thoughtW = bubble.width * CANVAS_WIDTH;
+                    const thoughtH = bubble.height * CANVAS_HEIGHT;
+                    const thoughtCx = thoughtX + thoughtW / 2;
+                    const thoughtCy = thoughtY + thoughtH / 2;
+                    const thoughtRotDeg = (bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.rotation ?? 0);
+                    const borderColorVal = bubble.borderColor || '#000';
+                    const borderWidthVal = bubble.borderWidth ?? 2.5;
+                    const cornerPct = bubble.cornerRadius ?? 50;
+                    const svgRx = (cornerPct / 100) * thoughtW;
+                    const svgRy = (cornerPct / 100) * thoughtH;
+                    return (
+                      <svg
+                        style={{
+                          position: 'absolute',
+                          left: 0, top: 0,
+                          width: CANVAS_WIDTH,
+                          height: CANVAS_HEIGHT,
+                          pointerEvents: 'none',
+                          zIndex: 50,
+                          overflow: 'visible'
+                        }}
+                        viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
+                      >
+                        <defs>
+                          <filter id={`roughThought-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+                          </filter>
+                        </defs>
+                        <g
+                          transform={`rotate(${thoughtRotDeg} ${thoughtCx} ${thoughtCy})`}
+                          data-bubble-id={bubble.id}
+                          onMouseDown={(e) => handleBubbleMouseDown(e, bubble)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBubbleId(bubble.id);
+                            setEditorMode('bubbles');
+                            setSidebarTab('panels');
+                          }}
+                          style={{ pointerEvents: 'auto', cursor: editorMode === 'bubbles' ? (bubble.locked ? 'default' : (isDraggingBubble ? 'grabbing' : 'grab')) : 'default' }}
+                        >
+                          <rect
+                            x={thoughtX}
+                            y={thoughtY}
+                            width={thoughtW}
+                            height={thoughtH}
+                            rx={svgRx}
+                            ry={svgRy}
+                            fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#ffffff')}
+                            stroke={selectedBubbleId === bubble.id ? '#00ff00' : (bubble.noBorder ? 'none' : borderColorVal)}
+                            strokeWidth={selectedBubbleId === bubble.id ? 3 : borderWidthVal}
+                            filter={`url(#roughThought-${bubble.id})`}
+                          />
+                        </g>
                       </svg>
                     );
                   })()}
@@ -5584,8 +5861,8 @@ function PageEditor({ isCover = false }) {
                       top: `${bubble.y * 100}%`,
                       width: `${bubble.width * 100}%`,
                       height: `${bubble.height * 100}%`,
-                      background: bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')),
-                      border: selectedBubbleId === bubble.id ? '3px solid #00ff00' : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`),
+                      background: bubble.type === 'thought' ? 'transparent' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff'))),
+                      border: bubble.type === 'thought' ? (selectedBubbleId === bubble.id ? '3px solid #00ff00' : 'none') : (selectedBubbleId === bubble.id ? '3px solid #00ff00' : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`)),
                       borderRadius: bubble.type === 'thought'
                         ? `${bubble.cornerRadius ?? 50}%`
                         : `${bubble.cornerRadius || 8}px`,
@@ -5597,9 +5874,10 @@ function PageEditor({ isCover = false }) {
                       cursor: editorMode === 'bubbles' ? (bubble.locked ? 'default' : (isDraggingBubble ? 'grabbing' : 'grab')) : 'default',
                       zIndex: 50,
                       boxShadow: selectedBubbleId === bubble.id ? '0 0 10px rgba(0,255,0,0.5)' : 'none',
-                      // Hand-drawn effect with slight rotation and rough filter
-                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2}deg)`,
-                      filter: 'url(#roughEdge)'
+                      // Hand-drawn effect with slight rotation and rough filter, plus user rotation for thought bubbles
+                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0)}deg)`,
+                      transformOrigin: 'center center',
+                      filter: bubble.type === 'thought' ? 'none' : 'url(#roughEdge)'
                     }}
                   >
                     {bubble.type === 'image' ? (
@@ -5637,8 +5915,8 @@ function PageEditor({ isCover = false }) {
                         textTransform: bubble.uppercase ? 'uppercase' : 'none',
                         pointerEvents: 'none',
                         userSelect: 'none',
-                        // Counter-rotation for hand-drawn effect + user text angle
-                        transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) + (bubble.textAngle ?? 0)}deg)`,
+                        // Counter-rotation for hand-drawn effect + thought bubble rotation + user text angle
+                        transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) - (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0) + (bubble.textAngle ?? 0)}deg)`,
                         display: 'inline-block'
                       }}
                     >
@@ -5714,35 +5992,16 @@ function PageEditor({ isCover = false }) {
                   </div>
                   )}
 
-                  {/* Draggable tail tip handle (orange - for tip position) - only for thought bubbles */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (
-                    <div
-                      data-tail-handle="true"
-                      onMouseDown={(e) => handleTailMouseDown(e, bubble)}
-                      style={{
-                        position: 'absolute',
-                        left: `${tailEndX * 100}%`,
-                        top: `${tailEndY * 100}%`,
-                        width: 12,
-                        height: 12,
-                        background: '#ff6600',
-                        border: '2px solid #fff',
-                        borderRadius: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        cursor: 'move',
-                        zIndex: 60
-                      }}
-                      title="Drag to move tail tip"
-                    />
-                  )}
 
-                  {/* Rotation handle (orange - for rotating speech bubble) */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'speech' && bubble.showTail !== false && (() => {
+                  {/* Rotation handle (orange - for rotating speech/thought bubble) */}
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (bubble.type === 'speech' || bubble.type === 'thought') && bubble.showTail !== false && (() => {
                     const rotation = bubble.rotation ?? 0;
                     const rotRad = (rotation - 90) * Math.PI / 180; // -90 so 0 degrees = bottom
                     const cx = bubble.x + bubble.width / 2;
                     const cy = bubble.y + bubble.height / 2;
-                    const handleDistance = bubble.height / 2 + (bubble.tailLength ?? 0.35) * bubble.height + 0.02;
+                    const handleDistance = bubble.type === 'thought'
+                      ? Math.max(bubble.width, bubble.height) / 2 + 0.04
+                      : bubble.height / 2 + (bubble.tailLength ?? 0.35) * bubble.height + 0.02;
                     const handleX = cx + Math.cos(rotRad) * handleDistance;
                     const handleY = cy + Math.sin(rotRad) * handleDistance;
 
@@ -5768,158 +6027,65 @@ function PageEditor({ isCover = false }) {
                     );
                   })()}
 
-                  {/* Draggable tail base handle (blue - for base position on bubble) - only for thought bubbles */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (() => {
-                    const tailBasePos = bubble.tailBaseX ?? 0.5;
-                    const tailSide = bubble.tailSide || 'bottom';
 
-                    // Calculate handle position based on side
-                    let handleLeft, handleTop, cursorStyle;
-                    if (tailSide === 'bottom') {
-                      handleLeft = (bubble.x + bubble.width * tailBasePos) * 100;
-                      handleTop = (bubble.y + bubble.height) * 100;
-                      cursorStyle = 'ew-resize';
-                    } else if (tailSide === 'top') {
-                      handleLeft = (bubble.x + bubble.width * tailBasePos) * 100;
-                      handleTop = bubble.y * 100;
-                      cursorStyle = 'ew-resize';
-                    } else if (tailSide === 'left') {
-                      handleLeft = bubble.x * 100;
-                      handleTop = (bubble.y + bubble.height * tailBasePos) * 100;
-                      cursorStyle = 'ns-resize';
-                    } else { // right
-                      handleLeft = (bubble.x + bubble.width) * 100;
-                      handleTop = (bubble.y + bubble.height * tailBasePos) * 100;
-                      cursorStyle = 'ns-resize';
-                    }
 
-                    return (
-                      <div
-                        data-tail-base-handle="true"
-                        onMouseDown={(e) => handleTailBaseMouseDown(e, bubble)}
-                        style={{
-                          position: 'absolute',
-                          left: `${handleLeft}%`,
-                          top: `${handleTop}%`,
-                          width: 14,
-                          height: 14,
-                          background: '#0088ff',
-                          border: '2px solid #fff',
-                          borderRadius: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          cursor: cursorStyle,
-                          zIndex: 60
-                        }}
-                        title="Drag to move tail base"
-                      />
-                    );
-                  })()}
+                </div>
+              );
+            })}
 
-                  {/* Draggable tail curve control point 1 (green - for left side curve) - only for thought bubbles */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (() => {
-                    const tailBasePos = bubble.tailBaseX ?? 0.5;
-                    const tailSide = bubble.tailSide || 'bottom';
-                    const tailWidth = bubble.tailWidth ?? 0.10;
-                    const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
-
-                    let base1X, base1Y;
-                    if (tailSide === 'bottom') {
-                      base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
-                      base1Y = bubble.y + bubble.height;
-                    } else if (tailSide === 'top') {
-                      base1X = bubble.x + bubble.width * tailBasePos - halfWidth;
-                      base1Y = bubble.y;
-                    } else if (tailSide === 'left') {
-                      base1X = bubble.x;
-                      base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
-                    } else {
-                      base1X = bubble.x + bubble.width;
-                      base1Y = bubble.y + bubble.height * tailBasePos - halfWidth;
-                    }
-
-                    const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
-                    const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
-
-                    // Control point position = midpoint + offset
-                    const midX = (base1X + tipX) / 2;
-                    const midY = (base1Y + tipY) / 2;
-                    const ctrlX = midX + (bubble.tailCtrl1X || 0.02);
-                    const ctrlY = midY + (bubble.tailCtrl1Y || 0.02);
-
-                    return (
-                      <div
-                        data-tail-ctrl1-handle="true"
-                        onMouseDown={(e) => handleTailCtrl1MouseDown(e, bubble)}
-                        style={{
-                          position: 'absolute',
-                          left: `${ctrlX * 100}%`,
-                          top: `${ctrlY * 100}%`,
-                          width: 10,
-                          height: 10,
-                          background: '#00cc66',
-                          border: '2px solid #fff',
-                          borderRadius: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          cursor: 'move',
-                          zIndex: 61
-                        }}
-                        title="Drag to curve left side of tail"
-                      />
-                    );
-                  })()}
-
-                  {/* Draggable tail curve control point 2 (purple - for right side curve) - only for thought bubbles */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && bubble.type === 'thought' && bubble.showTail !== false && (() => {
-                    const tailBasePos = bubble.tailBaseX ?? 0.5;
-                    const tailSide = bubble.tailSide || 'bottom';
-                    const tailWidth = bubble.tailWidth ?? 0.10;
-                    const halfWidth = (tailWidth / 2) * (tailSide === 'bottom' || tailSide === 'top' ? bubble.width : bubble.height);
-
-                    let base2X, base2Y;
-                    if (tailSide === 'bottom') {
-                      base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
-                      base2Y = bubble.y + bubble.height;
-                    } else if (tailSide === 'top') {
-                      base2X = bubble.x + bubble.width * tailBasePos + halfWidth;
-                      base2Y = bubble.y;
-                    } else if (tailSide === 'left') {
-                      base2X = bubble.x;
-                      base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
-                    } else {
-                      base2X = bubble.x + bubble.width;
-                      base2Y = bubble.y + bubble.height * tailBasePos + halfWidth;
-                    }
-
-                    const tipX = bubble.x + bubble.width / 2 + (bubble.tailX || 0);
-                    const tipY = bubble.y + bubble.height / 2 + (bubble.tailY || 0.15);
-
-                    // Control point position = midpoint + offset
-                    const midX = (base2X + tipX) / 2;
-                    const midY = (base2Y + tipY) / 2;
-                    const ctrlX = midX + (bubble.tailCtrl2X || -0.02);
-                    const ctrlY = midY + (bubble.tailCtrl2Y || 0.02);
-
-                    return (
-                      <div
-                        data-tail-ctrl2-handle="true"
-                        onMouseDown={(e) => handleTailCtrl2MouseDown(e, bubble)}
-                        style={{
-                          position: 'absolute',
-                          left: `${ctrlX * 100}%`,
-                          top: `${ctrlY * 100}%`,
-                          width: 10,
-                          height: 10,
-                          background: '#9933ff',
-                          border: '2px solid #fff',
-                          borderRadius: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          cursor: 'move',
-                          zIndex: 61
-                        }}
-                        title="Drag to curve right side of tail"
-                      />
-                    );
-                  })()}
+            {/* Hotspot overlays */}
+            {editorMode === 'bubbles' && hotspots.map((hotspot, hIdx) => {
+              const isSelected = selectedHotspotId === hotspot.id;
+              return (
+                <div
+                  key={hotspot.id}
+                  data-hotspot-id={hotspot.id}
+                  onClick={(e) => { e.stopPropagation(); setSelectedHotspotId(hotspot.id); setSelectedBubbleId(null); }}
+                  onMouseDown={(e) => handleHotspotMouseDown(e, hotspot)}
+                  style={{
+                    position: 'absolute',
+                    left: `${hotspot.x * 100}%`,
+                    top: `${hotspot.y * 100}%`,
+                    width: `${hotspot.width * 100}%`,
+                    height: `${hotspot.height * 100}%`,
+                    border: isSelected ? '2px solid #00bcd4' : '2px dashed #00bcd4',
+                    background: isSelected ? 'rgba(0, 188, 212, 0.2)' : 'rgba(0, 188, 212, 0.08)',
+                    zIndex: 45,
+                    pointerEvents: 'auto',
+                    cursor: isDraggingHotspot ? 'grabbing' : 'grab',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 2, left: 4,
+                    fontSize: '10px', color: '#00838f', fontWeight: 'bold',
+                    background: 'rgba(255,255,255,0.8)', padding: '1px 4px', borderRadius: '3px'
+                  }}>
+                    H{hIdx + 1} ({(hotspot.slides || []).length})
+                  </span>
+                  {isSelected && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map(corner => (
+                    <div
+                      key={corner}
+                      data-hotspot-resize={corner.replace('-', '')}
+                      data-hotspot-id={hotspot.id}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setIsResizingHotspot(true);
+                        setHotspotResizeCorner(corner.replace('-', ''));
+                        setSelectedHotspotId(hotspot.id);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        [corner.includes('top') ? 'top' : 'bottom']: -4,
+                        [corner.includes('left') ? 'left' : 'right']: -4,
+                        width: 8, height: 8,
+                        background: '#00bcd4',
+                        cursor: corner === 'top-left' || corner === 'bottom-right' ? 'nwse-resize' : 'nesw-resize',
+                        borderRadius: '50%',
+                        zIndex: 46
+                      }}
+                    />
+                  ))}
                 </div>
               );
             })}
@@ -6217,7 +6383,23 @@ function PageEditor({ isCover = false }) {
               style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
             >
               <div style={{ flex: 1 }}>
-                <h4>Panel {i + 1}{panel.floating && <span style={{ color: '#e67e22', fontSize: '0.7rem', marginLeft: '0.3rem' }}>(floating)</span>}</h4>
+                <h4>Panel {i + 1}{panel.floating && <span style={{ color: '#e67e22', fontSize: '0.7rem', marginLeft: '0.3rem' }}>(floating)</span>}
+                  <label
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ fontSize: '0.65rem', color: panel.skipInReader ? '#e74c3c' : '#666', marginLeft: '0.4rem', cursor: 'pointer', fontWeight: 'normal' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!panel.skipInReader}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setPanels(prev => prev.map(p => p.id === panel.id ? { ...p, skipInReader: e.target.checked } : p));
+                      }}
+                      style={{ marginRight: '3px', verticalAlign: 'middle' }}
+                    />
+                    Skip
+                  </label>
+                </h4>
                 <small style={{ color: '#888' }}>
                   {(panel.tapZone.width * 100).toFixed(0)}% × {(panel.tapZone.height * 100).toFixed(0)}%
                 </small>
@@ -6234,37 +6416,81 @@ function PageEditor({ isCover = false }) {
                   </p>
                 )}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <button
-                  onClick={(e) => { e.stopPropagation(); movePanelUp(i); }}
-                  disabled={i === 0}
-                  style={{
-                    padding: '2px 6px',
-                    fontSize: '0.7rem',
-                    background: i === 0 ? '#ccc' : '#e94560',
-                    border: 'none',
-                    borderRadius: '3px',
-                    color: i === 0 ? '#999' : '#fff',
-                    cursor: i === 0 ? 'default' : 'pointer'
-                  }}
-                >
-                  ▲
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); movePanelDown(i); }}
-                  disabled={i === panels.length - 1}
-                  style={{
-                    padding: '2px 6px',
-                    fontSize: '0.7rem',
-                    background: i === panels.length - 1 ? '#ccc' : '#e94560',
-                    border: 'none',
-                    borderRadius: '3px',
-                    color: i === panels.length - 1 ? '#999' : '#fff',
-                    cursor: i === panels.length - 1 ? 'default' : 'pointer'
-                  }}
-                >
-                  ▼
-                </button>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); movePanelUp(i); }}
+                    disabled={i === 0}
+                    style={{
+                      padding: '2px 6px',
+                      fontSize: '0.7rem',
+                      background: i === 0 ? '#ccc' : '#e94560',
+                      border: 'none',
+                      borderRadius: '3px',
+                      color: i === 0 ? '#999' : '#fff',
+                      cursor: i === 0 ? 'default' : 'pointer'
+                    }}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); movePanelDown(i); }}
+                    disabled={i === panels.length - 1}
+                    style={{
+                      padding: '2px 6px',
+                      fontSize: '0.7rem',
+                      background: i === panels.length - 1 ? '#ccc' : '#e94560',
+                      border: 'none',
+                      borderRadius: '3px',
+                      color: i === panels.length - 1 ? '#999' : '#fff',
+                      cursor: i === panels.length - 1 ? 'default' : 'pointer'
+                    }}
+                  >
+                    ▼
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.55rem', color: '#888' }}>Layer</span>
+                  <div style={{ display: 'flex', gap: '2px' }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPanels(prev => prev.map(p => p.id === panel.id ? { ...p, zLayer: (p.zLayer ?? p.panelOrder ?? i + 1) - 1 } : p));
+                      }}
+                      style={{
+                        padding: '2px 5px',
+                        fontSize: '0.6rem',
+                        background: '#3498db',
+                        border: 'none',
+                        borderRadius: '3px',
+                        color: '#fff',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      -
+                    </button>
+                    <span style={{ fontSize: '0.6rem', color: '#555', minWidth: '14px', textAlign: 'center' }}>
+                      {panel.zLayer ?? panel.panelOrder ?? i + 1}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPanels(prev => prev.map(p => p.id === panel.id ? { ...p, zLayer: (p.zLayer ?? p.panelOrder ?? i + 1) + 1 } : p));
+                      }}
+                      style={{
+                        padding: '2px 5px',
+                        fontSize: '0.6rem',
+                        background: '#3498db',
+                        border: 'none',
+                        borderRadius: '3px',
+                        color: '#fff',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
@@ -6852,6 +7078,37 @@ function PageEditor({ isCover = false }) {
                                 marginBottom: '0.25rem'
                               }}
                             />
+                            <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[sighs]', '[pause]'].map(tag => {
+                                const tagKey = `${sentence.id}-en-${tag}`;
+                                const isCopied = copiedTag === tagKey;
+                                return (
+                                <button
+                                  key={tag}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(tag);
+                                    setCopiedTag(tagKey);
+                                    setTimeout(() => setCopiedTag(prev => prev === tagKey ? null : prev), 600);
+                                  }}
+                                  style={{
+                                    padding: '0.15rem 0.4rem',
+                                    fontSize: '0.7rem',
+                                    background: isCopied ? '#27ae60' : '#f0f0f0',
+                                    color: isCopied ? '#fff' : '#666',
+                                    border: `1px solid ${isCopied ? '#27ae60' : '#ddd'}`,
+                                    borderRadius: '3px',
+                                    cursor: 'pointer',
+                                    fontFamily: 'monospace',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  title={`Copy ${tag} to clipboard`}
+                                >
+                                  {tag}
+                                </button>
+                                );
+                              })}
+                            </div>
                             <input
                               type="text"
                               value={sentence.translation}
@@ -7165,7 +7422,8 @@ function PageEditor({ isCover = false }) {
                                           ...page,
                                           lines,
                                           panels: panelsToSave,
-                                          bubbles: updatedBubbles
+                                          bubbles: updatedBubbles,
+                                          hotspots
                                         };
                                         await api.put(`/comics/${id}`, updatedComic);
                                         setComic(updatedComic);
@@ -7241,6 +7499,62 @@ function PageEditor({ isCover = false }) {
                                 )}
                               </div>
                             </div>
+
+                            {/* EN Audio - Translation */}
+                            {sentence.translation && (
+                              <div style={{
+                                background: '#f0e6f6',
+                                borderRadius: '4px',
+                                padding: '0.4rem 0.5rem',
+                                marginBottom: '0.25rem',
+                                border: '1px solid #d4b8e8',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.4rem'
+                              }}>
+                                <span style={{ fontSize: '0.7rem', color: '#8e44ad', fontWeight: 'bold', whiteSpace: 'nowrap' }}>EN Audio</span>
+                                {sentence.translationAudioUrl ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (audioRef.current) audioRef.current.pause();
+                                      const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${sentence.translationAudioUrl}.mp3`);
+                                      audioRef.current = audio;
+                                      audio.play();
+                                    }}
+                                    style={{
+                                      padding: '0.15rem 0.35rem',
+                                      fontSize: '0.6rem',
+                                      background: '#27ae60',
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    ▶ Play
+                                  </button>
+                                ) : null}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    generateTranslationAudio(bubble.id, sentence.id);
+                                  }}
+                                  disabled={generatingAudio[`${sentence.id}-en`]}
+                                  style={{
+                                    padding: '0.15rem 0.35rem',
+                                    fontSize: '0.6rem',
+                                    background: generatingAudio[`${sentence.id}-en`] ? '#95a5a6' : sentence.translationAudioUrl ? '#8e44ad' : '#3498db',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: generatingAudio[`${sentence.id}-en`] ? 'wait' : 'pointer'
+                                  }}
+                                >
+                                  {generatingAudio[`${sentence.id}-en`] ? '...' : sentence.translationAudioUrl ? 'Regen' : 'Generate'}
+                                </button>
+                              </div>
+                            )}
 
                             {/* Words */}
                             <div style={{ marginTop: '0.25rem' }}>
@@ -7702,6 +8016,127 @@ function PageEditor({ isCover = false }) {
                         </>
                       )}
 
+                      {/* Bubble Angle (for thought bubbles) */}
+                      {bubble.type === 'thought' && (
+                        <div style={{ marginBottom: '0.5rem' }}>
+                          <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                            Bubble Angle: {Math.round(bubble.rotation ?? 0)}°
+                          </label>
+                          <input
+                            type="range"
+                            min="0"
+                            max="360"
+                            value={Math.round(bubble.rotation ?? 0)}
+                            onChange={(e) => updateBubble(bubble.id, { rotation: parseInt(e.target.value) })}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Tail Controls (for thought bubbles) */}
+                      {bubble.type === 'thought' && bubble.showTail !== false && (
+                        <>
+                          {/* Tail Side */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tail Side
+                            </label>
+                            <select
+                              value={bubble.tailSide || 'bottom'}
+                              onChange={(e) => updateBubble(bubble.id, { tailSide: e.target.value })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%', padding: '0.3rem', fontSize: '0.8rem', borderRadius: '3px', border: '1px solid #ccc' }}
+                            >
+                              <option value="bottom">Bottom</option>
+                              <option value="top">Top</option>
+                              <option value="left">Left</option>
+                              <option value="right">Right</option>
+                            </select>
+                          </div>
+
+                          {/* Base Position */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Base Position: {Math.round((bubble.tailBaseX ?? 0.5) * 100)}%
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="90"
+                              value={Math.round((bubble.tailBaseX ?? 0.5) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailBaseX: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tip Offset X */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tip Offset X: {Math.round((bubble.tailX ?? 0.03) * 100)}
+                            </label>
+                            <input
+                              type="range"
+                              min="-50"
+                              max="50"
+                              value={Math.round((bubble.tailX ?? 0.03) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailX: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Tip Offset Y */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Tip Offset Y: {Math.round((bubble.tailY ?? 0.08) * 100)}
+                            </label>
+                            <input
+                              type="range"
+                              min="-50"
+                              max="50"
+                              value={Math.round((bubble.tailY ?? 0.08) * 100)}
+                              onChange={(e) => updateBubble(bubble.id, { tailY: parseInt(e.target.value) / 100 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Number of Circles */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Bubbles: {bubble.thoughtTailCircles ?? 3}
+                            </label>
+                            <input
+                              type="range"
+                              min="1"
+                              max="10"
+                              value={bubble.thoughtTailCircles ?? 3}
+                              onChange={(e) => updateBubble(bubble.id, { thoughtTailCircles: parseInt(e.target.value) })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          {/* Circle Spacing */}
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
+                              Spacing: {bubble.thoughtTailSpacing ?? 18}
+                            </label>
+                            <input
+                              type="range"
+                              min="5"
+                              max="40"
+                              value={bubble.thoughtTailSpacing ?? 18}
+                              onChange={(e) => updateBubble(bubble.id, { thoughtTailSpacing: parseInt(e.target.value) })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </>
+                      )}
+
                       {/* Text Angle (for all bubble types) */}
                       <div style={{ marginBottom: '0.5rem' }}>
                         <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
@@ -7723,6 +8158,441 @@ function PageEditor({ isCover = false }) {
               ))}
             </div>
           )}
+
+          {/* HOTSPOT LIST — shown in bubbles mode when there are hotspots */}
+          {editorMode === 'bubbles' && hotspots.length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <h3 style={{ marginBottom: '0.5rem', color: '#00838f' }}>Hotspots ({hotspots.length})</h3>
+              {hotspots.map((h, hIdx) => (
+                <div
+                  key={h.id}
+                  onClick={() => { setSelectedHotspotId(h.id); setSelectedBubbleId(null); }}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    background: selectedHotspotId === h.id ? '#e0f7fa' : '#fff',
+                    borderRadius: '6px',
+                    marginBottom: '0.4rem',
+                    border: selectedHotspotId === h.id ? '2px solid #00bcd4' : '1px solid #ddd',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#00838f' }}>
+                    H{hIdx + 1}: {h.label || '(no label)'}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: '#888' }}>
+                    {(h.slides || []).length} slide{(h.slides || []).length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* HOTSPOT DETAILS — shown when a hotspot is selected in bubbles mode */}
+          {editorMode === 'bubbles' && selectedHotspotId && (() => {
+            const hotspot = hotspots.find(h => h.id === selectedHotspotId);
+            if (!hotspot) return null;
+            return (
+              <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#e0f7fa', borderRadius: '6px', border: '1px solid #00bcd4' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h4 style={{ margin: 0, color: '#00838f', fontSize: '0.9rem' }}>Hotspot Details</h4>
+                  <button
+                    onClick={() => { deleteHotspot(hotspot.id); }}
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                  >
+                    Delete Hotspot
+                  </button>
+                </div>
+
+                {/* Label */}
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#555', display: 'block', marginBottom: '0.2rem' }}>Label</label>
+                  <input
+                    type="text"
+                    value={hotspot.label || ''}
+                    onChange={(e) => updateHotspot(hotspot.id, { label: e.target.value })}
+                    placeholder="e.g., Ace of Spades"
+                    style={{ width: '100%', padding: '0.35rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.8rem' }}
+                  />
+                </div>
+
+                {/* Voice selector */}
+                <div style={{ marginBottom: '0.5rem' }}>
+                  {(comic?.voices || []).length === 0 ? (
+                    <p style={{ fontSize: '0.7rem', color: '#e74c3c', margin: 0 }}>No voices configured. Go to Comic Editor → Voices tab.</p>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <select
+                        value={selectedVoiceId}
+                        onChange={(e) => setSelectedVoiceId(e.target.value)}
+                        style={{ flex: 1, padding: '0.25rem', fontSize: '0.7rem', borderRadius: '3px', border: '1px solid #ccc' }}
+                      >
+                        <option value="">Select voice...</option>
+                        {(comic?.voices || []).map((voice, idx) => (
+                          <option key={`${voice.voiceId}-${idx}`} value={voice.voiceId}>{voice.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={audioModel}
+                        onChange={(e) => setAudioModel(e.target.value)}
+                        style={{ padding: '0.25rem', fontSize: '0.7rem', borderRadius: '3px', border: '1px solid #ccc' }}
+                      >
+                        <option value="eleven_v3">V3</option>
+                        <option value="eleven_multilingual_v2">Multi V2</option>
+                        <option value="eleven_turbo_v2_5">Turbo</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Slides */}
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: '#00838f', fontWeight: 'bold' }}>Slides ({(hotspot.slides || []).length})</span>
+                    <button
+                      onClick={() => addHotspotSlide(hotspot.id)}
+                      style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#00bcd4', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                    >
+                      + Add Slide
+                    </button>
+                  </div>
+
+                  {(hotspot.slides || []).map((slide, sIdx) => (
+                    <div key={slide.id} style={{ background: '#fff', borderRadius: '4px', padding: '0.5rem', marginBottom: '0.5rem', border: '1px solid #b2ebf2' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#00838f' }}>Slide {sIdx + 1}</span>
+                        <button
+                          onClick={() => removeHotspotSlide(hotspot.id, slide.id)}
+                          style={{ padding: '0.1rem 0.3rem', fontSize: '0.6rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '2px', cursor: 'pointer' }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      {/* Image upload */}
+                      <div style={{ marginBottom: '0.4rem' }}>
+                        {slide.imageUrl ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <img
+                              src={`http://localhost:3001${slide.imageUrl}`}
+                              alt={`Slide ${sIdx + 1}`}
+                              style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '3px', border: '1px solid #ccc' }}
+                            />
+                            <label style={{ padding: '0.2rem 0.4rem', fontSize: '0.65rem', background: '#8e44ad', color: '#fff', borderRadius: '3px', cursor: 'pointer' }}>
+                              Change
+                              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadSlideImage(hotspot.id, slide.id, e)} />
+                            </label>
+                          </div>
+                        ) : (
+                          <label style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem', background: '#3498db', color: '#fff', borderRadius: '3px', cursor: 'pointer', display: 'inline-block' }}>
+                            Upload Image
+                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadSlideImage(hotspot.id, slide.id, e)} />
+                          </label>
+                        )}
+                      </div>
+
+                      {/* Text (foreign language) */}
+                      <div style={{ marginBottom: '0.3rem' }}>
+                        <label style={{ fontSize: '0.65rem', color: '#888', display: 'block', marginBottom: '0.1rem' }}>Text ({comic?.language || 'es'})</label>
+                        <input
+                          type="text"
+                          value={slide.text || ''}
+                          onChange={(e) => updateHotspotSlide(hotspot.id, slide.id, { text: e.target.value })}
+                          placeholder="Foreign language text..."
+                          style={{ width: '100%', padding: '0.3rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.75rem' }}
+                        />
+                      </div>
+
+                      {/* Translation */}
+                      <div style={{ marginBottom: '0.3rem' }}>
+                        <label style={{ fontSize: '0.65rem', color: '#888', display: 'block', marginBottom: '0.1rem' }}>Translation (EN)</label>
+                        <input
+                          type="text"
+                          value={slide.translation || ''}
+                          onChange={(e) => updateHotspotSlide(hotspot.id, slide.id, { translation: e.target.value })}
+                          placeholder="English translation..."
+                          style={{ width: '100%', padding: '0.3rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.75rem' }}
+                        />
+                      </div>
+
+                      {/* Audio controls */}
+                      <div style={{ marginBottom: '0.3rem', display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!slide.text || !selectedVoiceId) { alert('Need text and voice'); return; }
+                            const key = `hotspot-${slide.id}`;
+                            setGeneratingAudio(prev => ({ ...prev, [key]: true }));
+                            try {
+                              const response = await api.post('/audio/generate', {
+                                text: slide.text,
+                                voice_id: selectedVoiceId,
+                                model_id: audioModel,
+                                ...audioSettings
+                              });
+                              setAudioPreview(prev => ({
+                                ...prev,
+                                [key]: { url: `http://localhost:3001${response.data.path}`, filename: response.data.filename, wordTimestamps: response.data.wordTimestamps || [] }
+                              }));
+                            } catch (err) { alert('Failed to generate: ' + err.message); }
+                            finally { setGeneratingAudio(prev => ({ ...prev, [key]: false })); }
+                          }}
+                          disabled={generatingAudio[`hotspot-${slide.id}`] || !slide.text || !selectedVoiceId}
+                          style={{ padding: '0.2rem 0.4rem', fontSize: '0.6rem', background: (generatingAudio[`hotspot-${slide.id}`] || !slide.text || !selectedVoiceId) ? '#95a5a6' : '#3498db', color: '#fff', border: 'none', borderRadius: '3px', cursor: (!slide.text || !selectedVoiceId) ? 'not-allowed' : 'pointer' }}
+                        >
+                          {generatingAudio[`hotspot-${slide.id}`] ? 'Gen...' : !selectedVoiceId ? 'No Voice' : 'Generate'}
+                        </button>
+                        {audioPreview[`hotspot-${slide.id}`] && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (audioRef.current) audioRef.current.pause();
+                                const audio = new Audio(audioPreview[`hotspot-${slide.id}`].url);
+                                audioRef.current = audio;
+                                audio.play();
+                              }}
+                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.6rem', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                            >
+                              Play
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const key = `hotspot-${slide.id}`;
+                                const preview = audioPreview[key];
+                                if (!preview?.filename) return;
+                                setSavingAudio(prev => ({ ...prev, [key]: true }));
+                                try {
+                                  const audioName = `${(comic?.title || 'comic').toLowerCase().replace(/\s+/g, '_')}_hotspot_${hotspot.id.replace('hotspot-', '')}_s${sIdx + 1}`;
+                                  await api.post('/audio/save-to-project', { comicId: id, filename: preview.filename, audioName });
+                                  updateHotspotSlide(hotspot.id, slide.id, { audioUrl: audioName });
+                                  showToast('Hotspot audio saved!');
+                                } catch (err) { alert('Failed to save: ' + err.message); }
+                                finally { setSavingAudio(prev => ({ ...prev, [key]: false })); }
+                              }}
+                              disabled={savingAudio[`hotspot-${slide.id}`]}
+                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.6rem', background: savingAudio[`hotspot-${slide.id}`] ? '#95a5a6' : '#27ae60', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                            >
+                              {savingAudio[`hotspot-${slide.id}`] ? 'Saving...' : 'Save'}
+                            </button>
+                          </>
+                        )}
+                        {slide.audioUrl && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (audioRef.current) audioRef.current.pause();
+                              const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${slide.audioUrl}.mp3`);
+                              audioRef.current = audio;
+                              audio.play();
+                            }}
+                            style={{ padding: '0.2rem 0.4rem', fontSize: '0.6rem', background: '#27ae60', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                          >
+                            Play Saved
+                          </button>
+                        )}
+                      </div>
+
+                      {/* EN Audio */}
+                      {slide.translation && (
+                        <div style={{ marginBottom: '0.3rem', display: 'flex', gap: '0.25rem', alignItems: 'center', background: '#f0e6f6', padding: '0.25rem', borderRadius: '3px' }}>
+                          <span style={{ fontSize: '0.6rem', color: '#8e44ad', fontWeight: 'bold' }}>EN:</span>
+                          {slide.translationAudioUrl && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (audioRef.current) audioRef.current.pause();
+                                const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${slide.translationAudioUrl}.mp3`);
+                                audioRef.current = audio;
+                                audio.play();
+                              }}
+                              style={{ padding: '0.1rem 0.3rem', fontSize: '0.55rem', background: '#27ae60', color: '#fff', border: 'none', borderRadius: '2px', cursor: 'pointer' }}
+                            >
+                              Play
+                            </button>
+                          )}
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const key = `hotspot-${slide.id}-en`;
+                              setGeneratingAudio(prev => ({ ...prev, [key]: true }));
+                              try {
+                                const response = await api.post('/audio/generate', {
+                                  text: slide.translation,
+                                  voice_id: 'GP1bgf0sjoFuuHkyrg8E',
+                                  model_id: 'eleven_v3',
+                                  ...audioSettings,
+                                  language_code: 'en'
+                                });
+                                const audioName = `${(comic?.title || 'comic').toLowerCase().replace(/\s+/g, '_')}_hotspot_${hotspot.id.replace('hotspot-', '')}_s${sIdx + 1}_en`;
+                                await api.post('/audio/save-to-project', { comicId: id, filename: response.data.filename, audioName });
+                                updateHotspotSlide(hotspot.id, slide.id, { translationAudioUrl: audioName });
+                                showToast('EN audio saved!');
+                              } catch (err) { alert('Failed: ' + err.message); }
+                              finally { setGeneratingAudio(prev => ({ ...prev, [key]: false })); }
+                            }}
+                            disabled={generatingAudio[`hotspot-${slide.id}-en`]}
+                            style={{ padding: '0.1rem 0.3rem', fontSize: '0.55rem', background: generatingAudio[`hotspot-${slide.id}-en`] ? '#95a5a6' : '#8e44ad', color: '#fff', border: 'none', borderRadius: '2px', cursor: 'pointer' }}
+                          >
+                            {generatingAudio[`hotspot-${slide.id}-en`] ? '...' : slide.translationAudioUrl ? 'Regen EN' : 'Gen EN'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Words */}
+                      <div style={{ marginTop: '0.3rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                          <span style={{ fontSize: '0.65rem', color: '#888' }}>Words ({(slide.words || []).length})</span>
+                          <div style={{ display: 'flex', gap: '0.2rem' }}>
+                            {(slide.words || []).some(w => !w.meaning) && (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (!slide.words?.length || !slide.text) return;
+                                  const normWord = (s) => (s || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\]]/g, '').trim();
+                                  const wordsNeedingLookup = slide.words.filter(w => !w.meaning);
+                                  if (wordsNeedingLookup.length === 0) return;
+                                  try {
+                                    const lookupResponse = await api.post('/chat/batch-word-lookup', {
+                                      words: wordsNeedingLookup.map(w => normWord(w.text)),
+                                      sentenceText: slide.text,
+                                      sentenceTranslation: slide.translation || '',
+                                      sourceLanguage: comic?.language || 'es',
+                                      targetLanguage: comic?.targetLanguage || 'en'
+                                    });
+                                    const lookupResults = lookupResponse.data;
+                                    if (Array.isArray(lookupResults)) {
+                                      updateHotspotSlide(hotspot.id, slide.id, {
+                                        words: slide.words.map(w => {
+                                          if (w.meaning) return w;
+                                          const idx = wordsNeedingLookup.findIndex(wn => wn.id === w.id);
+                                          if (idx >= 0 && lookupResults[idx] && !lookupResults[idx].isName) {
+                                            return { ...w, meaning: lookupResults[idx].meaning || '', baseForm: lookupResults[idx].baseForm || '' };
+                                          }
+                                          return w;
+                                        })
+                                      });
+                                    }
+                                  } catch (err) { console.error('Fill dictionary failed:', err); }
+                                }}
+                                style={{ padding: '0.1rem 0.3rem', fontSize: '0.6rem', background: '#3498db', color: '#fff', border: 'none', borderRadius: '2px', cursor: 'pointer' }}
+                              >
+                                Fill Dict
+                              </button>
+                            )}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!slide.text) return;
+                                const normWord = (s) => (s || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\]]/g, '').trim();
+                                const cleanWord = (s) => (s || '').replace(/[.,!?;:"""''¿¡…\[\]]+/g, '').trim();
+                                const textWords = slide.text.split(/\s+/).filter(w => w);
+                                const existingWords = slide.words || [];
+                                const allWords = textWords.map(w => {
+                                  const normalised = normWord(w);
+                                  const existing = existingWords.find(ew => normWord(ew.text) === normalised);
+                                  return {
+                                    id: existing?.id || `word-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                    text: cleanWord(w).toLowerCase(),
+                                    meaning: existing?.meaning || '',
+                                    baseForm: existing?.baseForm || '',
+                                    vocabQuiz: existing?.vocabQuiz || false
+                                  };
+                                });
+                                // Auto-fill meanings
+                                const wordsNeedingLookup = allWords.filter(w => !w.meaning);
+                                if (wordsNeedingLookup.length > 0) {
+                                  try {
+                                    const lookupResponse = await api.post('/chat/batch-word-lookup', {
+                                      words: wordsNeedingLookup.map(w => normWord(w.text)),
+                                      sentenceText: slide.text,
+                                      sentenceTranslation: slide.translation || '',
+                                      sourceLanguage: comic?.language || 'es',
+                                      targetLanguage: comic?.targetLanguage || 'en'
+                                    });
+                                    const lookupResults = lookupResponse.data;
+                                    if (Array.isArray(lookupResults)) {
+                                      wordsNeedingLookup.forEach((w, i) => {
+                                        if (lookupResults[i] && !lookupResults[i].isName) {
+                                          w.meaning = lookupResults[i].meaning || '';
+                                          w.baseForm = cleanWord(lookupResults[i].baseForm || '').toLowerCase();
+                                        }
+                                      });
+                                    }
+                                  } catch (err) { console.error('Lookup failed:', err); }
+                                }
+                                updateHotspotSlide(hotspot.id, slide.id, { words: allWords });
+                              }}
+                              style={{ padding: '0.1rem 0.3rem', fontSize: '0.6rem', background: '#e67e22', color: '#fff', border: 'none', borderRadius: '2px', cursor: 'pointer' }}
+                            >
+                              Save Text
+                            </button>
+                          </div>
+                        </div>
+                        {(slide.words || []).map((word, wIdx) => (
+                          <div key={word.id} style={{ display: 'flex', gap: '0.2rem', marginBottom: '0.2rem', alignItems: 'center' }}>
+                            <input
+                              type="text" value={word.text || ''}
+                              onChange={(e) => {
+                                const updatedWords = [...slide.words];
+                                updatedWords[wIdx] = { ...word, text: e.target.value };
+                                updateHotspotSlide(hotspot.id, slide.id, { words: updatedWords });
+                              }}
+                              placeholder="Word"
+                              style={{ flex: 1, minWidth: 0, padding: '0.2rem', borderRadius: '2px', border: '1px solid #ccc', fontSize: '0.7rem' }}
+                            />
+                            <input
+                              type="text" value={word.meaning || ''}
+                              onChange={(e) => {
+                                const updatedWords = [...slide.words];
+                                updatedWords[wIdx] = { ...word, meaning: e.target.value };
+                                updateHotspotSlide(hotspot.id, slide.id, { words: updatedWords });
+                              }}
+                              placeholder="Meaning"
+                              style={{ flex: 1, minWidth: 0, padding: '0.2rem', borderRadius: '2px', border: '1px solid #ccc', fontSize: '0.7rem' }}
+                            />
+                            <input
+                              type="text" value={word.baseForm || ''}
+                              onChange={(e) => {
+                                const updatedWords = [...slide.words];
+                                updatedWords[wIdx] = { ...word, baseForm: e.target.value };
+                                updateHotspotSlide(hotspot.id, slide.id, { words: updatedWords });
+                              }}
+                              placeholder="Base"
+                              style={{ flex: 1, minWidth: 0, padding: '0.2rem', borderRadius: '2px', border: '1px solid #ccc', fontSize: '0.7rem' }}
+                            />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.1rem', fontSize: '0.6rem', color: '#888', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox" checked={word.vocabQuiz || false}
+                                onChange={(e) => {
+                                  const updatedWords = [...slide.words];
+                                  updatedWords[wIdx] = { ...word, vocabQuiz: e.target.checked };
+                                  updateHotspotSlide(hotspot.id, slide.id, { words: updatedWords });
+                                }}
+                              />
+                              Q
+                            </label>
+                            <button
+                              onClick={() => {
+                                const updatedWords = slide.words.filter((_, i) => i !== wIdx);
+                                updateHotspotSlide(hotspot.id, slide.id, { words: updatedWords });
+                              }}
+                              style={{ padding: '0.1rem 0.2rem', fontSize: '0.6rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '2px', cursor: 'pointer' }}
+                            >
+                              x
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
             </div>
           )}
 
@@ -10243,7 +11113,7 @@ function PageEditor({ isCover = false }) {
                           <defs>
                             <filter id={`roughBubble${filtSuffix}-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
                               <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
-                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
                             </filter>
                           </defs>
                           <g transform={`rotate(${rotation} ${cx} ${cy})`}>
@@ -10299,6 +11169,9 @@ function PageEditor({ isCover = false }) {
                   {bubble.type === 'thought' && bubble.showTail !== false && (() => {
                     const tailBasePos = bubble.tailBaseX ?? 0.5;
                     const tailSide = bubble.tailSide || 'bottom';
+                    const thoughtRotation = bubble.rotation ?? 0;
+                    const bubbleCx = (bubble.x + bubble.width / 2) * CANVAS_WIDTH;
+                    const bubbleCy = (bubble.y + bubble.height / 2) * CANVAS_HEIGHT;
                     let startX, startY;
                     if (tailSide === 'bottom') { startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH; startY = (bubble.y + bubble.height) * CANVAS_HEIGHT; }
                     else if (tailSide === 'top') { startX = (bubble.x + bubble.width * tailBasePos) * CANVAS_WIDTH; startY = bubble.y * CANVAS_HEIGHT; }
@@ -10316,12 +11189,17 @@ function PageEditor({ isCover = false }) {
                     const ctrlX = (startX + tipX) / 2 + perpX;
                     const ctrlY = (startY + tipY) / 2 + perpY;
                     const circles = [];
-                    for (let i = 0; i < 3; i++) {
-                      const t = Math.min(((i + 1) * 18) / Math.max(distance, 1), 0.9);
+                    const numCircles = bubble.thoughtTailCircles ?? 3;
+                    const minRadius = 2;
+                    const stepShrink = 1.5;
+                    const startRadius = minRadius + (numCircles - 1) * stepShrink;
+                    for (let i = 0; i < numCircles; i++) {
+                      const t = Math.min(((i + 1) * (bubble.thoughtTailSpacing ?? 18)) / Math.max(distance, 1), 0.95);
                       const oneMinusT = 1 - t;
                       const ccx = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * ctrlX + t * t * tipX;
                       const ccy = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * ctrlY + t * t * tipY;
-                      circles.push({ cx: ccx, cy: ccy, radius: 7 - (i * 2) });
+                      const radius = startRadius - i * stepShrink;
+                      circles.push({ cx: ccx, cy: ccy, radius });
                     }
                     const borderColor = bubble.borderColor || '#000';
                     const borderWidth = bubble.borderWidth ?? 2;
@@ -10333,9 +11211,39 @@ function PageEditor({ isCover = false }) {
                             <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
                           </filter>
                         </defs>
+                        <g transform={`rotate(${thoughtRotation} ${bubbleCx} ${bubbleCy})`}>
                         {circles.map((circle, i) => (
                           <circle key={i} cx={circle.cx} cy={circle.cy} r={circle.radius} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke={bubble.noBorder ? 'none' : borderColor} strokeWidth={borderWidth} filter={`url(#roughCircles${filtSuffix}-${bubble.id})`} />
                         ))}
+                        </g>
+                      </svg>
+                    );
+                  })()}
+                  {/* Thought bubble body — SVG rect with rough filter (export) */}
+                  {bubble.type === 'thought' && (() => {
+                    const tX = bubble.x * CANVAS_WIDTH;
+                    const tY = bubble.y * CANVAS_HEIGHT;
+                    const tW = bubble.width * CANVAS_WIDTH;
+                    const tH = bubble.height * CANVAS_HEIGHT;
+                    const tCx = tX + tW / 2;
+                    const tCy = tY + tH / 2;
+                    const tRotDeg = (bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.rotation ?? 0);
+                    const tBorderColor = bubble.borderColor || '#000';
+                    const tBorderWidth = bubble.borderWidth ?? 2.5;
+                    const tCornerPct = bubble.cornerRadius ?? 50;
+                    const tSvgRx = (tCornerPct / 100) * tW;
+                    const tSvgRy = (tCornerPct / 100) * tH;
+                    return (
+                      <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 50, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
+                        <defs>
+                          <filter id={`roughThought${filtSuffix}-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+                          </filter>
+                        </defs>
+                        <g transform={`rotate(${tRotDeg} ${tCx} ${tCy})`}>
+                          <rect x={tX} y={tY} width={tW} height={tH} rx={tSvgRx} ry={tSvgRy} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#ffffff')} stroke={bubble.noBorder ? 'none' : tBorderColor} strokeWidth={tBorderWidth} filter={`url(#roughThought${filtSuffix}-${bubble.id})`} />
+                        </g>
                       </svg>
                     );
                   })()}
@@ -10347,8 +11255,8 @@ function PageEditor({ isCover = false }) {
                       top: `${bubble.y * 100}%`,
                       width: `${bubble.width * 100}%`,
                       height: `${bubble.height * 100}%`,
-                      background: bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')),
-                      border: bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`,
+                      background: bubble.type === 'thought' ? 'transparent' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff'))),
+                      border: bubble.type === 'thought' ? 'none' : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`),
                       borderRadius: bubble.type === 'thought' ? `${bubble.cornerRadius ?? 50}%` : `${bubble.cornerRadius || 8}px`,
                       display: 'flex',
                       alignItems: 'center',
@@ -10356,8 +11264,9 @@ function PageEditor({ isCover = false }) {
                       padding: bubble.type === 'image' ? '2px' : '6px 8px',
                       boxSizing: 'border-box',
                       zIndex: 50,
-                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2}deg)`,
-                      filter: `url(#roughEdge${filtSuffix})`
+                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0)}deg)`,
+                      transformOrigin: 'center center',
+                      filter: bubble.type === 'thought' ? 'none' : `url(#roughEdge${filtSuffix})`
                     }}
                   >
                     {bubble.type === 'image' && bubble.imageUrl ? (
@@ -10380,7 +11289,7 @@ function PageEditor({ isCover = false }) {
                       lineHeight: 1.3,
                       letterSpacing: bubble.fontId === 'bangers' ? '0.5px' : '0',
                       textTransform: bubble.uppercase ? 'uppercase' : 'none',
-                      transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) + (bubble.textAngle ?? 0)}deg)`,
+                      transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) - (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0) + (bubble.textAngle ?? 0)}deg)`,
                       display: 'inline-block'
                     }}>
                       {getBubbleDisplayText(bubble)}

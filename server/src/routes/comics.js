@@ -223,6 +223,14 @@ router.put('/:id', async (req, res) => {
     const updateData = { ...req.body };
     delete updateData.id; // Don't allow changing the id
 
+    // Strip voices from page/cover saves — voices should only be updated
+    // from the dedicated Voices tab (when voices is the primary payload).
+    // Full-comic saves from PageEditor include stale/injected voices that
+    // could accidentally overwrite the collection's voice config.
+    if (updateData.voices && (updateData.pages || updateData.cover)) {
+      delete updateData.voices;
+    }
+
     // If updating voices and comic belongs to a collection, save to collection instead
     if (updateData.voices) {
       const existingComic = await Comic.findOne({ id: req.params.id });
@@ -607,6 +615,24 @@ router.post('/:id/export-full', async (req, res) => {
       }
     }
 
+    // Copy collection cover image if this comic belongs to a collection
+    if (comicObj.collectionId) {
+      const Collection = require('../models/Collection');
+      const collection = await Collection.findOne({ id: comicObj.collectionId });
+      if (collection?.coverImage) {
+        const cleanColCover = collection.coverImage.split('?')[0];
+        const colCoverSource = path.join(__dirname, '../..', cleanColCover);
+        const colCoverDest = path.join(imagesDir, 'collection_cover.jpg');
+        try {
+          await convertToJpeg(colCoverSource, colCoverDest);
+          copiedImages.push('collection_cover.jpg');
+          exportedComic.collectionCoverImage = 'collection_cover';
+        } catch (e) {
+          console.log('Collection cover image not found:', colCoverSource);
+        }
+      }
+    }
+
     for (const page of comicObj.pages) {
       const pageImage = page.bakedImage || page.masterImage;
       if (pageImage) {
@@ -741,6 +767,18 @@ router.post('/:id/export-full', async (req, res) => {
             console.log('Audio file not found:', audioSourcePath);
           }
         }
+        // Copy translation audio file (English)
+        if (sentence.translationAudioUrl) {
+          const transFilename = `${sentence.translationAudioUrl}.mp3`;
+          const transSourcePath = path.join(projectAudioDir, transFilename);
+          const transDestPath = path.join(audioDir, transFilename);
+          try {
+            await fs.copyFile(transSourcePath, transDestPath);
+            copiedAudio.push(transFilename);
+          } catch (e) {
+            console.log('Translation audio file not found:', transSourcePath);
+          }
+        }
         // Copy alternative audio files
         for (const alt of sentence.alternatives || []) {
           if (alt.audioUrl) {
@@ -776,6 +814,59 @@ router.post('/:id/export-full', async (req, res) => {
       }
     } catch (e) {
       console.log('No word audio files to copy');
+    }
+
+    // Copy hotspot slide images and audio
+    const hotspotsImagesDir = path.join(imagesDir, 'hotspots');
+    let copiedHotspotFiles = 0;
+    for (const page of comicObj.pages || []) {
+      for (let hIdx = 0; hIdx < (page.hotspots || []).length; hIdx++) {
+        const hotspot = page.hotspots[hIdx];
+        for (let sIdx = 0; sIdx < (hotspot.slides || []).length; sIdx++) {
+          const slide = hotspot.slides[sIdx];
+          // Copy slide image
+          if (slide.imageUrl) {
+            await fs.mkdir(hotspotsImagesDir, { recursive: true });
+            const imageSourcePath = path.join(__dirname, '../..', slide.imageUrl);
+            const imageExt = path.extname(slide.imageUrl) || '.jpg';
+            const imageDestName = `${comicSlug}_p${page.pageNumber}_h${hIdx + 1}_slide${sIdx + 1}${imageExt}`;
+            const imageDestPath = path.join(hotspotsImagesDir, imageDestName);
+            try {
+              await fs.copyFile(imageSourcePath, imageDestPath);
+              copiedHotspotFiles++;
+            } catch (e) {
+              console.log('Hotspot image not found:', imageSourcePath);
+            }
+          }
+          // Copy slide audio
+          if (slide.audioUrl) {
+            const audioFilename = `${slide.audioUrl}.mp3`;
+            const audioSourcePath = path.join(projectAudioDir, audioFilename);
+            const audioDestPath = path.join(audioDir, audioFilename);
+            try {
+              await fs.copyFile(audioSourcePath, audioDestPath);
+              copiedHotspotFiles++;
+            } catch (e) {
+              console.log('Hotspot audio not found:', audioSourcePath);
+            }
+          }
+          // Copy slide translation audio
+          if (slide.translationAudioUrl) {
+            const transFilename = `${slide.translationAudioUrl}.mp3`;
+            const transSourcePath = path.join(projectAudioDir, transFilename);
+            const transDestPath = path.join(audioDir, transFilename);
+            try {
+              await fs.copyFile(transSourcePath, transDestPath);
+              copiedHotspotFiles++;
+            } catch (e) {
+              console.log('Hotspot translation audio not found:', transSourcePath);
+            }
+          }
+        }
+      }
+    }
+    if (copiedHotspotFiles > 0) {
+      console.log(`Copied ${copiedHotspotFiles} hotspot files`);
     }
 
     const comicJsonPath = path.join(exportDir, 'comic.json');

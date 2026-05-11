@@ -159,12 +159,27 @@ router.get('/comics/:id', async (req, res) => {
       // words dir might not exist
     }
 
+    // List hotspot image files
+    const hotspotImages = [];
+    const hotspotImagesDir = path.join(exportDir, 'images', 'hotspots');
+    try {
+      const hotspotFiles = await fs.readdir(hotspotImagesDir);
+      for (const file of hotspotFiles) {
+        if (file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')) {
+          hotspotImages.push(`${basePath}/images/hotspots/${file}`);
+        }
+      }
+    } catch (e) {
+      // hotspots dir might not exist
+    }
+
     res.json({
       comic: readerComic,
       assets: {
         images,
         audio,
-        wordAudio
+        wordAudio,
+        ...(hotspotImages.length > 0 && { hotspotImages })
       }
     });
   } catch (error) {

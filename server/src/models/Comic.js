@@ -18,6 +18,7 @@ const SentenceSchema = new mongoose.Schema({
   text: String,
   translation: String,
   audioUrl: String,
+  translationAudioUrl: String,
   alternatives: [{
     text: String,
     audioUrl: String
@@ -50,6 +51,8 @@ const BubbleSchema = new mongoose.Schema({
   tailBend: Number, // Tail curvature: negative = bend left, positive = bend right
   textAngle: Number, // Rotation angle for text inside bubble
   isSoundEffect: Boolean, // If true, this is a sound effect text (no TTS audio)
+  thoughtTailCircles: Number, // Number of thought tail circles
+  thoughtTailSpacing: Number, // Spacing between thought tail circles
   locked: Boolean,
   // Styling
   bgColor: String,
@@ -76,7 +79,9 @@ const BubbleSchema = new mongoose.Schema({
 const PanelSchema = new mongoose.Schema({
   id: String,
   panelOrder: Number,
+  zLayer: Number,
   floating: Boolean,
+  skipInReader: Boolean,
   corners: [{
     x: Number,
     y: Number
@@ -124,6 +129,28 @@ const LineSchema = new mongoose.Schema({
   y2: Number
 }, { _id: false });
 
+// Hotspot Slide Schema (nested in Hotspot)
+const HotspotSlideSchema = new mongoose.Schema({
+  id: String,
+  imageUrl: String,
+  text: String,
+  translation: String,
+  audioUrl: String,
+  translationAudioUrl: String,
+  words: [WordSchema]
+}, { _id: false });
+
+// Hotspot Schema (nested in Page)
+const HotspotSchema = new mongoose.Schema({
+  id: String,
+  x: Number,
+  y: Number,
+  width: Number,
+  height: Number,
+  label: String,
+  slides: [HotspotSlideSchema]
+}, { _id: false });
+
 // Page Schema (nested in Comic)
 const PageSchema = new mongoose.Schema({
   id: String,
@@ -138,7 +165,8 @@ const PageSchema = new mongoose.Schema({
     vertical: [mongoose.Schema.Types.Mixed]
   },
   panels: [PanelSchema],
-  bubbles: [BubbleSchema]
+  bubbles: [BubbleSchema],
+  hotspots: [HotspotSchema]
 }, { _id: false });
 
 // Character/Reference Schema (for prompt templates)

@@ -158,6 +158,7 @@ function transformToReaderFormat(comic, comicSlug) {
                 text: sentenceText,
                 translation: sentence.translation || '',
                 audioUrl: sentence.audioUrl || '',
+                ...(sentence.translationAudioUrl && { translationAudioUrl: sentence.translationAudioUrl }),
                 ...(sentence.alternatives?.length > 0 && {
                   alternativeTexts: sentence.alternatives.map(a => a.text),
                   alternativeAudioUrls: sentence.alternatives.filter(a => a.audioUrl).map(a => a.audioUrl)
@@ -222,6 +223,42 @@ function transformToReaderFormat(comic, comicSlug) {
       }
     }
 
+    // Build hotspots for this page
+    const pageHotspots = (page.hotspots || []).map((hotspot, hIdx) => {
+      return {
+        id: `${comicSlug}-hotspot-${page.pageNumber}-${hIdx + 1}`,
+        x: hotspot.x,
+        y: hotspot.y,
+        width: hotspot.width,
+        height: hotspot.height,
+        ...(hotspot.label && { label: hotspot.label }),
+        slides: (hotspot.slides || []).map((slide, sIdx) => {
+          const slideWords = (slide.words || []).map((word) => {
+            const wText = sanitizeWordForFilename(word.text);
+            const wBase = sanitizeWordForFilename(word.baseForm || word.text);
+            return {
+              id: `${comicSlug}-w${wordCounter++}`,
+              text: word.text || '',
+              meaning: word.meaning || '',
+              baseForm: word.baseForm || word.text || '',
+              ...(word.vocabQuiz && { vocabQuiz: true }),
+              ...(wText && { wordAudioUrl: `words/${wText}` }),
+              ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+            };
+          });
+          return {
+            id: `${comicSlug}-hotspot-${page.pageNumber}-${hIdx + 1}-slide-${sIdx + 1}`,
+            ...(slide.imageUrl && { imageUrl: `hotspots/${comicSlug}_p${page.pageNumber}_h${hIdx + 1}_slide${sIdx + 1}` }),
+            text: slide.text || '',
+            translation: slide.translation || '',
+            ...(slide.audioUrl && { audioUrl: slide.audioUrl }),
+            ...(slide.translationAudioUrl && { translationAudioUrl: slide.translationAudioUrl }),
+            words: slideWords
+          };
+        })
+      };
+    });
+
     const exportedPage = {
       id: `${comicSlug}-page-${page.pageNumber}`,
       pageNumber: pageNum,
@@ -230,7 +267,8 @@ function transformToReaderFormat(comic, comicSlug) {
       ...(page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage && {
         noTextImage: `${comicSlug}_p${page.pageNumber}_no_text`
       }),
-      panels: (page.panels || []).map(panel => {
+      ...(pageHotspots.length > 0 && { hotspots: pageHotspots }),
+      panels: (page.panels || []).filter(p => !p.skipInReader).map(panel => {
         const panelNum = panel.panelOrder;
         const hasBakedPage = page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage;
         const panelCorners = computePanelCorners(panel, page.lines);
@@ -315,6 +353,7 @@ function transformToReaderFormat(comic, comicSlug) {
                   text: sentenceText,
                   translation: sentence.translation || '',
                   audioUrl: sentence.audioUrl || '',
+                ...(sentence.translationAudioUrl && { translationAudioUrl: sentence.translationAudioUrl }),
                   ...(sentence.alternatives?.length > 0 && {
                   alternativeTexts: sentence.alternatives.map(a => a.text),
                   alternativeAudioUrls: sentence.alternatives.filter(a => a.audioUrl).map(a => a.audioUrl)
@@ -377,8 +416,8 @@ function transformToReaderFormat(comic, comicSlug) {
     ...(comic.collectionTitle && { collectionTitle: comic.collectionTitle }),
     ...(comic.episodeNumber && { episodeNumber: comic.episodeNumber }),
     pages,
-    reviewWords: pages.flatMap(page =>
-      (page.panels || []).flatMap(panel =>
+    reviewWords: pages.flatMap(page => [
+      ...(page.panels || []).flatMap(panel =>
         (panel.bubbles || []).flatMap(bubble =>
           (bubble.sentences || []).flatMap(sentence =>
             (sentence.words || []).filter(w => w.vocabQuiz).map(w => {
@@ -399,8 +438,28 @@ function transformToReaderFormat(comic, comicSlug) {
             })
           )
         )
+      ),
+      ...(page.hotspots || []).flatMap(hotspot =>
+        (hotspot.slides || []).flatMap(slide =>
+          (slide.words || []).filter(w => w.vocabQuiz).map(w => {
+            const wText = sanitizeWordForFilename(w.text);
+            const wBase = sanitizeWordForFilename(w.baseForm || w.text);
+            return {
+              word: {
+                id: w.id,
+                text: w.text,
+                meaning: w.meaning,
+                baseForm: w.baseForm,
+                ...(wText && { wordAudioUrl: `words/${wText}` }),
+                ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+              },
+              hotspotId: hotspot.id,
+              pageId: page.id
+            };
+          })
+        )
       )
-    ),
+    ]),
     wordAudioMap: (() => {
       const map = {};
       for (const page of pages) {
@@ -411,6 +470,14 @@ function transformToReaderFormat(comic, comicSlug) {
                 if (word.wordAudioUrl) map[sanitizeWordForFilename(word.text)] = word.wordAudioUrl;
                 if (word.baseFormAudioUrl) map[sanitizeWordForFilename(word.baseForm)] = word.baseFormAudioUrl;
               }
+            }
+          }
+        }
+        for (const hotspot of page.hotspots || []) {
+          for (const slide of hotspot.slides || []) {
+            for (const word of slide.words || []) {
+              if (word.wordAudioUrl) map[sanitizeWordForFilename(word.text)] = word.wordAudioUrl;
+              if (word.baseFormAudioUrl) map[sanitizeWordForFilename(word.baseForm)] = word.baseFormAudioUrl;
             }
           }
         }
