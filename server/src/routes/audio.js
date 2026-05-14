@@ -146,8 +146,7 @@ Rules:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      max_completion_tokens: 500,
-      temperature: 0.7
+      max_completion_tokens: 500
     });
 
     const enhancedText = completion.choices[0].message.content.trim();
@@ -381,8 +380,7 @@ router.post('/translate', async (req, res) => {
         },
         { role: 'user', content: text }
       ],
-      max_completion_tokens: 500,
-      temperature: 0.3
+      max_completion_tokens: 500
     });
 
     const translated = completion.choices[0].message.content.trim();
@@ -532,6 +530,140 @@ router.post('/generate-word-audio', async (req, res) => {
     res.json({ generated, skipped, failed, errors: errors.slice(0, 10), totalFiles: generated + skipped });
   } catch (error) {
     console.error('Word audio generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate translation (English) audio for all sentences in a comic
+router.post('/generate-translation-audio', async (req, res) => {
+  try {
+    const {
+      comicId,
+      voiceId,
+      modelId = 'eleven_v3',
+      stability = 0.5,
+      similarityBoost = 0.75,
+      speed = 1.0,
+      languageCode,
+      forceRegenerate = false
+    } = req.body;
+
+    if (!comicId || !voiceId) {
+      return res.status(400).json({ error: 'comicId and voiceId are required' });
+    }
+    if (!process.env.ELEVENLABS_API_KEY) {
+      return res.status(400).json({ error: 'ElevenLabs API key not configured.' });
+    }
+
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+
+    const comicObj = comic.toObject();
+    const audioDir = path.join(PROJECTS_DIR, comicId, 'audio');
+    await fs.mkdir(audioDir, { recursive: true });
+
+    // Collect all sentences with translations
+    const allBubbles = [
+      ...(comicObj.cover?.bubbles || []),
+      ...(comicObj.pages || []).flatMap(p => p.bubbles || [])
+    ];
+
+    const sentenceEntries = [];
+    for (const bubble of allBubbles) {
+      for (const sentence of bubble.sentences || []) {
+        if (!sentence.translation || !sentence.audioUrl) continue;
+        sentenceEntries.push({
+          id: sentence.id,
+          translation: sentence.translation,
+          audioName: `${sentence.audioUrl}_en`,
+          existingUrl: sentence.translationAudioUrl
+        });
+      }
+    }
+
+    let generated = 0;
+    let skipped = 0;
+    let failed = 0;
+    const errors = [];
+
+    console.log(`Translation audio: ${sentenceEntries.length} sentences to process`);
+
+    for (const entry of sentenceEntries) {
+      // Skip if already has translation audio and not forcing
+      if (!forceRegenerate && entry.existingUrl) {
+        const existingPath = path.join(audioDir, `${entry.existingUrl}.mp3`);
+        try {
+          await fs.access(existingPath);
+          skipped++;
+          continue;
+        } catch {
+          // File doesn't exist, regenerate
+        }
+      }
+
+      try {
+        const requestBody = {
+          text: entry.translation,
+          model_id: modelId,
+          voice_settings: {
+            stability,
+            similarity_boost: similarityBoost,
+            speed
+          }
+        };
+        if (languageCode) requestBody.language_code = languageCode;
+
+        const response = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+          {
+            method: 'POST',
+            headers: {
+              'xi-api-key': process.env.ELEVENLABS_API_KEY,
+              'Content-Type': 'application/json',
+              'Accept': 'audio/mpeg'
+            },
+            body: JSON.stringify(requestBody)
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`ElevenLabs ${response.status}: ${errorText}`);
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        await fs.writeFile(path.join(audioDir, `${entry.audioName}.mp3`), buffer);
+
+        // Update sentence in DB
+        await Comic.updateOne(
+          { id: comicId, 'pages.bubbles.sentences.id': entry.id },
+          { $set: { 'pages.$[].bubbles.$[].sentences.$[s].translationAudioUrl': entry.audioName } },
+          { arrayFilters: [{ 's.id': entry.id }] }
+        );
+        // Also check cover bubbles
+        await Comic.updateOne(
+          { id: comicId, 'cover.bubbles.sentences.id': entry.id },
+          { $set: { 'cover.bubbles.$[].sentences.$[s].translationAudioUrl': entry.audioName } },
+          { arrayFilters: [{ 's.id': entry.id }] }
+        );
+
+        generated++;
+        console.log(`  [${generated + skipped + failed}/${sentenceEntries.length}] Generated: ${entry.translation.substring(0, 40)}...`);
+
+        // Rate limit delay
+        await new Promise(resolve => setTimeout(resolve, 250));
+      } catch (err) {
+        failed++;
+        errors.push({ id: entry.id, error: err.message });
+        console.error(`  Failed: ${entry.id} - ${err.message}`);
+      }
+    }
+
+    console.log(`Translation audio done: ${generated} generated, ${skipped} skipped, ${failed} failed`);
+
+    res.json({ generated, skipped, failed, errors: errors.slice(0, 10), total: sentenceEntries.length });
+  } catch (error) {
+    console.error('Translation audio generation error:', error);
     res.status(500).json({ error: error.message });
   }
 });

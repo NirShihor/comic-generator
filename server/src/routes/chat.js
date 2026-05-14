@@ -69,8 +69,7 @@ router.post('/message', async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-5.5',
       messages: openaiMessages,
-      max_completion_tokens: 16000,
-      temperature: 0.7
+      max_completion_tokens: 16000
     });
 
     console.log('OpenAI API response received');
@@ -153,8 +152,7 @@ Write in a direct, descriptive style. Use comma-separated visual tags where appr
     const completion = await openai.chat.completions.create({
       model: 'gpt-5.5',
       messages: openaiMessages,
-      max_completion_tokens: 4000,
-      temperature: 0.5
+      max_completion_tokens: 4000
     });
 
     res.json({ message: completion.choices[0].message.content });
@@ -224,8 +222,7 @@ Return ONLY the JSON object, no other text.`;
         { role: 'system', content: 'You are a precise language assistant. Always respond with valid JSON only.' },
         { role: 'user', content: prompt }
       ],
-      max_completion_tokens: 200,
-      temperature: 0.2
+      max_completion_tokens: 200
     });
 
     const responseText = completion.choices[0].message.content.trim();
@@ -282,8 +279,7 @@ Return ONLY the JSON array, no other text.`;
         { role: 'system', content: 'You are a precise language assistant. Always respond with valid JSON only.' },
         { role: 'user', content: prompt }
       ],
-      max_completion_tokens: 1000,
-      temperature: 0.2
+      max_completion_tokens: 1000
     });
 
     const responseText = completion.choices[0].message.content.trim();

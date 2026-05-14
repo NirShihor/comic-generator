@@ -93,6 +93,7 @@ const PanelSchema = new mongoose.Schema({
     height: Number
   },
   artworkImage: String,
+  bakedCropImage: String,
   content: String,
   selectedBibleRefs: [String],
   fitMode: { type: String, default: 'stretch' },
@@ -137,6 +138,7 @@ const HotspotSlideSchema = new mongoose.Schema({
   translation: String,
   audioUrl: String,
   translationAudioUrl: String,
+  speakingTest: Boolean,
   words: [WordSchema]
 }, { _id: false });
 
@@ -158,6 +160,7 @@ const PageSchema = new mongoose.Schema({
   masterImage: String,
   originalMasterImage: String,
   bakedImage: String,
+  noFloatImage: String,
   lines: [LineSchema],
   // Legacy format support
   dividerLines: {

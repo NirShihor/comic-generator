@@ -94,6 +94,10 @@ function ComicEditor() {
   const [consistencyAdjusting, setConsistencyAdjusting] = useState(false);
   const [consistencyAdjustProgress, setConsistencyAdjustProgress] = useState({ current: 0, total: 0 });
   const [consistencyBeforeAfter, setConsistencyBeforeAfter] = useState({});
+  const [consistencyProvider, setConsistencyProvider] = useState('openai');
+  const [consistencyIgnore, setConsistencyIgnore] = useState('');
+  const [consistencyFocus, setConsistencyFocus] = useState('');
+  const [consistencyLightbox, setConsistencyLightbox] = useState(null);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState(() => {
@@ -823,10 +827,13 @@ function ComicEditor() {
           panelImagePath: panel.artworkImage,
           characterName: character.name,
           characterDescription: character.description || '',
-          characterRefImagePath: character.image
+          characterRefImagePath: character.image,
+          provider: consistencyProvider,
+          ignore: consistencyIgnore,
+          focus: consistencyFocus
         }, { timeout: 120000 });
 
-        if (resp.data.detected) {
+        if (resp.data.detected && resp.data.matchScore < 9) {
           results.push({
             pageId: page.id,
             pageNumber: page.pageNumber,
@@ -872,8 +879,11 @@ function ComicEditor() {
           characterName: result.characterName,
           characterDescription: result.characterDescription,
           characterRefImagePath: result.characterRefImage,
-          discrepancies: result.discrepancies,
-          panelId: result.panelId
+          discrepancies: result.userNotes ? [...result.discrepancies, result.userNotes] : result.discrepancies,
+          panelId: result.panelId,
+          provider: consistencyProvider,
+          ignore: consistencyIgnore,
+          focus: consistencyFocus
         }, { timeout: 600000 });
 
         // Update the panel in the DB
@@ -929,13 +939,53 @@ function ComicEditor() {
     }
   };
 
+  const handleConsistencySaveAll = async () => {
+    const adjustedResults = consistencyResults.filter(r => r.adjusted);
+    if (adjustedResults.length === 0) return;
+
+    try {
+      const resp = await api.post('/images/consistency/save-all', {
+        comicId: id,
+        panels: adjustedResults.map(r => ({
+          panelId: r.panelId,
+          pageId: r.pageId,
+          imagePath: r.panelImage
+        }))
+      });
+
+      // Update local results with new project paths
+      if (resp.data.results) {
+        const pathMap = {};
+        resp.data.results.forEach(r => {
+          if (r.status === 'saved') pathMap[r.panelId] = r.path;
+        });
+        setConsistencyResults(prev => prev.map(r =>
+          pathMap[r.panelId] ? { ...r, panelImage: pathMap[r.panelId] } : r
+        ));
+      }
+
+      const comicResp = await api.get(`/comics/${id}`);
+      setComic(comicResp.data);
+      alert(`Saved ${resp.data.saved} adjusted panel${resp.data.saved !== 1 ? 's' : ''} to project.`);
+    } catch (err) {
+      alert('Save failed: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   return (
     <div style={{ maxWidth: 'none', width: 'calc(100vw - 4rem)' }}>
       <div className="page-header">
         <div>
-          <Link to="/" style={{ color: '#888', textDecoration: 'none', marginBottom: '0.5rem', display: 'block' }}>
-            ← Back to Comics
-          </Link>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
+            <Link to="/" style={{ color: '#888', textDecoration: 'none' }}>
+              ← Back to Comics
+            </Link>
+            {comic.collectionId && (
+              <Link to={`/?collection=${comic.collectionId}`} style={{ color: '#888', textDecoration: 'none' }}>
+                ← Back to Collection
+              </Link>
+            )}
+          </div>
           <h1>{comic.title}</h1>
           <p style={{ color: '#888' }}>{comic.description}</p>
         </div>
@@ -2309,9 +2359,10 @@ function ComicEditor() {
                               const referenceImages = [...collectionCoverRefs];
                               const hasMasterSelected = settings.masterStyleImage && collectionCoverRefs.includes(settings.masterStyleImage);
 
+                              const colId = comic.collectionId || settingsCollectionId;
                               const response = await api.post('/images/generate-panel', {
                                 prompt: fullPrompt,
-                                panelId: `collection-cover-${comic.collectionId}`,
+                                panelId: `collection-cover-${colId}`,
                                 aspectRatio: 'portrait',
                                 referenceImages,
                                 linkedPanelImages: [],
@@ -2320,18 +2371,29 @@ function ComicEditor() {
                                 hasMasterStyleImage: !!hasMasterSelected
                               }, { timeout: 600000 });
 
+                              // Parse response if it came back as a string (keep-alive padding)
+                              const genData = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+
+                              if (genData.error) {
+                                throw new Error(genData.error);
+                              }
+                              if (!genData.path) {
+                                console.error('generate-panel response:', genData);
+                                throw new Error('Image generation did not return a file path');
+                              }
+
                               // Copy from uploads to collection project folder
                               const copyRes = await api.post('/images/copy-to-collection', {
-                                collectionId: comic.collectionId,
-                                sourcePath: response.data.path
+                                collectionId: colId,
+                                sourcePath: genData.path
                               });
 
                               const finalPath = copyRes.data.path;
                               setCollectionCoverImage(finalPath);
 
                               // Auto-save to collection
-                              await api.put(`/collections/${comic.collectionId}`, {
-                                id: comic.collectionId,
+                              await api.put(`/collections/${colId}`, {
+                                id: colId,
                                 coverImage: finalPath,
                                 coverPrompt: collectionCoverPrompt
                               });
@@ -3061,6 +3123,18 @@ function ComicEditor() {
               </select>
             </div>
 
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Provider</label>
+              <select
+                value={consistencyProvider}
+                onChange={(e) => setConsistencyProvider(e.target.value)}
+                style={{ padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem', minWidth: '120px' }}
+              >
+                <option value="openai">ChatGPT</option>
+                <option value="gemini">Gemini</option>
+              </select>
+            </div>
+
             <button
               onClick={handleConsistencyScan}
               disabled={!consistencyCharId || consistencyScanning}
@@ -3069,6 +3143,29 @@ function ComicEditor() {
             >
               {consistencyScanning ? `Scanning... (${consistencyScanProgress.current}/${consistencyScanProgress.total})` : 'Scan'}
             </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px', maxWidth: '400px' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Only check for</label>
+              <input
+                type="text"
+                value={consistencyFocus}
+                onChange={(e) => setConsistencyFocus(e.target.value)}
+                placeholder="e.g. glasses, hair color, scar"
+                style={{ padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem', width: '100%' }}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: '200px', maxWidth: '400px' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Ignore</label>
+              <input
+                type="text"
+                value={consistencyIgnore}
+                onChange={(e) => setConsistencyIgnore(e.target.value)}
+                placeholder="e.g. clothing, outfit, accessories"
+                style={{ padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem', width: '100%' }}
+              />
+            </div>
           </div>
 
           {/* No characters warning */}
@@ -3108,7 +3205,7 @@ function ComicEditor() {
                   return (
                     <div key={idx} style={{ border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden', background: '#fff' }}>
                       {/* Panel thumbnail with bounding box overlay */}
-                      <div style={{ position: 'relative', background: '#f0f0f0' }}>
+                      <div style={{ position: 'relative', background: '#f0f0f0', cursor: 'pointer' }} onClick={() => setConsistencyLightbox(`http://localhost:3001${result.panelImage}?t=${Date.now()}`)}>
                         <img
                           src={`http://localhost:3001${result.panelImage}?t=${Date.now()}`}
                           alt={`P${result.pageNumber} ${result.panelId}`}
@@ -3153,14 +3250,26 @@ function ComicEditor() {
                           <p style={{ fontSize: '0.75rem', color: '#888', margin: '0 0 0.5rem 0', fontStyle: 'italic' }}>{result.notes}</p>
                         )}
 
+                        {!result.adjusted && (
+                          <input
+                            type="text"
+                            placeholder="Add notes (e.g. looks too old)"
+                            value={result.userNotes || ''}
+                            onChange={(e) => setConsistencyResults(prev => prev.map((r, ri) =>
+                              ri === idx ? { ...r, userNotes: e.target.value } : r
+                            ))}
+                            style={{ width: '100%', padding: '0.3rem 0.5rem', fontSize: '0.75rem', border: '1px solid #ddd', borderRadius: '4px', marginBottom: '0.5rem', boxSizing: 'border-box' }}
+                          />
+                        )}
+
                         {/* Before/After comparison */}
                         {ba && result.adjusted && (
                           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                            <div style={{ flex: 1, textAlign: 'center' }}>
+                            <div style={{ flex: 1, textAlign: 'center', cursor: 'pointer' }} onClick={() => setConsistencyLightbox(`http://localhost:3001${ba.before}`)}>
                               <img src={`http://localhost:3001${ba.before}`} alt="Before" style={{ width: '100%', borderRadius: '4px' }} />
                               <div style={{ fontSize: '0.65rem', color: '#888' }}>Before</div>
                             </div>
-                            <div style={{ flex: 1, textAlign: 'center' }}>
+                            <div style={{ flex: 1, textAlign: 'center', cursor: 'pointer' }} onClick={() => setConsistencyLightbox(`http://localhost:3001${ba.after}`)}>
                               <img src={`http://localhost:3001${ba.after}`} alt="After" style={{ width: '100%', borderRadius: '4px' }} />
                               <div style={{ fontSize: '0.65rem', color: '#888' }}>After</div>
                             </div>
@@ -3192,26 +3301,70 @@ function ComicEditor() {
               </div>
 
               {/* Adjust button */}
-              {Object.values(consistencySelected).some(v => v) && (
-                <button
-                  onClick={handleConsistencyAdjust}
-                  disabled={consistencyAdjusting}
-                  className="btn btn-primary"
-                  style={{ padding: '0.6rem 1.5rem' }}
-                >
-                  {consistencyAdjusting
-                    ? `Adjusting... (${consistencyAdjustProgress.current}/${consistencyAdjustProgress.total})`
-                    : `Adjust Selected (${Object.values(consistencySelected).filter(v => v).length})`
-                  }
-                </button>
-              )}
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {Object.values(consistencySelected).some(v => v) && (
+                  <button
+                    onClick={handleConsistencyAdjust}
+                    disabled={consistencyAdjusting}
+                    className="btn btn-primary"
+                    style={{ padding: '0.6rem 1.5rem' }}
+                  >
+                    {consistencyAdjusting
+                      ? `Adjusting... (${consistencyAdjustProgress.current}/${consistencyAdjustProgress.total})`
+                      : `Adjust Selected (${Object.values(consistencySelected).filter(v => v).length})`
+                    }
+                  </button>
+                )}
+                {consistencyResults.some(r => r.adjusted) && (
+                  <button
+                    onClick={handleConsistencySaveAll}
+                    className="btn btn-secondary"
+                    style={{ padding: '0.6rem 1.5rem' }}
+                  >
+                    Save All Adjusted ({consistencyResults.filter(r => r.adjusted).length})
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Empty state after scan */}
-          {!consistencyScanning && consistencyResults.length === 0 && consistencyScanProgress.total > 0 && (
-            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
-              No character instances found in the scanned panels.
+          {/* Scan complete message */}
+          {!consistencyScanning && consistencyScanProgress.total > 0 && (
+            <div style={{
+              background: consistencyResults.length > 0 ? '#fff3cd' : '#d4edda',
+              border: `1px solid ${consistencyResults.length > 0 ? '#ffc107' : '#28a745'}`,
+              borderRadius: '6px', padding: '0.75rem', marginBottom: '1rem',
+              color: consistencyResults.length > 0 ? '#856404' : '#155724',
+              textAlign: 'center'
+            }}>
+              {consistencyResults.length > 0
+                ? `Scan complete — ${consistencyScanProgress.total} panels checked, ${consistencyResults.length} issue${consistencyResults.length !== 1 ? 's' : ''} found.`
+                : `Scan complete — ${consistencyScanProgress.total} panels checked. No consistency issues found!`
+              }
+            </div>
+          )}
+
+          {/* Lightbox overlay */}
+          {consistencyLightbox && (
+            <div
+              onClick={() => setConsistencyLightbox(null)}
+              style={{
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(0,0,0,0.85)', zIndex: 10000,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <img
+                src={consistencyLightbox}
+                alt="Enlarged"
+                style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px' }}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div style={{
+                position: 'absolute', top: '20px', right: '30px',
+                color: '#fff', fontSize: '2rem', cursor: 'pointer', fontWeight: 'bold'
+              }} onClick={() => setConsistencyLightbox(null)}>×</div>
             </div>
           )}
         </div>

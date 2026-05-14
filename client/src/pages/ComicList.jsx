@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 
 function ComicList() {
@@ -12,6 +12,9 @@ function ComicList() {
   const [renamingComic, setRenamingComic] = useState(null);
   const [renameTitle, setRenameTitle] = useState('');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const highlightCollectionId = searchParams.get('collection');
+  const collectionRefs = useRef({});
 
   // Group comics: collections grouped together, standalone comics separate
   const { collections, standaloneComics } = (() => {
@@ -91,6 +94,16 @@ function ComicList() {
   useEffect(() => {
     loadComics();
   }, []);
+
+  // Auto-expand and scroll to collection if ?collection= is in the URL
+  useEffect(() => {
+    if (highlightCollectionId && collections.length > 0) {
+      setCollapsedCollections(prev => ({ ...prev, [highlightCollectionId]: false }));
+      setTimeout(() => {
+        collectionRefs.current[highlightCollectionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [highlightCollectionId, collections.length]);
 
   const loadComics = async () => {
     try {
@@ -200,11 +213,12 @@ function ComicList() {
       <div className="comic-list">
         {/* Collection groups */}
         {collections.map(collection => (
-          <div key={collection.id} style={{
-            border: '2px solid #e0e0e0',
+          <div key={collection.id} ref={el => collectionRefs.current[collection.id] = el} style={{
+            border: `2px solid ${highlightCollectionId === collection.id ? '#007bff' : '#e0e0e0'}`,
             borderRadius: '10px',
             marginBottom: '1.5rem',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            transition: 'border-color 0.3s'
           }}>
             {/* Collection header */}
             <div

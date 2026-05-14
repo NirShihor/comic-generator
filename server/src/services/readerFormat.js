@@ -253,6 +253,7 @@ function transformToReaderFormat(comic, comicSlug) {
             translation: slide.translation || '',
             ...(slide.audioUrl && { audioUrl: slide.audioUrl }),
             ...(slide.translationAudioUrl && { translationAudioUrl: slide.translationAudioUrl }),
+            ...((slide.text && slide.translation) && { speakingTest: true }),
             words: slideWords
           };
         })

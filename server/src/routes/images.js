@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const OpenAI = require('openai');
+const { toFile } = require('openai');
 const sharp = require('sharp');
 const { GoogleGenAI } = require('@google/genai');
 
@@ -186,7 +187,7 @@ async function loadReferenceImages(imagePaths, annotationsMap) {
         resizedBuffer = await burnAnnotationsOntoImage(resizedBuffer, annotationsMap[imgPath]);
       }
       const filename = path.basename(fullPath, path.extname(fullPath)) + '.jpg';
-      files.push(new File([resizedBuffer], filename, { type: 'image/jpeg' }));
+      files.push(await toFile(resizedBuffer, filename, { type: 'image/jpeg' }));
     } catch (err) {
       console.log(`Reference image not found or resize failed, skipping: ${fullPath}`);
     }
@@ -209,7 +210,7 @@ async function loadBlurredReferenceImages(imagePaths) {
         .jpeg({ quality: 70 })
         .toBuffer();
       const filename = path.basename(fullPath, path.extname(fullPath)) + '-blur.jpg';
-      files.push(new File([resizedBuffer], filename, { type: 'image/jpeg' }));
+      files.push(await toFile(resizedBuffer, filename, { type: 'image/jpeg' }));
     } catch (err) {
       console.log(`Blurred ref image not found or failed, skipping: ${fullPath}`);
     }
@@ -401,8 +402,7 @@ router.post('/generate-page', (req, res) => {
           image: refStreams,
           prompt: refPrompt,
           n: 1,
-          size: '1024x1536',
-          quality: 'high'
+          size: '1024x1536'
         });
       } else {
         response = await openai.images.generate({
@@ -640,10 +640,6 @@ router.post('/generate-panel', (req, res) => {
       let allRefStreams = [];
 
       if (isAngleChange && angleSourceImage) {
-        // For angle changes: ONLY send the current panel image (unblurred).
-        // Skip per-panel character refs entirely — they confuse the AI into
-        // adding extra characters. Style refs also skipped to keep focus on
-        // recreating the source image from a different angle.
         const sourceStreams = await loadReferenceImages([angleSourceImage]);
         allRefStreams = [...sourceStreams];
       } else {
@@ -654,12 +650,6 @@ router.post('/generate-panel', (req, res) => {
           ? await loadReferenceImages(styleRefs)
           : [];
         allRefStreams = [...linkedRefStreams, ...styleRefStreams];
-      }
-
-      const maxPromptLen = 32000;
-      if (finalPrompt.length > maxPromptLen) {
-        console.log(`Panel prompt too long (${finalPrompt.length} chars), truncating to ${maxPromptLen}`);
-        finalPrompt = finalPrompt.substring(0, maxPromptLen);
       }
 
       console.log(`Generating panel ${panelId}, aspect: ${aspectRatio}, size: ${size}, quality: ${openaiQuality}, prompt length: ${finalPrompt.length}, angle-change: ${!!isAngleChange}, source: ${angleSourceImage ? 1 : 0}, linked refs: ${linkedRefs.length}, style refs: ${styleRefs.length}`);
@@ -690,15 +680,28 @@ Other attached images are style/character references — use them for art style 
         } else {
           refInstructions = `IMPORTANT: The attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n`;
         }
+
+        // Truncate prompt AFTER building refInstructions so total stays within 32000 char limit
+        const maxPromptLen = 32000 - refInstructions.length;
+        if (finalPrompt.length > maxPromptLen) {
+          console.log(`Panel prompt too long (${refInstructions.length + finalPrompt.length} chars total), truncating to fit 32000 limit`);
+          finalPrompt = finalPrompt.substring(0, maxPromptLen);
+        }
+
+        console.log(`[DEBUG] images.edit: model=gpt-image-2, refs=${allRefStreams.length}, size=${size}, prompt len=${(refInstructions + finalPrompt).length}`);
         response = await openai.images.edit({
           model: 'gpt-image-2',
           image: allRefStreams,
           prompt: refInstructions + finalPrompt,
           n: 1,
-          size: size,
-          quality: openaiQuality
+          size: size
         });
       } else {
+        // Truncate for generate path (no refInstructions prefix)
+        if (finalPrompt.length > 32000) {
+          console.log(`Panel prompt too long (${finalPrompt.length} chars), truncating to 32000`);
+          finalPrompt = finalPrompt.substring(0, 32000);
+        }
         response = await openai.images.generate({
           model: 'gpt-image-2',
           prompt: finalPrompt,
@@ -790,8 +793,7 @@ router.post('/generate-studio', (req, res) => {
           image: allRefStreams,
           prompt: refInstructions + prompt,
           n: 1,
-          size: size,
-          quality: openaiQuality
+          size: size
         });
       } else {
         response = await openai.images.generate({
@@ -977,8 +979,8 @@ router.post('/inpaint-region', (req, res) => {
 
       // Load source image as PNG File (clean — no annotation dots burned in)
       const sourceBuffer = await sharp(fullSourcePath).png().toBuffer();
-      const sourceFile = new File([sourceBuffer], 'source.png', { type: 'image/png' });
-      const maskFile = new File([maskBuffer], 'mask.png', { type: 'image/png' });
+      const sourceFile = await toFile(sourceBuffer, 'source.png', { type: 'image/png' });
+      const maskFile = await toFile(maskBuffer, 'mask.png', { type: 'image/png' });
 
       // Load reference images
       const refFiles = referenceImages?.length > 0
@@ -1021,8 +1023,7 @@ router.post('/inpaint-region', (req, res) => {
         mask: maskFile,
         prompt: inpaintPrompt,
         n: 1,
-        size: size,
-        quality: openaiQuality
+        size: size
       });
 
       const imageData = response.data[0];
@@ -1071,7 +1072,7 @@ router.post('/inpaint-region', (req, res) => {
 // Save image to comic project
 router.post('/save-to-project', async (req, res) => {
   try {
-    const { comicId, filename, imageType, pageNumber } = req.body;
+    const { comicId, filename, imageType, pageNumber, panelOrder } = req.body;
 
     const sourcePath = path.join(__dirname, '../../uploads', filename);
     const destDir = path.join(__dirname, '../../projects', comicId, 'images');
@@ -1084,6 +1085,10 @@ router.post('/save-to-project', async (req, res) => {
       ? `${comicId}_cover_baked.png`
       : imageType === 'baked'
       ? `${comicId}_p${pageNumber}_baked.png`
+      : imageType === 'page_nofloat'
+      ? `${comicId}_p${pageNumber}_nofloat.png`
+      : imageType === 'panel_baked_crop'
+      ? `${comicId}_p${pageNumber}_s${panelOrder}_baked.png`
       : `${comicId}_p${pageNumber}.png`;
 
     const destPath = path.join(destDir, newFilename);
@@ -1431,20 +1436,14 @@ router.post('/style-enforcer/revert-batch', async (req, res) => {
 // Character Consistency Agent endpoints
 // ============================================================
 
-// POST /consistency/detect — use GPT-4o vision to detect a character and assess match quality
+// POST /consistency/detect — use AI vision to detect a character and assess match quality
 router.post('/consistency/detect', async (req, res) => {
   try {
-    const { panelImagePath, characterName, characterDescription, characterRefImagePath } = req.body;
-    console.log(`Consistency detect: "${characterName}" in panel ${panelImagePath}`);
+    const { panelImagePath, characterName, characterDescription, characterRefImagePath, provider = 'openai', ignore = '', focus = '' } = req.body;
+    console.log(`Consistency detect (${provider}): "${characterName}" in panel ${panelImagePath}`);
     if (!panelImagePath || !characterName || !characterRefImagePath) {
       return res.status(400).json({ error: 'panelImagePath, characterName, and characterRefImagePath are required' });
     }
-
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(400).json({ error: 'OpenAI API key not configured.' });
-    }
-
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // Load panel image as base64
     const panelFullPath = path.join(__dirname, '../..', panelImagePath.split('?')[0]);
@@ -1466,51 +1465,75 @@ router.post('/consistency/detect', async (req, res) => {
 
     const descNote = characterDescription ? `\nCharacter description: ${characterDescription}` : '';
 
-    const response = await openai.responses.create({
-      model: 'gpt-5.5',
-      input: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'input_image',
-              image_url: `data:image/jpeg;base64,${refBase64}`
-            },
-            {
-              type: 'input_image',
-              image_url: `data:image/jpeg;base64,${panelBase64}`
-            },
-            {
-              type: 'input_text',
-              text: `You are a character consistency analyzer for comic books.
+    const ignoreNote = ignore.trim() ? `\n\nIMPORTANT: Do NOT flag or count as discrepancies any differences in: ${ignore.trim()}. The character may have multiple valid appearances for these aspects. Only flag differences in aspects NOT listed here.` : '';
+    const focusNote = focus.trim() ? `\n\nFOCUS: ONLY check for these specific aspects: ${focus.trim()}. Do NOT flag any other differences — only report discrepancies related to the listed aspects.` : '';
+
+    const promptText = `You are a character consistency analyzer for comic books.
 
 IMAGE 1 (first image): This is the REFERENCE image showing what "${characterName}" should look like.${descNote}
 
-IMAGE 2 (second image): This is a comic panel that may contain "${characterName}".
+IMAGE 2 (second image): This is a comic panel that may contain "${characterName}".${focusNote}${ignoreNote}
+
+IMPORTANT: Do NOT flag differences in body position, pose, camera angle, or facing direction. The character will be in different poses across panels (running, sitting, turned sideways, etc.) — this is normal and expected. Only assess the character's VISUAL IDENTITY: face, hair, body type, clothing, accessories, colors, and proportions.
 
 Analyze IMAGE 2 and determine:
 1. Is "${characterName}" present in this panel? Look carefully for characters matching the reference.
 2. If present, where are they? Provide a bounding box as percentages of the image dimensions.
-3. How well does their appearance match the reference? Score from 0 (completely different) to 10 (perfect match).
-4. List specific visual discrepancies (e.g. wrong hair color, missing glasses, different clothing, wrong proportions).
+3. How well does their appearance match the reference? Score from 0 (completely different) to 10 (perfect match). Judge ONLY visual identity, NOT pose or position.
+4. List specific visual discrepancies${focus.trim() ? ` (ONLY related to: ${focus.trim()})` : ' (e.g. wrong hair color, missing glasses, different clothing, wrong proportions)'}. Do NOT list pose or position differences.
 
 Respond with ONLY a JSON object in this exact format (no markdown, no extra text):
 {"detected": true/false, "boundingBox": {"x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0}, "matchScore": 0, "discrepancies": ["list of specific differences"], "notes": "brief overall assessment"}
 
 If the character is NOT detected, use: {"detected": false, "boundingBox": null, "matchScore": null, "discrepancies": [], "notes": "reason not found"}
 
-The bounding box values should be decimals from 0 to 1 representing percentages of image width/height.`
-            }
-          ]
-        }
-      ]
-    });
+The bounding box values should be decimals from 0 to 1 representing percentages of image width/height.`;
 
-    const text = response.output_text || '';
+    let text;
+
+    if (provider === 'gemini') {
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(400).json({ error: 'Gemini API key not configured.' });
+      }
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: 'image/jpeg', data: refBase64 } },
+              { inlineData: { mimeType: 'image/jpeg', data: panelBase64 } },
+              { text: promptText }
+            ]
+          }
+        ]
+      });
+      text = response.text || '';
+    } else {
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({ error: 'OpenAI API key not configured.' });
+      }
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const response = await openai.responses.create({
+        model: 'gpt-5.5',
+        input: [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_image', image_url: `data:image/jpeg;base64,${refBase64}` },
+              { type: 'input_image', image_url: `data:image/jpeg;base64,${panelBase64}` },
+              { type: 'input_text', text: promptText }
+            ]
+          }
+        ]
+      });
+      text = response.output_text || '';
+    }
+
     // Parse the JSON from the response
     let result;
     try {
-      // Try to extract JSON from the response (handle potential markdown wrapping)
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       result = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(text);
     } catch (parseErr) {
@@ -1525,9 +1548,63 @@ The bounding box values should be decimals from 0 to 1 representing percentages 
   }
 });
 
-// POST /consistency/adjust — use GPT-4o Responses API with image_generation to fix character appearance
-// Uses the same approach as angle changes: the model sees the full image, reasons about
-// what to change, and generates a new image — preserving pose, position, and other characters.
+// POST /consistency/save-all — copy all adjusted panel images to the project folder
+router.post('/consistency/save-all', async (req, res) => {
+  try {
+    const { comicId, panels } = req.body;
+    // panels: [{ panelId, pageId, imagePath }]
+    if (!comicId || !panels || panels.length === 0) {
+      return res.status(400).json({ error: 'comicId and panels array are required' });
+    }
+
+    const Comic = require('../models/Comic');
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    const destDir = path.join(__dirname, '../../projects', comicId, 'images');
+    await fs.mkdir(destDir, { recursive: true });
+
+    const results = [];
+    for (const p of panels) {
+      try {
+        const sourceFullPath = path.join(__dirname, '../..', p.imagePath.split('?')[0]);
+        await fs.access(sourceFullPath);
+
+        const ext = path.extname(sourceFullPath) || '.png';
+        const filename = `panel-${p.panelId}${ext}`;
+        const destPath = path.join(destDir, filename);
+        await fs.copyFile(sourceFullPath, destPath);
+
+        const newPath = `/projects/${comicId}/images/${filename}`;
+
+        // Update artworkImage in the DB
+        const page = comic.pages.find(pg => pg.id === p.pageId);
+        if (page) {
+          const panel = page.panels.find(pn => pn.id === p.panelId);
+          if (panel) {
+            panel.artworkImage = newPath;
+          }
+        }
+
+        results.push({ panelId: p.panelId, status: 'saved', path: newPath });
+      } catch (err) {
+        results.push({ panelId: p.panelId, status: 'failed', error: err.message });
+      }
+    }
+
+    await comic.save();
+    res.json({ saved: results.filter(r => r.status === 'saved').length, results });
+  } catch (error) {
+    console.error('Consistency save-all error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /consistency/adjust — use AI image generation to fix character appearance
+// The model sees the full image, reasons about what to change, and generates a new image
+// — preserving pose, position, and other characters.
 router.post('/consistency/adjust', (req, res) => {
   withKeepAlive(res, async () => {
     const {
@@ -1537,18 +1614,15 @@ router.post('/consistency/adjust', (req, res) => {
       characterDescription,
       characterRefImagePath,
       discrepancies,
-      panelId
+      panelId,
+      provider = 'openai',
+      ignore = '',
+      focus = ''
     } = req.body;
 
     if (!panelImagePath || !boundingBox || !characterName || !characterRefImagePath || !panelId) {
       return { error: 'panelImagePath, boundingBox, characterName, characterRefImagePath, and panelId are required' };
     }
-
-    if (!process.env.OPENAI_API_KEY) {
-      return { error: 'OpenAI API key not configured.' };
-    }
-
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // Load panel image as base64
     const fullSourcePath = path.join(__dirname, '../..', panelImagePath.split('?')[0]);
@@ -1577,25 +1651,10 @@ router.post('/consistency/adjust', (req, res) => {
       ? `"${characterName}" is located approximately at ${Math.round(boundingBox.x * 100)}%-${Math.round((boundingBox.x + boundingBox.width) * 100)}% horizontally and ${Math.round(boundingBox.y * 100)}%-${Math.round((boundingBox.y + boundingBox.height) * 100)}% vertically in the panel.`
       : '';
 
-    console.log(`Consistency adjust (Responses API): "${characterName}" in panel ${panelId}, discrepancies: ${(discrepancies || []).length}`);
+    const ignoreNote = ignore.trim() ? `\n5. Do NOT change: ${ignore.trim()}. These aspects may differ from the reference intentionally. Only adjust the aspects NOT listed here.` : '';
+    const focusNote = focus.trim() ? `\n6. ONLY fix these specific aspects: ${focus.trim()}. Do NOT change anything else about the character beyond these listed aspects.` : '';
 
-    const response = await openai.responses.create({
-      model: 'gpt-5.5',
-      input: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'input_image',
-              image_url: `data:image/jpeg;base64,${refBase64}`
-            },
-            {
-              type: 'input_image',
-              image_url: `data:image/jpeg;base64,${panelBase64}`
-            },
-            {
-              type: 'input_text',
-              text: `IMAGE 1: Character reference sheet for "${characterName}"${descNote}.
+    const promptText = `IMAGE 1: Character reference sheet for "${characterName}"${descNote}.
 IMAGE 2: A comic panel containing "${characterName}".
 
 ${bboxDesc}
@@ -1608,23 +1667,101 @@ CRITICAL RULES:
 1. The output must be virtually IDENTICAL to IMAGE 2 — same composition, same background, same lighting, same art style.
 2. ALL other characters must remain EXACTLY as they are — same appearance, same position, same pose. Do NOT remove, add, or modify any other character.
 3. "${characterName}"'s POSE and POSITION must stay exactly the same. Only change their visual appearance (face, hair, clothing details, proportions) to match the reference.
-4. This is a surgical fix — the viewer should only notice that "${characterName}" now looks more like their reference sheet. Everything else must be pixel-perfect identical.
+4. This is a surgical fix — the viewer should only notice that "${characterName}" now looks more like their reference sheet. Everything else must be pixel-perfect identical.${ignoreNote}${focusNote}
 
-Generate the corrected panel now.`
-            }
-          ]
+Generate the corrected panel now.`;
+
+    let buffer;
+
+    console.log(`Consistency adjust (${provider}): "${characterName}" in panel ${panelId}, discrepancies: ${(discrepancies || []).length}`);
+
+    if (provider === 'gemini') {
+      if (!process.env.GEMINI_API_KEY) {
+        return { error: 'Gemini API key not configured.' };
+      }
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-image-preview',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: 'image/jpeg', data: refBase64 } },
+              { inlineData: { mimeType: 'image/jpeg', data: panelBase64 } },
+              { text: promptText }
+            ]
+          }
+        ],
+        config: {
+          responseModalities: ['image', 'text'],
         }
-      ],
-      tools: [{ type: 'image_generation', quality: 'high' }],
-    });
+      });
 
-    // Extract the generated image
-    const imageOutput = response.output.find(o => o.type === 'image_generation_call');
-    if (!imageOutput || !imageOutput.result) {
-      throw new Error('GPT-4o Responses API returned no image');
+      // Extract generated image from Gemini response
+      const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      if (!part || !part.inlineData) {
+        throw new Error('Gemini returned no image');
+      }
+      buffer = Buffer.from(part.inlineData.data, 'base64');
+    } else {
+      if (!process.env.OPENAI_API_KEY) {
+        return { error: 'OpenAI API key not configured.' };
+      }
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      // Use mask-based inpainting to only edit the character region,
+      // preserving the rest of the image (art style, other characters, background)
+      const maskBuffer = await createInpaintMask(panelImagePath.split('?')[0], {
+        x: Math.max(0, boundingBox.x - 0.02),
+        y: Math.max(0, boundingBox.y - 0.02),
+        width: Math.min(1 - Math.max(0, boundingBox.x - 0.02), boundingBox.width + 0.04),
+        height: Math.min(1 - Math.max(0, boundingBox.y - 0.02), boundingBox.height + 0.04)
+      });
+
+      // Load source image as PNG for images.edit
+      const sourceBuffer = await sharp(fullSourcePath).png().toBuffer();
+      const sourceFile = await toFile(sourceBuffer, 'source.png', { type: 'image/png' });
+      const maskFile = await toFile(maskBuffer, 'mask.png', { type: 'image/png' });
+
+      // Load character reference image for images.edit
+      const refPngBuffer = await sharp(refFullPath)
+        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+        .png()
+        .toBuffer();
+      const refFile = await toFile(refPngBuffer, 'reference.png', { type: 'image/png' });
+
+      // Determine output size from source dimensions
+      let size = '1024x1024';
+      if (sourceMeta.width > sourceMeta.height * 1.2) size = '1536x1024';
+      else if (sourceMeta.height > sourceMeta.width * 1.2) size = '1024x1536';
+
+      const inpaintPrompt = `INPAINTING — fix the character "${characterName}" in the masked area to match the reference image.
+${bboxDesc}
+${discrepancyList}
+The character reference image is attached — adjust the character's appearance (face, hair, clothing, accessories, proportions) to match it.
+Keep the character's pose and position exactly the same. Only change their visual appearance to match the reference.
+The surrounding image must remain completely unchanged — same art style, same background, same lighting.${ignoreNote}${focusNote}`;
+
+      console.log(`Consistency adjust (openai inpaint): mask region [${Math.round(boundingBox.x*100)}%,${Math.round(boundingBox.y*100)}%]-[${Math.round((boundingBox.x+boundingBox.width)*100)}%,${Math.round((boundingBox.y+boundingBox.height)*100)}%]`);
+
+      const response = await openai.images.edit({
+        model: 'gpt-image-2',
+        image: [sourceFile, refFile],
+        mask: maskFile,
+        prompt: inpaintPrompt,
+        n: 1,
+        size: size
+      });
+
+      const imageData = response.data[0];
+      if (imageData.b64_json) {
+        buffer = Buffer.from(imageData.b64_json, 'base64');
+      } else if (imageData.url) {
+        const imageResponse = await fetch(imageData.url);
+        buffer = Buffer.from(await imageResponse.arrayBuffer());
+      }
+      if (!buffer) throw new Error('OpenAI returned no image');
     }
-
-    let buffer = Buffer.from(imageOutput.result, 'base64');
 
     // Resize to match source dimensions
     const aiMeta = await sharp(buffer).metadata();

@@ -711,15 +711,38 @@ router.post('/:id/export-full', async (req, res) => {
             }
             // Panel crop from baked image (with text)
             const sceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}.jpg`);
-            const cropped = await cropAndSaveScene(
-              sourceImagePath,
-              sceneDestPath,
-              cropRegion,
-              imgWidth,
-              imgHeight
-            );
-            if (cropped) {
-              copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}.jpg`);
+
+            // Floating panels with pre-baked crops: use the clean per-panel image
+            // (generated client-side with only this panel rendered, no overlap artifacts)
+            let usedBakedCrop = false;
+            if (panel.floating) {
+              console.log(`[Export] Floating panel p${pageNum}_s${panelNum}: bakedCropImage=${panel.bakedCropImage || 'NOT SET'}`);
+            }
+            if (panel.floating && panel.bakedCropImage) {
+              try {
+                const bakedCropPath = path.join(__dirname, '../..', panel.bakedCropImage.split('?')[0]);
+                console.log(`[Export] Trying baked crop: ${bakedCropPath}`);
+                await fs.access(bakedCropPath);
+                await convertToJpeg(bakedCropPath, sceneDestPath);
+                copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}.jpg`);
+                usedBakedCrop = true;
+                console.log(`[Export] Used baked crop for p${pageNum}_s${panelNum}`);
+              } catch (e) {
+                console.log(`Baked crop not found for p${pageNum}_s${panelNum}: ${e.message}`);
+              }
+            }
+
+            if (!usedBakedCrop) {
+              const cropped = await cropAndSaveScene(
+                sourceImagePath,
+                sceneDestPath,
+                cropRegion,
+                imgWidth,
+                imgHeight
+              );
+              if (cropped) {
+                copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}.jpg`);
+              }
             }
 
             // Panel crop from no_text image (master + image bubbles) for Speaking Practice Mode

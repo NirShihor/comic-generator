@@ -558,7 +558,6 @@ function PageEditor({ isCover = false }) {
   const [hotspotDragOffset, setHotspotDragOffset] = useState({ x: 0, y: 0 });
   const [isResizingHotspot, setIsResizingHotspot] = useState(false);
   const [hotspotResizeCorner, setHotspotResizeCorner] = useState(null);
-
   const canvasRef = useRef(null);
 
   const CANVAS_WIDTH = 400;
@@ -2957,11 +2956,21 @@ function PageEditor({ isCover = false }) {
 
       delete abortControllers.current[panel.id];
 
+      // withKeepAlive sends space characters before JSON — axios may receive a string
+      let result = response.data;
+      if (typeof result === 'string') {
+        try { result = JSON.parse(result.trim()); } catch (e) { /* leave as-is */ }
+      }
+
+      if (!result?.path) {
+        throw new Error(result?.error || 'No image path returned from server');
+      }
+
       setPanelImages(prev => ({
         ...prev,
         [panel.id]: {
           ...prev[panel.id], // Preserve existing fitMode and crop settings
-          path: response.data.path,
+          path: result.path,
           generating: null,
           error: null,
           fitMode: prev[panel.id]?.fitMode || 'stretch',
@@ -2974,8 +2983,8 @@ function PageEditor({ isCover = false }) {
         }
       }));
 
-      await updatePanelArtwork(panel.id, response.data.path);
-      console.log(`Panel ${panelIndex + 1} generated:`, response.data.path);
+      await updatePanelArtwork(panel.id, result.path);
+      console.log(`Panel ${panelIndex + 1} generated:`, result.path);
     } catch (error) {
       delete abortControllers.current[panel.id];
       if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
@@ -3308,9 +3317,10 @@ function PageEditor({ isCover = false }) {
   };
 
   // Composite all panel images onto a single canvas
-  const compositePageFromPanels = async () => {
-    const canvas = compositeCanvasRef.current;
-    if (!canvas) return null;
+  const compositePageFromPanels = async ({ skipFloating = false, onlyFloatingPanel = null } = {}) => {
+    // Use DOM canvas if available, otherwise create an offscreen canvas (e.g. during bake flow)
+    const canvas = compositeCanvasRef.current || document.createElement('canvas');
+    if (!compositeCanvasRef.current && !onlyFloatingPanel && !skipFloating) return null;
     // Read from ref to avoid stale closure issues
     const panelImages = panelImagesRef.current;
 
@@ -3727,9 +3737,12 @@ function PageEditor({ isCover = false }) {
     }
 
     // Render floating panels ON TOP of regular panels, sorted by zLayer
+    if (skipFloating) return canvas.toDataURL('image/png');
     const floatingMargin = 3;
     const sortedFloating = [...floatingPanels].sort((a, b) => (a.zLayer ?? a.panelOrder ?? 0) - (b.zLayer ?? b.panelOrder ?? 0));
     for (const panel of sortedFloating) {
+      // When generating per-panel crops, only render the specified floating panel
+      if (onlyFloatingPanel && panel.id !== onlyFloatingPanel) continue;
       const panelData = panelImages[panel.id];
       if (!panelData?.path) continue;
 
@@ -3901,6 +3914,90 @@ function PageEditor({ isCover = false }) {
         const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
         updatedComic.pages[pageIndex].masterImage = imagePath;
 
+        // Generate no-floating variant if page has floating panels
+        const hasFloating = panels.some(p => p.floating);
+        let noFloatImagePath = '';
+        if (hasFloating) {
+          const noFloatDataUrl = await compositePageFromPanels({ skipFloating: true });
+          if (noFloatDataUrl) {
+            const nfResponse = await fetch(noFloatDataUrl);
+            const nfBlob = await nfResponse.blob();
+            const nfFormData = new FormData();
+            nfFormData.append('image', nfBlob, `composited-${pageId}-nofloat.png`);
+            const nfUpload = await api.post('/images/upload', nfFormData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            await api.post('/images/save-to-project', {
+              comicId: id,
+              filename: nfUpload.data.filename,
+              imageType: 'page_nofloat',
+              pageNumber: page.pageNumber
+            });
+            noFloatImagePath = `/projects/${id}/images/${id}_p${page.pageNumber}_nofloat.png`;
+          }
+        }
+        updatedComic.pages[pageIndex].noFloatImage = noFloatImagePath || '';
+
+        // Generate per-panel baked crops for floating panels (clean, no overlap)
+        if (hasFloating) {
+          const floatingPanels = panels.filter(p => p.floating);
+          console.log(`[PerPanelCrop] Generating crops for ${floatingPanels.length} floating panels`);
+          for (const fp of floatingPanels) {
+            try {
+              console.log(`[PerPanelCrop] Processing panel ${fp.id}, panelOrder=${fp.panelOrder}, tapZone=`, fp.tapZone);
+              const panelDataUrl = await compositePageFromPanels({ onlyFloatingPanel: fp.id });
+              if (!panelDataUrl) continue;
+
+              // Crop the panel's tapZone region from the single-panel composite
+              const tz = fp.tapZone;
+              const cropCanvas = document.createElement('canvas');
+              const cropW = Math.round(tz.width * 2048);
+              const cropH = Math.round(tz.height * 3072);
+              cropCanvas.width = cropW;
+              cropCanvas.height = cropH;
+              const cropCtx = cropCanvas.getContext('2d');
+
+              const fullImg = await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = panelDataUrl;
+              });
+
+              cropCtx.drawImage(
+                fullImg,
+                Math.round(tz.x * 2048), Math.round(tz.y * 3072), cropW, cropH,
+                0, 0, cropW, cropH
+              );
+
+              const cropDataUrl = cropCanvas.toDataURL('image/png');
+              const cropResponse = await fetch(cropDataUrl);
+              const cropBlob = await cropResponse.blob();
+              const cropFormData = new FormData();
+              cropFormData.append('image', cropBlob, `panel-${fp.id}-baked.png`);
+              const cropUpload = await api.post('/images/upload', cropFormData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+              });
+              await api.post('/images/save-to-project', {
+                comicId: id,
+                filename: cropUpload.data.filename,
+                imageType: 'panel_baked_crop',
+                pageNumber: page.pageNumber,
+                panelOrder: fp.panelOrder
+              });
+              const cropPath = `/projects/${id}/images/${id}_p${page.pageNumber}_s${fp.panelOrder}_baked.png`;
+
+              // Update the panel in the comic data
+              const panelIdx = updatedComic.pages[pageIndex].panels.findIndex(p => p.id === fp.id);
+              if (panelIdx >= 0) {
+                updatedComic.pages[pageIndex].panels[panelIdx].bakedCropImage = cropPath;
+              }
+            } catch (e) {
+              console.error(`Failed to generate baked crop for panel ${fp.id}:`, e);
+            }
+          }
+        }
+
         // Save to database
         await api.put(`/comics/${id}`, updatedComic);
         setComic(updatedComic);
@@ -4021,7 +4118,137 @@ function PageEditor({ isCover = false }) {
             const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
             if (pageIndex !== -1) {
               updatedComic.pages[pageIndex].bakedImage = bakedPath;
-              await api.put(`/comics/${id}`, updatedComic);
+
+              // Generate per-panel baked crops for floating panels (clean artwork + bubbles, no overlap)
+              const hasFloating = panels.some(p => p.floating);
+              if (hasFloating) {
+                const floatingPanels = panels.filter(p => p.floating);
+                console.log(`[BakeCrop] Generating baked crops for ${floatingPanels.length} floating panels`);
+
+                let bubbleCanvas = null;
+                const bakedCanvas = canvas; // html2canvas result (1024x1536)
+                const bakedW = bakedCanvas.width;
+                const bakedH = bakedCanvas.height;
+                try {
+                  console.log(`[BakeCrop] Baked canvas size: ${bakedW}x${bakedH}`);
+
+                  // Load the master composite (no bubbles) at the same size
+                  const masterImgUrl = `http://localhost:3001${page.masterImage.split('?')[0]}`;
+                  console.log(`[BakeCrop] Loading master image: ${masterImgUrl}`);
+                  const masterImg = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    img.onload = () => resolve(img);
+                    img.onerror = (e) => { console.error('[BakeCrop] Master image load failed:', e); reject(e); };
+                    img.src = masterImgUrl;
+                  });
+                  console.log(`[BakeCrop] Master image loaded: ${masterImg.naturalWidth}x${masterImg.naturalHeight}`);
+                  const masterCanvas = document.createElement('canvas');
+                  masterCanvas.width = bakedW;
+                  masterCanvas.height = bakedH;
+                  const masterCtx = masterCanvas.getContext('2d');
+                  masterCtx.drawImage(masterImg, 0, 0, bakedW, bakedH);
+
+                  // Get pixel data for bubble detection
+                  const bakedPixels = bakedCanvas.getContext('2d').getImageData(0, 0, bakedW, bakedH);
+                  const masterPixels = masterCtx.getImageData(0, 0, bakedW, bakedH);
+                  console.log(`[BakeCrop] Got pixel data, building bubble mask...`);
+
+                  // Build bubble mask: pixels where baked differs from master
+                  const bubbleMask = new Uint8ClampedArray(bakedW * bakedH * 4);
+                  let bubblePixelCount = 0;
+                  for (let i = 0; i < bakedPixels.data.length; i += 4) {
+                    const dr = Math.abs(bakedPixels.data[i] - masterPixels.data[i]);
+                    const dg = Math.abs(bakedPixels.data[i + 1] - masterPixels.data[i + 1]);
+                    const db = Math.abs(bakedPixels.data[i + 2] - masterPixels.data[i + 2]);
+                    if (dr + dg + db > 30) {
+                      bubbleMask[i] = bakedPixels.data[i];
+                      bubbleMask[i + 1] = bakedPixels.data[i + 1];
+                      bubbleMask[i + 2] = bakedPixels.data[i + 2];
+                      bubbleMask[i + 3] = 255;
+                      bubblePixelCount++;
+                    }
+                  }
+                  console.log(`[BakeCrop] Bubble mask built: ${bubblePixelCount} bubble pixels found`);
+                  const bubbleImageData = new ImageData(bubbleMask, bakedW, bakedH);
+                  bubbleCanvas = document.createElement('canvas');
+                  bubbleCanvas.width = bakedW;
+                  bubbleCanvas.height = bakedH;
+                  bubbleCanvas.getContext('2d').putImageData(bubbleImageData, 0, 0);
+                } catch (maskErr) {
+                  console.error('[BakeCrop] Failed to build bubble mask:', maskErr);
+                }
+
+                for (const fp of floatingPanels) {
+                  try {
+                    console.log(`[BakeCrop] Processing floating panel ${fp.id}, panelOrder=${fp.panelOrder}`);
+
+                    // Get clean single-panel artwork (2048x3072)
+                    const panelDataUrl = await compositePageFromPanels({ onlyFloatingPanel: fp.id });
+                    console.log(`[BakeCrop] compositePageFromPanels returned: ${panelDataUrl ? 'data URL (' + panelDataUrl.length + ' chars)' : 'FALSY'}`);
+                    if (!panelDataUrl) continue;
+
+                    const tz = fp.tapZone;
+                    // Crop from clean artwork at full res (2048x3072)
+                    const fullImg = await new Promise((resolve, reject) => {
+                      const img = new Image();
+                      img.onload = () => resolve(img);
+                      img.onerror = reject;
+                      img.src = panelDataUrl;
+                    });
+
+                    const cropW = Math.round(tz.width * 2048);
+                    const cropH = Math.round(tz.height * 3072);
+                    const cropX = Math.round(tz.x * 2048);
+                    const cropY = Math.round(tz.y * 3072);
+
+                    const cropCanvas = document.createElement('canvas');
+                    cropCanvas.width = cropW;
+                    cropCanvas.height = cropH;
+                    const cropCtx = cropCanvas.getContext('2d');
+
+                    // Draw clean artwork
+                    cropCtx.drawImage(fullImg, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+                    // Overlay bubble pixels from the bubble mask, scaled to match
+                    const bubbleCropX = Math.round(tz.x * bakedW);
+                    const bubbleCropY = Math.round(tz.y * bakedH);
+                    const bubbleCropW = Math.round(tz.width * bakedW);
+                    const bubbleCropH = Math.round(tz.height * bakedH);
+                    cropCtx.drawImage(bubbleCanvas, bubbleCropX, bubbleCropY, bubbleCropW, bubbleCropH, 0, 0, cropW, cropH);
+
+                    // Upload the per-panel crop
+                    const cropDataUrl = cropCanvas.toDataURL('image/png');
+                    const cropResponse = await fetch(cropDataUrl);
+                    const cropBlob = await cropResponse.blob();
+                    const cropFormData = new FormData();
+                    cropFormData.append('image', cropBlob, `panel-${fp.id}-baked.png`);
+                    const cropUpload = await api.post('/images/upload', cropFormData, {
+                      headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                    await api.post('/images/save-to-project', {
+                      comicId: id,
+                      filename: cropUpload.data.filename,
+                      imageType: 'panel_baked_crop',
+                      pageNumber: page.pageNumber,
+                      panelOrder: fp.panelOrder
+                    });
+                    const cropPath = `/projects/${id}/images/${id}_p${page.pageNumber}_s${fp.panelOrder}_baked.png`;
+                    const panelIdx = updatedComic.pages[pageIndex].panels.findIndex(p => p.id === fp.id);
+                    if (panelIdx >= 0) {
+                      updatedComic.pages[pageIndex].panels[panelIdx].bakedCropImage = cropPath;
+                    }
+                    console.log(`[BakeCrop] Saved baked crop for p${page.pageNumber}_s${fp.panelOrder}`);
+                  } catch (e) {
+                    console.error(`[BakeCrop] Failed for panel ${fp.id}:`, e);
+                  }
+                }
+
+                // Save updated comic with bakedCropImage paths
+                await api.put(`/comics/${id}`, updatedComic);
+              } else {
+                await api.put(`/comics/${id}`, updatedComic);
+              }
               setComic(updatedComic);
             }
           }
@@ -8589,6 +8816,14 @@ function PageEditor({ isCover = false }) {
                       </div>
                     </div>
                   ))}
+                  {(hotspot.slides || []).length > 0 && (
+                    <button
+                      onClick={() => addHotspotSlide(hotspot.id)}
+                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem', background: '#00bcd4', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', width: '100%', marginTop: '0.2rem' }}
+                    >
+                      + Add Slide
+                    </button>
+                  )}
                 </div>
               </div>
             );
