@@ -140,6 +140,7 @@ function transformToReaderFormat(comic, comicSlug) {
           return {
             id: bubbleId,
             type: bubble.type || 'narration',
+            ...(bubble.fontSize && { fontSize: bubble.fontSize }),
             position: {
               x: bubble.x,
               y: bubble.y,
@@ -232,6 +233,7 @@ function transformToReaderFormat(comic, comicSlug) {
         width: hotspot.width,
         height: hotspot.height,
         ...(hotspot.label && { label: hotspot.label }),
+        ...(hotspot.borderColor && { borderColor: hotspot.borderColor }),
         slides: (hotspot.slides || []).map((slide, sIdx) => {
           const slideWords = (slide.words || []).map((word) => {
             const wText = sanitizeWordForFilename(word.text);
@@ -331,6 +333,7 @@ function transformToReaderFormat(comic, comicSlug) {
             return {
               id: bubbleId,
               type: bubble.type || 'speech',
+              ...(bubble.fontSize && { fontSize: bubble.fontSize }),
               ...(bubble.isSoundEffect && { isSoundEffect: true }),
               ...(bubble.imageUrl && { imageUrl: bubble.imageUrl }),
               position: {

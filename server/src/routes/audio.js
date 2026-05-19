@@ -3,11 +3,146 @@ const router = express.Router();
 const fs = require('fs').promises;
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 
 const Comic = require('../models/Comic');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
+
+// --- FFmpeg post-processing helpers ---
+
+function buildFFmpegFilterChain(effects, sampleRate = 44100) {
+  const filters = [];
+  const preset = effects.preset || 'none';
+  const sr = sampleRate;
+
+  switch (preset) {
+    case 'robot': {
+      const freq = effects.intensity != null ? 20 + effects.intensity * 40 : 30;
+      // Tremolo for ring-modulation effect, short echo for metallic quality, EQ boost for tinny resonance
+      filters.push(`tremolo=f=${freq}:d=1`);
+      filters.push('aecho=0.8:0.88:30:0.4');
+      filters.push('equalizer=f=3000:t=q:w=2:g=8');
+      break;
+    }
+    case 'pitch_up': {
+      const semitones = effects.semitones != null ? effects.semitones : 4;
+      const rate = Math.pow(2, semitones / 12);
+      filters.push(`asetrate=${sr}*${rate.toFixed(6)}`);
+      filters.push(`aresample=${sr}`);
+      filters.push(`atempo=${(1 / rate).toFixed(6)}`);
+      break;
+    }
+    case 'pitch_down': {
+      const semitones = effects.semitones != null ? effects.semitones : 4;
+      const rate = Math.pow(2, -semitones / 12);
+      filters.push(`asetrate=${sr}*${rate.toFixed(6)}`);
+      filters.push(`aresample=${sr}`);
+      filters.push(`atempo=${(1 / rate).toFixed(6)}`);
+      break;
+    }
+    case 'radio': {
+      // Bandpass 300-3000Hz simulates AM radio, compressor evens dynamics
+      filters.push('highpass=f=300');
+      filters.push('lowpass=f=3000');
+      filters.push('acompressor=threshold=0.1:ratio=4');
+      filters.push('volume=1.5');
+      break;
+    }
+    case 'echo': {
+      const delay = effects.delayMs != null ? effects.delayMs : 200;
+      const decay = effects.decay != null ? effects.decay : 0.5;
+      filters.push(`aecho=0.8:0.9:${delay}:${decay}`);
+      break;
+    }
+    case 'megaphone': {
+      // Bandpass + bitcrusher distortion + hard compression = bullhorn
+      filters.push('highpass=f=500');
+      filters.push('lowpass=f=4000');
+      filters.push('acrusher=bits=8:mix=0.5:mode=log:aa=1');
+      filters.push('acompressor=threshold=0.1:ratio=9:attack=0.01:release=0.1');
+      filters.push('volume=0.7');
+      break;
+    }
+    case 'whisper': {
+      // Cut low frequencies, boost remaining, add slight room ambiance
+      filters.push('highpass=f=500');
+      filters.push('lowpass=f=8000');
+      filters.push('volume=1.8');
+      filters.push('aecho=0.6:0.3:40:0.3');
+      break;
+    }
+    case 'deep': {
+      const rate = Math.pow(2, -3 / 12);
+      filters.push(`asetrate=${sr}*${rate.toFixed(6)}`);
+      filters.push(`aresample=${sr}`);
+      filters.push(`atempo=${(1 / rate).toFixed(6)}`);
+      filters.push('equalizer=f=200:t=q:w=1:g=6');
+      filters.push('aecho=0.8:0.88:60:0.3');
+      break;
+    }
+    case 'chipmunk': {
+      const rate = Math.pow(2, 6 / 12);
+      filters.push(`asetrate=${sr}*${rate.toFixed(6)}`);
+      filters.push(`aresample=${sr}`);
+      filters.push(`atempo=${(1 / rate).toFixed(6)}`);
+      break;
+    }
+    default:
+      break;
+  }
+
+  return filters;
+}
+
+async function getAudioSampleRate(filePath) {
+  try {
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'quiet',
+      '-print_format', 'json',
+      '-show_streams',
+      filePath
+    ]);
+    const info = JSON.parse(stdout);
+    const audioStream = info.streams.find(s => s.codec_type === 'audio');
+    return audioStream ? parseInt(audioStream.sample_rate) : 44100;
+  } catch {
+    return 44100;
+  }
+}
+
+async function applyAudioEffects(inputPath, effects) {
+  if (!effects || effects.preset === 'none') return;
+
+  // Detect actual sample rate for pitch-shift effects
+  const sampleRate = await getAudioSampleRate(inputPath);
+  console.log(`Detected audio sample rate: ${sampleRate}Hz`);
+
+  const filters = buildFFmpegFilterChain(effects, sampleRate);
+  if (filters.length === 0) return;
+
+  const outputPath = inputPath.replace('.mp3', '_fx.mp3');
+  const filterChain = filters.join(',');
+
+  console.log(`FFmpeg filter chain: ${filterChain}`);
+
+  const { stderr } = await execFileAsync('ffmpeg', [
+    '-i', inputPath,
+    '-af', filterChain,
+    '-y',
+    outputPath
+  ]);
+
+  if (stderr) {
+    console.log('FFmpeg stderr (last 500 chars):', stderr.substring(stderr.length - 500));
+  }
+
+  // Replace original with processed version
+  await fs.rename(outputPath, inputPath);
+}
 
 function sanitizeWordForFilename(word) {
   if (!word) return '';
@@ -172,7 +307,8 @@ router.post('/generate', async (req, res) => {
       similarity_boost = 0.75,
       style = 0.0,
       speed = 1.0,
-      language_code
+      language_code,
+      postProcessing
     } = req.body;
 
     if (!process.env.ELEVENLABS_API_KEY) {
@@ -231,6 +367,24 @@ router.post('/generate', async (req, res) => {
     const filePath = path.join(UPLOADS_DIR, filename);
     await fs.writeFile(filePath, buffer);
 
+    // Apply post-processing effects if requested
+    let effectApplied = null;
+    if (postProcessing && postProcessing.preset && postProcessing.preset !== 'none') {
+      try {
+        console.log(`Applying audio effect: ${postProcessing.preset}`, JSON.stringify(postProcessing));
+        await applyAudioEffects(filePath, postProcessing);
+        // Re-read the processed file for base64 response
+        const processedBuffer = await fs.readFile(filePath);
+        data.audio_base64 = processedBuffer.toString('base64');
+        effectApplied = postProcessing.preset;
+        console.log(`Audio effect "${postProcessing.preset}" applied successfully`);
+      } catch (ffmpegError) {
+        console.error('FFmpeg post-processing failed:', ffmpegError.message);
+        if (ffmpegError.stderr) console.error('FFmpeg stderr:', ffmpegError.stderr.substring(0, 1000));
+        effectApplied = `FAILED: ${ffmpegError.message}`;
+      }
+    }
+
     // Convert character-level alignment to word-level timestamps
     let wordTimestamps = [];
     const alignment = data.normalized_alignment || data.alignment;
@@ -278,7 +432,8 @@ router.post('/generate', async (req, res) => {
       text,
       voice_id,
       model_id,
-      wordTimestamps
+      wordTimestamps,
+      effectApplied
     });
   } catch (error) {
     console.error('Failed to generate audio:', error);

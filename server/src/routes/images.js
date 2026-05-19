@@ -681,10 +681,13 @@ Other attached images are style/character references — use them for art style 
           refInstructions = `IMPORTANT: The attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n`;
         }
 
-        // Truncate prompt AFTER building refInstructions so total stays within 32000 char limit
-        const maxPromptLen = 32000 - refInstructions.length;
+        // Truncate prompt AFTER building refInstructions so total stays within OpenAI's 32000 char limit.
+        // Use 30000 as the effective limit — OpenAI counts characters differently than JS .length
+        // (UTF-8 encoding of accented chars like á/é/ñ can add ~2-3% overhead).
+        const safeLimit = 30000;
+        const maxPromptLen = safeLimit - refInstructions.length;
         if (finalPrompt.length > maxPromptLen) {
-          console.log(`Panel prompt too long (${refInstructions.length + finalPrompt.length} chars total), truncating to fit 32000 limit`);
+          console.log(`Panel prompt too long (${refInstructions.length + finalPrompt.length} chars total), truncating to fit ${safeLimit} limit`);
           finalPrompt = finalPrompt.substring(0, maxPromptLen);
         }
 
@@ -698,9 +701,9 @@ Other attached images are style/character references — use them for art style 
         });
       } else {
         // Truncate for generate path (no refInstructions prefix)
-        if (finalPrompt.length > 32000) {
-          console.log(`Panel prompt too long (${finalPrompt.length} chars), truncating to 32000`);
-          finalPrompt = finalPrompt.substring(0, 32000);
+        if (finalPrompt.length > 30000) {
+          console.log(`Panel prompt too long (${finalPrompt.length} chars), truncating to 30000`);
+          finalPrompt = finalPrompt.substring(0, 30000);
         }
         response = await openai.images.generate({
           model: 'gpt-image-2',

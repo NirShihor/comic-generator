@@ -150,6 +150,7 @@ const HotspotSchema = new mongoose.Schema({
   width: Number,
   height: Number,
   label: String,
+  borderColor: String,
   slides: [HotspotSlideSchema]
 }, { _id: false });
 

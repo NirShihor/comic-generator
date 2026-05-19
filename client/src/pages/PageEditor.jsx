@@ -425,6 +425,14 @@ function PageEditor({ isCover = false }) {
     style: 0.0,
     speed: 1.0
   });
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+  const [audioEffects, setAudioEffects] = useState({
+    preset: 'none',
+    semitones: 4,
+    delayMs: 200,
+    decay: 0.5,
+    intensity: 0.5
+  });
   const [audioPreview, setAudioPreview] = useState({}); // { [sentenceId]: { url, base64, isPlaying } }
   const [generatingAudio, setGeneratingAudio] = useState({}); // { [sentenceId]: true/false }
   const [savingAudio, setSavingAudio] = useState({}); // { [sentenceId]: true/false }
@@ -589,7 +597,8 @@ function PageEditor({ isCover = false }) {
         text,
         voice_id: selectedVoiceId,
         model_id: audioModel,
-        ...audioSettings
+        ...audioSettings,
+        postProcessing: audioEffects
       });
 
       setAudioPreview(prev => ({
@@ -798,7 +807,8 @@ function PageEditor({ isCover = false }) {
         text: alt.text,
         voice_id: selectedVoiceId,
         model_id: audioModel,
-        ...audioSettings
+        ...audioSettings,
+        postProcessing: audioEffects
       });
 
       // Save to project
@@ -4102,7 +4112,7 @@ function PageEditor({ isCover = false }) {
 
             const bakedPath = `/projects/${id}/images/${id}_cover_baked.png`;
             const updatedComic = { ...comic };
-            updatedComic.cover = { ...updatedComic.cover, bakedImage: bakedPath };
+            updatedComic.cover = { ...updatedComic.cover, bakedImage: bakedPath, bubbles: bubbles };
             await api.put(`/comics/${id}`, updatedComic);
             setComic(updatedComic);
           } else {
@@ -6263,6 +6273,11 @@ function PageEditor({ isCover = false }) {
             {/* Hotspot overlays */}
             {editorMode === 'bubbles' && hotspots.map((hotspot, hIdx) => {
               const isSelected = selectedHotspotId === hotspot.id;
+              const hColor = hotspot.borderColor || '#00bcd4';
+              // Parse hex to RGB for semi-transparent background
+              const hR = parseInt(hColor.slice(1, 3), 16) || 0;
+              const hG = parseInt(hColor.slice(3, 5), 16) || 0;
+              const hB = parseInt(hColor.slice(5, 7), 16) || 0;
               return (
                 <div
                   key={hotspot.id}
@@ -6275,8 +6290,8 @@ function PageEditor({ isCover = false }) {
                     top: `${hotspot.y * 100}%`,
                     width: `${hotspot.width * 100}%`,
                     height: `${hotspot.height * 100}%`,
-                    border: isSelected ? '2px solid #00bcd4' : '2px dashed #00bcd4',
-                    background: isSelected ? 'rgba(0, 188, 212, 0.2)' : 'rgba(0, 188, 212, 0.08)',
+                    border: isSelected ? `2px solid ${hColor}` : `2px dashed ${hColor}`,
+                    background: isSelected ? `rgba(${hR}, ${hG}, ${hB}, 0.2)` : `rgba(${hR}, ${hG}, ${hB}, 0.08)`,
                     zIndex: 45,
                     pointerEvents: 'auto',
                     cursor: isDraggingHotspot ? 'grabbing' : 'grab',
@@ -6285,7 +6300,7 @@ function PageEditor({ isCover = false }) {
                 >
                   <span style={{
                     position: 'absolute', top: 2, left: 4,
-                    fontSize: '10px', color: '#00838f', fontWeight: 'bold',
+                    fontSize: '10px', color: hColor, fontWeight: 'bold',
                     background: 'rgba(255,255,255,0.8)', padding: '1px 4px', borderRadius: '3px'
                   }}>
                     H{hIdx + 1} ({(hotspot.slides || []).length})
@@ -6306,7 +6321,7 @@ function PageEditor({ isCover = false }) {
                         [corner.includes('top') ? 'top' : 'bottom']: -4,
                         [corner.includes('left') ? 'left' : 'right']: -4,
                         width: 8, height: 8,
-                        background: '#00bcd4',
+                        background: hColor,
                         cursor: corner === 'top-left' || corner === 'bottom-right' ? 'nwse-resize' : 'nesw-resize',
                         borderRadius: '50%',
                         zIndex: 46
@@ -7519,6 +7534,117 @@ function PageEditor({ isCover = false }) {
                                 </div>
                               )}
 
+                              {/* Voice Settings & Effects */}
+                              <div style={{ marginBottom: '0.3rem' }}>
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setShowVoiceSettings(prev => !prev); }}
+                                    style={{
+                                      background: 'none', border: 'none', color: '#888',
+                                      fontSize: '0.65rem', cursor: 'pointer', padding: '0.15rem 0',
+                                      display: 'flex', alignItems: 'center', gap: '0.2rem'
+                                    }}
+                                  >
+                                    {showVoiceSettings ? '▾' : '▸'} Voice Settings
+                                  </button>
+                                  <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                                    <label style={{ fontSize: '0.6rem', color: '#888' }}>FX:</label>
+                                    <select
+                                      value={audioEffects.preset}
+                                      onChange={(e) => { e.stopPropagation(); setAudioEffects(prev => ({ ...prev, preset: e.target.value })); }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{ padding: '0.15rem', fontSize: '0.6rem', borderRadius: '3px', border: '1px solid #ccc' }}
+                                    >
+                                      <option value="none">None</option>
+                                      <option value="robot">Robot</option>
+                                      <option value="radio">Radio / Intercom</option>
+                                      <option value="megaphone">Megaphone</option>
+                                      <option value="echo">Echo</option>
+                                      <option value="whisper">Whisper</option>
+                                      <option value="deep">Deep / Ominous</option>
+                                      <option value="chipmunk">Chipmunk</option>
+                                      <option value="pitch_up">Pitch Up</option>
+                                      <option value="pitch_down">Pitch Down</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                {/* ElevenLabs voice settings sliders */}
+                                {showVoiceSettings && (
+                                  <div style={{ padding: '0.3rem', background: '#f0f4f8', borderRadius: '3px', marginTop: '0.2rem', border: '1px solid #d0dce8' }}>
+                                    {[
+                                      { label: 'Stability', key: 'stability', min: 0, max: 100, tip: 'Lower = more expressive' },
+                                      { label: 'Similarity', key: 'similarity_boost', min: 0, max: 100, tip: 'Voice matching' },
+                                      { label: 'Style', key: 'style', min: 0, max: 100, tip: 'Style exaggeration' },
+                                      { label: 'Speed', key: 'speed', min: 70, max: 120, tip: '100 = normal' }
+                                    ].map(({ label, key, min, max, tip }) => (
+                                      <div key={key} style={{ marginBottom: '0.15rem' }}>
+                                        <label style={{ fontSize: '0.6rem', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
+                                          <span title={tip}>{label}</span>
+                                          <span>{key === 'speed' ? audioSettings[key].toFixed(2) : Math.round(audioSettings[key] * 100)}</span>
+                                        </label>
+                                        <input
+                                          type="range"
+                                          min={min}
+                                          max={max}
+                                          value={Math.round(audioSettings[key] * 100)}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            setAudioSettings(prev => ({ ...prev, [key]: parseInt(e.target.value) / 100 }));
+                                          }}
+                                          onClick={(e) => e.stopPropagation()}
+                                          style={{ width: '100%', height: '12px' }}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Effect-specific parameter sliders */}
+                                {['pitch_up', 'pitch_down'].includes(audioEffects.preset) && (
+                                  <div style={{ padding: '0.2rem 0.3rem', background: '#fff8e8', borderRadius: '3px', marginTop: '0.2rem', border: '1px solid #e8d8b0' }}>
+                                    <label style={{ fontSize: '0.6rem', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>Semitones</span><span>{audioEffects.semitones}</span>
+                                    </label>
+                                    <input type="range" min="1" max="12" value={audioEffects.semitones}
+                                      onChange={(e) => { e.stopPropagation(); setAudioEffects(prev => ({ ...prev, semitones: parseInt(e.target.value) })); }}
+                                      onClick={(e) => e.stopPropagation()} style={{ width: '100%', height: '12px' }}
+                                    />
+                                  </div>
+                                )}
+
+                                {audioEffects.preset === 'echo' && (
+                                  <div style={{ padding: '0.2rem 0.3rem', background: '#fff8e8', borderRadius: '3px', marginTop: '0.2rem', border: '1px solid #e8d8b0' }}>
+                                    <label style={{ fontSize: '0.6rem', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>Delay (ms)</span><span>{audioEffects.delayMs}</span>
+                                    </label>
+                                    <input type="range" min="50" max="500" step="10" value={audioEffects.delayMs}
+                                      onChange={(e) => { e.stopPropagation(); setAudioEffects(prev => ({ ...prev, delayMs: parseInt(e.target.value) })); }}
+                                      onClick={(e) => e.stopPropagation()} style={{ width: '100%', height: '12px' }}
+                                    />
+                                    <label style={{ fontSize: '0.6rem', color: '#666', display: 'flex', justifyContent: 'space-between', marginTop: '0.1rem' }}>
+                                      <span>Decay</span><span>{audioEffects.decay.toFixed(2)}</span>
+                                    </label>
+                                    <input type="range" min="10" max="90" value={Math.round(audioEffects.decay * 100)}
+                                      onChange={(e) => { e.stopPropagation(); setAudioEffects(prev => ({ ...prev, decay: parseInt(e.target.value) / 100 })); }}
+                                      onClick={(e) => e.stopPropagation()} style={{ width: '100%', height: '12px' }}
+                                    />
+                                  </div>
+                                )}
+
+                                {audioEffects.preset === 'robot' && (
+                                  <div style={{ padding: '0.2rem 0.3rem', background: '#fff8e8', borderRadius: '3px', marginTop: '0.2rem', border: '1px solid #e8d8b0' }}>
+                                    <label style={{ fontSize: '0.6rem', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>Intensity</span><span>{Math.round(audioEffects.intensity * 100)}</span>
+                                    </label>
+                                    <input type="range" min="0" max="100" value={Math.round(audioEffects.intensity * 100)}
+                                      onChange={(e) => { e.stopPropagation(); setAudioEffects(prev => ({ ...prev, intensity: parseInt(e.target.value) / 100 })); }}
+                                      onClick={(e) => e.stopPropagation()} style={{ width: '100%', height: '12px' }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+
                               {/* Action buttons */}
                               <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
                                 <button
@@ -8445,6 +8571,17 @@ function PageEditor({ isCover = false }) {
                   />
                 </div>
 
+                {/* Frame Color */}
+                <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#555' }}>Frame Color</label>
+                  <ColorPicker
+                    value={hotspot.borderColor || '#00bcd4'}
+                    onChange={(e) => updateHotspot(hotspot.id, { borderColor: e.target.value })}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ width: '28px', height: '22px', border: '1px solid #ccc', borderRadius: '3px' }}
+                  />
+                </div>
+
                 {/* Voice selector */}
                 <div style={{ marginBottom: '0.5rem' }}>
                   {(comic?.voices || []).length === 0 ? (
@@ -8557,7 +8694,8 @@ function PageEditor({ isCover = false }) {
                                 text: slide.text,
                                 voice_id: selectedVoiceId,
                                 model_id: audioModel,
-                                ...audioSettings
+                                ...audioSettings,
+                                postProcessing: audioEffects
                               });
                               setAudioPreview(prev => ({
                                 ...prev,
