@@ -71,6 +71,9 @@ const BubbleSchema = new mongoose.Schema({
   // Image bubble fields
   imageUrl: String,
   imagePrompt: String,
+  // Background image fields (for thought bubbles with image backgrounds)
+  backgroundImageUrl: String,
+  backgroundImagePrompt: String,
   // Content
   sentences: [SentenceSchema]
 }, { _id: false });

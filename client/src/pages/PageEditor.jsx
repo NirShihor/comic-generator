@@ -558,6 +558,9 @@ function PageEditor({ isCover = false }) {
   const [resizeCorner, setResizeCorner] = useState(null);
   const [isAddingBubble, setIsAddingBubble] = useState(false);
 
+  // Bubble copy/paste
+  const copiedBubbleRef = useRef(null);
+
   // Hotspot state
   const [hotspots, setHotspots] = useState([]);
   const [selectedHotspotId, setSelectedHotspotId] = useState(null);
@@ -575,6 +578,11 @@ function PageEditor({ isCover = false }) {
   useEffect(() => {
     loadComic();
   }, [id, pageId, isCover]);
+
+  // Keep comic state in sync with defaultBubbleStyle so full-comic saves don't overwrite it
+  useEffect(() => {
+    setComic(prev => prev ? { ...prev, defaultBubbleStyle } : prev);
+  }, [defaultBubbleStyle]);
 
   // Auto-composite cover when panelImages are loaded
   useEffect(() => {
@@ -1598,6 +1606,45 @@ function PageEditor({ isCover = false }) {
     setSelectedBubbleId(newBubble.id);
   };
 
+  // Copy/paste bubble with Cmd+C / Cmd+V
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Only handle when not typing in an input/textarea
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        if (bubble) {
+          copiedBubbleRef.current = JSON.parse(JSON.stringify(bubble));
+          showToast('Bubble copied');
+        }
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && copiedBubbleRef.current) {
+        e.preventDefault();
+        const src = copiedBubbleRef.current;
+        const now = Date.now();
+        const newBubble = {
+          ...src,
+          id: `bubble-${now}`,
+          locked: false,
+          x: Math.min(src.x + 0.03, 0.9),
+          y: Math.min(src.y + 0.03, 0.9),
+          sentences: src.sentences.map((s, i) => ({
+            ...s,
+            id: `sentence-${now}-${i}`,
+            audioUrl: '',
+          })),
+        };
+        setBubbles(prev => [...prev, newBubble]);
+        setSelectedBubbleId(newBubble.id);
+        showToast('Bubble pasted');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedBubbleId, bubbles]);
+
   // Get display text from sentences
   const getBubbleDisplayText = (bubble) => {
     if (!bubble.sentences || bubble.sentences.length === 0) return '';
@@ -1899,6 +1946,49 @@ function PageEditor({ isCover = false }) {
     }
   };
 
+  // Generate a background image for a thought bubble
+  const generateBubbleBackgroundImage = async (bubbleId, prompt, provider = 'openai') => {
+    if (!prompt.trim()) return;
+    updateBubble(bubbleId, { bgImageGenerating: provider, backgroundImagePrompt: prompt });
+    try {
+      const response = await api.post('/images/generate', {
+        prompt,
+        style: promptSettings.styleBible || 'comic book illustration',
+        size: '1024x1024',
+        provider
+      }, { timeout: 600000 });
+      updateBubble(bubbleId, {
+        backgroundImageUrl: response.data.path,
+        bgImageGenerating: null
+      });
+    } catch (error) {
+      console.error('Bubble background image generation failed:', error);
+      updateBubble(bubbleId, { bgImageGenerating: null });
+      alert('Background image generation failed: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  // Upload a background image from disk for a thought bubble
+  const uploadBubbleBackgroundImage = async (bubbleId, file) => {
+    if (!file) return;
+    updateBubble(bubbleId, { bgImageGenerating: 'upload' });
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await api.post('/images/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      updateBubble(bubbleId, {
+        backgroundImageUrl: response.data.path,
+        bgImageGenerating: null
+      });
+    } catch (error) {
+      console.error('Bubble background image upload failed:', error);
+      updateBubble(bubbleId, { bgImageGenerating: null });
+      alert('Background image upload failed: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   // Refine an existing image bubble using the current image as reference
   const refineBubbleImage = async (bubbleId, refinementPrompt, currentImageUrl) => {
     if (!refinementPrompt.trim() || !currentImageUrl) return;
@@ -2037,9 +2127,15 @@ function PageEditor({ isCover = false }) {
       if (!coords) return;
 
       if (isDraggingBubble && selectedBubbleId) {
+        const bubble = bubbles.find(b => b.id === selectedBubbleId);
+        const tailOverflow = bubble ? (bubble.tailLength ?? 0.35) * (bubble.height || 0.1) : 0;
+        const rot = bubble ? Math.abs(bubble.rotation || 0) : 0;
+        // Allow negative y when bubble is rotated so the flipped tail can reach the panel top
+        const minY = rot > 90 ? -tailOverflow : 0;
+        const maxY = rot > 90 ? 1 : 1 + tailOverflow;
         updateBubble(selectedBubbleId, {
           x: Math.max(0, Math.min(1, coords.x - dragOffset.x)),
-          y: Math.max(0, Math.min(1, coords.y - dragOffset.y))
+          y: Math.max(minY, Math.min(maxY, coords.y - dragOffset.y))
         });
       } else if (isResizingBubble && selectedBubbleId) {
         const bubble = bubbles.find(b => b.id === selectedBubbleId);
@@ -2603,23 +2699,32 @@ function PageEditor({ isCover = false }) {
         setPanelsComputed(true);
       }
 
-      const updatedComic = { ...comic };
-      // Only include promptSettings in comic save if not from collection
-      if (promptSettingsSource !== 'collection') {
-        updatedComic.promptSettings = promptSettings;
-      }
-      const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
-      updatedComic.pages[pageIndex] = {
-        ...page,
+      // Save the current page using the page-specific endpoint to avoid
+      // overwriting other pages with stale client state.
+      // Exclude masterImage to avoid re-triggering image processing — it hasn't changed.
+      const { masterImage: _mi, bakedImage: _bi, ...pageWithoutImages } = page;
+      const pageData = {
+        ...pageWithoutImages,
         lines,
         panels: panelsToSave,
         bubbles,
         hotspots
       };
+      await api.put(`/comics/${id}/pages/${pageId}`, pageData);
 
-      await api.put(`/comics/${id}`, updatedComic);
-      setComic(updatedComic);
-      setPage(updatedComic.pages[pageIndex]);
+      // Save promptSettings separately if needed
+      if (promptSettingsSource !== 'collection') {
+        await api.put(`/comics/${id}`, { promptSettings });
+      }
+
+      // Update local state
+      setComic(prev => {
+        const updated = { ...prev };
+        const pageIndex = updated.pages.findIndex(p => p.id === pageId);
+        if (pageIndex >= 0) updated.pages[pageIndex] = pageData;
+        return updated;
+      });
+      setPage(pageData);
       showToast('Page saved!');
     } catch (error) {
       console.error('Failed to save page:', error);
@@ -4076,6 +4181,19 @@ function PageEditor({ isCover = false }) {
         bakeImg.src = imgUrl;
         await new Promise(r => { bakeImg.onload = r; bakeImg.onerror = r; });
       }
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
+
+    // Preload background images for thought bubbles
+    const bgImageBubbles = bubbles.filter(b => b.type === 'thought' && b.backgroundImageUrl);
+    if (bgImageBubbles.length > 0) {
+      await Promise.all(bgImageBubbles.map(b => new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = resolve;
+        img.onerror = resolve;
+        img.src = `http://localhost:3001${b.backgroundImageUrl}`;
+      })));
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     }
 
@@ -6051,6 +6169,11 @@ function PageEditor({ isCover = false }) {
                             <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
                             <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
                           </filter>
+                          {bubble.backgroundImageUrl && (
+                            <clipPath id={`thoughtClip-${bubble.id}`}>
+                              <rect x={thoughtX} y={thoughtY} width={thoughtW} height={thoughtH} rx={svgRx} ry={svgRy} />
+                            </clipPath>
+                          )}
                         </defs>
                         <g
                           transform={`rotate(${thoughtRotDeg} ${thoughtCx} ${thoughtCy})`}
@@ -6064,6 +6187,15 @@ function PageEditor({ isCover = false }) {
                           }}
                           style={{ pointerEvents: 'auto', cursor: editorMode === 'bubbles' ? (bubble.locked ? 'default' : (isDraggingBubble ? 'grabbing' : 'grab')) : 'default' }}
                         >
+                          {bubble.backgroundImageUrl && (
+                            <image
+                              href={`http://localhost:3001${bubble.backgroundImageUrl}`}
+                              x={thoughtX} y={thoughtY}
+                              width={thoughtW} height={thoughtH}
+                              preserveAspectRatio="xMidYMid slice"
+                              clipPath={`url(#thoughtClip-${bubble.id})`}
+                            />
+                          )}
                           <rect
                             x={thoughtX}
                             y={thoughtY}
@@ -6071,7 +6203,7 @@ function PageEditor({ isCover = false }) {
                             height={thoughtH}
                             rx={svgRx}
                             ry={svgRy}
-                            fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#ffffff')}
+                            fill={bubble.backgroundImageUrl ? 'none' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#ffffff'))}
                             stroke={selectedBubbleId === bubble.id ? '#00ff00' : (bubble.noBorder ? 'none' : borderColorVal)}
                             strokeWidth={selectedBubbleId === bubble.id ? 3 : borderWidthVal}
                             filter={`url(#roughThought-${bubble.id})`}
@@ -6110,6 +6242,7 @@ function PageEditor({ isCover = false }) {
                       boxSizing: 'border-box',
                       cursor: editorMode === 'bubbles' ? (bubble.locked ? 'default' : (isDraggingBubble ? 'grabbing' : 'grab')) : 'default',
                       zIndex: 50,
+                      overflow: bubble.backgroundImageUrl ? 'hidden' : 'visible',
                       boxShadow: selectedBubbleId === bubble.id ? '0 0 10px rgba(0,255,0,0.5)' : 'none',
                       // Hand-drawn effect with slight rotation and rough filter, plus user rotation for thought bubbles
                       transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0)}deg)`,
@@ -6117,6 +6250,14 @@ function PageEditor({ isCover = false }) {
                       filter: bubble.type === 'thought' ? 'none' : 'url(#roughEdge)'
                     }}
                   >
+                    {bubble.type === 'thought' && bubble.backgroundImageUrl && (
+                      <img
+                        src={`http://localhost:3001${bubble.backgroundImageUrl}`}
+                        alt=""
+                        crossOrigin="anonymous"
+                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', userSelect: 'none' }}
+                      />
+                    )}
                     {bubble.type === 'image' ? (
                       bubble.imageUrl ? (
                         <img
@@ -7124,7 +7265,7 @@ function PageEditor({ isCover = false }) {
                           </label>
                           <ColorPicker
                             value={bubble.bgColor || '#ffffff'}
-                            onChange={(e) => updateBubble(bubble.id, { bgColor: e.target.value, bgTransparent: false })}
+                            onChange={(e) => { updateBubble(bubble.id, { bgColor: e.target.value, bgTransparent: false }); setDefaultBubbleStyle(prev => { const updated = { ...prev, bgColor: e.target.value }; api.put(`/comics/${id}`, { defaultBubbleStyle: updated }).catch(err => console.error('Failed to save defaults:', err)); return updated; }); }}
                             onClick={(e) => e.stopPropagation()}
                             disabled={bubble.bgTransparent}
                             style={{
@@ -7153,6 +7294,63 @@ function PageEditor({ isCover = false }) {
                           />
                           No border
                         </label>
+                        {/* Background Image (thought bubbles only) */}
+                        {bubble.type === 'thought' && (
+                          <div style={{ marginBottom: '0.5rem', marginTop: '0.3rem', padding: '0.4rem', background: '#f8f8f8', borderRadius: '6px' }}>
+                            <label style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginBottom: '0.25rem', fontWeight: 'bold' }}>
+                              Background Image
+                            </label>
+                            <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem' }}>
+                              <input
+                                type="text"
+                                value={bubble.backgroundImagePrompt || ''}
+                                onChange={(e) => { e.stopPropagation(); updateBubble(bubble.id, { backgroundImagePrompt: e.target.value }); }}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && bubble.backgroundImagePrompt) {
+                                    e.preventDefault();
+                                    generateBubbleBackgroundImage(bubble.id, bubble.backgroundImagePrompt, 'openai');
+                                  }
+                                }}
+                                placeholder="e.g. dreamy clouds"
+                                style={{ flex: 1, padding: '0.3rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.8rem' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem' }}>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); generateBubbleBackgroundImage(bubble.id, bubble.backgroundImagePrompt, 'openai'); }}
+                                disabled={bubble.bgImageGenerating || !bubble.backgroundImagePrompt}
+                                style={{ flex: 1, padding: '0.3rem 0.5rem', background: bubble.bgImageGenerating ? '#ccc' : '#27ae60', border: 'none', borderRadius: '4px', color: '#fff', cursor: bubble.bgImageGenerating ? 'not-allowed' : 'pointer', fontSize: '0.7rem' }}>
+                                {bubble.bgImageGenerating === 'openai' ? 'Generating...' : 'GPT'}
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); generateBubbleBackgroundImage(bubble.id, bubble.backgroundImagePrompt, 'gemini'); }}
+                                disabled={bubble.bgImageGenerating || !bubble.backgroundImagePrompt}
+                                style={{ flex: 1, padding: '0.3rem 0.5rem', background: bubble.bgImageGenerating ? '#ccc' : '#4285f4', border: 'none', borderRadius: '4px', color: '#fff', cursor: bubble.bgImageGenerating ? 'not-allowed' : 'pointer', fontSize: '0.7rem' }}>
+                                {bubble.bgImageGenerating === 'gemini' ? 'Generating...' : 'Gemini'}
+                              </button>
+                              <input type="file" accept="image/*" id={`bubble-bg-upload-${bubble.id}`} style={{ display: 'none' }}
+                                onChange={(e) => { if (e.target.files[0]) { uploadBubbleBackgroundImage(bubble.id, e.target.files[0]); e.target.value = ''; } }}
+                                onClick={(e) => e.stopPropagation()} />
+                              <button
+                                onClick={(e) => { e.stopPropagation(); document.getElementById(`bubble-bg-upload-${bubble.id}`).click(); }}
+                                disabled={bubble.bgImageGenerating}
+                                style={{ flex: 1, padding: '0.3rem 0.5rem', background: bubble.bgImageGenerating ? '#ccc' : '#8e44ad', border: 'none', borderRadius: '4px', color: '#fff', cursor: bubble.bgImageGenerating ? 'not-allowed' : 'pointer', fontSize: '0.7rem' }}>
+                                {bubble.bgImageGenerating === 'upload' ? 'Uploading...' : 'Upload'}
+                              </button>
+                            </div>
+                            {bubble.backgroundImageUrl && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <img src={`http://localhost:3001${bubble.backgroundImageUrl}`} alt="BG preview"
+                                  style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ddd' }} />
+                                <button onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { backgroundImageUrl: null, backgroundImagePrompt: '' }); }}
+                                  style={{ padding: '0.25rem 0.5rem', background: '#e74c3c', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', fontSize: '0.7rem' }}>
+                                  Remove
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div style={{ opacity: bubble.noBorder ? 0.4 : 1 }}>
                           <label style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginBottom: '0.2rem' }}>
                             Border
@@ -7160,7 +7358,7 @@ function PageEditor({ isCover = false }) {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                             <ColorPicker
                               value={bubble.borderColor || '#000000'}
-                              onChange={(e) => updateBubble(bubble.id, { borderColor: e.target.value })}
+                              onChange={(e) => { updateBubble(bubble.id, { borderColor: e.target.value }); setDefaultBubbleStyle(prev => { const updated = { ...prev, borderColor: e.target.value }; api.put(`/comics/${id}`, { defaultBubbleStyle: updated }).catch(err => console.error('Failed to save defaults:', err)); return updated; }); }}
                               onClick={(e) => e.stopPropagation()}
                               disabled={bubble.noBorder}
                               style={{ width: '32px', height: '24px', border: '1px solid #ccc', borderRadius: '4px' }}
@@ -7185,7 +7383,7 @@ function PageEditor({ isCover = false }) {
                           </label>
                           <ColorPicker
                             value={bubble.textColor || '#000000'}
-                            onChange={(e) => updateBubble(bubble.id, { textColor: e.target.value })}
+                            onChange={(e) => { updateBubble(bubble.id, { textColor: e.target.value }); setDefaultBubbleStyle(prev => { const updated = { ...prev, textColor: e.target.value }; api.put(`/comics/${id}`, { defaultBubbleStyle: updated }).catch(err => console.error('Failed to save defaults:', err)); return updated; }); }}
                             onClick={(e) => e.stopPropagation()}
                             style={{ width: '40px', height: '28px', border: '1px solid #ccc', borderRadius: '4px' }}
                           />
@@ -11613,9 +11811,24 @@ function PageEditor({ isCover = false }) {
                             <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
                             <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
                           </filter>
+                          {bubble.backgroundImageUrl && (
+                            <clipPath id={`thoughtClip${filtSuffix}-${bubble.id}`}>
+                              <rect x={tX} y={tY} width={tW} height={tH} rx={tSvgRx} ry={tSvgRy} />
+                            </clipPath>
+                          )}
                         </defs>
                         <g transform={`rotate(${tRotDeg} ${tCx} ${tCy})`}>
-                          <rect x={tX} y={tY} width={tW} height={tH} rx={tSvgRx} ry={tSvgRy} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#ffffff')} stroke={bubble.noBorder ? 'none' : tBorderColor} strokeWidth={tBorderWidth} filter={`url(#roughThought${filtSuffix}-${bubble.id})`} />
+                          {bubble.backgroundImageUrl && (
+                            <image
+                              href={`http://localhost:3001${bubble.backgroundImageUrl}`}
+                              x={tX} y={tY}
+                              width={tW} height={tH}
+                              preserveAspectRatio="xMidYMid slice"
+                              clipPath={`url(#thoughtClip${filtSuffix}-${bubble.id})`}
+                              crossOrigin="anonymous"
+                            />
+                          )}
+                          <rect x={tX} y={tY} width={tW} height={tH} rx={tSvgRx} ry={tSvgRy} fill={bubble.backgroundImageUrl ? 'none' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#ffffff'))} stroke={bubble.noBorder ? 'none' : tBorderColor} strokeWidth={tBorderWidth} filter={`url(#roughThought${filtSuffix}-${bubble.id})`} />
                         </g>
                       </svg>
                     );
@@ -11637,11 +11850,20 @@ function PageEditor({ isCover = false }) {
                       padding: bubble.type === 'image' ? '2px' : '6px 8px',
                       boxSizing: 'border-box',
                       zIndex: 50,
+                      overflow: bubble.backgroundImageUrl ? 'hidden' : 'visible',
                       transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0)}deg)`,
                       transformOrigin: 'center center',
                       filter: bubble.type === 'thought' ? 'none' : `url(#roughEdge${filtSuffix})`
                     }}
                   >
+                    {bubble.type === 'thought' && bubble.backgroundImageUrl && (
+                      <img
+                        src={`http://localhost:3001${bubble.backgroundImageUrl}`}
+                        alt=""
+                        crossOrigin="anonymous"
+                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                      />
+                    )}
                     {bubble.type === 'image' && bubble.imageUrl ? (
                       <img
                         src={`http://localhost:3001${bubble.imageUrl}`}

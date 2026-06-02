@@ -336,6 +336,7 @@ function transformToReaderFormat(comic, comicSlug) {
               ...(bubble.fontSize && { fontSize: bubble.fontSize }),
               ...(bubble.isSoundEffect && { isSoundEffect: true }),
               ...(bubble.imageUrl && { imageUrl: bubble.imageUrl }),
+              ...(bubble.backgroundImageUrl && { backgroundImageUrl: bubble.backgroundImageUrl }),
               position: {
                 x: bubble.x,
                 y: bubble.y,

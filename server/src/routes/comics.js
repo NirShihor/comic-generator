@@ -245,11 +245,47 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    const comic = await Comic.findOneAndUpdate(
-      { id: req.params.id },
-      { $set: updateData },
-      { new: true }
-    );
+    // If the client sends a pages array, merge by page ID instead of replacing
+    // the entire array. This prevents stale client state from accidentally
+    // wiping pages that were added/removed on the server since the client last
+    // loaded the comic (a common race condition).
+    let comic;
+    if (updateData.pages && Array.isArray(updateData.pages)) {
+      const incomingPages = updateData.pages;
+      delete updateData.pages;
+
+      comic = await Comic.findOne({ id: req.params.id });
+      if (!comic) {
+        return res.status(404).json({ error: 'Comic not found' });
+      }
+
+      // Update each existing page whose ID appears in the incoming data
+      for (const incoming of incomingPages) {
+        const existingIdx = comic.pages.findIndex(p => p.id === incoming.id);
+        if (existingIdx >= 0) {
+          // Merge: update all fields from the incoming page except the id
+          const merged = { ...comic.pages[existingIdx].toObject?.() || comic.pages[existingIdx], ...incoming };
+          comic.pages[existingIdx] = merged;
+        }
+        // Pages that only exist on the client (stale) are silently ignored
+        // Pages that only exist on the server are preserved
+      }
+
+      // Apply any remaining non-pages fields
+      for (const [key, value] of Object.entries(updateData)) {
+        comic[key] = value;
+      }
+
+      await comic.save();
+      // Reload to get clean Mongoose document
+      comic = await Comic.findOne({ id: req.params.id });
+    } else {
+      comic = await Comic.findOneAndUpdate(
+        { id: req.params.id },
+        { $set: updateData },
+        { new: true }
+      );
+    }
 
     if (!comic) {
       return res.status(404).json({ error: 'Comic not found' });
@@ -370,18 +406,23 @@ router.put('/:id/pages/:pageId', async (req, res) => {
     if (req.body.bubbles !== undefined) {
       page.bubbles = req.body.bubbles;
     }
+    if (req.body.hotspots !== undefined) {
+      page.hotspots = req.body.hotspots;
+    }
     if (req.body.bakedImage !== undefined) {
       page.bakedImage = req.body.bakedImage;
     }
     if (req.body.masterImage !== undefined) {
-      page.masterImage = req.body.masterImage;
+      // Strip cache-buster query strings (e.g. ?t=123456)
+      const cleanMasterImage = req.body.masterImage.split('?')[0];
+      page.masterImage = cleanMasterImage;
 
-      if (req.body.masterImage && req.body.panels && req.body.panels.length > 0) {
+      if (cleanMasterImage && req.body.panels && req.body.panels.length > 0) {
         let sourceImagePath;
-        if (req.body.masterImage.startsWith('/uploads/')) {
-          sourceImagePath = path.join(UPLOADS_DIR, req.body.masterImage.replace('/uploads/', ''));
-        } else if (req.body.masterImage.startsWith('/projects/')) {
-          sourceImagePath = path.join(PROJECTS_DIR, req.body.masterImage.replace('/projects/', ''));
+        if (cleanMasterImage.startsWith('/uploads/')) {
+          sourceImagePath = path.join(UPLOADS_DIR, cleanMasterImage.replace('/uploads/', ''));
+        } else if (cleanMasterImage.startsWith('/projects/')) {
+          sourceImagePath = path.join(PROJECTS_DIR, cleanMasterImage.replace('/projects/', ''));
         }
 
         if (sourceImagePath) {
@@ -473,6 +514,11 @@ router.patch('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
       if (req.body[field] !== undefined) {
         panel[field] = req.body[field];
       }
+    }
+
+    // Clear baked image if artwork changed — needs re-bake
+    if (req.body.artworkImage && comic.pages[pageIndex].bakedImage) {
+      comic.pages[pageIndex].bakedImage = '';
     }
 
     await comic.save();

@@ -250,6 +250,63 @@ async function createInpaintMask(sourceImagePath, rect) {
     .toBuffer();
 }
 
+// Verify inpaint result using OpenAI vision
+async function verifyInpaintResult(resultBuffer, sourceImagePath, prompt, rect) {
+  try {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    // Resize both images to 512px max for fast/cheap verification
+    const fullSourcePath = path.join(__dirname, '../..', sourceImagePath.split('?')[0]);
+    const sourceThumb = await sharp(fullSourcePath)
+      .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+    const resultThumb = await sharp(resultBuffer)
+      .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+
+    const pctLeft = Math.round(rect.x * 100);
+    const pctTop = Math.round(rect.y * 100);
+    const pctRight = Math.round((rect.x + rect.width) * 100);
+    const pctBottom = Math.round((rect.y + rect.height) * 100);
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${sourceThumb.toString('base64')}`, detail: 'low' } },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${resultThumb.toString('base64')}`, detail: 'low' } },
+          { type: 'text', text: `Image 1 is the original. Image 2 is the result after an inpaint edit request.
+
+The edit request was: "${prompt}"
+The target region was approximately ${pctLeft}%-${pctRight}% horizontally, ${pctTop}%-${pctBottom}% vertically.
+
+Check THREE things:
+1. Was the edit request fulfilled in Image 2? Look at the target region and check if the requested change was actually made.
+2. Does Image 2 preserve the same art style/visual medium as Image 1? (e.g. if Image 1 is a hand-drawn illustration or comic art, Image 2 must also be — NOT photorealistic. A style change is a failure.)
+3. Were any unrelated details changed? Compare characters, animals, objects outside the edit region. If their colors, markings, features, or appearance changed when they shouldn't have, that is a failure.
+
+Reply with ONLY a JSON object: {"fulfilled": true/false, "reason": "brief explanation"}` }
+        ]
+      }],
+      max_tokens: 150
+    });
+
+    const text = response.choices[0]?.message?.content || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return { fulfilled: !!parsed.fulfilled, reason: parsed.reason || '' };
+    }
+    return { fulfilled: true, reason: 'Could not parse verification response' };
+  } catch (err) {
+    console.error('[Inpaint verify] Verification error:', err.message);
+    return { fulfilled: true, reason: 'Verification failed, assuming OK' };
+  }
+}
+
 // Helper: wrap a long-running async operation with periodic keep-alive writes
 // to prevent browser/proxy from closing the connection on idle.
 // Sends newlines every 15s, then the final JSON result.
@@ -866,6 +923,11 @@ router.post('/inpaint-region', (req, res) => {
     const pctBottom = Math.round((rect.y + rect.height) * 100);
 
     let buffer;
+    const MAX_VERIFY_ATTEMPTS = 3;
+    let retryFeedback = '';
+
+    for (let verifyAttempt = 1; verifyAttempt <= MAX_VERIFY_ATTEMPTS; verifyAttempt++) {
+      buffer = null;
 
     if (provider === 'gemini') {
       // Gemini path: prompt-guided inpainting (no native mask support)
@@ -925,16 +987,19 @@ router.post('/inpaint-region', (req, res) => {
         `In and around this area: ${prompt}\n` +
         annotationNote + `\n` +
         `RULES:\n` +
-        `1. Focus the change on the indicated area, but if the modification naturally extends slightly beyond it (e.g. limbs, clothing, shadows), that is fine — complete the change so it looks natural.\n` +
-        `2. Keep the rest of the image as close to the original as possible.\n` +
-        `3. The new content must blend naturally with the surrounding scene (matching lighting, perspective, art style).\n` +
-        `4. Generate the COMPLETE image with the modification applied.\n` +
-        (styleRefs.length > 0 ? `5. Additional attached images are character/style references for visual consistency.\n` : '');
+        `1. CRITICAL — PRESERVE THE EXACT ART STYLE: The output MUST use the same visual medium as the source image (e.g. if it is a hand-drawn illustration, watercolor, ink drawing, or comic art, the output must also be in that same medium). Do NOT convert to photorealism or change the artistic style. Match the line work, coloring technique, shading style, and overall aesthetic of the original.\n` +
+        `2. Focus the change ONLY on what was requested. When changing a subject's pose, position, or expression, you MUST preserve their EXACT visual appearance — same fur color/markings, hair color, skin tone, clothing colors, patterns, and all other visual attributes. Only change what was explicitly asked for. Do NOT alter colors, markings, or features of any character or animal.\n` +
+        `3. Keep the rest of the image as close to the original as possible — pixel-perfect where feasible.\n` +
+        `4. If the modification naturally extends slightly beyond the indicated area (e.g. limbs, clothing, shadows), that is fine — complete the change so it looks natural.\n` +
+        `5. The new content must blend naturally with the surrounding scene (matching lighting, perspective, and art style).\n` +
+        `6. Generate the COMPLETE image with the modification applied.\n` +
+        (styleRefs.length > 0 ? `7. Additional attached images are character/style reference sheets — use them ONLY to match the art style, character appearance, and visual consistency. Do NOT reproduce, copy, or include any part of these reference sheets (such as grids, labels, text, or layout guides) in the output image. The output must look like a natural comic panel, not a reference sheet.\n` : '') +
+        retryFeedback;
 
       // Prompt after images (original working order)
       parts.push({ text: spatialPrompt });
 
-      console.log(`Inpaint (Gemini): region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], prompt: ${prompt.substring(0, 80)}...`);
+      console.log(`Inpaint (Gemini): attempt ${verifyAttempt}/${MAX_VERIFY_ATTEMPTS}, region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], prompt: ${prompt.substring(0, 80)}...`);
 
       const maxRetries = 3;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -1010,7 +1075,8 @@ router.post('/inpaint-region', (req, res) => {
         `Preserve the rest of the image as closely as possible. ` +
         `The new content must blend seamlessly with the surrounding area ` +
         `(matching lighting, perspective, line work, and art style).` +
-        (refFiles.length > 0 ? `\n\nAdditional images are character/style references for visual consistency.` : '');
+        (refFiles.length > 0 ? `\n\nAdditional images are character/style reference sheets — use them ONLY to match the art style, character appearance, and visual consistency. Do NOT reproduce, copy, or include any part of these reference sheets (such as grids, labels, text, or layout guides) in the output image. The output must look like a natural comic panel, not a reference sheet.` : '') +
+        retryFeedback;
 
       // Determine size from source image dimensions
       const sourceMeta = await sharp(fullSourcePath).metadata();
@@ -1018,7 +1084,7 @@ router.post('/inpaint-region', (req, res) => {
       if (sourceMeta.width > sourceMeta.height * 1.2) size = '1536x1024';
       else if (sourceMeta.height > sourceMeta.width * 1.2) size = '1024x1536';
 
-      console.log(`Inpaint (OpenAI): region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], size: ${size}, quality: ${openaiQuality}, prompt: ${prompt.substring(0, 80)}...`);
+      console.log(`Inpaint (OpenAI): attempt ${verifyAttempt}/${MAX_VERIFY_ATTEMPTS}, region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], size: ${size}, quality: ${openaiQuality}, prompt: ${prompt.substring(0, 80)}...`);
 
       const response = await openai.images.edit({
         model: 'gpt-image-2',
@@ -1061,6 +1127,19 @@ router.post('/inpaint-region', (req, res) => {
         .png()
         .toBuffer();
     }
+
+    // Verify the inpaint result
+    if (verifyAttempt < MAX_VERIFY_ATTEMPTS) {
+      const verdict = await verifyInpaintResult(buffer, sourceImagePath, prompt, rect);
+      console.log(`[Inpaint verify] Attempt ${verifyAttempt}/${MAX_VERIFY_ATTEMPTS}: fulfilled=${verdict.fulfilled}, reason: "${verdict.reason}"`);
+      if (verdict.fulfilled) break;
+      // Retry with feedback
+      retryFeedback = `\n\nPREVIOUS ATTEMPT FAILED VERIFICATION: ${verdict.reason}. Please ensure you fulfill the original request.`;
+    } else {
+      console.log(`[Inpaint verify] Attempt ${verifyAttempt}/${MAX_VERIFY_ATTEMPTS}: final attempt, using result as-is`);
+    }
+
+    } // end verify loop
 
     // Save result
     const filename = `panel-${panelId}-inpaint-${uuidv4()}.png`;
@@ -1582,12 +1661,16 @@ router.post('/consistency/save-all', async (req, res) => {
 
         const newPath = `/projects/${comicId}/images/${filename}`;
 
-        // Update artworkImage in the DB
+        // Update artworkImage in the DB and clear stale bakedImage
         const page = comic.pages.find(pg => pg.id === p.pageId);
         if (page) {
           const panel = page.panels.find(pn => pn.id === p.panelId);
           if (panel) {
             panel.artworkImage = newPath;
+          }
+          // Clear baked image since artwork changed — needs re-bake
+          if (page.bakedImage) {
+            page.bakedImage = '';
           }
         }
 
