@@ -271,12 +271,13 @@ router.put('/:id', async (req, res) => {
         // Pages that only exist on the server are preserved
       }
 
-      // Apply any remaining non-pages fields
+      // Build atomic update: set merged pages + any remaining fields
+      const atomicSet = { pages: comic.pages.map(p => p.toObject?.() || p) };
       for (const [key, value] of Object.entries(updateData)) {
-        comic[key] = value;
+        atomicSet[key] = value;
       }
 
-      await comic.save();
+      await Comic.updateOne({ id: req.params.id }, { $set: atomicSet });
       // Reload to get clean Mongoose document
       comic = await Comic.findOne({ id: req.params.id });
     } else {
@@ -461,7 +462,10 @@ router.put('/:id/pages/:pageId', async (req, res) => {
       }
     }
 
-    await comic.save();
+    await Comic.updateOne(
+      { id: req.params.id, 'pages.id': req.params.pageId },
+      { $set: { [`pages.${pageIndex}`]: page.toObject?.() || page } }
+    );
     res.json(page);
   } catch (error) {
     res.status(500).json({ error: error.message });

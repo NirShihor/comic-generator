@@ -164,6 +164,9 @@ function transformToReaderFormat(comic, comicSlug) {
                   alternativeTexts: sentence.alternatives.map(a => a.text),
                   alternativeAudioUrls: sentence.alternatives.filter(a => a.audioUrl).map(a => a.audioUrl)
                 }),
+                ...(sentence.transformations?.length > 0 && {
+                  transformations: sentence.transformations.map(t => ({ prompt: t.prompt, text: t.text }))
+                }),
                 words: (sentence.words || []).map((word, wIdx) => {
                   const wText = sanitizeWordForFilename(word.text);
                   const wBase = sanitizeWordForFilename(word.baseForm || word.text);
@@ -194,7 +197,8 @@ function transformToReaderFormat(comic, comicSlug) {
                     ...(word.vocabQuiz && { vocabQuiz: true }),
                     ...(word.manual && { manual: true }),
                     ...(wText && { wordAudioUrl: `words/${wText}` }),
-                    ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+                    ...(wBase && { baseFormAudioUrl: `words/${wBase}` }),
+                    ...(word.forms?.length > 0 && { forms: word.forms.map(f => { const fAudio = sanitizeWordForFilename(f.text); return { label: f.label, text: f.text, ...(fAudio && { audioUrl: `words/${fAudio}` }) }; }) })
                   };
                 })
               };
@@ -245,7 +249,8 @@ function transformToReaderFormat(comic, comicSlug) {
               baseForm: word.baseForm || word.text || '',
               ...(word.vocabQuiz && { vocabQuiz: true }),
               ...(wText && { wordAudioUrl: `words/${wText}` }),
-              ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+              ...(wBase && { baseFormAudioUrl: `words/${wBase}` }),
+              ...(word.forms?.length > 0 && { forms: word.forms.map(f => { const fAudio = sanitizeWordForFilename(f.text); return { label: f.label, text: f.text, ...(fAudio && { audioUrl: `words/${fAudio}` }) }; }) })
             };
           });
           return {
@@ -313,8 +318,12 @@ function transformToReaderFormat(comic, comicSlug) {
           return ay - by_; // Top to bottom
         });
 
+        // Use a distinct suffix for floating panels to avoid ID collisions
+        // with regular panels that share the same panelOrder
+        const panelIdSuffix = panel.floating ? `${panelNum}f` : `${panelNum}`;
+
         return {
-          id: `${comicSlug}-panel-${page.pageNumber}-${panelNum}`,
+          id: `${comicSlug}-panel-${page.pageNumber}-${panelIdSuffix}`,
           artworkImage: `${comicSlug}_p${page.pageNumber}_s${panelNum}`,
           ...(hasBakedPage && {
             noTextImage: `${comicSlug}_p${page.pageNumber}_s${panelNum}_no_text`
@@ -363,6 +372,9 @@ function transformToReaderFormat(comic, comicSlug) {
                   alternativeTexts: sentence.alternatives.map(a => a.text),
                   alternativeAudioUrls: sentence.alternatives.filter(a => a.audioUrl).map(a => a.audioUrl)
                 }),
+                  ...(sentence.transformations?.length > 0 && {
+                    transformations: sentence.transformations.map(t => ({ prompt: t.prompt, text: t.text }))
+                  }),
                   words: (sentence.words || []).map((word, wIdx) => {
                     const wText = sanitizeWordForFilename(word.text);
                     const wBase = sanitizeWordForFilename(word.baseForm || word.text);
@@ -393,7 +405,8 @@ function transformToReaderFormat(comic, comicSlug) {
                       ...(word.vocabQuiz && { vocabQuiz: true }),
                       ...(word.manual && { manual: true }),
                       ...(wText && { wordAudioUrl: `words/${wText}` }),
-                      ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+                      ...(wBase && { baseFormAudioUrl: `words/${wBase}` }),
+                      ...(word.forms?.length > 0 && { forms: word.forms.map(f => { const fAudio = sanitizeWordForFilename(f.text); return { label: f.label, text: f.text, ...(fAudio && { audioUrl: `words/${fAudio}` }) }; }) })
                     };
                   })
                 };
@@ -401,7 +414,7 @@ function transformToReaderFormat(comic, comicSlug) {
             };
           })
         };
-      })
+      }).filter(p => !p.floating || p.bubbles.length > 0)
     };
     pages.push(exportedPage);
   }
@@ -435,7 +448,8 @@ function transformToReaderFormat(comic, comicSlug) {
                   meaning: w.meaning,
                   baseForm: w.baseForm,
                   ...(wText && { wordAudioUrl: `words/${wText}` }),
-                  ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+                  ...(wBase && { baseFormAudioUrl: `words/${wBase}` }),
+                  ...(w.forms?.length > 0 && { forms: w.forms.map(f => { const fAudio = sanitizeWordForFilename(f.text); return { label: f.label, text: f.text, ...(fAudio && { audioUrl: `words/${fAudio}` }) }; }) })
                 },
                 panelId: panel.id,
                 pageId: page.id
@@ -456,7 +470,8 @@ function transformToReaderFormat(comic, comicSlug) {
                 meaning: w.meaning,
                 baseForm: w.baseForm,
                 ...(wText && { wordAudioUrl: `words/${wText}` }),
-                ...(wBase && { baseFormAudioUrl: `words/${wBase}` })
+                ...(wBase && { baseFormAudioUrl: `words/${wBase}` }),
+                ...(w.forms?.length > 0 && { forms: w.forms.map(f => { const fAudio = sanitizeWordForFilename(f.text); return { label: f.label, text: f.text, ...(fAudio && { audioUrl: `words/${fAudio}` }) }; }) })
               },
               hotspotId: hotspot.id,
               pageId: page.id

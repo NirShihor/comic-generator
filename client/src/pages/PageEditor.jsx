@@ -440,6 +440,7 @@ function PageEditor({ isCover = false }) {
   const [enhancingText, setEnhancingText] = useState({}); // { [sentenceId]: true/false }
   const [translatingText, setTranslatingText] = useState({}); // { [sentenceId]: true/false }
   const [translateInput, setTranslateInput] = useState({}); // { [sentenceId]: 'english text' }
+  const [generatingGrammar, setGeneratingGrammar] = useState({}); // { [sentenceId]: true/false }
   const audioRef = useRef(null);
 
   // ChatGPT panel state - persist in localStorage
@@ -675,6 +676,27 @@ function PageEditor({ isCover = false }) {
       alert('Failed to translate: ' + error.message);
     } finally {
       setTranslatingText(prev => ({ ...prev, [sentenceId]: false }));
+    }
+  };
+
+  const generateGrammar = async (bubbleId, sentenceId, sentenceText, sentenceTranslation) => {
+    if (!sentenceText || !sentenceTranslation) return;
+
+    setGeneratingGrammar(prev => ({ ...prev, [sentenceId]: true }));
+    try {
+      const response = await api.post('/chat/generate-transformations', {
+        sentenceText,
+        sentenceTranslation,
+        sourceLanguage: comic?.language || 'es',
+        targetLanguage: comic?.targetLanguage || 'en'
+      });
+
+      updateSentence(bubbleId, sentenceId, { transformations: response.data });
+    } catch (error) {
+      console.error('Failed to generate grammar:', error);
+      alert('Failed to generate grammar: ' + error.message);
+    } finally {
+      setGeneratingGrammar(prev => ({ ...prev, [sentenceId]: false }));
     }
   };
 
@@ -1679,8 +1701,8 @@ function PageEditor({ isCover = false }) {
           )
         };
       });
-      // Auto-save alternatives to DB when they change
-      if ('alternatives' in updates) {
+      // Auto-save alternatives/transformations to DB when they change
+      if ('alternatives' in updates || 'transformations' in updates) {
         const updatedComic = { ...comic };
         const pageIndex = updatedComic.pages?.findIndex(p => p.id === pageId);
         if (pageIndex >= 0) {
@@ -2701,30 +2723,35 @@ function PageEditor({ isCover = false }) {
 
       // Save the current page using the page-specific endpoint to avoid
       // overwriting other pages with stale client state.
-      // Exclude masterImage to avoid re-triggering image processing — it hasn't changed.
-      const { masterImage: _mi, bakedImage: _bi, ...pageWithoutImages } = page;
-      const pageData = {
-        ...pageWithoutImages,
+      // Only send fields that savePage manages — exclude masterImage/bakedImage
+      // to avoid re-triggering server-side image processing.
+      await api.put(`/comics/${id}/pages/${pageId}`, {
         lines,
         panels: panelsToSave,
         bubbles,
         hotspots
-      };
-      await api.put(`/comics/${id}/pages/${pageId}`, pageData);
+      });
 
       // Save promptSettings separately if needed
       if (promptSettingsSource !== 'collection') {
         await api.put(`/comics/${id}`, { promptSettings });
       }
 
-      // Update local state
+      // Update local state — keep masterImage/bakedImage from the existing page
+      const fullPageData = {
+        ...page,
+        lines,
+        panels: panelsToSave,
+        bubbles,
+        hotspots
+      };
       setComic(prev => {
         const updated = { ...prev };
         const pageIndex = updated.pages.findIndex(p => p.id === pageId);
-        if (pageIndex >= 0) updated.pages[pageIndex] = pageData;
+        if (pageIndex >= 0) updated.pages[pageIndex] = fullPageData;
         return updated;
       });
-      setPage(pageData);
+      setPage(fullPageData);
       showToast('Page saved!');
     } catch (error) {
       console.error('Failed to save page:', error);
@@ -4196,6 +4223,10 @@ function PageEditor({ isCover = false }) {
       })));
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     }
+
+    // Extra settle time for SVG filters and bubble shapes (covers especially need this)
+    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     try {
       const targetEl = bakeTargetRef.current;
@@ -5921,11 +5952,12 @@ function PageEditor({ isCover = false }) {
                         >
                           <path
                             d={path}
-                            fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')}
-                            stroke={selectedBubbleId === bubble.id ? '#00ff00' : (bubble.noBorder ? 'none' : borderColorVal)}
-                            strokeWidth={selectedBubbleId === bubble.id ? 3 : borderWidthVal}
+                            fill={bubble.hidden ? 'transparent' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff'))}
+                            stroke={selectedBubbleId === bubble.id ? '#00ff00' : (bubble.hidden ? '#e74c3c' : (bubble.noBorder ? 'none' : borderColorVal))}
+                            strokeWidth={selectedBubbleId === bubble.id ? 3 : (bubble.hidden ? 2 : borderWidthVal)}
                             strokeLinejoin="round"
-                            filter={`url(#roughBubble-${bubble.id})`}
+                            strokeDasharray={bubble.hidden ? '6 4' : 'none'}
+                            filter={bubble.hidden ? 'none' : `url(#roughBubble-${bubble.id})`}
                           />
                         </g>
                         {/* Visual indicator line from center to tip (only when selected) */}
@@ -6230,8 +6262,10 @@ function PageEditor({ isCover = false }) {
                       top: `${bubble.y * 100}%`,
                       width: `${bubble.width * 100}%`,
                       height: `${bubble.height * 100}%`,
-                      background: bubble.type === 'thought' ? 'transparent' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff'))),
-                      border: bubble.type === 'thought' ? (selectedBubbleId === bubble.id ? '3px solid #00ff00' : 'none') : (selectedBubbleId === bubble.id ? '3px solid #00ff00' : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`)),
+                      background: bubble.hidden ? 'transparent' : (bubble.type === 'thought' ? 'transparent' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')))),
+                      border: bubble.hidden
+                        ? (selectedBubbleId === bubble.id ? '3px solid #00ff00' : '2px dashed #e74c3c')
+                        : (bubble.type === 'thought' ? (selectedBubbleId === bubble.id ? '3px solid #00ff00' : 'none') : (selectedBubbleId === bubble.id ? '3px solid #00ff00' : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`))),
                       borderRadius: bubble.type === 'thought'
                         ? `${bubble.cornerRadius ?? 50}%`
                         : `${bubble.cornerRadius || 8}px`,
@@ -6285,6 +6319,7 @@ function PageEditor({ isCover = false }) {
                         fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                         fontStyle: bubble.italic ? 'italic' : 'normal',
                         color: bubble.textColor || '#000000',
+                        opacity: bubble.hidden ? 0 : 1,
                         textAlign: bubble.textAlign || 'center',
                         width: '100%',
                         wordBreak: 'break-word',
@@ -7294,6 +7329,15 @@ function PageEditor({ isCover = false }) {
                           />
                           No border
                         </label>
+                        <label style={{ fontSize: '0.75rem', color: bubble.hidden ? '#e74c3c' : '#666', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem', fontWeight: bubble.hidden ? 'bold' : 'normal' }}>
+                          <input
+                            type="checkbox"
+                            checked={bubble.hidden || false}
+                            onChange={(e) => updateBubble(bubble.id, { hidden: e.target.checked })}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          Hidden (data only)
+                        </label>
                         {/* Background Image (thought bubbles only) */}
                         {bubble.type === 'thought' && (
                           <div style={{ marginBottom: '0.5rem', marginTop: '0.3rem', padding: '0.4rem', background: '#f8f8f8', borderRadius: '6px' }}>
@@ -8104,6 +8148,48 @@ function PageEditor({ isCover = false }) {
                                 >
                                   {generatingAudio[`${sentence.id}-en`] ? '...' : sentence.translationAudioUrl ? 'Regen' : 'Generate'}
                                 </button>
+                              </div>
+                            )}
+
+                            {/* Grammar Transformations */}
+                            {sentence.text && sentence.translation && (
+                              <div style={{
+                                background: '#fef3e0',
+                                borderRadius: '4px',
+                                padding: '0.4rem 0.5rem',
+                                marginBottom: '0.25rem',
+                                border: '1px solid #f0c060'
+                              }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: (sentence.transformations || []).length > 0 ? '0.3rem' : 0 }}>
+                                  <span style={{ fontSize: '0.7rem', color: '#e65100', fontWeight: 'bold' }}>
+                                    Grammar ({(sentence.transformations || []).length})
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      generateGrammar(bubble.id, sentence.id, sentence.text, sentence.translation);
+                                    }}
+                                    disabled={generatingGrammar[sentence.id]}
+                                    style={{
+                                      padding: '0.15rem 0.35rem',
+                                      fontSize: '0.6rem',
+                                      background: generatingGrammar[sentence.id] ? '#95a5a6' : (sentence.transformations?.length ? '#e65100' : '#3498db'),
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: generatingGrammar[sentence.id] ? 'wait' : 'pointer'
+                                    }}
+                                  >
+                                    {generatingGrammar[sentence.id] ? '...' : (sentence.transformations?.length ? 'Regen' : 'Generate')}
+                                  </button>
+                                </div>
+                                {(sentence.transformations || []).map((t, tIdx) => (
+                                  <div key={tIdx} style={{ fontSize: '0.75rem', marginBottom: '0.15rem', padding: '0.2rem 0.3rem', background: '#fff8e1', borderRadius: '2px' }}>
+                                    <span style={{ color: '#555' }}>{t.prompt}</span>
+                                    <span style={{ color: '#999', margin: '0 0.3rem' }}>&rarr;</span>
+                                    <span style={{ color: '#e65100', fontWeight: 500 }}>{t.text}</span>
+                                  </div>
+                                ))}
                               </div>
                             )}
 
@@ -11629,7 +11715,7 @@ function PageEditor({ isCover = false }) {
                 </filter>
               </defs>
             </svg>
-            {bubbles.map((bubble) => {
+            {bubbles.filter(b => !(b.hidden && ref === bakeTargetRef)).map((bubble) => {
               const bubbleCenterX = bubble.x + bubble.width / 2;
               const bubbleCenterY = bubble.y + bubble.height / 2;
               const tailEndX = bubbleCenterX + (bubble.tailX || 0);

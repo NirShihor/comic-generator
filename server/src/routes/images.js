@@ -309,13 +309,16 @@ Reply with ONLY a JSON object: {"fulfilled": true/false, "reason": "brief explan
 
 // Helper: wrap a long-running async operation with periodic keep-alive writes
 // to prevent browser/proxy from closing the connection on idle.
-// Sends newlines every 15s, then the final JSON result.
+// Sends spaces every 3s, then the final JSON result.
 function withKeepAlive(res, asyncFn) {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('X-Accel-Buffering', 'no');
+  // Prevent socket timeout on this response
+  res.socket?.setTimeout?.(600000);
   const keepAlive = setInterval(() => {
     try { res.write(' '); } catch (e) { clearInterval(keepAlive); }
-  }, 15000);
+  }, 3000);
   return asyncFn()
     .then(result => {
       clearInterval(keepAlive);
@@ -1626,6 +1629,130 @@ The bounding box values should be decimals from 0 to 1 representing percentages 
     res.json(result);
   } catch (error) {
     console.error('Consistency detect error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /language/review — review translations for contextual accuracy using page image
+router.post('/language/review', async (req, res) => {
+  try {
+    const { pageImagePath, pageNumber, panels, language = 'es', targetLanguage = 'en', provider = 'openai' } = req.body;
+    console.log(`Language review (${provider}): page ${pageNumber}`);
+
+    if (!pageImagePath || !panels || panels.length === 0) {
+      return res.status(400).json({ error: 'pageImagePath and panels with sentences are required' });
+    }
+
+    // Load page image as base64
+    const pageFullPath = path.join(__dirname, '../..', pageImagePath.split('?')[0]);
+    await fs.access(pageFullPath);
+    const pageBuffer = await sharp(pageFullPath)
+      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    const pageBase64 = pageBuffer.toString('base64');
+
+    // Build dialogue inventory
+    const languageNames = {
+      en: 'English', es: 'Spanish', fr: 'French', de: 'German',
+      it: 'Italian', pt: 'Portuguese', ja: 'Japanese', ko: 'Korean', zh: 'Chinese'
+    };
+    const sourceLang = languageNames[language] || language;
+    const targetLang = languageNames[targetLanguage] || targetLanguage;
+
+    let dialogueInventory = `PAGE ${pageNumber} — DIALOGUE INVENTORY:\n`;
+    let sentenceNum = 1;
+    for (const panel of panels) {
+      for (const bubble of panel.bubbles) {
+        for (const sentence of bubble.sentences) {
+          dialogueInventory += `  S${sentenceNum}. "${sentence.text}" → "${sentence.translation}" (${bubble.type})\n`;
+          sentenceNum++;
+        }
+      }
+    }
+
+    const promptText = `You are a bilingual language reviewer for a comic book language-learning app.
+You review ${sourceLang} dialogue against ${targetLang} translations in the context of comic panel artwork.
+
+TASK: Look at the attached comic page image carefully. The ${sourceLang} text is VISIBLE in speech bubbles in the image. Use the VISUAL POSITION of each speech bubble in the image to understand which panel and scene each line belongs to. Do NOT assume the dialogue inventory below is in visual order.
+
+The dialogue inventory provides each ${sourceLang} line paired with its ${targetLang} translation. Your job is to check whether each ${sourceLang} line correctly translates the ${targetLang} meaning AND fits the visual context of the panel where that speech bubble ACTUALLY appears in the image.
+
+Flag ONLY issues — do not report sentences that are correct.
+
+Check for these issue types:
+1. CONTEXTUAL TRANSLATION ERROR: The ${sourceLang} text is grammatically correct but does not match the ${targetLang} meaning, OR does not fit what is visually happening in the specific panel where the bubble appears.
+2. REGISTER/TONE INCONSISTENCY: A character uses "tú" in one place and "usted" in another without justification, or uses formal register in clearly informal visual contexts, or vice versa.
+3. MISSING/WRONG CONTEXT: The ${sourceLang} text conveys a different emotion or intent than what the visual scene around that bubble suggests.
+
+Do NOT flag:
+- Pure grammar errors (assume the ${sourceLang} is grammatically valid)
+- Style preferences (regional variations are fine)
+- Sound effects or single exclamations
+
+IMPORTANT: Before flagging an issue, LOCATE the speech bubble containing that text IN THE IMAGE. Verify which panel it is in and what is happening visually AROUND THAT SPECIFIC BUBBLE. Do not confuse text from one panel with the scene of another panel.
+
+${dialogueInventory}
+
+Respond with ONLY a JSON object (no markdown, no extra text):
+{"issues": [{"sentenceText": "the problematic ${sourceLang} text", "sentenceTranslation": "the ${targetLang} translation", "bubbleType": "speech", "issueType": "contextual_translation_error | register_inconsistency | missing_wrong_context", "description": "Clear explanation of what is wrong and which part of the image you are referring to", "suggestedFix": "The corrected ${sourceLang} text"}]}
+
+If there are NO issues on this page, respond with: {"issues": []}`;
+
+    let text;
+
+    if (provider === 'gemini') {
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(400).json({ error: 'Gemini API key not configured.' });
+      }
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: 'image/jpeg', data: pageBase64 } },
+              { text: promptText }
+            ]
+          }
+        ]
+      });
+      text = response.text || '';
+    } else {
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({ error: 'OpenAI API key not configured.' });
+      }
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const response = await openai.responses.create({
+        model: 'gpt-5.5',
+        input: [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_image', image_url: `data:image/jpeg;base64,${pageBase64}` },
+              { type: 'input_text', text: promptText }
+            ]
+          }
+        ]
+      });
+      text = response.output_text || '';
+    }
+
+    // Parse the JSON from the response
+    let result;
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      result = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(text);
+    } catch (parseErr) {
+      console.error('Failed to parse language review response:', text);
+      return res.status(500).json({ error: 'Failed to parse AI response', raw: text });
+    }
+
+    console.log(`Language review page ${pageNumber}: ${(result.issues || []).length} issues found`);
+    res.json(result);
+  } catch (error) {
+    console.error('Language review error:', error);
     res.status(500).json({ error: error.message });
   }
 });

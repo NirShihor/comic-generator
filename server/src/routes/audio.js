@@ -150,7 +150,7 @@ function sanitizeWordForFilename(word) {
 }
 
 function collectUniqueWords(comic) {
-  const uniqueWords = new Set();
+  const wordMap = new Map(); // sanitized filename -> original text for TTS
   const allBubbles = [
     ...(comic.cover?.bubbles || []),
     ...(comic.pages || []).flatMap(p => p.bubbles || [])
@@ -160,12 +160,17 @@ function collectUniqueWords(comic) {
       for (const word of sentence.words || []) {
         const text = sanitizeWordForFilename(word.text);
         const base = sanitizeWordForFilename(word.baseForm);
-        if (text) uniqueWords.add(text);
-        if (base && base !== text) uniqueWords.add(base);
+        if (text && !wordMap.has(text)) wordMap.set(text, word.text);
+        if (base && !wordMap.has(base)) wordMap.set(base, word.baseForm);
+        // Include word form texts
+        for (const form of word.forms || []) {
+          const formText = sanitizeWordForFilename(form.text);
+          if (formText && !wordMap.has(formText)) wordMap.set(formText, form.text);
+        }
       }
     }
   }
-  return [...uniqueWords];
+  return wordMap;
 }
 
 // Get available voices from ElevenLabs
@@ -561,7 +566,8 @@ router.post('/word-audio-count', async (req, res) => {
     const comic = await Comic.findOne({ id: comicId });
     if (!comic) return res.status(404).json({ error: 'Comic not found' });
 
-    const uniqueWords = collectUniqueWords(comic.toObject());
+    const wordMap = collectUniqueWords(comic.toObject());
+    const uniqueKeys = [...wordMap.keys()];
     const wordsDir = path.join(PROJECTS_DIR, comicId, 'audio', 'words');
 
     let alreadyGenerated = 0;
@@ -569,16 +575,16 @@ router.post('/word-audio-count', async (req, res) => {
       try {
         const existingFiles = await fs.readdir(wordsDir);
         const existingSet = new Set(existingFiles.map(f => f.replace('.mp3', '')));
-        alreadyGenerated = uniqueWords.filter(w => existingSet.has(w)).length;
+        alreadyGenerated = uniqueKeys.filter(w => existingSet.has(w)).length;
       } catch (e) {
         // Directory doesn't exist yet
       }
     }
 
     res.json({
-      totalUnique: uniqueWords.length,
+      totalUnique: uniqueKeys.length,
       alreadyGenerated,
-      toGenerate: uniqueWords.length - alreadyGenerated
+      toGenerate: uniqueKeys.length - alreadyGenerated
     });
   } catch (error) {
     console.error('Word audio count error:', error);
@@ -610,7 +616,8 @@ router.post('/generate-word-audio', async (req, res) => {
     const comic = await Comic.findOne({ id: comicId });
     if (!comic) return res.status(404).json({ error: 'Comic not found' });
 
-    const uniqueWords = collectUniqueWords(comic.toObject());
+    const wordMap = collectUniqueWords(comic.toObject());
+    const uniqueKeys = [...wordMap.keys()];
     const wordsDir = path.join(PROJECTS_DIR, comicId, 'audio', 'words');
     await fs.mkdir(wordsDir, { recursive: true });
 
@@ -623,22 +630,29 @@ router.post('/generate-word-audio', async (req, res) => {
       } catch (e) {}
     }
 
+    // Stream progress as NDJSON to keep the connection alive
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+
     let generated = 0;
     let skipped = 0;
     let failed = 0;
     const errors = [];
+    const total = uniqueKeys.length;
 
-    console.log(`Word audio: ${uniqueWords.length} unique words, ${existingSet.size} already on disk${forceRegenerate ? ' (force regenerate)' : ''}`);
+    console.log(`Word audio: ${total} unique words, ${existingSet.size} already on disk${forceRegenerate ? ' (force regenerate)' : ''}`);
 
-    for (const word of uniqueWords) {
-      if (existingSet.has(word)) {
+    for (const fileKey of uniqueKeys) {
+      if (existingSet.has(fileKey)) {
         skipped++;
         continue;
       }
 
+      const originalText = wordMap.get(fileKey);
       try {
         const requestBody = {
-          text: word,
+          text: originalText,
           model_id: modelId,
           voice_settings: {
             stability,
@@ -667,25 +681,36 @@ router.post('/generate-word-audio', async (req, res) => {
         }
 
         const buffer = Buffer.from(await response.arrayBuffer());
-        await fs.writeFile(path.join(wordsDir, `${word}.mp3`), buffer);
+        await fs.writeFile(path.join(wordsDir, `${fileKey}.mp3`), buffer);
         generated++;
-        console.log(`  [${generated + skipped + failed}/${uniqueWords.length}] Generated: ${word}`);
+        console.log(`  [${generated + skipped + failed}/${total}] Generated: ${originalText} -> ${fileKey}.mp3`);
+
+        // Stream progress every word
+        res.write(JSON.stringify({ type: 'progress', generated, skipped, failed, total, current: originalText }) + '\n');
 
         // Rate limit delay
         await new Promise(resolve => setTimeout(resolve, 250));
       } catch (err) {
         failed++;
-        errors.push({ word, error: err.message });
-        console.error(`  Failed: ${word} - ${err.message}`);
+        errors.push({ word: originalText, error: err.message });
+        console.error(`  Failed: ${originalText} - ${err.message}`);
+        res.write(JSON.stringify({ type: 'progress', generated, skipped, failed, total, current: originalText }) + '\n');
       }
     }
 
     console.log(`Word audio done: ${generated} generated, ${skipped} skipped, ${failed} failed`);
 
-    res.json({ generated, skipped, failed, errors: errors.slice(0, 10), totalFiles: generated + skipped });
+    // Final result line
+    res.write(JSON.stringify({ type: 'done', generated, skipped, failed, errors: errors.slice(0, 10), totalFiles: generated + skipped }) + '\n');
+    res.end();
   } catch (error) {
     console.error('Word audio generation error:', error);
-    res.status(500).json({ error: error.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n');
+      res.end();
+    }
   }
 });
 

@@ -44,6 +44,10 @@ function ComicEditor() {
   const [wordAudioGenerating, setWordAudioGenerating] = useState(false);
   const [wordAudioProgress, setWordAudioProgress] = useState(null);
   const [wordAudioForceRegenerate, setWordAudioForceRegenerate] = useState(false);
+  const [wordFormsGenerating, setWordFormsGenerating] = useState(false);
+  const [wordFormsResult, setWordFormsResult] = useState(null);
+  const [fillMeaningsRunning, setFillMeaningsRunning] = useState(false);
+  const [fillMeaningsResult, setFillMeaningsResult] = useState(null);
 
   // Reference builder state
   const [refImage, setRefImage] = useState(null);
@@ -98,6 +102,12 @@ function ComicEditor() {
   const [consistencyIgnore, setConsistencyIgnore] = useState('');
   const [consistencyFocus, setConsistencyFocus] = useState('');
   const [consistencyLightbox, setConsistencyLightbox] = useState(null);
+
+  // Language tab state
+  const [languageResults, setLanguageResults] = useState([]);
+  const [languageScanning, setLanguageScanning] = useState(false);
+  const [languageScanProgress, setLanguageScanProgress] = useState({ current: 0, total: 0 });
+  const [languageProvider, setLanguageProvider] = useState('openai');
 
   // Chat state
   const [chatMessages, setChatMessages] = useState(() => {
@@ -972,6 +982,94 @@ function ComicEditor() {
     }
   };
 
+  const handleLanguageScan = async () => {
+    if (languageScanning) return;
+
+    const pagesToScan = [];
+    for (const page of (comic.pages || [])) {
+      const pageImage = page.masterImage || page.bakedImage;
+      if (!pageImage) continue;
+
+      // Collect bubbles from panels
+      const panels = (page.panels || []).map((panel, panelIdx) => {
+        const bubbles = (panel.bubbles || [])
+          .filter(b => b.type !== 'image' && !b.isSoundEffect)
+          .map(bubble => ({
+            type: bubble.type || 'speech',
+            sentences: (bubble.sentences || [])
+              .filter(s => s.text && s.translation)
+              .map(s => ({ text: s.text, translation: s.translation }))
+          }))
+          .filter(b => b.sentences.length > 0);
+        if (bubbles.length === 0) return null;
+        return { panelId: panel.id, panelIndex: panelIdx, bubbles };
+      }).filter(Boolean);
+
+      // Also collect page-level bubbles (not inside panels)
+      const pageBubbles = (page.bubbles || [])
+        .filter(b => b.type !== 'image' && !b.isSoundEffect)
+        .map(bubble => ({
+          type: bubble.type || 'speech',
+          sentences: (bubble.sentences || [])
+            .filter(s => s.text && s.translation)
+            .map(s => ({ text: s.text, translation: s.translation }))
+        }))
+        .filter(b => b.sentences.length > 0);
+
+      if (pageBubbles.length > 0) {
+        panels.push({ panelId: 'page-level', panelIndex: panels.length, bubbles: pageBubbles });
+      }
+
+      if (panels.length === 0) continue;
+      pagesToScan.push({ page, panels, pageImage });
+    }
+
+    if (pagesToScan.length === 0) {
+      alert('No pages with images and dialogue found.');
+      return;
+    }
+
+    setLanguageScanning(true);
+    setLanguageResults([]);
+    setLanguageScanProgress({ current: 0, total: pagesToScan.length });
+
+    const allResults = [];
+    for (let i = 0; i < pagesToScan.length; i++) {
+      const { page, panels, pageImage } = pagesToScan[i];
+      setLanguageScanProgress({ current: i + 1, total: pagesToScan.length });
+      try {
+        const resp = await api.post('/images/language/review', {
+          pageImagePath: pageImage,
+          pageNumber: page.pageNumber,
+          panels,
+          language: comic.language || 'es',
+          targetLanguage: comic.targetLanguage || 'en',
+          provider: languageProvider
+        }, { timeout: 120000 });
+
+        if (resp.data.issues && resp.data.issues.length > 0) {
+          for (const issue of resp.data.issues) {
+            // Match sentenceText back to the correct panel
+            let matchedPanelIndex = issue.panelIndex || 0;
+            for (const panel of panels) {
+              const found = panel.bubbles.some(b =>
+                b.sentences.some(s => s.text === issue.sentenceText)
+              );
+              if (found) { matchedPanelIndex = panel.panelIndex; break; }
+            }
+            allResults.push({ pageNumber: page.pageNumber, pageId: page.id, ...issue, panelIndex: matchedPanelIndex });
+          }
+          setLanguageResults([...allResults]);
+        }
+      } catch (err) {
+        console.error(`Language review failed for page ${page.pageNumber}:`, err.response?.data || err.message);
+      }
+    }
+
+    setLanguageResults(allResults);
+    setLanguageScanning(false);
+  };
+
   return (
     <div style={{ maxWidth: 'none', width: 'calc(100vw - 4rem)' }}>
       <div className="page-header">
@@ -987,7 +1085,22 @@ function ComicEditor() {
             )}
           </div>
           <h1>{comic.title}</h1>
-          <p style={{ color: '#888' }}>{comic.description}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <p style={{ color: '#888', margin: 0 }}>{comic.description}</p>
+            <select
+              value={comic.level || 'beginner'}
+              onChange={(e) => {
+                const newLevel = e.target.value;
+                setComic(prev => ({ ...prev, level: newLevel }));
+                api.put(`/comics/${id}`, { level: newLevel }).catch(err => console.error('Failed to update level:', err));
+              }}
+              style={{ padding: '0.2rem 0.4rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #555', background: '#1a1a2e', color: '#fff', cursor: 'pointer' }}
+            >
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button className="btn btn-primary" onClick={() => addPage()}>
@@ -1039,6 +1152,13 @@ function ComicEditor() {
           style={{ padding: '0.6rem 1.2rem' }}
         >
           Consistency
+        </button>
+        <button
+          className={`btn ${activeTab === 'language' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('language')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Language
         </button>
       </div>
 
@@ -2782,13 +2902,46 @@ function ComicEditor() {
                   try {
                     const countRes = await api.post('/audio/word-audio-count', { comicId: id, forceRegenerate: wordAudioForceRegenerate });
                     setWordAudioProgress({ ...countRes.data, generated: 0, failed: 0, done: false });
-                    const genRes = await api.post('/audio/generate-word-audio', {
-                      comicId: id,
-                      voiceId: wordAudioVoiceId,
-                      modelId: wordAudioModel,
-                      forceRegenerate: wordAudioForceRegenerate
-                    }, { timeout: 600000 });
-                    setWordAudioProgress(prev => ({ ...prev, generated: genRes.data.generated, skipped: genRes.data.skipped, failed: genRes.data.failed, done: true }));
+                    // Use fetch with streaming to keep connection alive
+                    const response = await fetch('/api/audio/generate-word-audio', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        comicId: id,
+                        voiceId: wordAudioVoiceId,
+                        modelId: wordAudioModel,
+                        forceRegenerate: wordAudioForceRegenerate
+                      })
+                    });
+                    if (!response.ok) {
+                      const err = await response.json();
+                      throw new Error(err.error || 'Generation failed');
+                    }
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      buffer += decoder.decode(value, { stream: true });
+                      const lines = buffer.split('\n');
+                      buffer = lines.pop(); // keep incomplete line in buffer
+                      for (const line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                          const msg = JSON.parse(line);
+                          if (msg.type === 'progress') {
+                            setWordAudioProgress(prev => ({ ...prev, generated: msg.generated, skipped: msg.skipped, failed: msg.failed, currentWord: msg.current }));
+                          } else if (msg.type === 'done') {
+                            setWordAudioProgress(prev => ({ ...prev, generated: msg.generated, skipped: msg.skipped, failed: msg.failed, done: true }));
+                          } else if (msg.type === 'error') {
+                            throw new Error(msg.error);
+                          }
+                        } catch (parseErr) {
+                          console.warn('Failed to parse stream line:', line);
+                        }
+                      }
+                    }
                   } catch (error) {
                     console.error('Word audio generation failed:', error);
                     alert('Word audio generation failed: ' + error.message);
@@ -2827,9 +2980,17 @@ function ComicEditor() {
                 <p style={{ margin: '0 0 0.3rem 0', fontSize: '0.9rem' }}><strong>Already on disk:</strong> {wordAudioProgress.alreadyGenerated}</p>
                 <p style={{ margin: '0 0 0.3rem 0', fontSize: '0.9rem' }}><strong>To generate:</strong> {wordAudioProgress.toGenerate}</p>
                 {wordAudioGenerating && !wordAudioProgress.done && (
-                  <p style={{ margin: '0.5rem 0 0 0', color: '#856404', fontSize: '0.85rem' }}>
-                    Generating audio... This may take several minutes. Please do not close this page.
-                  </p>
+                  <div style={{ marginTop: '0.5rem' }}>
+                    {wordAudioProgress.generated > 0 || wordAudioProgress.failed > 0 ? (
+                      <p style={{ margin: '0 0 0.3rem 0', color: '#2c3e50', fontSize: '0.85rem' }}>
+                        Progress: {wordAudioProgress.generated + (wordAudioProgress.failed || 0)} / {wordAudioProgress.toGenerate} generated
+                        {wordAudioProgress.currentWord && <span style={{ color: '#888' }}> — {wordAudioProgress.currentWord}</span>}
+                      </p>
+                    ) : null}
+                    <p style={{ margin: '0', color: '#856404', fontSize: '0.85rem' }}>
+                      Generating audio... Please do not close this page.
+                    </p>
+                  </div>
                 )}
                 {wordAudioProgress.done && (
                   <div style={{ background: '#d4edda', padding: '0.75rem', borderRadius: '4px', marginTop: '0.5rem' }}>
@@ -2841,6 +3002,183 @@ function ComicEditor() {
                 )}
               </div>
             )}
+
+            {/* Word Forms Section */}
+            <div style={{ background: '#fdf2e9', padding: '1rem', borderRadius: '6px', border: '1px solid #e8c9a0' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', color: '#e67e22' }}>Word Grammar Forms</h4>
+              <p style={{ color: '#888', fontSize: '0.85rem', margin: '0 0 0.75rem 0' }}>
+                Generate grammatical forms (conjugations, gender/number variants) for all words in the comic via GPT.
+              </p>
+              <button
+                onClick={async () => {
+                  setWordFormsGenerating(true);
+                  setWordFormsResult(null);
+                  try {
+                    const response = await fetch('/api/chat/generate-word-forms', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ comicId: id, forceRegenerate: true })
+                    });
+                    if (!response.ok) {
+                      const err = await response.json();
+                      throw new Error(err.error || 'Generation failed');
+                    }
+                    // Check if streaming (NDJSON) or regular JSON (e.g. "all words already have forms")
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('ndjson')) {
+                      const reader = response.body.getReader();
+                      const decoder = new TextDecoder();
+                      let buffer = '';
+                      while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+                        for (const line of lines) {
+                          if (!line.trim()) continue;
+                          try {
+                            const msg = JSON.parse(line);
+                            if (msg.type === 'progress') {
+                              setWordFormsResult({ chunk: msg.chunk, totalChunks: msg.totalChunks, wordsProcessed: msg.wordsProcessed, totalWords: msg.totalWords, inProgress: true });
+                            } else if (msg.type === 'done') {
+                              setWordFormsResult({ generated: msg.generated, updated: msg.updated, total: msg.total, inProgress: false });
+                            } else if (msg.type === 'error') {
+                              throw new Error(msg.error);
+                            }
+                          } catch (parseErr) {
+                            console.warn('Failed to parse stream line:', line);
+                          }
+                        }
+                      }
+                    } else {
+                      const data = await response.json();
+                      setWordFormsResult({ ...data, inProgress: false });
+                    }
+                  } catch (error) {
+                    console.error('Word forms generation failed:', error);
+                    alert('Word forms generation failed: ' + error.message);
+                  } finally {
+                    setWordFormsGenerating(false);
+                  }
+                }}
+                disabled={wordFormsGenerating}
+                style={{
+                  padding: '0.5rem 1.2rem',
+                  background: wordFormsGenerating ? '#95a5a6' : '#e67e22',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: wordFormsGenerating ? 'default' : 'pointer',
+                  fontSize: '0.95rem'
+                }}
+              >
+                {wordFormsGenerating ? 'Generating Forms...' : 'Generate Word Forms'}
+              </button>
+              {wordFormsResult && wordFormsResult.inProgress && (
+                <div style={{ background: '#fff3cd', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                  <p style={{ margin: 0, color: '#856404' }}>
+                    Processing chunk {wordFormsResult.chunk} of {wordFormsResult.totalChunks} ({wordFormsResult.wordsProcessed} / {wordFormsResult.totalWords} words)...
+                  </p>
+                </div>
+              )}
+              {wordFormsResult && !wordFormsResult.inProgress && wordFormsResult.generated != null && (
+                <div style={{ background: '#d4edda', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                  <p style={{ margin: 0, color: '#155724' }}>
+                    Done! Generated forms for {wordFormsResult.generated} base words. Updated {wordFormsResult.updated} word instances.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Fill Missing Meanings Section */}
+            <div style={{ background: '#eaf2f8', padding: '1rem', borderRadius: '6px', border: '1px solid #a9cce3' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', color: '#2980b9' }}>Fill Missing Meanings</h4>
+              <p style={{ color: '#888', fontSize: '0.85rem', margin: '0 0 0.75rem 0' }}>
+                Scan all words and fill in any missing English meanings and base forms via GPT.
+              </p>
+              <button
+                onClick={async () => {
+                  setFillMeaningsRunning(true);
+                  setFillMeaningsResult(null);
+                  try {
+                    const response = await fetch('/api/chat/fill-missing-meanings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ comicId: id })
+                    });
+                    if (!response.ok) {
+                      const err = await response.json();
+                      throw new Error(err.error || 'Failed');
+                    }
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('ndjson')) {
+                      const reader = response.body.getReader();
+                      const decoder = new TextDecoder();
+                      let buffer = '';
+                      while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+                        for (const line of lines) {
+                          if (!line.trim()) continue;
+                          try {
+                            const msg = JSON.parse(line);
+                            if (msg.type === 'progress') {
+                              setFillMeaningsResult({ current: msg.current, total: msg.total, fixed: msg.fixed, inProgress: true });
+                            } else if (msg.type === 'done') {
+                              setFillMeaningsResult({ fixed: msg.fixed, total: msg.total, inProgress: false, message: msg.message });
+                            } else if (msg.type === 'error') {
+                              throw new Error(msg.error);
+                            }
+                          } catch (parseErr) {
+                            console.warn('Failed to parse stream line:', line);
+                          }
+                        }
+                      }
+                    } else {
+                      const data = await response.json();
+                      setFillMeaningsResult({ ...data, inProgress: false });
+                    }
+                  } catch (error) {
+                    console.error('Fill meanings failed:', error);
+                    alert('Fill meanings failed: ' + error.message);
+                  } finally {
+                    setFillMeaningsRunning(false);
+                  }
+                }}
+                disabled={fillMeaningsRunning}
+                style={{
+                  padding: '0.5rem 1.2rem',
+                  background: fillMeaningsRunning ? '#95a5a6' : '#2980b9',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: fillMeaningsRunning ? 'default' : 'pointer',
+                  fontSize: '0.95rem'
+                }}
+              >
+                {fillMeaningsRunning ? 'Filling Meanings...' : 'Fill Missing Meanings'}
+              </button>
+              {fillMeaningsResult && fillMeaningsResult.inProgress && (
+                <div style={{ background: '#fff3cd', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                  <p style={{ margin: 0, color: '#856404' }}>
+                    Processing sentence {fillMeaningsResult.current} of {fillMeaningsResult.total} ({fillMeaningsResult.fixed} words fixed so far)...
+                  </p>
+                </div>
+              )}
+              {fillMeaningsResult && !fillMeaningsResult.inProgress && (
+                <div style={{ background: '#d4edda', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                  <p style={{ margin: 0, color: '#155724' }}>
+                    {fillMeaningsResult.fixed > 0
+                      ? `Done! Fixed meanings for ${fillMeaningsResult.fixed} words across ${fillMeaningsResult.total} sentences.`
+                      : (fillMeaningsResult.message || 'All words already have meanings.')}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -3365,6 +3703,102 @@ function ComicEditor() {
                 position: 'absolute', top: '20px', right: '30px',
                 color: '#fff', fontSize: '2rem', cursor: 'pointer', fontWeight: 'bold'
               }} onClick={() => setConsistencyLightbox(null)}>×</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Language Tab */}
+      {activeTab === 'language' && (
+        <div style={{ maxWidth: '900px' }}>
+          <h2 style={{ marginBottom: '0.5rem' }}>Language Review</h2>
+          <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            Scan pages to review translations for contextual accuracy and register consistency (tú vs usted).
+            Each page image is sent to AI along with all dialogue for analysis.
+          </p>
+
+          {/* Controls */}
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Provider</label>
+              <select
+                value={languageProvider}
+                onChange={(e) => setLanguageProvider(e.target.value)}
+                style={{ padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem', minWidth: '120px' }}
+              >
+                <option value="openai">ChatGPT</option>
+                <option value="gemini">Gemini</option>
+              </select>
+            </div>
+            <button
+              onClick={handleLanguageScan}
+              disabled={languageScanning}
+              className="btn btn-primary"
+              style={{ padding: '0.5rem 1.2rem' }}
+            >
+              {languageScanning
+                ? `Scanning... (${languageScanProgress.current}/${languageScanProgress.total})`
+                : 'Scan All Pages'}
+            </button>
+          </div>
+
+          {/* Results */}
+          {languageResults.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>
+                Issues Found ({languageResults.length})
+              </h3>
+              {languageResults.map((issue, idx) => (
+                <div key={idx} style={{
+                  border: '1px solid #e0e0e0', borderRadius: '8px',
+                  padding: '1rem', marginBottom: '0.75rem', background: '#fff'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
+                      Page {issue.pageNumber} ({issue.bubbleType})
+                    </span>
+                    <span style={{
+                      background: issue.issueType === 'register_inconsistency' ? '#f39c12'
+                        : issue.issueType === 'missing_wrong_context' ? '#e67e22' : '#e74c3c',
+                      color: '#fff', padding: '2px 8px', borderRadius: '10px',
+                      fontSize: '0.7rem', fontWeight: 'bold'
+                    }}>
+                      {issue.issueType === 'contextual_translation_error' ? 'Translation'
+                        : issue.issueType === 'register_inconsistency' ? 'Register' : 'Context'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+                    <strong>Text:</strong> {issue.sentenceText}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', marginBottom: '0.4rem', color: '#666' }}>
+                    <strong>Translation:</strong> {issue.sentenceTranslation}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', marginBottom: '0.4rem', color: '#c0392b' }}>
+                    <strong>Issue:</strong> {issue.description}
+                  </div>
+                  {issue.suggestedFix && (
+                    <div style={{ fontSize: '0.85rem', color: '#27ae60' }}>
+                      <strong>Suggested fix:</strong> {issue.suggestedFix}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Scan complete message */}
+          {!languageScanning && languageScanProgress.total > 0 && (
+            <div style={{
+              background: languageResults.length > 0 ? '#fff3cd' : '#d4edda',
+              border: `1px solid ${languageResults.length > 0 ? '#ffc107' : '#28a745'}`,
+              borderRadius: '6px', padding: '0.75rem', marginBottom: '1rem',
+              color: languageResults.length > 0 ? '#856404' : '#155724',
+              textAlign: 'center'
+            }}>
+              {languageResults.length > 0
+                ? `Scan complete — ${languageScanProgress.total} pages reviewed, ${languageResults.length} issue${languageResults.length !== 1 ? 's' : ''} found.`
+                : `Scan complete — ${languageScanProgress.total} pages reviewed. No language issues found!`
+              }
             </div>
           )}
         </div>

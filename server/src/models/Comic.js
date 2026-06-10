@@ -1,5 +1,11 @@
 const mongoose = require('mongoose');
 
+// Grammatical form of a word (e.g. verb conjugation, adjective agreement)
+const WordFormSchema = new mongoose.Schema({
+  label: String,  // e.g. "Present", "Preterite", "Feminine plural"
+  text: String    // e.g. "escondo", "escondí", "altas"
+}, { _id: false });
+
 // Word Schema (nested in Sentence)
 const WordSchema = new mongoose.Schema({
   id: String,
@@ -9,7 +15,14 @@ const WordSchema = new mongoose.Schema({
   startTimeMs: Number,
   endTimeMs: Number,
   vocabQuiz: Boolean,
-  manual: Boolean
+  manual: Boolean,
+  forms: [WordFormSchema]
+}, { _id: false });
+
+// Grammar transformation (nested in Sentence)
+const TransformationSchema = new mongoose.Schema({
+  prompt: String,  // English cue, e.g. "He should hide"
+  text: String     // Target language answer, e.g. "Debería esconderse"
 }, { _id: false });
 
 // Sentence Schema (nested in Bubble)
@@ -23,7 +36,8 @@ const SentenceSchema = new mongoose.Schema({
     text: String,
     audioUrl: String
   }],
-  words: [WordSchema]
+  words: [WordSchema],
+  transformations: [TransformationSchema]
 }, { _id: false });
 
 // Bubble Schema (nested in Panel)
@@ -68,6 +82,7 @@ const BubbleSchema = new mongoose.Schema({
   italic: Boolean,
   uppercase: Boolean,
   cornerRadius: Number,
+  hidden: Boolean, // Hidden bubble: invisible when baked, but text data still exported to reader
   // Image bubble fields
   imageUrl: String,
   imagePrompt: String,

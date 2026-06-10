@@ -9,6 +9,14 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3001',
         timeout: 600000,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.socket?.setTimeout(600000);
+          });
+          proxy.on('proxyRes', (proxyRes) => {
+            proxyRes.socket?.setTimeout(600000);
+          });
+        },
       },
       '/uploads': 'http://localhost:3001',
       '/projects': 'http://localhost:3001',
