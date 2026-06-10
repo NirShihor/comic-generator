@@ -19,6 +19,8 @@ function authMiddleware(req, res, next) {
 
   if (req.path === '/api/health') return next();
   if (req.path === '/login') return next();
+  // Reader app (iOS) endpoints are public — the phone has no login cookie
+  if (req.path.startsWith('/api/reader/')) return next();
 
   const cookies = parseCookies(req.headers.cookie || '');
   if (cookies.auth_token === generateToken(password)) return next();

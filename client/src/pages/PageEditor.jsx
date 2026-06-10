@@ -613,7 +613,7 @@ function PageEditor({ isCover = false }) {
       setAudioPreview(prev => ({
         ...prev,
         [sentenceId]: {
-          url: `http://localhost:3001${response.data.path}`,
+          url: `${response.data.path}`,
           base64: response.data.base64,
           filename: response.data.filename,
           isPlaying: false,
@@ -3287,7 +3287,7 @@ function PageEditor({ isCover = false }) {
     setInpaintGenerating(null);
     setInpaintDrawing(false);
     setInpaintStart(null);
-    setLightboxImage(`http://localhost:3001${imagePath}`);
+    setLightboxImage(`${imagePath}`);
     setLightboxRefContext(null);
   };
 
@@ -3335,7 +3335,7 @@ function PageEditor({ isCover = false }) {
       updatePanelArtwork(panelId, response.data.path);
 
       // Update lightbox to show result; clear rect and annotations for another pass
-      setLightboxImage(`http://localhost:3001${response.data.path}`);
+      setLightboxImage(`${response.data.path}`);
       setInpaintRect(null);
       setInpaintPrompt('');
       setInpaintAnnotations([]);
@@ -3504,7 +3504,7 @@ function PageEditor({ isCover = false }) {
       const panelData = panelImages[panel.id];
       if (panelData?.path) {
         try {
-          const img = await loadImage(`http://localhost:3001${panelData.path}`);
+          const img = await loadImage(`${panelData.path}`);
           loadedImages.push({ panel, img });
 
           // Sample colors from image edges using a temp canvas
@@ -3890,7 +3890,7 @@ function PageEditor({ isCover = false }) {
 
       let img;
       try {
-        img = await loadImage(`http://localhost:3001${panelData.path}`);
+        img = await loadImage(`${panelData.path}`);
       } catch (error) {
         console.error(`Failed to load floating panel image for ${panel.id}:`, error);
         continue;
@@ -4194,7 +4194,7 @@ function PageEditor({ isCover = false }) {
 
     // Ensure the master image in the bake target is fully loaded (not cached stale version)
     if (page.masterImage) {
-      const imgUrl = `http://localhost:3001${page.masterImage}`;
+      const imgUrl = `${page.masterImage}`;
       await new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -4219,7 +4219,7 @@ function PageEditor({ isCover = false }) {
         img.crossOrigin = 'anonymous';
         img.onload = resolve;
         img.onerror = resolve;
-        img.src = `http://localhost:3001${b.backgroundImageUrl}`;
+        img.src = `${b.backgroundImageUrl}`;
       })));
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     }
@@ -4292,7 +4292,7 @@ function PageEditor({ isCover = false }) {
                   console.log(`[BakeCrop] Baked canvas size: ${bakedW}x${bakedH}`);
 
                   // Load the master composite (no bubbles) at the same size
-                  const masterImgUrl = `http://localhost:3001${page.masterImage.split('?')[0]}`;
+                  const masterImgUrl = `${page.masterImage.split('?')[0]}`;
                   console.log(`[BakeCrop] Loading master image: ${masterImgUrl}`);
                   const masterImg = await new Promise((resolve, reject) => {
                     const img = new Image();
@@ -4585,7 +4585,7 @@ function PageEditor({ isCover = false }) {
 
     try {
       // Fetch the generated image and convert to base64
-      const response = await fetch(`http://localhost:3001${generatedImage.path}`);
+      const response = await fetch(`${generatedImage.path}`);
       const blob = await response.blob();
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -4993,7 +4993,7 @@ function PageEditor({ isCover = false }) {
                         [panelId]: { ...prev[panelId], path: prevPath, previousPath: null }
                       }));
                       updatePanelArtwork(panelId, prevPath);
-                      setLightboxImage(`http://localhost:3001${prevPath}`);
+                      setLightboxImage(`${prevPath}`);
                       setInpaintRect(null);
                       setInpaintPrompt('');
                     }}
@@ -5349,7 +5349,7 @@ function PageEditor({ isCover = false }) {
             {/* Background image */}
             {page.masterImage && (
               <img
-                src={`http://localhost:3001${page.masterImage}`}
+                src={`${page.masterImage}`}
                 alt={`Page ${page.pageNumber}`}
                 style={{
                   width: '100%',
@@ -6221,7 +6221,7 @@ function PageEditor({ isCover = false }) {
                         >
                           {bubble.backgroundImageUrl && (
                             <image
-                              href={`http://localhost:3001${bubble.backgroundImageUrl}`}
+                              href={`${bubble.backgroundImageUrl}`}
                               x={thoughtX} y={thoughtY}
                               width={thoughtW} height={thoughtH}
                               preserveAspectRatio="xMidYMid slice"
@@ -6286,7 +6286,7 @@ function PageEditor({ isCover = false }) {
                   >
                     {bubble.type === 'thought' && bubble.backgroundImageUrl && (
                       <img
-                        src={`http://localhost:3001${bubble.backgroundImageUrl}`}
+                        src={`${bubble.backgroundImageUrl}`}
                         alt=""
                         crossOrigin="anonymous"
                         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', userSelect: 'none' }}
@@ -6295,7 +6295,7 @@ function PageEditor({ isCover = false }) {
                     {bubble.type === 'image' ? (
                       bubble.imageUrl ? (
                         <img
-                          src={`http://localhost:3001${bubble.imageUrl}`}
+                          src={`${bubble.imageUrl}`}
                           alt="Bubble image"
                           crossOrigin="anonymous"
                           style={{
@@ -6638,7 +6638,7 @@ function PageEditor({ isCover = false }) {
               Close
             </button>
             <img
-              src={`http://localhost:3001${page.bakedImage}`}
+              src={`${page.bakedImage}`}
               alt="Baked page"
               style={{
                 width: CANVAS_WIDTH,
@@ -6709,7 +6709,7 @@ function PageEditor({ isCover = false }) {
                     ✕
                   </button>
                   <img
-                    src={`http://localhost:3001${page.masterImage}`}
+                    src={`${page.masterImage}`}
                     alt="Preview"
                     style={{
                       width: '100%',
@@ -7163,7 +7163,7 @@ function PageEditor({ isCover = false }) {
                           {bubble.imageUrl && (
                             <div style={{ marginBottom: '0.5rem' }}>
                               <img
-                                src={`http://localhost:3001${bubble.imageUrl}`}
+                                src={`${bubble.imageUrl}`}
                                 alt="Generated"
                                 style={{ width: '80px', height: '80px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #ddd' }}
                               />
@@ -7385,7 +7385,7 @@ function PageEditor({ isCover = false }) {
                             </div>
                             {bubble.backgroundImageUrl && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <img src={`http://localhost:3001${bubble.backgroundImageUrl}`} alt="BG preview"
+                                <img src={`${bubble.backgroundImageUrl}`} alt="BG preview"
                                   style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ddd' }} />
                                 <button onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { backgroundImageUrl: null, backgroundImagePrompt: '' }); }}
                                   style={{ padding: '0.25rem 0.5rem', background: '#e74c3c', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', fontSize: '0.7rem' }}>
@@ -7653,7 +7653,7 @@ function PageEditor({ isCover = false }) {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (audioRef.current) audioRef.current.pause();
-                                      const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${alt.audioUrl}.mp3`);
+                                      const audio = new Audio(`/projects/${id}/audio/${alt.audioUrl}.mp3`);
                                       audioRef.current = audio;
                                       audio.play();
                                     }}
@@ -7710,7 +7710,7 @@ function PageEditor({ isCover = false }) {
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (audioRef.current) audioRef.current.pause();
-                                        const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${sentence.audioUrl}.mp3`);
+                                        const audio = new Audio(`/projects/${id}/audio/${sentence.audioUrl}.mp3`);
                                         audioRef.current = audio;
                                         audio.play();
                                       }}
@@ -8113,7 +8113,7 @@ function PageEditor({ isCover = false }) {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (audioRef.current) audioRef.current.pause();
-                                      const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${sentence.translationAudioUrl}.mp3`);
+                                      const audio = new Audio(`/projects/${id}/audio/${sentence.translationAudioUrl}.mp3`);
                                       audioRef.current = audio;
                                       audio.play();
                                     }}
@@ -8376,7 +8376,7 @@ function PageEditor({ isCover = false }) {
                                       if (audioRef.current) audioRef.current.pause();
                                       const sanitized = word.text.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
                                       if (sanitized) {
-                                        const audio = new Audio(`http://localhost:3001/projects/${id}/audio/words/${sanitized}.mp3`);
+                                        const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3`);
                                         audioRef.current = audio;
                                         audio.play().catch(() => {});
                                       }
@@ -8404,7 +8404,7 @@ function PageEditor({ isCover = false }) {
                                         if (audioRef.current) audioRef.current.pause();
                                         const sanitized = word.baseForm.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
                                         if (sanitized) {
-                                          const audio = new Audio(`http://localhost:3001/projects/${id}/audio/words/${sanitized}.mp3`);
+                                          const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3`);
                                           audioRef.current = audio;
                                           audio.play().catch(() => {});
                                         }
@@ -8924,7 +8924,7 @@ function PageEditor({ isCover = false }) {
                         {slide.imageUrl ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <img
-                              src={`http://localhost:3001${slide.imageUrl}`}
+                              src={`${slide.imageUrl}`}
                               alt={`Slide ${sIdx + 1}`}
                               style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '3px', border: '1px solid #ccc' }}
                             />
@@ -8983,7 +8983,7 @@ function PageEditor({ isCover = false }) {
                               });
                               setAudioPreview(prev => ({
                                 ...prev,
-                                [key]: { url: `http://localhost:3001${response.data.path}`, filename: response.data.filename, wordTimestamps: response.data.wordTimestamps || [] }
+                                [key]: { url: `${response.data.path}`, filename: response.data.filename, wordTimestamps: response.data.wordTimestamps || [] }
                               }));
                             } catch (err) { alert('Failed to generate: ' + err.message); }
                             finally { setGeneratingAudio(prev => ({ ...prev, [key]: false })); }
@@ -9034,7 +9034,7 @@ function PageEditor({ isCover = false }) {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (audioRef.current) audioRef.current.pause();
-                              const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${slide.audioUrl}.mp3`);
+                              const audio = new Audio(`/projects/${id}/audio/${slide.audioUrl}.mp3`);
                               audioRef.current = audio;
                               audio.play();
                             }}
@@ -9054,7 +9054,7 @@ function PageEditor({ isCover = false }) {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (audioRef.current) audioRef.current.pause();
-                                const audio = new Audio(`http://localhost:3001/projects/${id}/audio/${slide.translationAudioUrl}.mp3`);
+                                const audio = new Audio(`/projects/${id}/audio/${slide.translationAudioUrl}.mp3`);
                                 audioRef.current = audio;
                                 audio.play();
                               }}
@@ -9284,7 +9284,7 @@ function PageEditor({ isCover = false }) {
                   {promptSettings.masterStyleImage ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <img
-                        src={`http://localhost:3001${promptSettings.masterStyleImage}`}
+                        src={`${promptSettings.masterStyleImage}`}
                         alt="Master style"
                         style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '2px solid #8e44ad' }}
                       />
@@ -9329,10 +9329,10 @@ function PageEditor({ isCover = false }) {
                     <div key={img.id || idx} style={{ background: '#fff', borderRadius: '4px', padding: '0.75rem', marginBottom: '0.75rem', border: '1px solid #ccc' }}>
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                         <img
-                          src={`http://localhost:3001${img.image}`}
+                          src={`${img.image}`}
                           alt={img.name || `Style ref ${idx + 1}`}
                           style={{ height: '80px', borderRadius: '4px', border: '1px solid #999', flexShrink: 0, cursor: 'pointer' }}
-                          onClick={() => { setLightboxImage(`http://localhost:3001${img.image}`); setLightboxRefContext(null); }}
+                          onClick={() => { setLightboxImage(`${img.image}`); setLightboxRefContext(null); }}
                         />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#333', marginBottom: '0.25rem' }}>{img.name || `Style ref ${idx + 1}`}</div>
@@ -9381,7 +9381,7 @@ function PageEditor({ isCover = false }) {
                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
                       {char.image && (
                         <img
-                          src={`http://localhost:3001${char.image}`}
+                          src={`${char.image}`}
                           alt={char.name}
                           style={{ height: '50px', borderRadius: '4px', border: '1px solid #999', flexShrink: 0 }}
                         />
@@ -9576,7 +9576,7 @@ function PageEditor({ isCover = false }) {
                                 cursor: 'pointer', border: isSelected ? '2px solid #6c3483' : '2px solid transparent',
                                 borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
                               }}>
-                              <img src={`http://localhost:3001${img.image}`} alt={img.name}
+                              <img src={`${img.image}`} alt={img.name}
                                 style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
                               <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {img.name || (img.description ? img.description.split(',')[0].substring(0, 40) : 'Style ref')}
@@ -9604,7 +9604,7 @@ function PageEditor({ isCover = false }) {
                                 cursor: 'pointer', border: isSelected ? '2px solid #6c3483' : '2px solid transparent',
                                 borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
                               }}>
-                              <img src={`http://localhost:3001${char.image}`} alt={char.name}
+                              <img src={`${char.image}`} alt={char.name}
                                 style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
                               <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {char.name}
@@ -9777,8 +9777,8 @@ function PageEditor({ isCover = false }) {
                                     cursor: 'pointer', border: isSelected ? '2px solid #6c3483' : '2px solid transparent',
                                     borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
                                   }}>
-                                  <img src={`http://localhost:3001${img.image}`} alt={img.name}
-                                    onClick={(e) => { e.stopPropagation(); setRefPreviewImage(`http://localhost:3001${img.image}`); }}
+                                  <img src={`${img.image}`} alt={img.name}
+                                    onClick={(e) => { e.stopPropagation(); setRefPreviewImage(`${img.image}`); }}
                                     style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0, cursor: 'zoom-in' }} />
                                   <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {img.name || (img.description ? img.description.split(',')[0].substring(0, 40) : 'Style ref')}
@@ -9796,8 +9796,8 @@ function PageEditor({ isCover = false }) {
                                     cursor: 'pointer', border: isSelected ? '2px solid #6c3483' : '2px solid transparent',
                                     borderRadius: '6px', padding: '3px', background: isSelected ? '#f0e6f6' : '#f9f9f9'
                                   }}>
-                                  <img src={`http://localhost:3001${char.image}`} alt={char.name}
-                                    onClick={(e) => { e.stopPropagation(); setRefPreviewImage(`http://localhost:3001${char.image}`); }}
+                                  <img src={`${char.image}`} alt={char.name}
+                                    onClick={(e) => { e.stopPropagation(); setRefPreviewImage(`${char.image}`); }}
                                     style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0, cursor: 'zoom-in' }} />
                                   <span style={{ fontSize: '0.7rem', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {char.name}
@@ -9930,10 +9930,10 @@ function PageEditor({ isCover = false }) {
                         {(panelImages[panel.id]?.refImages || []).map((ref, ri) => (
                           <div key={ri} style={{ position: 'relative', display: 'inline-block' }}>
                             <img
-                              src={`http://localhost:3001${getRefPath(ref)}`}
+                              src={`${getRefPath(ref)}`}
                               alt={`Ref ${ri + 1}`}
                               onClick={() => {
-                                setLightboxImage(`http://localhost:3001${getRefPath(ref)}`);
+                                setLightboxImage(`${getRefPath(ref)}`);
                                 setLightboxRefContext({ panelId: panel.id, refIndex: ri });
                               }}
                               style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ccc', cursor: 'pointer' }}
@@ -10236,9 +10236,9 @@ function PageEditor({ isCover = false }) {
                         <div style={{ marginTop: '0.5rem' }}>
                           <div style={{ position: 'relative', display: 'inline-block' }}>
                             <img
-                              src={`http://localhost:3001${panelImages[panel.id].path}`}
+                              src={`${panelImages[panel.id].path}`}
                               alt={`Panel ${i + 1}`}
-                              onClick={() => { setLightboxImage(`http://localhost:3001${panelImages[panel.id].path}`); setLightboxRefContext({ panelId: panel.id, refIndex: -1 }); }}
+                              onClick={() => { setLightboxImage(`${panelImages[panel.id].path}`); setLightboxRefContext({ panelId: panel.id, refIndex: -1 }); }}
                               style={{
                                 maxWidth: '100%',
                                 maxHeight: '150px',
@@ -10800,7 +10800,7 @@ function PageEditor({ isCover = false }) {
                               return (
                                 <img
                                   key={panel.id}
-                                  src={`http://localhost:3001${panelData.path}`}
+                                  src={`${panelData.path}`}
                                   alt={`Panel ${i + 1}`}
                                   title={`Panel ${i + 1}${colorMatchRefPanel === panel.id ? ' (reference)' : ''}`}
                                   onClick={() => {
@@ -10853,7 +10853,7 @@ function PageEditor({ isCover = false }) {
                                       }}
                                     >
                                       <img
-                                        src={`http://localhost:3001${op.artworkImage}`}
+                                        src={`${op.artworkImage}`}
                                         alt={label}
                                         style={{ width: '50px', height: '50px', objectFit: 'cover', display: 'block' }}
                                       />
@@ -10871,7 +10871,7 @@ function PageEditor({ isCover = false }) {
                           {colorMatchRefExternal && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
                               <img
-                                src={`http://localhost:3001${colorMatchRefExternal.path}`}
+                                src={`${colorMatchRefExternal.path}`}
                                 alt="External ref"
                                 style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '3px solid #8e44ad' }}
                               />
@@ -11338,7 +11338,7 @@ function PageEditor({ isCover = false }) {
                         <div>
                           <h4 style={{ marginBottom: '0.5rem' }}>Generated Image:</h4>
                           <img
-                            src={`http://localhost:3001${generatedImage.path}`}
+                            src={`${generatedImage.path}`}
                             alt="Generated page"
                             style={{
                               width: '100%',
@@ -11701,7 +11701,7 @@ function PageEditor({ isCover = false }) {
             {page.masterImage && (
               <img
                 key={page.masterImage}
-                src={`http://localhost:3001${page.masterImage}`}
+                src={`${page.masterImage}`}
                 alt="Page preview"
                 crossOrigin="anonymous"
                 style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }}
@@ -11906,7 +11906,7 @@ function PageEditor({ isCover = false }) {
                         <g transform={`rotate(${tRotDeg} ${tCx} ${tCy})`}>
                           {bubble.backgroundImageUrl && (
                             <image
-                              href={`http://localhost:3001${bubble.backgroundImageUrl}`}
+                              href={`${bubble.backgroundImageUrl}`}
                               x={tX} y={tY}
                               width={tW} height={tH}
                               preserveAspectRatio="xMidYMid slice"
@@ -11944,7 +11944,7 @@ function PageEditor({ isCover = false }) {
                   >
                     {bubble.type === 'thought' && bubble.backgroundImageUrl && (
                       <img
-                        src={`http://localhost:3001${bubble.backgroundImageUrl}`}
+                        src={`${bubble.backgroundImageUrl}`}
                         alt=""
                         crossOrigin="anonymous"
                         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
@@ -11952,7 +11952,7 @@ function PageEditor({ isCover = false }) {
                     )}
                     {bubble.type === 'image' && bubble.imageUrl ? (
                       <img
-                        src={`http://localhost:3001${bubble.imageUrl}`}
+                        src={`${bubble.imageUrl}`}
                         alt="Bubble image"
                         crossOrigin="anonymous"
                         style={{ width: '100%', height: '100%', objectFit: 'contain' }}

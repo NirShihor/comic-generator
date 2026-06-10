@@ -671,7 +671,7 @@ function ComicEditor() {
     const name = prompt('Name for this reference:');
     if (!name || !name.trim()) return;
     try {
-      const imgResponse = await fetch(`http://localhost:3001${item.path}`);
+      const imgResponse = await fetch(`${item.path}`);
       const blob = await imgResponse.blob();
       const reader = new FileReader();
       reader.onload = async () => {
@@ -708,7 +708,7 @@ function ComicEditor() {
     const item = studioGallery[galleryIndex];
     if (!item) return;
     const a = document.createElement('a');
-    a.href = `http://localhost:3001${item.path}`;
+    a.href = `${item.path}`;
     a.download = `studio-${item.timestamp}.png`;
     a.click();
   };
@@ -1214,7 +1214,7 @@ function ComicEditor() {
             >
               {comic.cover?.image ? (
                 <img
-                  src={`http://localhost:3001${comic.cover.image}`}
+                  src={`${comic.cover.image}`}
                   alt="Cover"
                 />
               ) : (
@@ -1243,7 +1243,7 @@ function ComicEditor() {
                 >
                   {page.masterImage ? (
                     <img
-                      src={`http://localhost:3001${page.masterImage}`}
+                      src={`${page.masterImage}`}
                       alt={`Page ${page.pageNumber}`}
                     />
                   ) : (
@@ -1334,7 +1334,7 @@ function ComicEditor() {
                     {settings.masterStyleImage && (
                       <div style={{ position: 'relative' }}>
                         <img
-                          src={`http://localhost:3001${settings.masterStyleImage}`}
+                          src={`${settings.masterStyleImage}`}
                           alt="Master style"
                           style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '6px', border: '2px solid #8e44ad' }}
                         />
@@ -1465,7 +1465,7 @@ function ComicEditor() {
                         }}
                       >
                         <img
-                          src={`http://localhost:3001${item.image}`}
+                          src={`${item.image}`}
                           alt="Style reference"
                           style={{ maxHeight: '150px', borderRadius: '6px', border: '1px solid #333', flexShrink: 0 }}
                         />
@@ -1614,7 +1614,7 @@ function ComicEditor() {
                     {char.image && (
                       <div style={{ marginBottom: '0.5rem' }}>
                         <img
-                          src={`http://localhost:3001${char.image}`}
+                          src={`${char.image}`}
                           alt={char.name}
                           style={{ maxHeight: '150px', borderRadius: '6px', border: '1px solid #333' }}
                         />
@@ -1932,7 +1932,7 @@ function ComicEditor() {
                       {enforcerImages.map((imgPath, index) => (
                         <div key={index} style={{ position: 'relative' }}>
                           <img
-                            src={`http://localhost:3001${imgPath}`}
+                            src={`${imgPath}`}
                             alt={`Reference ${index + 1}`}
                             style={{
                               height: '120px',
@@ -3237,7 +3237,7 @@ function ComicEditor() {
                         border: studioRefImages.includes(char.image) ? '3px solid #27ae60' : '2px solid #ddd',
                         borderRadius: '6px', cursor: 'pointer', padding: '2px', textAlign: 'center'
                       }}>
-                        <img src={`http://localhost:3001${char.image}`} alt={char.name} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                        <img src={`${char.image}`} alt={char.name} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
                         <div style={{ fontSize: '0.65rem', color: '#666', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{char.name}</div>
                       </div>
                     ))}
@@ -3254,7 +3254,7 @@ function ComicEditor() {
                         border: studioRefImages.includes(img) ? '3px solid #27ae60' : '2px solid #ddd',
                         borderRadius: '6px', cursor: 'pointer', padding: '2px'
                       }}>
-                        <img src={`http://localhost:3001${img}`} alt={`Style ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                        <img src={`${img}`} alt={`Style ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
                       </div>
                     ))}
                   </div>
@@ -3267,7 +3267,7 @@ function ComicEditor() {
                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                     {studioUploadedRefs.map((img, idx) => (
                       <div key={idx} style={{ position: 'relative', border: '2px solid #3498db', borderRadius: '6px', padding: '2px' }}>
-                        <img src={`http://localhost:3001${img}`} alt={`Upload ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                        <img src={`${img}`} alt={`Upload ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
                         <button onClick={() => setStudioUploadedRefs(prev => prev.filter((_, i) => i !== idx))} style={{
                           position: 'absolute', top: '-6px', right: '-6px', background: '#e74c3c', color: '#fff',
                           border: 'none', borderRadius: '50%', width: '18px', height: '18px', fontSize: '0.7rem',
@@ -3301,7 +3301,7 @@ function ComicEditor() {
                 {studioGallery.map((item, idx) => (
                   <img
                     key={idx}
-                    src={`http://localhost:3001${item.path}`}
+                    src={`${item.path}`}
                     alt={item.prompt.substring(0, 30)}
                     onClick={() => { setStudioSelectedImage(idx); setStudioInpaintMode(false); setStudioInpaintRect(null); }}
                     style={{
@@ -3320,7 +3320,7 @@ function ComicEditor() {
               <div style={{ position: 'relative', display: 'inline-block', marginBottom: '0.5rem' }}>
                 <img
                   ref={studioImageRef}
-                  src={`http://localhost:3001${studioGallery[studioSelectedImage].path}`}
+                  src={`${studioGallery[studioSelectedImage].path}`}
                   alt="Selected"
                   onMouseDown={studioHandleMouseDown}
                   onMouseMove={studioHandleMouseMove}
@@ -3443,7 +3443,7 @@ function ComicEditor() {
             {consistencyCharId && consistencyCharId !== 'all' && (() => {
               const char = settings.characters.find(c => c.id === consistencyCharId);
               return char?.image ? (
-                <img src={`http://localhost:3001${char.image}`} alt={char.name} style={{ height: '48px', borderRadius: '4px', border: '2px solid #3498db' }} />
+                <img src={`${char.image}`} alt={char.name} style={{ height: '48px', borderRadius: '4px', border: '2px solid #3498db' }} />
               ) : null;
             })()}
 
@@ -3543,9 +3543,9 @@ function ComicEditor() {
                   return (
                     <div key={idx} style={{ border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden', background: '#fff' }}>
                       {/* Panel thumbnail with bounding box overlay */}
-                      <div style={{ position: 'relative', background: '#f0f0f0', cursor: 'pointer' }} onClick={() => setConsistencyLightbox(`http://localhost:3001${result.panelImage}?t=${Date.now()}`)}>
+                      <div style={{ position: 'relative', background: '#f0f0f0', cursor: 'pointer' }} onClick={() => setConsistencyLightbox(`${result.panelImage}?t=${Date.now()}`)}>
                         <img
-                          src={`http://localhost:3001${result.panelImage}?t=${Date.now()}`}
+                          src={`${result.panelImage}?t=${Date.now()}`}
                           alt={`P${result.pageNumber} ${result.panelId}`}
                           style={{ width: '100%', display: 'block' }}
                         />
@@ -3603,12 +3603,12 @@ function ComicEditor() {
                         {/* Before/After comparison */}
                         {ba && result.adjusted && (
                           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                            <div style={{ flex: 1, textAlign: 'center', cursor: 'pointer' }} onClick={() => setConsistencyLightbox(`http://localhost:3001${ba.before}`)}>
-                              <img src={`http://localhost:3001${ba.before}`} alt="Before" style={{ width: '100%', borderRadius: '4px' }} />
+                            <div style={{ flex: 1, textAlign: 'center', cursor: 'pointer' }} onClick={() => setConsistencyLightbox(`${ba.before}`)}>
+                              <img src={`${ba.before}`} alt="Before" style={{ width: '100%', borderRadius: '4px' }} />
                               <div style={{ fontSize: '0.65rem', color: '#888' }}>Before</div>
                             </div>
-                            <div style={{ flex: 1, textAlign: 'center', cursor: 'pointer' }} onClick={() => setConsistencyLightbox(`http://localhost:3001${ba.after}`)}>
-                              <img src={`http://localhost:3001${ba.after}`} alt="After" style={{ width: '100%', borderRadius: '4px' }} />
+                            <div style={{ flex: 1, textAlign: 'center', cursor: 'pointer' }} onClick={() => setConsistencyLightbox(`${ba.after}`)}>
+                              <img src={`${ba.after}`} alt="After" style={{ width: '100%', borderRadius: '4px' }} />
                               <div style={{ fontSize: '0.65rem', color: '#888' }}>After</div>
                             </div>
                           </div>
