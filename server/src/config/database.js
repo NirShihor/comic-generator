@@ -9,7 +9,10 @@ const connectDB = async () => {
       return false;
     }
 
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 60000
+    });
     console.log('MongoDB connected successfully');
     return true;
   } catch (error) {
