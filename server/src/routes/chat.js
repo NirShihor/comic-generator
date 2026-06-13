@@ -672,4 +672,51 @@ Return ONLY the JSON object, no other text.`;
   }
 });
 
+// Generate grammar explanations for all sentences in a comic.
+// Explanations are stored on each sentence (grammarNote) and baked into reader bundles.
+router.post('/generate-grammar-explanations', async (req, res) => {
+  try {
+    const { comicId, forceRegenerate = false } = req.body;
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    }
+    if (!comicId) {
+      return res.status(400).json({ error: 'comicId is required' });
+    }
+
+    const Comic = require('../models/Comic');
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+
+    // Stream progress as NDJSON to keep the connection alive
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const { generateGrammarNotes } = require('../services/grammarNotes');
+    const result = await generateGrammarNotes(comic, {
+      forceRegenerate,
+      onProgress: (chunk, totalChunks, sentencesProcessed, totalSentences) => {
+        res.write(JSON.stringify({ type: 'progress', chunk, totalChunks, sentencesProcessed, totalSentences }) + '\n');
+      }
+    });
+
+    if (result.total === 0) {
+      res.write(JSON.stringify({ type: 'done', generated: 0, updated: 0, total: 0, message: 'All sentences already have grammar notes' }) + '\n');
+    } else {
+      res.write(JSON.stringify({ type: 'done', ...result }) + '\n');
+    }
+    res.end();
+  } catch (error) {
+    console.error('Generate grammar explanations error:', error.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n');
+      res.end();
+    }
+  }
+});
+
 module.exports = router;

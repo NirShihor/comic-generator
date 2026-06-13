@@ -158,6 +158,7 @@ function transformToReaderFormat(comic, comicSlug) {
                 id: sentenceId,
                 text: sentenceText,
                 translation: sentence.translation || '',
+                ...(sentence.grammarNote && { grammarNote: sentence.grammarNote }),
                 audioUrl: sentence.audioUrl || '',
                 ...(sentence.translationAudioUrl && { translationAudioUrl: sentence.translationAudioUrl }),
                 ...(sentence.alternatives?.length > 0 && {
@@ -366,6 +367,7 @@ function transformToReaderFormat(comic, comicSlug) {
                   id: sentenceId,
                   text: sentenceText,
                   translation: sentence.translation || '',
+                  ...(sentence.grammarNote && { grammarNote: sentence.grammarNote }),
                   audioUrl: sentence.audioUrl || '',
                 ...(sentence.translationAudioUrl && { translationAudioUrl: sentence.translationAudioUrl }),
                   ...(sentence.alternatives?.length > 0 && {

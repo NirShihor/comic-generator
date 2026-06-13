@@ -46,6 +46,8 @@ function ComicEditor() {
   const [wordAudioForceRegenerate, setWordAudioForceRegenerate] = useState(false);
   const [wordFormsGenerating, setWordFormsGenerating] = useState(false);
   const [wordFormsResult, setWordFormsResult] = useState(null);
+  const [grammarNotesGenerating, setGrammarNotesGenerating] = useState(false);
+  const [grammarNotesResult, setGrammarNotesResult] = useState(null);
   const [fillMeaningsRunning, setFillMeaningsRunning] = useState(false);
   const [fillMeaningsResult, setFillMeaningsResult] = useState(null);
 
@@ -3087,6 +3089,98 @@ function ComicEditor() {
                   <p style={{ margin: 0, color: '#155724' }}>
                     Done! Generated forms for {wordFormsResult.generated} base words. Updated {wordFormsResult.updated} word instances.
                   </p>
+                </div>
+              )}
+            </div>
+
+            {/* Grammar Explanations Section */}
+            <div style={{ background: '#f4ecf7', padding: '1rem', borderRadius: '6px', border: '1px solid #d2b4de' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', color: '#8e44ad' }}>Sentence Grammar Explanations</h4>
+              <p style={{ color: '#888', fontSize: '0.85rem', margin: '0 0 0.75rem 0' }}>
+                Generate a short grammar explanation for every sentence via GPT. Shown in the reader app under "Explain grammar". Run before exporting.
+              </p>
+              <button
+                onClick={async () => {
+                  setGrammarNotesGenerating(true);
+                  setGrammarNotesResult(null);
+                  try {
+                    const response = await fetch('/api/chat/generate-grammar-explanations', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ comicId: id })
+                    });
+                    if (!response.ok) {
+                      const err = await response.json();
+                      throw new Error(err.error || 'Generation failed');
+                    }
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('ndjson')) {
+                      const reader = response.body.getReader();
+                      const decoder = new TextDecoder();
+                      let buffer = '';
+                      while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+                        for (const line of lines) {
+                          if (!line.trim()) continue;
+                          try {
+                            const msg = JSON.parse(line);
+                            if (msg.type === 'progress') {
+                              setGrammarNotesResult({ chunk: msg.chunk, totalChunks: msg.totalChunks, sentencesProcessed: msg.sentencesProcessed, totalSentences: msg.totalSentences, inProgress: true });
+                            } else if (msg.type === 'done') {
+                              setGrammarNotesResult({ generated: msg.generated, updated: msg.updated, total: msg.total, inProgress: false });
+                            } else if (msg.type === 'error') {
+                              throw new Error(msg.error);
+                            }
+                          } catch (parseErr) {
+                            console.warn('Failed to parse stream line:', line);
+                          }
+                        }
+                      }
+                    } else {
+                      const data = await response.json();
+                      setGrammarNotesResult({ ...data, inProgress: false });
+                    }
+                  } catch (error) {
+                    console.error('Grammar explanations generation failed:', error);
+                    alert('Grammar explanations generation failed: ' + error.message);
+                  } finally {
+                    setGrammarNotesGenerating(false);
+                  }
+                }}
+                disabled={grammarNotesGenerating}
+                style={{
+                  padding: '0.5rem 1.2rem',
+                  background: grammarNotesGenerating ? '#95a5a6' : '#8e44ad',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: grammarNotesGenerating ? 'default' : 'pointer',
+                  fontSize: '0.95rem'
+                }}
+              >
+                {grammarNotesGenerating ? 'Generating Explanations...' : 'Generate Grammar Explanations'}
+              </button>
+              {grammarNotesResult && grammarNotesResult.inProgress && (
+                <div style={{ background: '#fff3cd', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                  <p style={{ margin: 0, color: '#856404' }}>
+                    Processing chunk {grammarNotesResult.chunk} of {grammarNotesResult.totalChunks} ({grammarNotesResult.sentencesProcessed} / {grammarNotesResult.totalSentences} sentences)...
+                  </p>
+                </div>
+              )}
+              {grammarNotesResult && !grammarNotesResult.inProgress && grammarNotesResult.generated != null && (
+                <div style={{ background: '#d4edda', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                  <p style={{ margin: 0, color: '#155724' }}>
+                    Done! Generated explanations for {grammarNotesResult.generated} sentences{grammarNotesResult.updated != null ? `, updated ${grammarNotesResult.updated}` : ''}.
+                  </p>
+                </div>
+              )}
+              {grammarNotesResult && !grammarNotesResult.inProgress && grammarNotesResult.generated === 0 && grammarNotesResult.message && (
+                <div style={{ background: '#d1ecf1', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                  <p style={{ margin: 0, color: '#0c5460' }}>{grammarNotesResult.message}</p>
                 </div>
               )}
             </div>

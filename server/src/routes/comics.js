@@ -619,9 +619,25 @@ router.get('/:id/export', async (req, res) => {
 router.post('/:id/export-full', async (req, res) => {
   try {
     const { targetDir } = req.body;
-    const comic = await Comic.findOne({ id: req.params.id });
+    let comic = await Comic.findOne({ id: req.params.id });
     if (!comic) {
       return res.status(404).json({ error: 'Comic not found' });
+    }
+
+    // Ensure every sentence has a grammar explanation before baking the
+    // bundle — exporting mid-generation (or before generating) otherwise
+    // produces bundles without notes.
+    let grammarNotesGenerated = 0;
+    try {
+      const { generateGrammarNotes } = require('../services/grammarNotes');
+      const result = await generateGrammarNotes(comic);
+      grammarNotesGenerated = result.updated;
+      if (result.updated > 0) {
+        console.log(`[Export] Generated ${result.updated} missing grammar notes before export`);
+        comic = await Comic.findOne({ id: req.params.id });
+      }
+    } catch (e) {
+      console.warn(`[Export] Skipping grammar note generation: ${e.message}`);
     }
 
     const comicObj = comic.toObject();
@@ -964,6 +980,20 @@ router.post('/:id/export-full', async (req, res) => {
     const zipSizeMB = Math.round(zipStat.size / (1024 * 1024) * 10) / 10;
     console.log(`Pre-built ZIP: ${zipPath} (${zipSizeMB} MB)`);
 
+    // Auto-sync the fresh export to the fly.io volume in the BACKGROUND, so
+    // the browser gets its response as soon as the local bundle is built
+    // (skipped when this server IS the fly deployment). The fly upload can
+    // take minutes; never block the export response on it.
+    if (!process.env.FLY_APP_NAME) {
+      const { execFile } = require('child_process');
+      const syncScript = path.join(__dirname, '../../sync-store.sh');
+      execFile(syncScript, [req.params.id], { timeout: 1200000 }, (err, stdout, stderr) => {
+        if (err) console.warn(`[Export] Background fly sync failed (export is complete locally; run sync-store.sh manually): ${stderr || err.message}`);
+        else console.log(`[Export] Background fly sync of ${req.params.id} complete`);
+      });
+      console.log(`[Export] Started background fly sync of ${req.params.id}`);
+    }
+
     res.json({
       success: true,
       exportDir,
@@ -972,7 +1002,11 @@ router.post('/:id/export-full', async (req, res) => {
       copiedAudio,
       copiedWordAudio,
       zipSizeMB,
+      grammarNotesGenerated,
+      flySyncing: !process.env.FLY_APP_NAME,
       message: `Exported to ${exportDir} (ZIP: ${zipSizeMB} MB)`
+        + (grammarNotesGenerated > 0 ? ` — generated ${grammarNotesGenerated} missing grammar notes first` : '')
+        + (!process.env.FLY_APP_NAME ? ' — syncing to fly in the background (re-download on the phone once it finishes)' : '')
     });
   } catch (error) {
     console.error('Export error:', error);

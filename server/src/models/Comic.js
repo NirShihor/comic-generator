@@ -30,6 +30,7 @@ const SentenceSchema = new mongoose.Schema({
   id: String,
   text: String,
   translation: String,
+  grammarNote: String,  // AI-generated explanation of the sentence's grammar
   audioUrl: String,
   translationAudioUrl: String,
   alternatives: [{
