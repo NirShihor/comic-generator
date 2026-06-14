@@ -814,21 +814,43 @@ router.post('/:id/export-full', async (req, res) => {
             // Panel crop from no_text image (master + image bubbles) for Speaking Practice Mode
             if (hasBakedImage && rawMasterPath) {
               const noTextSceneDestPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_s${panelNum}_no_text.jpg`);
-              try {
-                const noTextFullPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_no_text.jpg`);
-                const noTextMeta = await sharp(noTextFullPath).metadata();
-                const rawCropped = await cropAndSaveScene(
-                  noTextFullPath,
-                  noTextSceneDestPath,
-                  cropRegion,
-                  noTextMeta.width,
-                  noTextMeta.height
-                );
-                if (rawCropped) {
+
+              // Floating panels sit at an angle over the panels beneath them, so a plain
+              // rectangular crop of the no_text page leaks those neighbours into the corners
+              // (the panel appears in its original rectangular shape with another panel's art
+              // showing through). Prefer the clean per-panel no-text crop baked client-side
+              // (only this panel rendered, no overlap) — mirrors how bakedCropImage fixes the
+              // normal/artwork view.
+              let usedBakedNoText = false;
+              if (panel.floating && panel.bakedCropImageNoText) {
+                try {
+                  const bakedNoTextPath = path.join(__dirname, '../..', panel.bakedCropImageNoText.split('?')[0]);
+                  await fs.access(bakedNoTextPath);
+                  await convertToJpeg(bakedNoTextPath, noTextSceneDestPath);
                   copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}_no_text.jpg`);
+                  usedBakedNoText = true;
+                } catch (e) {
+                  console.log(`Baked no-text crop not found for p${pageNum}_s${panelNum}: ${e.message}`);
                 }
-              } catch (e) {
-                console.log('Failed to crop no_text panel:', e.message);
+              }
+
+              if (!usedBakedNoText) {
+                try {
+                  const noTextFullPath = path.join(imagesDir, `${comicSlug}_p${pageNum}_no_text.jpg`);
+                  const noTextMeta = await sharp(noTextFullPath).metadata();
+                  const rawCropped = await cropAndSaveScene(
+                    noTextFullPath,
+                    noTextSceneDestPath,
+                    cropRegion,
+                    noTextMeta.width,
+                    noTextMeta.height
+                  );
+                  if (rawCropped) {
+                    copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}_no_text.jpg`);
+                  }
+                } catch (e) {
+                  console.log('Failed to crop no_text panel:', e.message);
+                }
               }
             }
           }
