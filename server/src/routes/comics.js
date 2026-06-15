@@ -39,17 +39,6 @@ async function convertToJpeg(sourcePath, outputPath) {
   await sharp(sourcePath).jpeg({ quality: 85 }).toFile(outputPath);
 }
 
-// Convert to JPEG, downscaling to at most maxWidth (never upscales). Used for the
-// no_text (Speaking/Listening Practice) images: the baked master is exported at a
-// reduced size, but the raw master they derive from is full-res, so without this they
-// end up ~4x larger than everything else and dominate the download bundle.
-async function convertToJpegResized(sourcePath, outputPath, maxWidth) {
-  await sharp(sourcePath)
-    .resize({ width: Math.max(1, Math.round(maxWidth)), withoutEnlargement: true })
-    .jpeg({ quality: 85 })
-    .toFile(outputPath);
-}
-
 async function ensureProjectDirs(comicId) {
   const imagesDir = path.join(PROJECTS_DIR, comicId, 'images');
   const audioDir = path.join(PROJECTS_DIR, comicId, 'audio');
@@ -722,10 +711,6 @@ router.post('/:id/export-full', async (req, res) => {
           await convertToJpeg(sourceImagePath, masterDestPath);
           copiedImages.push(`${comicSlug}_p${pageNum}.jpg`);
 
-          // Target width for the no_text / practice-mode images: match the exported
-          // master so they aren't full-res (which bloats the download bundle).
-          const exportWidth = (await sharp(masterDestPath).metadata()).width;
-
           // If there's a baked image, also export the raw master as _no_text variant
           // for Speaking Practice Mode in the reader app
           const rawMasterPath = page.masterImage
@@ -761,12 +746,10 @@ router.post('/:id/export-full', async (req, res) => {
                     console.log('Image bubble source not found, skipping:', imgPath);
                   }
                 }
-                await sharp(rawMasterPath).composite(composites)
-                  .resize({ width: exportWidth, withoutEnlargement: true })
-                  .jpeg({ quality: 85 }).toFile(noTextDestPath);
+                await sharp(rawMasterPath).composite(composites).jpeg({ quality: 85 }).toFile(noTextDestPath);
               } else {
-                // No image bubbles — just convert the raw master (downscaled)
-                await convertToJpegResized(rawMasterPath, noTextDestPath, exportWidth);
+                // No image bubbles — just convert the raw master
+                await convertToJpeg(rawMasterPath, noTextDestPath);
               }
               copiedImages.push(`${comicSlug}_p${pageNum}_no_text.jpg`);
             } catch (e) {
@@ -843,9 +826,7 @@ router.post('/:id/export-full', async (req, res) => {
                 try {
                   const bakedNoTextPath = path.join(__dirname, '../..', panel.bakedCropImageNoText.split('?')[0]);
                   await fs.access(bakedNoTextPath);
-                  // Downscale to the panel's width at the master's export scale (the
-                  // client bakes this crop at full page resolution).
-                  await convertToJpegResized(bakedNoTextPath, noTextSceneDestPath, cropRegion.width * exportWidth);
+                  await convertToJpeg(bakedNoTextPath, noTextSceneDestPath);
                   copiedImages.push(`${comicSlug}_p${pageNum}_s${panelNum}_no_text.jpg`);
                   usedBakedNoText = true;
                 } catch (e) {
