@@ -113,7 +113,6 @@ const PanelSchema = new mongoose.Schema({
   },
   artworkImage: String,
   bakedCropImage: String,
-  bakedCropImageNoText: String,
   content: String,
   selectedBibleRefs: [String],
   fitMode: { type: String, default: 'stretch' },
