@@ -4129,28 +4129,10 @@ function PageEditor({ isCover = false }) {
               });
               const cropPath = `/projects/${id}/images/${id}_p${page.pageNumber}_s${fp.panelOrder}_baked.png`;
 
-              // This composite crop is clean (no text bubbles yet), so it also serves as the
-              // no-text per-panel crop for Speaking/Listening Practice Mode. Saving it under a
-              // distinct name keeps it from being overwritten when bubbles are baked in later.
-              const noTextCropFormData = new FormData();
-              noTextCropFormData.append('image', cropBlob, `panel-${fp.id}-baked-no-text.png`);
-              const noTextCropUpload = await api.post('/images/upload', noTextCropFormData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-              });
-              await api.post('/images/save-to-project', {
-                comicId: id,
-                filename: noTextCropUpload.data.filename,
-                imageType: 'panel_baked_crop_no_text',
-                pageNumber: page.pageNumber,
-                panelOrder: fp.panelOrder
-              });
-              const noTextCropPath = `/projects/${id}/images/${id}_p${page.pageNumber}_s${fp.panelOrder}_baked_no_text.png`;
-
               // Update the panel in the comic data
               const panelIdx = updatedComic.pages[pageIndex].panels.findIndex(p => p.id === fp.id);
               if (panelIdx >= 0) {
                 updatedComic.pages[pageIndex].panels[panelIdx].bakedCropImage = cropPath;
-                updatedComic.pages[pageIndex].panels[panelIdx].bakedCropImageNoText = noTextCropPath;
               }
             } catch (e) {
               console.error(`Failed to generate baked crop for panel ${fp.id}:`, e);
@@ -4387,12 +4369,6 @@ function PageEditor({ isCover = false }) {
                     // Draw clean artwork
                     cropCtx.drawImage(fullImg, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-                    // Capture the clean (text-free) crop before overlaying bubbles — this is the
-                    // no-text per-panel image for Speaking/Listening Practice Mode. Without it, the
-                    // reader falls back to a rectangular crop of the no_text page, which leaks the
-                    // panels underneath a floating panel into its corners.
-                    const noTextCropDataUrl = cropCanvas.toDataURL('image/png');
-
                     // Overlay bubble pixels from the bubble mask, scaled to match
                     const bubbleCropX = Math.round(tz.x * bakedW);
                     const bubbleCropY = Math.round(tz.y * bakedH);
@@ -4417,28 +4393,9 @@ function PageEditor({ isCover = false }) {
                       panelOrder: fp.panelOrder
                     });
                     const cropPath = `/projects/${id}/images/${id}_p${page.pageNumber}_s${fp.panelOrder}_baked.png`;
-
-                    // Upload the clean (text-free) per-panel crop captured above
-                    const noTextResponse = await fetch(noTextCropDataUrl);
-                    const noTextBlob = await noTextResponse.blob();
-                    const noTextFormData = new FormData();
-                    noTextFormData.append('image', noTextBlob, `panel-${fp.id}-baked-no-text.png`);
-                    const noTextUpload = await api.post('/images/upload', noTextFormData, {
-                      headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-                    await api.post('/images/save-to-project', {
-                      comicId: id,
-                      filename: noTextUpload.data.filename,
-                      imageType: 'panel_baked_crop_no_text',
-                      pageNumber: page.pageNumber,
-                      panelOrder: fp.panelOrder
-                    });
-                    const noTextCropPath = `/projects/${id}/images/${id}_p${page.pageNumber}_s${fp.panelOrder}_baked_no_text.png`;
-
                     const panelIdx = updatedComic.pages[pageIndex].panels.findIndex(p => p.id === fp.id);
                     if (panelIdx >= 0) {
                       updatedComic.pages[pageIndex].panels[panelIdx].bakedCropImage = cropPath;
-                      updatedComic.pages[pageIndex].panels[panelIdx].bakedCropImageNoText = noTextCropPath;
                     }
                     console.log(`[BakeCrop] Saved baked crop for p${page.pageNumber}_s${fp.panelOrder}`);
                   } catch (e) {
