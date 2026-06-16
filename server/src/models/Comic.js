@@ -282,6 +282,9 @@ const ComicSchema = new mongoose.Schema({
   collectionId: String,
   collectionTitle: String,
   episodeNumber: Number,
+  // Manual sort position for the reader catalog/library (lower = higher up).
+  // Set via the drag-to-reorder screen in the generator.
+  order: { type: Number, default: 0 },
   pages: [PageSchema]
 }, {
   timestamps: true,
@@ -292,5 +295,6 @@ const ComicSchema = new mongoose.Schema({
 // Index for faster queries
 ComicSchema.index({ title: 1 });
 ComicSchema.index({ createdAt: -1 });
+ComicSchema.index({ order: 1 });
 
 module.exports = mongoose.model('Comic', ComicSchema);

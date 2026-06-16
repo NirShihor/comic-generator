@@ -432,6 +432,7 @@ function transformToReaderFormat(comic, comicSlug) {
     language: comic.language || 'es',
     targetLanguage: comic.targetLanguage || 'en',
     version: '1.0',
+    order: comic.order || 0,
     ...(comic.collectionId && { collectionId: comic.collectionId }),
     ...(comic.collectionTitle && { collectionTitle: comic.collectionTitle }),
     ...(comic.episodeNumber && { episodeNumber: comic.episodeNumber }),

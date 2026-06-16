@@ -201,13 +201,23 @@ function ComicList() {
     <div>
       <div>
         <h1>My Comics</h1>
-        <button
-          className="btn btn-primary"
-          onClick={() => setShowModal(true)}
-          style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', marginTop: '0.5rem' }}
-        >
-          + New Comic
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowModal(true)}
+            style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+          >
+            + New Comic
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => navigate('/order')}
+            style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+            title="Set the order comics appear in the reader app"
+          >
+            ↕ Reader Order
+          </button>
+        </div>
       </div>
 
       <div className="comic-list">

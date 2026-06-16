@@ -33,7 +33,9 @@ async function getDirectorySize(dirPath) {
 // GET /api/reader/catalog — list published comics for the reader app store
 router.get('/catalog', async (req, res) => {
   try {
-    const comics = await Comic.find({ published: true }).lean();
+    const comics = await Comic.find({ published: true })
+      .sort({ order: 1, createdAt: 1 })
+      .lean();
 
     // Look up collection metadata for enriching catalog entries
     const collectionIds = [...new Set(comics.map(c => c.collectionId).filter(Boolean))];
@@ -70,6 +72,7 @@ router.get('/catalog', async (req, res) => {
         fileSizeMB: sizeMB,
         version: '1.0',
         downloadUrl: `/api/reader/comics/${comic.id}`,
+        order: comic.order || 0,
         // Include collection info for grouping
         ...(comic.collectionId && { collectionId: comic.collectionId }),
         ...(comic.collectionTitle && { collectionTitle: comic.collectionTitle }),
