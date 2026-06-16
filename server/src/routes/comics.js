@@ -82,6 +82,36 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Bulk-set the manual sort order for the reader catalog/library.
+// Body: { orders: [{ id, order }, ...] } — explicit order per comic. All
+// episodes of a collection get the SAME order so the series moves as one block;
+// within a collection, episodeNumber decides the issue order.
+// (Also accepts { ids: [...] } for a simple flat sequence.)
+// Defined before "/:id" routes so "reorder" isn't treated as an id.
+router.post('/reorder', async (req, res) => {
+  try {
+    const { orders, ids } = req.body;
+    let ops;
+    if (Array.isArray(orders)) {
+      ops = orders.map(({ id, order }) => ({
+        updateOne: { filter: { id }, update: { $set: { order: Number(order) || 0 } } }
+      }));
+    } else if (Array.isArray(ids)) {
+      ops = ids.map((id, index) => ({
+        updateOne: { filter: { id }, update: { $set: { order: index } } }
+      }));
+    } else {
+      return res.status(400).json({ error: 'Provide orders [{id, order}] or ids []' });
+    }
+    if (ops.length > 0) {
+      await Comic.bulkWrite(ops);
+    }
+    res.json({ success: true, count: ops.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get single comic project
 // Resolve prompt settings: from collection if comic belongs to one, otherwise from comic
 router.get('/:id/prompt-settings', async (req, res) => {
