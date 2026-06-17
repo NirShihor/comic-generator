@@ -7,8 +7,61 @@ const sharp = require('sharp');
 const Comic = require('../models/Comic');
 const Collection = require('../models/Collection');
 const { sanitizeTitle, transformToReaderFormat } = require('../services/readerFormat');
+const { generateFlowReply } = require('../services/flowPractice');
+const { generateSpeech, generateSpeechTimed } = require('../services/tts');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
+
+// POST /api/reader/tts — synthesize speech (MP3) for a short piece of text.
+// Body: { text, voice?, instructions? }. Returns audio/mpeg.
+router.post('/tts', async (req, res) => {
+  try {
+    const { text } = req.body || {};
+    const audio = await generateSpeech({ text });
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Cache-Control', 'no-store');
+    res.send(audio);
+  } catch (error) {
+    console.error('[TTS] error:', error);
+    res.status(error.statusCode || 500).json({ error: error.message });
+  }
+});
+
+// POST /api/reader/tts-timed — synthesize speech with character-level timing,
+// for lip-syncing an avatar. Body: { text, voice?, speed? }.
+// Returns JSON: { audio: <base64 mp3>, alignment: { characters,
+// character_start_times_seconds, character_end_times_seconds } }.
+router.post('/tts-timed', async (req, res) => {
+  try {
+    const { text, voice, speed } = req.body || {};
+    const { audioBase64, alignment } = await generateSpeechTimed({ text, voiceId: voice, speed });
+    res.set('Cache-Control', 'no-store');
+    res.json({ audio: audioBase64, alignment });
+  } catch (error) {
+    console.error('[TTS-timed] error:', error);
+    res.status(error.statusCode || 500).json({ error: error.message });
+  }
+});
+
+// POST /api/reader/flow-practice — one turn of the Flow Practice conversation.
+// Body: { comicTitle, sourceLang, targetLang, level?, vocab: [{text, meaning}],
+//         messages: [{role: "user"|"assistant", content}] }  (empty messages = opener)
+// Returns: { reply, usage }
+router.post('/flow-practice', async (req, res) => {
+  try {
+    const { comicTitle, sourceLang, targetLang, level, vocab, messages } = req.body || {};
+    if (!Array.isArray(vocab) || vocab.length === 0) {
+      return res.status(400).json({ error: 'vocab must be a non-empty array of { text, meaning }' });
+    }
+    const { reply, usage } = await generateFlowReply({
+      comicTitle, sourceLang, targetLang, level, vocab, messages,
+    });
+    res.json({ reply, usage });
+  } catch (error) {
+    console.error('[FlowPractice] error:', error);
+    res.status(error.statusCode || 500).json({ error: error.message });
+  }
+});
 
 // Calculate total size of a directory recursively (in bytes)
 async function getDirectorySize(dirPath) {

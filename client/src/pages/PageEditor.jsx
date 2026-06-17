@@ -6279,7 +6279,7 @@ function PageEditor({ isCover = false }) {
                       overflow: bubble.backgroundImageUrl ? 'hidden' : 'visible',
                       boxShadow: selectedBubbleId === bubble.id ? '0 0 10px rgba(0,255,0,0.5)' : 'none',
                       // Hand-drawn effect with slight rotation and rough filter, plus user rotation for thought bubbles
-                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0)}deg)`,
+                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + ((bubble.type === 'thought' || bubble.type === 'narration') ? (bubble.rotation ?? 0) : 0)}deg)`,
                       transformOrigin: 'center center',
                       filter: bubble.type === 'thought' ? 'none' : 'url(#roughEdge)'
                     }}
@@ -8653,21 +8653,31 @@ function PageEditor({ isCover = false }) {
                         </>
                       )}
 
-                      {/* Bubble Angle (for thought bubbles) */}
-                      {bubble.type === 'thought' && (
+                      {/* Bubble Angle (for thought and narration bubbles) */}
+                      {(bubble.type === 'thought' || bubble.type === 'narration') && (
                         <div style={{ marginBottom: '0.5rem' }}>
                           <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.25rem' }}>
                             Bubble Angle: {Math.round(bubble.rotation ?? 0)}°
                           </label>
+                          {/* Narration: small symmetric tilt centred on 0 (straight), so it's
+                              easy to nudge left/right and straighten. Thought: full spin. */}
                           <input
                             type="range"
-                            min="0"
-                            max="360"
+                            min={bubble.type === 'narration' ? -30 : 0}
+                            max={bubble.type === 'narration' ? 30 : 360}
                             value={Math.round(bubble.rotation ?? 0)}
                             onChange={(e) => updateBubble(bubble.id, { rotation: parseInt(e.target.value) })}
                             onClick={(e) => e.stopPropagation()}
                             style={{ width: '100%' }}
                           />
+                          {bubble.type === 'narration' && (bubble.rotation ?? 0) !== 0 && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { rotation: 0 }); }}
+                              style={{ marginTop: '0.25rem', fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '3px', border: '1px solid #ccc', background: '#f5f5f5', cursor: 'pointer' }}
+                            >
+                              Straighten (0°)
+                            </button>
+                          )}
                         </div>
                       )}
 
@@ -11937,7 +11947,7 @@ function PageEditor({ isCover = false }) {
                       boxSizing: 'border-box',
                       zIndex: 50,
                       overflow: bubble.backgroundImageUrl ? 'hidden' : 'visible',
-                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0)}deg)`,
+                      transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + ((bubble.type === 'thought' || bubble.type === 'narration') ? (bubble.rotation ?? 0) : 0)}deg)`,
                       transformOrigin: 'center center',
                       filter: bubble.type === 'thought' ? 'none' : `url(#roughEdge${filtSuffix})`
                     }}
