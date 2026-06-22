@@ -1170,6 +1170,8 @@ router.post('/save-to-project', async (req, res) => {
       ? `${comicId}_cover_baked.png`
       : imageType === 'baked'
       ? `${comicId}_p${pageNumber}_baked.png`
+      : imageType === 'baked-empty'
+      ? `${comicId}_p${pageNumber}_baked_empty.png`
       : imageType === 'page_nofloat'
       ? `${comicId}_p${pageNumber}_nofloat.png`
       : imageType === 'panel_baked_crop'

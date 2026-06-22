@@ -225,6 +225,7 @@ router.post('/', async (req, res) => {
     const comic = new Comic({
       id: comicId,
       title: req.body.title || 'Untitled Comic',
+      titleEn: req.body.titleEn || '',
       description: req.body.description || '',
       level: req.body.level || 'beginner',
       language: 'es',
@@ -715,6 +716,9 @@ router.post('/:id/export-full', async (req, res) => {
     if (comicObj.collectionId) {
       const Collection = require('../models/Collection');
       const collection = await Collection.findOne({ id: comicObj.collectionId });
+      if (collection?.titleEn) {
+        exportedComic.collectionTitleEn = collection.titleEn;
+      }
       if (collection?.coverImage) {
         const cleanColCover = collection.coverImage.split('?')[0];
         const colCoverSource = path.join(__dirname, '../..', cleanColCover);
@@ -784,6 +788,19 @@ router.post('/:id/export-full', async (req, res) => {
               copiedImages.push(`${comicSlug}_p${pageNum}_no_text.jpg`);
             } catch (e) {
               console.log('Raw master image not found for no_text:', rawMasterPath);
+            }
+          }
+
+          // Export the empty-bubbles variant (bubbles drawn, text blank) for the
+          // reader's practice modes — bubbles are visible so they're tappable.
+          if (page.emptyBubblesImage) {
+            try {
+              const emptySrc = path.join(__dirname, '../..', page.emptyBubblesImage.split('?')[0]);
+              const emptyDest = path.join(imagesDir, `${comicSlug}_p${pageNum}_empty_bubbles.jpg`);
+              await convertToJpeg(emptySrc, emptyDest);
+              copiedImages.push(`${comicSlug}_p${pageNum}_empty_bubbles.jpg`);
+            } catch (e) {
+              console.log('Empty-bubbles image not found:', page.emptyBubblesImage);
             }
           }
 

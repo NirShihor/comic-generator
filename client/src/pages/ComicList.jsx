@@ -7,10 +7,11 @@ function ComicList() {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [comicToDelete, setComicToDelete] = useState(null);
-  const [newComic, setNewComic] = useState({ title: '', description: '', level: 'beginner' });
+  const [newComic, setNewComic] = useState({ title: '', titleEn: '', description: '', level: 'beginner' });
   const [collapsedCollections, setCollapsedCollections] = useState({});
   const [renamingComic, setRenamingComic] = useState(null);
   const [renameTitle, setRenameTitle] = useState('');
+  const [renameTitleEn, setRenameTitleEn] = useState('');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const highlightCollectionId = searchParams.get('collection');
@@ -77,15 +78,17 @@ function ComicList() {
     e.stopPropagation();
     setRenamingComic(comic);
     setRenameTitle(comic.title);
+    setRenameTitleEn(comic.titleEn || '');
   };
 
   const renameComic = async () => {
     if (!renamingComic || !renameTitle.trim()) return;
     try {
-      const response = await api.put(`/comics/${renamingComic.id}`, { title: renameTitle.trim() });
-      setComics(comics.map(c => c.id === renamingComic.id ? { ...c, title: response.data.title } : c));
+      const response = await api.put(`/comics/${renamingComic.id}`, { title: renameTitle.trim(), titleEn: renameTitleEn.trim() });
+      setComics(comics.map(c => c.id === renamingComic.id ? { ...c, title: response.data.title, titleEn: response.data.titleEn } : c));
       setRenamingComic(null);
       setRenameTitle('');
+      setRenameTitleEn('');
     } catch (error) {
       console.error('Failed to rename comic:', error);
     }
@@ -119,7 +122,7 @@ function ComicList() {
       const response = await api.post('/comics', newComic);
       setComics([...comics, response.data]);
       setShowModal(false);
-      setNewComic({ title: '', description: '', level: 'beginner' });
+      setNewComic({ title: '', titleEn: '', description: '', level: 'beginner' });
       navigate(`/comic/${response.data.id}`);
     } catch (error) {
       console.error('Failed to create comic:', error);
@@ -194,6 +197,14 @@ function ComicList() {
       <p style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
         {comic.pages?.length || 0} pages • {comic.level}
       </p>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(comic.id); }}
+        title="Click to copy — use with ./sync-store.sh"
+        style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#999', background: 'rgba(0,0,0,0.04)', border: '1px solid #ddd', borderRadius: '4px', padding: '0.1rem 0.35rem', cursor: 'pointer', marginTop: '0.4rem' }}
+      >
+        {comic.id} 📋
+      </button>
     </div>
   );
 
@@ -251,6 +262,14 @@ function ComicList() {
                 <span style={{ fontSize: '0.8rem', color: '#999' }}>
                   ({collection.comics.length} episode{collection.comics.length !== 1 ? 's' : ''})
                 </span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(collection.id); }}
+                  title="Collection ID — click to copy"
+                  style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#999', background: 'rgba(0,0,0,0.04)', border: '1px solid #ddd', borderRadius: '4px', padding: '0.1rem 0.35rem', cursor: 'pointer' }}
+                >
+                  {collection.id} 📋
+                </button>
               </div>
             </div>
 
@@ -283,6 +302,16 @@ function ComicList() {
                 value={newComic.title}
                 onChange={e => setNewComic({ ...newComic, title: e.target.value.toUpperCase() })}
                 placeholder="e.g., El Superviviente"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>English Title (optional)</label>
+              <input
+                type="text"
+                value={newComic.titleEn}
+                onChange={e => setNewComic({ ...newComic, titleEn: e.target.value })}
+                placeholder="e.g., The Survivor"
               />
             </div>
 
@@ -356,6 +385,16 @@ function ComicList() {
                 onChange={e => setRenameTitle(e.target.value.toUpperCase())}
                 onKeyDown={e => e.key === 'Enter' && renameComic()}
                 autoFocus
+              />
+            </div>
+            <div className="form-group">
+              <label>English Title (optional)</label>
+              <input
+                type="text"
+                value={renameTitleEn}
+                onChange={e => setRenameTitleEn(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && renameComic()}
+                placeholder="e.g., The Survivor"
               />
             </div>
             <div className="modal-actions" style={{ marginTop: '1.5rem' }}>

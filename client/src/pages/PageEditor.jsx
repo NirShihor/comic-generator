@@ -4159,6 +4159,9 @@ function PageEditor({ isCover = false }) {
   const [isBaking, setIsBaking] = useState(false);
   const [showBakedPreview, setShowBakedPreview] = useState(false);
   const bakeTargetRef = useRef(null);
+  // When true, the off-screen bake target renders bubbles with their text blanked,
+  // so we can capture an "empty bubbles" image (for practice modes) in a 2nd pass.
+  const [bakeHideText, setBakeHideText] = useState(false);
 
   // Style Enforcer state
   const [enforcingStyle, setEnforcingStyle] = useState(false);
@@ -4242,6 +4245,26 @@ function PageEditor({ isCover = false }) {
         height: CANVAS_HEIGHT
       });
 
+      // Second pass: re-render the bake target with bubble text blanked and
+      // capture an "empty bubbles" image (used by the reader's practice modes).
+      // Pages only — the cover isn't practiced. The main `canvas` above already
+      // holds the with-text snapshot, so blanking now doesn't affect it.
+      let emptyBlob = null;
+      if (!isCover) {
+        try {
+          setBakeHideText(true);
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+          await new Promise(r => setTimeout(r, 120));
+          const emptyCanvas = await html2canvas(targetEl, {
+            scale, useCORS: true, allowTaint: true, backgroundColor: '#ffffff',
+            width: CANVAS_WIDTH, height: CANVAS_HEIGHT
+          });
+          emptyBlob = await new Promise(res => emptyCanvas.toBlob(res, 'image/png'));
+        } finally {
+          setBakeHideText(false);
+        }
+      }
+
       canvas.toBlob(async (blob) => {
         try {
           const formData = new FormData();
@@ -4277,6 +4300,27 @@ function PageEditor({ isCover = false }) {
             const pageIndex = updatedComic.pages.findIndex(p => p.id === pageId);
             if (pageIndex !== -1) {
               updatedComic.pages[pageIndex].bakedImage = bakedPath;
+
+              // Upload + record the empty-bubbles variant captured above, in the
+              // same comic update so it isn't lost to a second PUT.
+              if (emptyBlob) {
+                try {
+                  const emptyForm = new FormData();
+                  emptyForm.append('image', emptyBlob, `baked-empty-${pageId}.png`);
+                  const emptyUpload = await api.post('/images/upload', emptyForm, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                  });
+                  await api.post('/images/save-to-project', {
+                    comicId: id,
+                    filename: emptyUpload.data.filename,
+                    imageType: 'baked-empty',
+                    pageNumber: page.pageNumber
+                  });
+                  updatedComic.pages[pageIndex].emptyBubblesImage = `/projects/${id}/images/${id}_p${page.pageNumber}_baked_empty.png`;
+                } catch (e) {
+                  console.error('Failed to save empty-bubbles image:', e);
+                }
+              }
 
               // Generate per-panel baked crops for floating panels (clean artwork + bubbles, no overlap)
               const hasFloating = panels.some(p => p.floating);
@@ -4412,7 +4456,11 @@ function PageEditor({ isCover = false }) {
             }
           }
 
-          setPage(prev => ({ ...prev, bakedImage: `${(isCover ? `/projects/${id}/images/${id}_cover_baked.png` : `/projects/${id}/images/${id}_p${page.pageNumber}_baked.png`)}?t=${Date.now()}` }));
+          setPage(prev => ({
+            ...prev,
+            bakedImage: `${(isCover ? `/projects/${id}/images/${id}_cover_baked.png` : `/projects/${id}/images/${id}_p${page.pageNumber}_baked.png`)}?t=${Date.now()}`,
+            ...(!isCover && { emptyBubblesImage: `/projects/${id}/images/${id}_p${page.pageNumber}_baked_empty.png?t=${Date.now()}` })
+          }));
           showToast('Bubbles baked into image!');
         } catch (error) {
           console.error('Failed to bake bubbles:', error);
@@ -11731,6 +11779,14 @@ function PageEditor({ isCover = false }) {
               const tailEndX = bubbleCenterX + (bubble.tailX || 0);
               const tailEndY = bubbleCenterY + (bubble.tailY || 0);
               const filtSuffix = ref === bakeTargetRef ? 'Bake' : 'Preview';
+              // Empty-bubbles (practice) bake: a transparent + borderless text
+              // bubble (e.g. a narration "title" painted on the art) would vanish
+              // entirely once its text is blanked, leaving nothing to see or tap.
+              // Give it the default fill + border in this pass only, so it reads as
+              // an empty, tappable shape like the other bubbles. The normal
+              // with-text bake is unaffected.
+              const emptyPlaceholder = ref === bakeTargetRef && bakeHideText
+                && bubble.type !== 'image' && bubble.bgTransparent && bubble.noBorder;
               return (
                 <div key={bubble.id}>
                   {bubble.type === 'speech' && bubble.showTail !== false && (() => {
@@ -11784,7 +11840,7 @@ function PageEditor({ isCover = false }) {
                             </filter>
                           </defs>
                           <g transform={`rotate(${rotation} ${cx} ${cy})`}>
-                            <path d={path} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff')} stroke={bubble.noBorder ? 'none' : borderColorVal} strokeWidth={borderWidthVal} strokeLinejoin="round" filter={`url(#roughBubble${filtSuffix}-${bubble.id})`} />
+                            <path d={path} fill={emptyPlaceholder ? '#fff' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || '#fff'))} stroke={emptyPlaceholder ? '#000' : (bubble.noBorder ? 'none' : borderColorVal)} strokeWidth={borderWidthVal} strokeLinejoin="round" filter={`url(#roughBubble${filtSuffix}-${bubble.id})`} />
                           </g>
                         </svg>
                         {(() => {
@@ -11825,7 +11881,7 @@ function PageEditor({ isCover = false }) {
                                 transform: `rotate(${bubble.textAngle ?? 0}deg)`,
                                 display: 'inline-block'
                               }}>
-                                {getBubbleDisplayText(bubble)}
+                                {(ref === bakeTargetRef && bakeHideText) ? '' : getBubbleDisplayText(bubble)}
                               </span>
                             </div>
                           );
@@ -11937,8 +11993,8 @@ function PageEditor({ isCover = false }) {
                       top: `${bubble.y * 100}%`,
                       width: `${bubble.width * 100}%`,
                       height: `${bubble.height * 100}%`,
-                      background: bubble.type === 'thought' ? 'transparent' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff'))),
-                      border: bubble.type === 'thought' ? 'none' : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`),
+                      background: bubble.type === 'thought' ? 'transparent' : (emptyPlaceholder ? (bubble.type === 'narration' ? '#fffde7' : '#ffffff') : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')))),
+                      border: bubble.type === 'thought' ? 'none' : (emptyPlaceholder ? `${bubble.borderWidth ?? 2.5}px solid #000` : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`)),
                       borderRadius: bubble.type === 'thought' ? `${bubble.cornerRadius ?? 50}%` : `${bubble.cornerRadius || 8}px`,
                       display: 'flex',
                       alignItems: 'center',
@@ -11983,7 +12039,7 @@ function PageEditor({ isCover = false }) {
                       transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) - (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0) + (bubble.textAngle ?? 0)}deg)`,
                       display: 'inline-block'
                     }}>
-                      {getBubbleDisplayText(bubble)}
+                      {(ref === bakeTargetRef && bakeHideText) ? '' : getBubbleDisplayText(bubble)}
                     </span>
                     )}
                   </div>

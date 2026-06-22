@@ -116,6 +116,7 @@ router.get('/catalog', async (req, res) => {
       return {
         id: `comic-${comicSlug}`,
         title: comic.title,
+        ...(comic.titleEn && { titleEn: comic.titleEn }),
         description: comic.description || '',
         coverThumbnailUrl: coverImage ? `/api/reader/cover-thumbnail/${comic.id}` : '',
         level: comic.level || 'beginner',
@@ -129,6 +130,7 @@ router.get('/catalog', async (req, res) => {
         // Include collection info for grouping
         ...(comic.collectionId && { collectionId: comic.collectionId }),
         ...(comic.collectionTitle && { collectionTitle: comic.collectionTitle }),
+        ...(collection?.titleEn && { collectionTitleEn: collection.titleEn }),
         ...(comic.episodeNumber && { episodeNumber: comic.episodeNumber }),
         ...(collection?.description && { collectionDescription: collection.description }),
         ...(collection?.coverImage && { collectionCoverThumbnailUrl: `/api/reader/collection-thumbnail/${comic.collectionId}` })
