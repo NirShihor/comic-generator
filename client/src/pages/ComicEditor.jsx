@@ -209,6 +209,9 @@ function ComicEditor() {
       if (response.data.collectionId) {
         try {
           const colRes = await api.get(`/collections/${response.data.collectionId}`);
+          if (colRes.data.titleEn) {
+            setComic(prev => ({ ...prev, collectionTitleEn: colRes.data.titleEn }));
+          }
           setCollectionDescription(colRes.data.description || '');
           setCollectionCoverImage(colRes.data.coverImage || '');
           setCollectionCoverPrompt(colRes.data.coverPrompt || '');
@@ -354,12 +357,14 @@ function ComicEditor() {
       if (settingsSource === 'collection' && settingsCollectionId) {
         await api.put(`/collections/${settingsCollectionId}`, {
           title: comic.collectionTitle || '',
+          titleEn: comic.collectionTitleEn || '',
           promptSettings: data
         });
         if (!silent) alert('Collection settings saved! (shared across all episodes)');
       } else if (comic.collectionId && settingsSource === 'comic') {
         await api.put(`/collections/${comic.collectionId}`, {
           title: comic.collectionTitle || '',
+          titleEn: comic.collectionTitleEn || '',
           promptSettings: data
         });
         setSettingsSource('collection');
@@ -1087,6 +1092,14 @@ function ComicEditor() {
             )}
           </div>
           <h1>{comic.title}</h1>
+          <button
+            type="button"
+            onClick={() => navigator.clipboard?.writeText(id)}
+            title="Click to copy — use with ./sync-store.sh"
+            style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#888', background: 'rgba(255,255,255,0.06)', border: '1px solid #444', borderRadius: '4px', padding: '0.15rem 0.4rem', cursor: 'pointer', marginBottom: '0.4rem' }}
+          >
+            {id} 📋
+          </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <p style={{ color: '#888', margin: 0 }}>{comic.description}</p>
             <select
@@ -2302,6 +2315,18 @@ function ComicEditor() {
                 </span>
               )}
             </div>
+            {comic.collectionId && (
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Collection English Title (optional)</label>
+                <input
+                  type="text"
+                  value={comic.collectionTitleEn || ''}
+                  onChange={(e) => setComic({ ...comic, collectionTitleEn: e.target.value || undefined })}
+                  placeholder="e.g. The Visitor"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+                />
+              </div>
+            )}
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#555' }}>Episode Number</label>
               <input
@@ -2584,6 +2609,7 @@ function ComicEditor() {
                       await api.put(`/collections/${comic.collectionId}`, {
                         id: comic.collectionId,
                         title: comic.collectionTitle,
+                        titleEn: comic.collectionTitleEn || '',
                         description: collectionDescription,
                         coverImage: collectionCoverImage,
                         coverPrompt: collectionCoverPrompt

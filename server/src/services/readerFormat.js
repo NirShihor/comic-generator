@@ -276,6 +276,10 @@ function transformToReaderFormat(comic, comicSlug) {
       ...(page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage && {
         noTextImage: `${comicSlug}_p${page.pageNumber}_no_text`
       }),
+      // Empty-bubbles variant (bubbles drawn, text blank) for practice modes
+      ...(page.emptyBubblesImage && {
+        emptyBubblesImage: `${comicSlug}_p${page.pageNumber}_empty_bubbles`
+      }),
       ...(pageHotspots.length > 0 && { hotspots: pageHotspots }),
       panels: (page.panels || []).filter(p => !p.skipInReader).map(panel => {
         const panelNum = panel.panelOrder;
@@ -424,6 +428,7 @@ function transformToReaderFormat(comic, comicSlug) {
   return {
     id: `comic-${comicSlug}`,
     title: comic.title,
+    ...(comic.titleEn && { titleEn: comic.titleEn }),
     description: comic.description || '',
     coverImage: `${comicSlug}_cover`,
     level: comic.level || 'beginner',

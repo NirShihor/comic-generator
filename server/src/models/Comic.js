@@ -180,6 +180,7 @@ const PageSchema = new mongoose.Schema({
   masterImage: String,
   originalMasterImage: String,
   bakedImage: String,
+  emptyBubblesImage: String,   // bubbles drawn but text blank — for practice modes
   noFloatImage: String,
   lines: [LineSchema],
   // Legacy format support
@@ -220,6 +221,7 @@ const ComicSchema = new mongoose.Schema({
   locked: { type: Boolean, default: true },
   published: { type: Boolean, default: false },
   title: { type: String, required: true },
+  titleEn: String,   // optional English title, shown under the Spanish in the reader
   description: String,
   level: { type: String, enum: ['beginner', 'intermediate', 'advanced'], default: 'beginner' },
   language: { type: String, default: 'es' },

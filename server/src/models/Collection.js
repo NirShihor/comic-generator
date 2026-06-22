@@ -26,6 +26,7 @@ const VoiceSchema = new mongoose.Schema({
 const CollectionSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
   title: String,
+  titleEn: String,   // optional English title, shown under the Spanish in the reader
   description: String,
   coverImage: String,
   coverPrompt: String,
