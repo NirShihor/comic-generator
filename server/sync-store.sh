@@ -63,7 +63,9 @@ for dir in $dirs; do
   id=$(dirname "$dir")
   tarfile="/tmp/sync-$id.tar"
   echo "--- $id"
-  tar -cf "$tarfile" "$dir"
+  # COPYFILE_DISABLE stops macOS tar from adding ._ AppleDouble sidecar files,
+  # which otherwise pollute the export dir on the volume.
+  COPYFILE_DISABLE=1 tar -cf "$tarfile" "$dir"
   echo "  uploading $(du -h "$tarfile" | cut -f1 | tr -d ' ') over HTTPS..."
   retry curl -sS --fail-with-body --max-time 1800 \
     -H "Cookie: auth_token=$token" \

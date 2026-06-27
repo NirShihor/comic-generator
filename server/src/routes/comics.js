@@ -8,6 +8,7 @@ const sharp = require('sharp');
 const Comic = require('../models/Comic');
 const ArchivedPage = require('../models/ArchivedPage');
 const { sanitizeTitle, sanitizeWordForFilename, transformToReaderFormat, computePanelCorners } = require('../services/readerFormat');
+const { objectStoreEnabled, uploadBundle } = require('../services/objectStore');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
@@ -1432,12 +1433,66 @@ router.post('/:id/upload-bundle', bundleUpload.single('bundle'), async (req, res
     });
     const sizeMB = Math.round(req.file.size / (1024 * 1024) * 10) / 10;
     console.log(`[upload-bundle] ${id}: extracted ${sizeMB} MB into ${exportDir}`);
-    res.json({ success: true, id, sizeMB });
+
+    // Mirror the prebuilt zip to object storage (Tigris) so the reader can
+    // download it from the CDN edge instead of streaming from this machine.
+    let mirrored = false;
+    if (objectStoreEnabled) {
+      try {
+        const files = await fs.readdir(exportDir);
+        const zipFile = files.find(f => f.endsWith('.zip') && !f.startsWith('._'));
+        if (zipFile) {
+          await uploadBundle(id, path.join(exportDir, zipFile));
+          mirrored = true;
+          console.log(`[upload-bundle] ${id}: mirrored ${zipFile} to object storage`);
+        } else {
+          console.warn(`[upload-bundle] ${id}: no .zip in export dir to mirror`);
+        }
+      } catch (e) {
+        console.warn(`[upload-bundle] ${id}: object-store mirror failed: ${e.message}`);
+      }
+    }
+
+    res.json({ success: true, id, sizeMB, mirrored });
   } catch (err) {
     console.error(`[upload-bundle] ${id} failed:`, err.message);
     res.status(500).json({ error: err.message });
   } finally {
     await fs.unlink(tarPath).catch(() => {});
+  }
+});
+
+// One-shot backfill: mirror every comic's existing prebuilt zip from the volume
+// to object storage, so already-synced comics get the CDN fast path without
+// having to re-sync each one. Behind the same auth as the rest of /api/comics.
+router.post('/mirror-bundles', async (req, res) => {
+  if (!objectStoreEnabled) {
+    return res.status(400).json({ error: 'Object storage not configured' });
+  }
+  try {
+    const entries = await fs.readdir(PROJECTS_DIR, { withFileTypes: true });
+    const results = [];
+    for (const e of entries) {
+      if (!e.isDirectory() || !/^comic-/.test(e.name)) continue;
+      const exportDir = path.join(PROJECTS_DIR, e.name, 'export');
+      let files;
+      try { files = await fs.readdir(exportDir); } catch { continue; }
+      const zipFile = files.find(f => f.endsWith('.zip') && !f.startsWith('._'));
+      if (!zipFile) { results.push({ id: e.name, ok: false, error: 'no .zip', files }); continue; }
+      try {
+        const zipPath = path.join(exportDir, zipFile);
+        const st = await fs.stat(zipPath);
+        await uploadBundle(e.name, zipPath);
+        results.push({ id: e.name, ok: true, zip: zipFile, bytes: st.size });
+        console.log(`[mirror-bundles] mirrored ${e.name}/${zipFile} (${st.size} bytes)`);
+      } catch (err) {
+        results.push({ id: e.name, ok: false, error: err.message });
+        console.warn(`[mirror-bundles] ${e.name} failed: ${err.message}`);
+      }
+    }
+    res.json({ mirrored: results.filter(r => r.ok).length, total: results.length, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

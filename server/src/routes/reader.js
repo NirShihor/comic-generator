@@ -9,6 +9,7 @@ const Collection = require('../models/Collection');
 const { sanitizeTitle, transformToReaderFormat } = require('../services/readerFormat');
 const { generateFlowReply } = require('../services/flowPractice');
 const { generateSpeech, generateSpeechTimed } = require('../services/tts');
+const { objectStoreEnabled, bundleExists, presignedBundleUrl } = require('../services/objectStore');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 
@@ -250,6 +251,21 @@ router.get('/comics/:id', async (req, res) => {
 router.get('/comics/:id/bundle', async (req, res) => {
   console.log(`[BUNDLE] Request received for comic: ${req.params.id}`);
   try {
+    // Fast path: if the bundle is mirrored to object storage, redirect there so
+    // the download comes from the Tigris CDN edge near the user. Older comics
+    // not yet re-synced fall through to streaming from the volume below.
+    if (objectStoreEnabled) {
+      try {
+        if (await bundleExists(req.params.id)) {
+          const url = await presignedBundleUrl(req.params.id, 3600);
+          console.log(`[BUNDLE] Redirecting ${req.params.id} to object storage`);
+          return res.redirect(302, url);
+        }
+      } catch (e) {
+        console.warn(`[BUNDLE] object-store check failed, serving from volume: ${e.message}`);
+      }
+    }
+
     const comic = await Comic.findOne({ id: req.params.id });
     if (!comic) {
       return res.status(404).json({ error: 'Comic not found' });
