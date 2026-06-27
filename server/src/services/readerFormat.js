@@ -431,6 +431,8 @@ function transformToReaderFormat(comic, comicSlug) {
     ...(comic.titleEn && { titleEn: comic.titleEn }),
     description: comic.description || '',
     coverImage: `${comicSlug}_cover`,
+    ...(comic.cover?.landscapeImage && { coverLandscape: `${comicSlug}_cover_landscape` }),
+    ...(comic.cover?.bannerTitlePosition && { bannerTitlePosition: comic.cover.bannerTitlePosition }),
     level: comic.level || 'beginner',
     totalPages: pages.length,
     estimatedMinutes: pages.length * 2,

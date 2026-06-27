@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs').promises;
 const path = require('path');
+const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
 const Comic = require('../models/Comic');
@@ -34,9 +35,62 @@ async function cropAndSaveScene(sourceImagePath, outputPath, region, imageWidth,
   }
 }
 
-// Convert a source image to JPEG and save to outputPath
-async function convertToJpeg(sourcePath, outputPath) {
-  await sharp(sourcePath).jpeg({ quality: 85 }).toFile(outputPath);
+// Convert a source image to JPEG and save to outputPath.
+// Caps width at maxWidth (default 1024) so exported art matches the reader's
+// display resolution — the raw AI masters are 2048px, which is 4× the pixels a
+// phone ever shows and bloats the download bundle for no visible benefit.
+async function convertToJpeg(sourcePath, outputPath, maxWidth = 1024) {
+  let pipe = sharp(sourcePath);
+  if (maxWidth) pipe = pipe.resize(maxWidth, null, { withoutEnlargement: true });
+  await pipe.jpeg({ quality: 85 }).toFile(outputPath);
+}
+
+// Like convertToJpeg, but bakes in brightness/contrast/saturation adjustments
+// (each 1 = unchanged), so the values match the CSS-filter preview in the editor.
+async function convertToJpegAdjusted(sourcePath, outputPath, adj = {}) {
+  const brightness = adj.brightness ?? 1;
+  const contrast = adj.contrast ?? 1;
+  const saturation = adj.saturation ?? 1;
+  const zoom = adj.zoom ?? 1;
+  const cropX = adj.cropX ?? 0;   // -1 (left) .. 1 (right)
+  const cropY = adj.cropY ?? 0;   // -1 (up)   .. 1 (down)
+  const edgeTrim = adj.edgeTrim ?? 0;   // fraction trimmed off each edge
+
+  let pipe = sharp(sourcePath);
+
+  // Zoom + pan: crop a smaller window (zoom) positioned by cropX/cropY, then
+  // resize back to the original dimensions. Panning only applies when zoomed in.
+  if (zoom && zoom > 1) {
+    const meta = await sharp(sourcePath).metadata();
+    const w = meta.width || 0, h = meta.height || 0;
+    if (w && h) {
+      const vw = Math.max(1, Math.round(w / zoom));
+      const vh = Math.max(1, Math.round(h / zoom));
+      const clamp = (v, max) => Math.min(Math.max(v, 0), max);
+      const left = clamp(Math.round((w - vw) * (cropX + 1) / 2), w - vw);
+      const top = clamp(Math.round((h - vh) * (cropY + 1) / 2), h - vh);
+      pipe = pipe.extract({ left, top, width: vw, height: vh }).resize(w, h);
+    }
+  } else if (edgeTrim > 0 && edgeTrim < 0.45) {
+    // Trim a fixed fraction off every edge, then resize back — removes the thin
+    // AI-drawn border that the cover otherwise keeps (pages already get this).
+    const meta = await sharp(sourcePath).metadata();
+    const w = meta.width || 0, h = meta.height || 0;
+    if (w && h) {
+      const tx = Math.round(w * edgeTrim);
+      const ty = Math.round(h * edgeTrim);
+      pipe = pipe.extract({ left: tx, top: ty, width: w - 2 * tx, height: h - 2 * ty }).resize(w, h);
+    }
+  }
+
+  if (brightness !== 1 || saturation !== 1) {
+    pipe = pipe.modulate({ brightness, saturation });
+  }
+  if (contrast !== 1) {
+    // out = contrast*in + 128*(1-contrast) → contrast pivots around mid-grey.
+    pipe = pipe.linear(contrast, 128 * (1 - contrast));
+  }
+  await pipe.jpeg({ quality: 85 }).toFile(outputPath);
 }
 
 async function ensureProjectDirs(comicId) {
@@ -700,15 +754,50 @@ router.post('/:id/export-full', async (req, res) => {
     const projectAudioDir = path.join(PROJECTS_DIR, req.params.id, 'audio');
 
     if (comicObj.cover?.image) {
-      const coverImage = comicObj.cover.bakedImage || comicObj.cover.image;
+      let coverImage = comicObj.cover.bakedImage || comicObj.cover.image;
+      // The cover's baked file (art + title bubble) is created reliably by the
+      // editor, but the `cover.bakedImage` DB field doesn't always persist (race
+      // with cover re-saves). So prefer the baked file on disk when it's at least
+      // as new as the cover art — this is what reliably includes the title bubble.
+      try {
+        const bakedDiskPath = path.join(PROJECTS_DIR, req.params.id, 'images', `${req.params.id}_cover_baked.png`);
+        const srcDiskPath = path.join(__dirname, '../..', (comicObj.cover.image || '').split('?')[0]);
+        const [bakedStat, srcStat] = await Promise.all([fs.stat(bakedDiskPath), fs.stat(srcDiskPath)]);
+        if (bakedStat.mtimeMs >= srcStat.mtimeMs) {
+          coverImage = `/projects/${req.params.id}/images/${req.params.id}_cover_baked.png`;
+        }
+      } catch (e) {
+        // No baked file (or art missing) — fall back to the chosen coverImage.
+      }
       const cleanCoverImage = coverImage.split('?')[0];
       const coverSourcePath = path.join(__dirname, '../..', cleanCoverImage);
       const coverDestPath = path.join(imagesDir, `${comicSlug}_cover.jpg`);
       try {
-        await convertToJpeg(coverSourcePath, coverDestPath);
+        // Trim ~4% off each edge to drop the thin AI-drawn border the cover keeps.
+        await convertToJpegAdjusted(coverSourcePath, coverDestPath, { edgeTrim: 0.04 });
         copiedImages.push(`${comicSlug}_cover.jpg`);
       } catch (e) {
         console.log('Cover image not found:', coverSourcePath);
+      }
+    }
+
+    // Copy the landscape cover (reader detail-view banner) if one was generated.
+    if (comicObj.cover?.landscapeImage) {
+      const cleanLandscape = comicObj.cover.landscapeImage.split('?')[0];
+      const landscapeSourcePath = path.join(__dirname, '../..', cleanLandscape);
+      const landscapeDestPath = path.join(imagesDir, `${comicSlug}_cover_landscape.jpg`);
+      try {
+        await convertToJpegAdjusted(landscapeSourcePath, landscapeDestPath, {
+          brightness: comicObj.cover.landscapeBrightness,
+          contrast: comicObj.cover.landscapeContrast,
+          saturation: comicObj.cover.landscapeSaturation,
+          zoom: comicObj.cover.landscapeZoom,
+          cropX: comicObj.cover.landscapeCropX,
+          cropY: comicObj.cover.landscapeCropY
+        });
+        copiedImages.push(`${comicSlug}_cover_landscape.jpg`);
+      } catch (e) {
+        console.log('Landscape cover image not found:', landscapeSourcePath);
       }
     }
 
@@ -780,7 +869,7 @@ router.post('/:id/export-full', async (req, res) => {
                     console.log('Image bubble source not found, skipping:', imgPath);
                   }
                 }
-                await sharp(rawMasterPath).composite(composites).jpeg({ quality: 85 }).toFile(noTextDestPath);
+                await sharp(rawMasterPath).composite(composites).resize(1024, null, { withoutEnlargement: true }).jpeg({ quality: 85 }).toFile(noTextDestPath);
               } else {
                 // No image bubbles — just convert the raw master
                 await convertToJpeg(rawMasterPath, noTextDestPath);
@@ -1301,6 +1390,54 @@ router.delete('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
     res.json({ success: true, message: 'Panel deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Bundle upload (used by sync-store.sh to push exports to the fly volume over
+// HTTPS instead of the flaky WireGuard sftp tunnel). Behind the same auth
+// cookie as the rest of /api/comics. The uploaded tar contains
+// `comic-<id>/export/...` entries; we extract it into PROJECTS_DIR.
+// ---------------------------------------------------------------------------
+const BUNDLE_TMP_DIR = path.join(PROJECTS_DIR, '.upload-tmp');
+const bundleUpload = multer({
+  storage: multer.diskStorage({
+    destination: async (req, file, cb) => {
+      try { await fs.mkdir(BUNDLE_TMP_DIR, { recursive: true }); cb(null, BUNDLE_TMP_DIR); }
+      catch (e) { cb(e); }
+    },
+    filename: (req, file, cb) => cb(null, `bundle-${req.params.id}-${Date.now()}.tar`),
+  }),
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1 GB ceiling
+});
+
+router.post('/:id/upload-bundle', bundleUpload.single('bundle'), async (req, res) => {
+  const { execFile } = require('child_process');
+  const id = req.params.id;
+  if (!/^comic-[A-Za-z0-9_-]+$/.test(id)) {
+    if (req.file) await fs.unlink(req.file.path).catch(() => {});
+    return res.status(400).json({ error: 'Invalid comic id' });
+  }
+  if (!req.file) return res.status(400).json({ error: 'No bundle uploaded (expected field "bundle")' });
+
+  const tarPath = req.file.path;
+  try {
+    // Replace the existing export atomically-ish: extract first, then swap.
+    const exportDir = path.join(PROJECTS_DIR, id, 'export');
+    await fs.rm(exportDir, { recursive: true, force: true });
+    await new Promise((resolve, reject) => {
+      execFile('tar', ['-xf', tarPath, '-C', PROJECTS_DIR], { maxBuffer: 1024 * 1024 * 64 }, (err, _o, stderr) => {
+        if (err) reject(new Error(stderr || err.message)); else resolve();
+      });
+    });
+    const sizeMB = Math.round(req.file.size / (1024 * 1024) * 10) / 10;
+    console.log(`[upload-bundle] ${id}: extracted ${sizeMB} MB into ${exportDir}`);
+    res.json({ success: true, id, sizeMB });
+  } catch (err) {
+    console.error(`[upload-bundle] ${id} failed:`, err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    await fs.unlink(tarPath).catch(() => {});
   }
 });
 
