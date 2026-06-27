@@ -2887,6 +2887,9 @@ function PageEditor({ isCover = false }) {
     // Single panel content
     prompt += `SINGLE PANEL IMAGE\n\n`;
     prompt += `This is Panel ${panelIndex + 1} of ${panels.length} on ${isCover ? 'the COVER' : `PAGE ${page.pageNumber}`}.\n\n`;
+    if (isCover) {
+      prompt += `IMPORTANT: this is a full-bleed cover — the artwork must FILL THE ENTIRE FRAME edge to edge, with NO borders, frames, margins, or empty/white space around the image.\n\n`;
+    }
     prompt += `Panel Content:\n${stripHighlightMarkers(panel.content) || '(No content specified)'}\n\n`;
 
     // Per-panel framing options

@@ -21,7 +21,8 @@ primary_region = 'iad'
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 0
+  # Keep one machine always warm so comic downloads never wait on a cold boot.
+  min_machines_running = 1
 
   [http_service.concurrency]
     type = 'requests'

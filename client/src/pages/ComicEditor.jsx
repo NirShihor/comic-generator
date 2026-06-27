@@ -31,6 +31,21 @@ function ComicEditor() {
   const [collectionCoverContrast, setCollectionCoverContrast] = useState(1);
   const [collectionCoverSaturation, setCollectionCoverSaturation] = useState(1);
   const collectionCoverAdjTimer = useRef(null);
+  // Per-comic landscape cover (reader detail-view banner)
+  const [coverLandscapeImage, setCoverLandscapeImage] = useState('');
+  const [coverLandscapePrompt, setCoverLandscapePrompt] = useState('');
+  const [coverLandscapeGenerating, setCoverLandscapeGenerating] = useState(false);
+  const [coverLandscapeRefs, setCoverLandscapeRefs] = useState([]);
+  const [bannerTitlePosition, setBannerTitlePosition] = useState('bottomLeft');
+  const [coverLandscapeBrightness, setCoverLandscapeBrightness] = useState(1);
+  const [coverLandscapeContrast, setCoverLandscapeContrast] = useState(1);
+  const [coverLandscapeSaturation, setCoverLandscapeSaturation] = useState(1);
+  const [coverLandscapeLightbox, setCoverLandscapeLightbox] = useState(false);
+  const [coverLandscapeZoom, setCoverLandscapeZoom] = useState(1);
+  const [coverLandscapeCropX, setCoverLandscapeCropX] = useState(0);
+  const [coverLandscapeCropY, setCoverLandscapeCropY] = useState(0);
+  const coverLandscapeAdjTimer = useRef(null);
+  const [refLightbox, setRefLightbox] = useState(null);  // reference image path to enlarge
   const [settingsTab, setSettingsTab] = useState('style');
   const [saving, setSaving] = useState(false);
   const settingsRef = useRef(DEFAULT_SETTINGS);
@@ -167,6 +182,17 @@ function ComicEditor() {
     try {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
+
+      // Load the per-comic landscape cover (reader detail-view banner)
+      setCoverLandscapeImage(response.data.cover?.landscapeImage || '');
+      setCoverLandscapePrompt(response.data.cover?.landscapePrompt || '');
+      setBannerTitlePosition(response.data.cover?.bannerTitlePosition || 'bottomLeft');
+      setCoverLandscapeBrightness(response.data.cover?.landscapeBrightness ?? 1);
+      setCoverLandscapeContrast(response.data.cover?.landscapeContrast ?? 1);
+      setCoverLandscapeSaturation(response.data.cover?.landscapeSaturation ?? 1);
+      setCoverLandscapeZoom(response.data.cover?.landscapeZoom ?? 1);
+      setCoverLandscapeCropX(response.data.cover?.landscapeCropX ?? 0);
+      setCoverLandscapeCropY(response.data.cover?.landscapeCropY ?? 0);
 
       // Load style enforcer data
       if (response.data.styleEnforcer) {
@@ -347,6 +373,19 @@ function ComicEditor() {
           ...adjustments
         }).catch(err => console.error('Failed to save cover adjustments:', err));
       }
+    }, 500);
+  };
+
+  // Debounced save for the landscape cover's brightness/contrast/saturation.
+  const saveLandscapeCoverAdj = (adjustments) => {
+    clearTimeout(coverLandscapeAdjTimer.current);
+    coverLandscapeAdjTimer.current = setTimeout(() => {
+      setComic(prev => {
+        const updatedCover = { ...(prev.cover || {}), ...adjustments };
+        api.put(`/comics/${id}`, { cover: updatedCover })
+          .catch(err => console.error('Failed to save landscape cover adjustments:', err));
+        return { ...prev, cover: updatedCover };
+      });
     }, 500);
   };
 
@@ -2282,6 +2321,289 @@ function ComicEditor() {
             </button>
           </div>
 
+          {/* Cover — Landscape (Reader detail-view banner) */}
+          <div style={{
+            background: '#f8f9fa',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            marginBottom: '1.5rem'
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '0.3rem', color: '#333' }}>Cover — Landscape (Reader banner)</h3>
+            <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              A wide 3:2 image shown as the banner at the top of this comic in the Reader. Generated like the cover image.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+              {coverLandscapeImage && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div
+                    onClick={() => setCoverLandscapeLightbox(true)}
+                    title="Click to enlarge"
+                    style={{ width: 220, height: 147, borderRadius: '6px', border: '1px solid #ccc', overflow: 'hidden', cursor: 'pointer' }}
+                  >
+                    <img
+                      src={`${api.defaults.baseURL.replace('/api', '')}${coverLandscapeImage}?t=${Date.now()}`}
+                      alt="Landscape cover"
+                      style={{
+                        width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                        transformOrigin: 'center',
+                        transform: `scale(${coverLandscapeZoom}) translate(${coverLandscapeZoom > 1 ? (-coverLandscapeCropX * (coverLandscapeZoom - 1) / (2 * coverLandscapeZoom) * 100) : 0}%, ${coverLandscapeZoom > 1 ? (-coverLandscapeCropY * (coverLandscapeZoom - 1) / (2 * coverLandscapeZoom) * 100) : 0}%)`,
+                        filter: `brightness(${coverLandscapeBrightness}) contrast(${coverLandscapeContrast}) saturate(${coverLandscapeSaturation})`
+                      }}
+                    />
+                  </div>
+                  {/* Brightness / contrast / saturation controls */}
+                  <div style={{ width: 220 }}>
+                    <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.3rem' }}>
+                      <button
+                        onClick={() => {
+                          const newSat = coverLandscapeSaturation === 0 ? 1 : 0;
+                          setCoverLandscapeSaturation(newSat);
+                          saveLandscapeCoverAdj({ landscapeSaturation: newSat });
+                        }}
+                        style={{ padding: '2px 6px', fontSize: '0.65rem', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', background: coverLandscapeSaturation === 0 ? '#8e44ad' : '#fff', color: coverLandscapeSaturation === 0 ? '#fff' : '#333' }}
+                      >B&amp;W</button>
+                      {(coverLandscapeBrightness !== 1 || coverLandscapeContrast !== 1 || coverLandscapeSaturation !== 1) && (
+                        <button
+                          onClick={() => {
+                            setCoverLandscapeBrightness(1); setCoverLandscapeContrast(1); setCoverLandscapeSaturation(1);
+                            saveLandscapeCoverAdj({ landscapeBrightness: 1, landscapeContrast: 1, landscapeSaturation: 1 });
+                          }}
+                          style={{ padding: '2px 6px', fontSize: '0.65rem', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', background: '#fff', color: '#333' }}
+                        >Reset</button>
+                      )}
+                    </div>
+                    {[
+                      { label: 'Bright', value: coverLandscapeBrightness, set: setCoverLandscapeBrightness, field: 'landscapeBrightness', min: 50, max: 300 },
+                      { label: 'Contrast', value: coverLandscapeContrast, set: setCoverLandscapeContrast, field: 'landscapeContrast', min: 50, max: 150 },
+                      { label: 'Saturtn', value: coverLandscapeSaturation, set: setCoverLandscapeSaturation, field: 'landscapeSaturation', min: 0, max: 200 }
+                    ].map(s => (
+                      <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.15rem' }}>
+                        <span style={{ fontSize: '0.6rem', color: '#888', width: '40px' }}>{s.label}</span>
+                        <input type="range" min={s.min} max={s.max} value={Math.round(s.value * 100)}
+                          onChange={(e) => { const v = parseInt(e.target.value) / 100; s.set(v); saveLandscapeCoverAdj({ [s.field]: v }); }}
+                          style={{ flex: 1, height: '12px' }}
+                        />
+                        <span style={{ fontSize: '0.6rem', color: '#888', width: '28px', textAlign: 'right' }}>{Math.round(s.value * 100)}%</span>
+                      </div>
+                    ))}
+
+                    {/* Zoom + pan (move up/down/left/right) */}
+                    <div style={{ marginTop: '0.4rem', borderTop: '1px solid #eee', paddingTop: '0.4rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.25rem' }}>
+                        <span style={{ fontSize: '0.6rem', color: '#888', width: '40px' }}>Zoom</span>
+                        <input type="range" min={100} max={300} value={Math.round(coverLandscapeZoom * 100)}
+                          onChange={(e) => { const v = parseInt(e.target.value) / 100; setCoverLandscapeZoom(v); saveLandscapeCoverAdj({ landscapeZoom: v }); }}
+                          style={{ flex: 1, height: '12px' }}
+                        />
+                        <span style={{ fontSize: '0.6rem', color: '#888', width: '28px', textAlign: 'right' }}>{Math.round(coverLandscapeZoom * 100)}%</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.6rem', color: '#888', width: '40px' }}>Move</span>
+                        {[
+                          { label: '←', dx: -0.25, dy: 0 },
+                          { label: '→', dx: 0.25, dy: 0 },
+                          { label: '↑', dx: 0, dy: -0.25 },
+                          { label: '↓', dx: 0, dy: 0.25 }
+                        ].map(b => (
+                          <button key={b.label} disabled={coverLandscapeZoom <= 1}
+                            onClick={() => {
+                              const nx = Math.min(1, Math.max(-1, coverLandscapeCropX + b.dx));
+                              const ny = Math.min(1, Math.max(-1, coverLandscapeCropY + b.dy));
+                              setCoverLandscapeCropX(nx); setCoverLandscapeCropY(ny);
+                              saveLandscapeCoverAdj({ landscapeCropX: nx, landscapeCropY: ny });
+                            }}
+                            style={{ padding: '2px 8px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '3px', cursor: coverLandscapeZoom <= 1 ? 'default' : 'pointer', background: '#fff', color: coverLandscapeZoom <= 1 ? '#ccc' : '#333' }}
+                          >{b.label}</button>
+                        ))}
+                        {(coverLandscapeZoom !== 1 || coverLandscapeCropX !== 0 || coverLandscapeCropY !== 0) && (
+                          <button
+                            onClick={() => {
+                              setCoverLandscapeZoom(1); setCoverLandscapeCropX(0); setCoverLandscapeCropY(0);
+                              saveLandscapeCoverAdj({ landscapeZoom: 1, landscapeCropX: 0, landscapeCropY: 0 });
+                            }}
+                            style={{ padding: '2px 6px', fontSize: '0.65rem', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', background: '#fff', color: '#333' }}
+                          >Reset</button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#555' }}>Landscape Prompt</label>
+                <textarea
+                  value={coverLandscapePrompt}
+                  onChange={(e) => setCoverLandscapePrompt(e.target.value)}
+                  placeholder="Describe the wide banner image, e.g. 'A cinematic wide shot of the train cutting through the night countryside, the two leads silhouetted in a lit carriage window...'"
+                  rows={3}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', resize: 'vertical', fontSize: '0.85rem' }}
+                />
+                {/* Reference image selector */}
+                {(() => {
+                  const availableChars = settings.characters?.filter(c => c.image) || [];
+                  const availableStyles = (settings.styleBibleImages || []).filter(img => img.image);
+                  const hasMaster = !!settings.masterStyleImage;
+                  if (availableChars.length === 0 && availableStyles.length === 0 && !hasMaster) return null;
+                  const toggle = (img) => setCoverLandscapeRefs(prev => prev.includes(img) ? prev.filter(p => p !== img) : [...prev, img]);
+                  const chip = (src, label, key) => (
+                    <div key={key} style={{ position: 'relative', border: coverLandscapeRefs.includes(src) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', padding: '2px', textAlign: 'center' }}>
+                      <img onClick={() => toggle(src)} src={`${api.defaults.baseURL.replace('/api', '')}${src}`} alt={label} style={{ height: '60px', borderRadius: '4px', display: 'block', cursor: 'pointer' }} />
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setRefLightbox(`${api.defaults.baseURL.replace('/api', '')}${src}`); }}
+                        title="Enlarge"
+                        style={{ position: 'absolute', top: '4px', right: '4px', width: '18px', height: '18px', lineHeight: '16px', padding: 0, borderRadius: '4px', border: 'none', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.7rem', cursor: 'pointer' }}
+                      >⤢</button>
+                      <div style={{ fontSize: '0.65rem', color: '#666', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
+                    </div>
+                  );
+                  return (
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <small style={{ color: '#888' }}>Reference Images ({coverLandscapeRefs.length} selected)</small>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                        {hasMaster && chip(settings.masterStyleImage, 'Master', 'master')}
+                        {availableChars.map(c => chip(c.image, c.name, c.id))}
+                        {availableStyles.map((img, idx) => chip(img.image, img.name || `Style ${idx + 1}`, img.id || idx))}
+                      </div>
+                    </div>
+                  );
+                })()}
+                <button
+                  className="btn btn-primary"
+                  disabled={coverLandscapeGenerating || !coverLandscapePrompt.trim()}
+                  onClick={async () => {
+                    setCoverLandscapeGenerating(true);
+                    try {
+                      let fullPrompt = '';
+                      if (settings.styleBible) fullPrompt += `ART STYLE GUIDE:\n${settings.styleBible}\n\n`;
+                      if (settings.cameraAndInks) fullPrompt += `CAMERA & INKS:\n${settings.cameraAndInks}\n\n`;
+                      const selectedCharImages = coverLandscapeRefs.filter(ref => settings.characters?.some(c => c.image === ref));
+                      const chars = settings.characters?.filter(c => c.name && c.description && (!c.image || selectedCharImages.includes(c.image))) || [];
+                      if (chars.length > 0) {
+                        fullPrompt += `CHARACTERS:\n`;
+                        chars.forEach(c => { fullPrompt += `- ${c.name}: ${c.description}\n`; });
+                        fullPrompt += '\n';
+                      }
+                      if (settings.doNotInclude) fullPrompt += `DO NOT INCLUDE: ${settings.doNotInclude}\n\n`;
+                      fullPrompt += `SCENE:\n${coverLandscapePrompt}\n\nThis is a LANDSCAPE BANNER IMAGE for a comic, shown as a wide header at the top of the comic. Make it dramatic and cinematic, composed for a horizontal 3:2 banner with the key subject framed toward the upper portion. Landscape orientation. IMPORTANT: the artwork must FILL THE ENTIRE FRAME edge to edge (full bleed) — do NOT add any borders, frames, margins, or empty/white space around the image.`;
+
+                      const referenceImages = [...coverLandscapeRefs];
+                      const hasMasterSelected = settings.masterStyleImage && coverLandscapeRefs.includes(settings.masterStyleImage);
+
+                      const response = await api.post('/images/generate-panel', {
+                        prompt: fullPrompt,
+                        panelId: `comic-cover-landscape-${id}`,
+                        aspectRatio: 'landscape',
+                        referenceImages,
+                        linkedPanelImages: [],
+                        provider: 'openai',
+                        openaiQuality: 'high',
+                        hasMasterStyleImage: !!hasMasterSelected
+                      }, { timeout: 600000 });
+
+                      const genData = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+                      if (genData.error) throw new Error(genData.error);
+                      if (!genData.path) throw new Error('Image generation did not return a file path');
+
+                      const saveRes = await api.post('/images/save-to-project', {
+                        comicId: id,
+                        filename: genData.path.split('/').pop(),
+                        imageType: 'cover-landscape'
+                      });
+                      const finalPath = `${saveRes.data.path}`;
+                      setCoverLandscapeImage(finalPath);
+
+                      const updatedCover = { ...(comic.cover || {}), landscapeImage: finalPath, landscapePrompt: coverLandscapePrompt };
+                      await api.put(`/comics/${id}`, { cover: updatedCover });
+                      setComic(prev => ({ ...prev, cover: updatedCover }));
+                    } catch (err) {
+                      console.error('Landscape cover generation failed:', err);
+                      alert('Failed to generate landscape cover: ' + (err.response?.data?.error || err.message));
+                    } finally {
+                      setCoverLandscapeGenerating(false);
+                    }
+                  }}
+                  style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', marginTop: '0.75rem' }}
+                >
+                  {coverLandscapeGenerating ? 'Generating…' : (coverLandscapeImage ? 'Regenerate Landscape Cover' : 'Generate Landscape Cover')}
+                </button>
+
+                <label
+                  className="btn btn-secondary"
+                  style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', marginTop: '0.75rem', marginLeft: '0.5rem', cursor: coverLandscapeGenerating ? 'default' : 'pointer', display: 'inline-block' }}
+                >
+                  Upload Image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={coverLandscapeGenerating}
+                    style={{ display: 'none' }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setCoverLandscapeGenerating(true);
+                      try {
+                        const formData = new FormData();
+                        formData.append('image', file);
+                        const up = await api.post('/images/upload', formData, {
+                          headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                        const saveRes = await api.post('/images/save-to-project', {
+                          comicId: id,
+                          filename: up.data.filename,
+                          imageType: 'cover-landscape'
+                        });
+                        const finalPath = `${saveRes.data.path}`;
+                        setCoverLandscapeImage(finalPath);
+                        const updatedCover = { ...(comic.cover || {}), landscapeImage: finalPath };
+                        await api.put(`/comics/${id}`, { cover: updatedCover });
+                        setComic(prev => ({ ...prev, cover: updatedCover }));
+                      } catch (err) {
+                        console.error('Landscape upload failed:', err);
+                        alert('Failed to upload landscape image: ' + (err.response?.data?.error || err.message));
+                      } finally {
+                        setCoverLandscapeGenerating(false);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+
+                <div style={{ marginTop: '0.75rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#555' }}>
+                    Title position on banner (in the Reader)
+                  </label>
+                  <select
+                    value={bannerTitlePosition}
+                    onChange={async (e) => {
+                      const pos = e.target.value;
+                      setBannerTitlePosition(pos);
+                      const updatedCover = { ...(comic.cover || {}), bannerTitlePosition: pos };
+                      setComic(prev => ({ ...prev, cover: updatedCover }));
+                      try {
+                        await api.put(`/comics/${id}`, { cover: updatedCover });
+                      } catch (err) {
+                        console.error('Failed to save banner title position:', err);
+                      }
+                    }}
+                    style={{ padding: '0.4rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.85rem' }}
+                  >
+                    <option value="topLeft">Top left</option>
+                    <option value="topRight">Top right</option>
+                    <option value="bottomLeft">Bottom left</option>
+                    <option value="bottomRight">Bottom right</option>
+                    <option value="center">Centered</option>
+                    <option value="hidden">Hidden (no title — art only)</option>
+                  </select>
+                  <p style={{ color: '#999', fontSize: '0.75rem', margin: '0.3rem 0 0' }}>
+                    Where the Reader places the title + level over the banner, so it doesn't cover the art.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Collection Settings */}
           <div style={{
             background: '#f8f9fa',
@@ -2426,10 +2748,10 @@ function ComicEditor() {
                                 <small style={{ color: '#aaa', fontSize: '0.7rem' }}>Master Style</small>
                                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.15rem' }}>
                                   <div
-                                    onClick={() => setCollectionCoverRefs(prev => prev.includes(settings.masterStyleImage) ? prev.filter(p => p !== settings.masterStyleImage) : [...prev, settings.masterStyleImage])}
-                                    style={{ border: collectionCoverRefs.includes(settings.masterStyleImage) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', cursor: 'pointer', padding: '2px', textAlign: 'center' }}
+                                    style={{ position: 'relative', border: collectionCoverRefs.includes(settings.masterStyleImage) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', padding: '2px', textAlign: 'center' }}
                                   >
-                                    <img src={`${api.defaults.baseURL.replace('/api', '')}${settings.masterStyleImage}`} alt="Master style" style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                                    <img onClick={() => setCollectionCoverRefs(prev => prev.includes(settings.masterStyleImage) ? prev.filter(p => p !== settings.masterStyleImage) : [...prev, settings.masterStyleImage])} src={`${api.defaults.baseURL.replace('/api', '')}${settings.masterStyleImage}`} alt="Master style" style={{ height: '60px', borderRadius: '4px', display: 'block', cursor: 'pointer' }} />
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setRefLightbox(`${api.defaults.baseURL.replace('/api', '')}${settings.masterStyleImage}`); }} title="Enlarge" style={{ position: 'absolute', top: '4px', right: '4px', width: '18px', height: '18px', lineHeight: '16px', padding: 0, borderRadius: '4px', border: 'none', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.7rem', cursor: 'pointer' }}>⤢</button>
                                     <div style={{ fontSize: '0.65rem', color: '#666' }}>Master</div>
                                   </div>
                                 </div>
@@ -2442,10 +2764,10 @@ function ComicEditor() {
                                   {availableChars.map(char => (
                                     <div
                                       key={char.id}
-                                      onClick={() => setCollectionCoverRefs(prev => prev.includes(char.image) ? prev.filter(p => p !== char.image) : [...prev, char.image])}
-                                      style={{ border: collectionCoverRefs.includes(char.image) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', cursor: 'pointer', padding: '2px', textAlign: 'center' }}
+                                      style={{ position: 'relative', border: collectionCoverRefs.includes(char.image) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', padding: '2px', textAlign: 'center' }}
                                     >
-                                      <img src={`${api.defaults.baseURL.replace('/api', '')}${char.image}`} alt={char.name} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                                      <img onClick={() => setCollectionCoverRefs(prev => prev.includes(char.image) ? prev.filter(p => p !== char.image) : [...prev, char.image])} src={`${api.defaults.baseURL.replace('/api', '')}${char.image}`} alt={char.name} style={{ height: '60px', borderRadius: '4px', display: 'block', cursor: 'pointer' }} />
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); setRefLightbox(`${api.defaults.baseURL.replace('/api', '')}${char.image}`); }} title="Enlarge" style={{ position: 'absolute', top: '4px', right: '4px', width: '18px', height: '18px', lineHeight: '16px', padding: 0, borderRadius: '4px', border: 'none', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.7rem', cursor: 'pointer' }}>⤢</button>
                                       <div style={{ fontSize: '0.65rem', color: '#666', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{char.name}</div>
                                     </div>
                                   ))}
@@ -2459,10 +2781,10 @@ function ComicEditor() {
                                   {availableStyles.map((img, idx) => (
                                     <div
                                       key={img.id || idx}
-                                      onClick={() => setCollectionCoverRefs(prev => prev.includes(img.image) ? prev.filter(p => p !== img.image) : [...prev, img.image])}
-                                      style={{ border: collectionCoverRefs.includes(img.image) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', cursor: 'pointer', padding: '2px', textAlign: 'center' }}
+                                      style={{ position: 'relative', border: collectionCoverRefs.includes(img.image) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', padding: '2px', textAlign: 'center' }}
                                     >
-                                      <img src={`${api.defaults.baseURL.replace('/api', '')}${img.image}`} alt={img.name || `Style ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                                      <img onClick={() => setCollectionCoverRefs(prev => prev.includes(img.image) ? prev.filter(p => p !== img.image) : [...prev, img.image])} src={`${api.defaults.baseURL.replace('/api', '')}${img.image}`} alt={img.name || `Style ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block', cursor: 'pointer' }} />
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); setRefLightbox(`${api.defaults.baseURL.replace('/api', '')}${img.image}`); }} title="Enlarge" style={{ position: 'absolute', top: '4px', right: '4px', width: '18px', height: '18px', lineHeight: '16px', padding: 0, borderRadius: '4px', border: 'none', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.7rem', cursor: 'pointer' }}>⤢</button>
                                       <div style={{ fontSize: '0.65rem', color: '#666', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.name || `Style ${idx + 1}`}</div>
                                     </div>
                                   ))}
@@ -3353,11 +3675,13 @@ function ComicEditor() {
                   <small style={{ color: '#888' }}>Characters</small>
                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                     {settings.characters.filter(c => c.image).map(char => (
-                      <div key={char.id} onClick={() => studioToggleRef(char.image)} style={{
+                      <div key={char.id} style={{
+                        position: 'relative',
                         border: studioRefImages.includes(char.image) ? '3px solid #27ae60' : '2px solid #ddd',
-                        borderRadius: '6px', cursor: 'pointer', padding: '2px', textAlign: 'center'
+                        borderRadius: '6px', padding: '2px', textAlign: 'center'
                       }}>
-                        <img src={`${char.image}`} alt={char.name} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                        <img onClick={() => studioToggleRef(char.image)} src={`${char.image}`} alt={char.name} style={{ height: '60px', borderRadius: '4px', display: 'block', cursor: 'pointer' }} />
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setRefLightbox(char.image); }} title="Enlarge" style={{ position: 'absolute', top: '4px', right: '4px', width: '18px', height: '18px', lineHeight: '16px', padding: 0, borderRadius: '4px', border: 'none', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.7rem', cursor: 'pointer' }}>⤢</button>
                         <div style={{ fontSize: '0.65rem', color: '#666', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{char.name}</div>
                       </div>
                     ))}
@@ -3370,11 +3694,13 @@ function ComicEditor() {
                   <small style={{ color: '#888' }}>Style Bible</small>
                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                     {settings.styleBibleImages.map((img, idx) => (
-                      <div key={idx} onClick={() => studioToggleRef(img)} style={{
+                      <div key={idx} style={{
+                        position: 'relative',
                         border: studioRefImages.includes(img) ? '3px solid #27ae60' : '2px solid #ddd',
-                        borderRadius: '6px', cursor: 'pointer', padding: '2px'
+                        borderRadius: '6px', padding: '2px'
                       }}>
-                        <img src={`${img}`} alt={`Style ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                        <img onClick={() => studioToggleRef(img)} src={`${img}`} alt={`Style ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block', cursor: 'pointer' }} />
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setRefLightbox(img); }} title="Enlarge" style={{ position: 'absolute', top: '4px', right: '4px', width: '18px', height: '18px', lineHeight: '16px', padding: 0, borderRadius: '4px', border: 'none', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: '0.7rem', cursor: 'pointer' }}>⤢</button>
                       </div>
                     ))}
                   </div>
@@ -3387,7 +3713,7 @@ function ComicEditor() {
                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                     {studioUploadedRefs.map((img, idx) => (
                       <div key={idx} style={{ position: 'relative', border: '2px solid #3498db', borderRadius: '6px', padding: '2px' }}>
-                        <img src={`${img}`} alt={`Upload ${idx + 1}`} style={{ height: '60px', borderRadius: '4px', display: 'block' }} />
+                        <img onClick={() => setRefLightbox(img)} src={`${img}`} alt={`Upload ${idx + 1}`} title="Enlarge" style={{ height: '60px', borderRadius: '4px', display: 'block', cursor: 'pointer' }} />
                         <button onClick={() => setStudioUploadedRefs(prev => prev.filter((_, i) => i !== idx))} style={{
                           position: 'absolute', top: '-6px', right: '-6px', background: '#e74c3c', color: '#fff',
                           border: 'none', borderRadius: '50%', width: '18px', height: '18px', fontSize: '0.7rem',
@@ -4164,6 +4490,68 @@ function ComicEditor() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reference Image Lightbox */}
+      {refLightbox && (
+        <div
+          onClick={() => setRefLightbox(null)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.85)', zIndex: 10000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', cursor: 'default' }}>
+            <img
+              src={refLightbox}
+              alt="Reference"
+              style={{ maxHeight: '90vh', maxWidth: '90vw', borderRadius: '8px' }}
+            />
+            <button
+              onClick={() => setRefLightbox(null)}
+              style={{
+                position: 'absolute', top: '-12px', right: '-12px',
+                background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%',
+                width: '30px', height: '30px', fontSize: '1.1rem', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}
+            >&times;</button>
+          </div>
+        </div>
+      )}
+
+      {/* Landscape Cover Lightbox */}
+      {coverLandscapeLightbox && coverLandscapeImage && (
+        <div
+          onClick={() => setCoverLandscapeLightbox(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.85)', zIndex: 10000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer'
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', cursor: 'default' }}>
+            <img
+              src={`${api.defaults.baseURL.replace('/api', '')}${coverLandscapeImage}?t=${Date.now()}`}
+              alt="Landscape cover"
+              style={{
+                maxHeight: '90vh', maxWidth: '90vw', borderRadius: '8px',
+                filter: `brightness(${coverLandscapeBrightness}) contrast(${coverLandscapeContrast}) saturate(${coverLandscapeSaturation})`
+              }}
+            />
+            <button
+              onClick={() => setCoverLandscapeLightbox(false)}
+              style={{
+                position: 'absolute', top: '-12px', right: '-12px',
+                background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%',
+                width: '30px', height: '30px', fontSize: '1.1rem', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}
+            >&times;</button>
           </div>
         </div>
       )}

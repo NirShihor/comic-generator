@@ -231,6 +231,17 @@ const ComicSchema = new mongoose.Schema({
     sceneImage: String,
     bakedImage: String,
     prompt: String,
+    landscapeImage: String,   // 3:2 landscape cover, used as the reader's detail-view banner
+    landscapePrompt: String,
+    landscapeBrightness: { type: Number, default: 1 },
+    landscapeContrast: { type: Number, default: 1 },
+    landscapeSaturation: { type: Number, default: 1 },
+    landscapeZoom: { type: Number, default: 1 },     // 1 = 100%, >1 zooms in
+    landscapeCropX: { type: Number, default: 0 },    // -1 (left) .. 1 (right)
+    landscapeCropY: { type: Number, default: 0 },    // -1 (up) .. 1 (down)
+    // Where the reader overlays the title/level on the banner so it doesn't cover
+    // the art: topLeft | topRight | bottomLeft | bottomRight | center | hidden.
+    bannerTitlePosition: { type: String, default: 'bottomLeft' },
     bubbles: [BubbleSchema],
     fitMode: { type: String, default: 'stretch' },
     cropX: { type: Number, default: 0 },

@@ -1166,6 +1166,8 @@ router.post('/save-to-project', async (req, res) => {
 
     const newFilename = imageType === 'cover'
       ? `${comicId}_cover.png`
+      : imageType === 'cover-landscape'
+      ? `${comicId}_cover_landscape.png`
       : imageType === 'cover-baked'
       ? `${comicId}_cover_baked.png`
       : imageType === 'baked'
