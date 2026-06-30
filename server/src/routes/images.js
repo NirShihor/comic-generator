@@ -809,6 +809,8 @@ router.post('/generate-studio', (req, res) => {
 
     const styleRefs = referenceImages || [];
     let buffer;
+    let promptSent = prompt;   // the exact prompt string handed to the model (for transparency)
+    let refsLoaded = 0;
 
     // Map aspect ratio to OpenAI size
     let size = '1024x1024';
@@ -818,6 +820,7 @@ router.post('/generate-studio', (req, res) => {
     console.log(`Studio generate: provider=${provider}, aspect=${aspectRatio}, refs=${styleRefs.length}, prompt=${prompt.substring(0, 80)}...`);
 
     if (provider === 'gemini') {
+      refsLoaded = styleRefs.length;
       buffer = await generateWithGemini(prompt, styleRefs, [], false, aspectRatio, {}, hasMasterStyleImage);
       // Enforce target dimensions
       let targetWidth = 1024, targetHeight = 1024;
@@ -840,6 +843,7 @@ router.post('/generate-studio', (req, res) => {
       let response;
       if (styleRefs.length > 0) {
         const allRefStreams = await loadReferenceImages(styleRefs);
+        refsLoaded = allRefStreams.length;
         let refInstructions;
         if (hasMasterStyleImage) {
           const otherRefs = styleRefs.length - 1;
@@ -851,10 +855,11 @@ router.post('/generate-studio', (req, res) => {
         } else {
           refInstructions = `IMPORTANT: The attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n`;
         }
+        promptSent = refInstructions + prompt;
         response = await openai.images.edit({
           model: 'gpt-image-2',
           image: allRefStreams,
-          prompt: refInstructions + prompt,
+          prompt: promptSent,
           n: 1,
           size: size
         });
@@ -883,8 +888,102 @@ router.post('/generate-studio', (req, res) => {
     const filePath = path.join(__dirname, '../../uploads', filename);
     await fs.writeFile(filePath, buffer);
 
-    console.log(`Studio image generated: ${filename}`);
-    return { filename, path: `/uploads/${filename}` };
+    console.log(`Studio image generated: ${filename} (provider=${provider}, refsLoaded=${refsLoaded})`);
+    return { filename, path: `/uploads/${filename}`, promptSent, refsLoaded, provider };
+  });
+});
+
+// Style Sheet generation — the "ChatGPT way". For OpenAI we use the Responses API
+// with the image_generation tool, so GPT actually SEES the style reference and
+// reasons about it before drawing (far stronger style adherence than images.edit,
+// and it won't collapse to a photo for real place names). Gemini already reasons
+// over refs natively, so it keeps its normal path.
+router.post('/generate-stylesheet', (req, res) => {
+  withKeepAlive(res, async () => {
+    const { prompt, provider = 'openai', aspectRatio = 'landscape', referenceImages, openaiQuality = 'high' } = req.body;
+    if (!prompt) return { error: 'Prompt is required.' };
+
+    const styleRefs = referenceImages || [];
+    let buffer;
+    let refsLoaded = 0;
+    let promptSent = prompt;
+
+    let size = '1024x1024';
+    if (aspectRatio === 'portrait') size = '1024x1536';
+    else if (aspectRatio === 'landscape') size = '1536x1024';
+    let targetWidth = 1024, targetHeight = 1024;
+    if (aspectRatio === 'portrait') { targetWidth = 1024; targetHeight = 1536; }
+    else if (aspectRatio === 'landscape') { targetWidth = 1536; targetHeight = 1024; }
+
+    if (provider === 'gemini') {
+      refsLoaded = styleRefs.length;
+      buffer = await generateWithGemini(prompt, styleRefs, [], false, aspectRatio, {}, styleRefs.length > 0);
+      const meta = await sharp(buffer).metadata();
+      if (meta.width !== targetWidth || meta.height !== targetHeight) {
+        buffer = await sharp(buffer).resize(targetWidth, targetHeight, { fit: 'cover', position: 'centre' }).png().toBuffer();
+      }
+    } else {
+      if (!process.env.OPENAI_API_KEY) return { error: 'OpenAI API key not configured.' };
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      // Attach style references as input_image so the model can study them.
+      const refImageParts = [];
+      for (const imgPath of styleRefs) {
+        try {
+          const full = path.join(__dirname, '../..', imgPath);
+          await fs.access(full);
+          const buf = await sharp(full).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+          refImageParts.push({ type: 'input_image', image_url: `data:image/jpeg;base64,${buf.toString('base64')}` });
+          refsLoaded++;
+        } catch (err) {
+          console.log(`Style sheet ref not found, skipping: ${imgPath}`);
+        }
+      }
+
+      // STEP 1 — GPT studies the reference and writes a TIGHT, front-loaded in-style
+      // prompt. Image models weight the earliest tokens hardest and dilute long lists,
+      // so we force: medium first, ~6-8 descriptors, scene last, no real place names.
+      const planInstruction = `${refsLoaded > 0 ? `The attached image${refsLoaded > 1 ? 's are a' : ' is a'} STYLE REFERENCE — study its art style (medium, line work, shading, colour palette, level of stylization).\n\n` : ''}Write ONE TIGHT image-generation prompt (TARGET 60-90 words, never longer). Image models weight the earliest words most and ignore long adjective lists, so order and brevity matter more than completeness. Structure it EXACTLY:
+1. OPEN with the medium and a concrete style anchor, stating it is NOT a photograph — e.g. "Korean webtoon / slice-of-life manga comic panel, hand-drawn cel-shaded illustration, NOT a photograph, NOT 3D".
+2. Then ONLY the 6-8 highest-signal style descriptors (linework, shading, palette, lighting, finish). Drop everything else.
+3. END with the scene/subject, described by concrete GEOMETRY and materials — NEVER a real place name (a real toponym pulls hard toward photographic training data). Preserve the requested reference-sheet layout (multiple views/angles on one plain-background sheet).
+Output ONLY the prompt text — no preamble, no commentary.
+
+Brief to compress and reorder:
+${prompt}`;
+
+      console.log(`Style sheet step 1 (plan): refsLoaded=${refsLoaded}`);
+      const planResp = await openai.responses.create({
+        model: 'gpt-5.5',
+        input: [{ role: 'user', content: [...refImageParts, { type: 'input_text', text: planInstruction }] }]
+      });
+      const plan = (planResp.output_text || '').trim() || prompt;
+
+      // STEP 2 — feed that prompt back (with the reference) to actually generate.
+      const hardClose = `\n\nABSOLUTE REQUIREMENT: a flat, hand-drawn ILLUSTRATION in the reference's comic/illustrated style — NOT a photograph, NOT photorealistic, NOT a 3D render.`;
+      const genInstruction = `${refsLoaded > 0 ? 'Use the attached image only as a STYLE REFERENCE for the look (copy none of its content). ' : ''}Generate an image from the following prompt:\n\n${plan}${hardClose}`;
+      promptSent = genInstruction;
+
+      const toolQuality = openaiQuality === 'medium' ? 'medium' : 'high';
+      console.log(`Style sheet step 2 (generate): planLen=${plan.length}, quality=${toolQuality}`);
+      const response = await openai.responses.create({
+        model: 'gpt-5.5',
+        input: [{ role: 'user', content: [...refImageParts, { type: 'input_text', text: genInstruction }] }],
+        tools: [{ type: 'image_generation', quality: toolQuality, size }]
+      });
+      const imageOutput = response.output.find(o => o.type === 'image_generation_call');
+      if (!imageOutput || !imageOutput.result) throw new Error('Responses API returned no image');
+      buffer = Buffer.from(imageOutput.result, 'base64');
+    }
+
+    if (!buffer) throw new Error('No image generated');
+
+    const filename = `stylesheet-${uuidv4()}.png`;
+    const filePath = path.join(__dirname, '../../uploads', filename);
+    await fs.writeFile(filePath, buffer);
+
+    console.log(`Style sheet generated: ${filename} (provider=${provider}, refsLoaded=${refsLoaded})`);
+    return { filename, path: `/uploads/${filename}`, promptSent, refsLoaded, provider };
   });
 });
 

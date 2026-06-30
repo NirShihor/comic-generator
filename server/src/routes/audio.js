@@ -210,6 +210,79 @@ router.get('/voices', async (req, res) => {
   }
 });
 
+// Browse the ElevenLabs community / shared voice library (thousands of voices).
+// Search + language/gender/age filters are applied server-side by ElevenLabs.
+router.get('/shared-voices', async (req, res) => {
+  try {
+    if (!process.env.ELEVENLABS_API_KEY) {
+      return res.status(400).json({ error: 'ElevenLabs API key not configured.' });
+    }
+    const { search = '', language = '', gender = '', age = '', accent = '', page = '0', page_size = '30' } = req.query;
+    const params = new URLSearchParams();
+    params.set('page_size', String(Math.min(Number(page_size) || 30, 100)));
+    params.set('page', String(Number(page) || 0));
+    if (search) params.set('search', search);
+    if (language) params.set('language', language);
+    if (gender) params.set('gender', gender);
+    if (age) params.set('age', age);
+    if (accent) params.set('accent', accent);
+
+    const response = await fetch(`https://api.elevenlabs.io/v1/shared-voices?${params.toString()}`, {
+      headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY }
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      return res.status(response.status).json({ error: `ElevenLabs API error: ${response.status} ${body}` });
+    }
+    const data = await response.json();
+    const voices = (data.voices || []).map(v => ({
+      voice_id: v.voice_id,
+      public_owner_id: v.public_owner_id,
+      name: v.name,
+      preview_url: v.preview_url,
+      language: v.language,
+      accent: v.accent,
+      gender: v.gender,
+      age: v.age,
+      descriptive: v.descriptive,
+      use_case: v.use_case,
+      category: v.category
+    }));
+    res.json({ voices, has_more: !!data.has_more });
+  } catch (error) {
+    console.error('Failed to fetch shared voices:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add a community/shared voice to the account library so it can be used for TTS.
+// Returns the new voice_id minted in the account. Requires voices_write on the key.
+router.post('/add-shared-voice', async (req, res) => {
+  try {
+    if (!process.env.ELEVENLABS_API_KEY) {
+      return res.status(400).json({ error: 'ElevenLabs API key not configured.' });
+    }
+    const { public_owner_id, voice_id, name } = req.body;
+    if (!public_owner_id || !voice_id || !name) {
+      return res.status(400).json({ error: 'public_owner_id, voice_id and name are required' });
+    }
+    const response = await fetch(`https://api.elevenlabs.io/v1/voices/add/${public_owner_id}/${voice_id}`, {
+      method: 'POST',
+      headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_name: name })
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      return res.status(response.status).json({ error: `ElevenLabs API error: ${response.status} ${body}` });
+    }
+    const data = await response.json();
+    res.json({ voice_id: data.voice_id });
+  } catch (error) {
+    console.error('Failed to add shared voice:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get available models
 router.get('/models', async (req, res) => {
   try {

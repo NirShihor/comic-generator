@@ -41,7 +41,8 @@ const CollectionSchema = new mongoose.Schema({
     characters: [CharacterSchema],
     globalDoNot: String,
     hardNegatives: String,
-    masterStyleImage: String
+    masterStyleImage: String,
+    styleSheetImages: [{ path: String, stylePrompt: String }]   // uploaded style refs + their extracted style prompt
   }
 }, {
   timestamps: true,

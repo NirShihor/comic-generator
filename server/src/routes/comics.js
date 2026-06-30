@@ -1400,6 +1400,23 @@ router.delete('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
 // cookie as the rest of /api/comics. The uploaded tar contains
 // `comic-<id>/export/...` entries; we extract it into PROJECTS_DIR.
 // ---------------------------------------------------------------------------
+// Pick the newest non-AppleDouble .zip in an export dir. A comic renamed after a
+// previous export leaves several {slug}.zip files; the current one is the newest.
+// (Picking the first alphabetically served stale content — e.g. "el_superviviente"
+// instead of the renamed "la_casa_en_la_colina".)
+async function newestBundleZip(dir) {
+  let files;
+  try { files = await fs.readdir(dir); } catch { return null; }
+  const zips = files.filter(f => f.endsWith('.zip') && !f.startsWith('._'));
+  if (zips.length <= 1) return zips[0] || null;
+  const stamped = await Promise.all(zips.map(async f => {
+    try { return { f, m: (await fs.stat(path.join(dir, f))).mtimeMs }; }
+    catch { return { f, m: 0 }; }
+  }));
+  stamped.sort((a, b) => b.m - a.m);
+  return stamped[0].f;
+}
+
 const BUNDLE_TMP_DIR = path.join(PROJECTS_DIR, '.upload-tmp');
 const bundleUpload = multer({
   storage: multer.diskStorage({
@@ -1439,8 +1456,7 @@ router.post('/:id/upload-bundle', bundleUpload.single('bundle'), async (req, res
     let mirrored = false;
     if (objectStoreEnabled) {
       try {
-        const files = await fs.readdir(exportDir);
-        const zipFile = files.find(f => f.endsWith('.zip') && !f.startsWith('._'));
+        const zipFile = await newestBundleZip(exportDir);
         if (zipFile) {
           await uploadBundle(id, path.join(exportDir, zipFile));
           mirrored = true;
@@ -1475,10 +1491,8 @@ router.post('/mirror-bundles', async (req, res) => {
     for (const e of entries) {
       if (!e.isDirectory() || !/^comic-/.test(e.name)) continue;
       const exportDir = path.join(PROJECTS_DIR, e.name, 'export');
-      let files;
-      try { files = await fs.readdir(exportDir); } catch { continue; }
-      const zipFile = files.find(f => f.endsWith('.zip') && !f.startsWith('._'));
-      if (!zipFile) { results.push({ id: e.name, ok: false, error: 'no .zip', files }); continue; }
+      const zipFile = await newestBundleZip(exportDir);
+      if (!zipFile) { results.push({ id: e.name, ok: false, error: 'no .zip' }); continue; }
       try {
         const zipPath = path.join(exportDir, zipFile);
         const st = await fs.stat(zipPath);

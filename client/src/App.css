@@ -156,7 +156,8 @@ body {
 
 /* ChatGPT Panel */
 .chat-panel {
-  width: 400px;
+  width: 20%;
+  max-width: 20%;
   background: #f5f5f5;
   border-radius: 12px;
   padding: 1rem;

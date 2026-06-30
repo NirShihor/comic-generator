@@ -259,7 +259,8 @@ const ComicSchema = new mongoose.Schema({
     characters: [CharacterSchema],
     globalDoNot: String,
     hardNegatives: String,
-    masterStyleImage: String
+    masterStyleImage: String,
+    styleSheetImages: [{ path: String, stylePrompt: String }]   // uploaded style refs + their extracted style prompt
   },
   promptSettings: {
     styleBible: String,
@@ -268,7 +269,8 @@ const ComicSchema = new mongoose.Schema({
     characters: [CharacterSchema],
     globalDoNot: String,
     hardNegatives: String,
-    masterStyleImage: String
+    masterStyleImage: String,
+    styleSheetImages: [{ path: String, stylePrompt: String }]   // uploaded style refs + their extracted style prompt
   },
   defaultBubbleStyle: {
     bgColor: String,

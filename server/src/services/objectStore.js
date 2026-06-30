@@ -58,6 +58,10 @@ async function uploadBundle(comicId, filePath) {
       Key: bundleKey(comicId),
       Body: fs.createReadStream(filePath),
       ContentType: 'application/zip',
+      // Cache aggressively at the CDN edge so a warmed object stays fast and
+      // doesn't expire back to a slow origin fetch. Re-uploading the same key
+      // (e.g. after a re-export) replaces the cached copy, so this is safe.
+      CacheControl: 'public, max-age=2592000', // 30 days
     },
   });
   await upload.done();

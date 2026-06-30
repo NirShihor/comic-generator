@@ -162,6 +162,64 @@ Write in a direct, descriptive style. Use comma-separated visual tags where appr
   }
 });
 
+// Describe the ART STYLE of a reference image (not its subject) — produces a
+// reusable, detailed style prompt to prepend when generating new images in the
+// same series, so the look stays consistent.
+router.post('/describe-style', async (req, res) => {
+  try {
+    const { image } = req.body;
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    }
+    if (!image) {
+      return res.status(400).json({ error: 'image (base64) is required' });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const systemPrompt = `You are an art-style analyst for illustration and comic-book art direction. Given a reference image, produce an EXTREMELY DETAILED, reusable description of its ART STYLE ONLY — everything an image generator would need to draw COMPLETELY NEW and UNRELATED subjects in this exact same style.
+
+CRITICAL: Describe HOW it is drawn, never WHAT it depicts. Do NOT describe the specific character, object, or scene in the image. Someone reading your description must be able to recreate the style without ever seeing this image's subject.
+
+Cover, as applicable:
+- Medium & technique (e.g. flat digital ink, watercolor, cel shading, gouache, screen-print)
+- Line work: weight, variation, cleanliness, whether outlines are present and their color
+- Inking & edges
+- Colour palette: name the actual dominant hues and how saturated/muted they are
+- Shading & rendering: flat, cel-shaded, soft gradients, cross-hatching, etc.
+- Lighting style and contrast
+- Level of detail and texture
+- Proportions / anatomy stylization (realistic, stylized, exaggerated)
+- Face & feature drawing conventions
+- Background treatment
+- Overall aesthetic, genre, era or comparable style references
+- Finish/grain/post-processing
+
+Write as one direct, dense, comma-and-clause prompt suitable for prepending to image-generation prompts. Begin with "Art style:". Do not narrate, do not mention the particular subject, do not add commentary before or after.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-5.5',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Analyze this image and produce the reusable art-style prompt.' },
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${image}`, detail: 'high' } }
+          ]
+        }
+      ],
+      max_completion_tokens: 2000
+    });
+
+    res.json({ stylePrompt: completion.choices[0].message.content.trim() });
+  } catch (error) {
+    console.error('Describe style error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Word lookup - get text, meaning, and baseForm for a clicked word or phrase
 router.post('/word-lookup', async (req, res) => {
   try {

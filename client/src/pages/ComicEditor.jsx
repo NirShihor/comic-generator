@@ -9,7 +9,8 @@ const DEFAULT_SETTINGS = {
   characters: [],
   globalDoNot: '',
   hardNegatives: '',
-  masterStyleImage: ''
+  masterStyleImage: '',
+  styleSheetImages: []
 };
 
 function ComicEditor() {
@@ -103,6 +104,38 @@ function ComicEditor() {
   const [studioInpaintPrompt, setStudioInpaintPrompt] = useState('');
   const [studioInpaintGenerating, setStudioInpaintGenerating] = useState(null);
   const studioFileInputRef = useRef(null);
+  const styleSheetFileInputRef = useRef(null);
+  // Style Sheet generator state
+  const [styleSheetMode, setStyleSheetMode] = useState('character'); // 'character' | 'location'
+  const [styleSheetPrompt, setStyleSheetPrompt] = useState('');
+  const [styleSheetProvider, setStyleSheetProvider] = useState('gemini');
+  const [styleSheetQuality, setStyleSheetQuality] = useState('high'); // OpenAI: 'high' | 'medium'
+  const [styleSheetAspect, setStyleSheetAspect] = useState('landscape');
+  const [styleSheetGenerating, setStyleSheetGenerating] = useState(false);
+  const [styleSheetGallery, setStyleSheetGallery] = useState([]);
+  const [styleSheetDescribing, setStyleSheetDescribing] = useState([]); // ref paths currently being analyzed
+  const styleSheetAbortRef = useRef(null); // cancels an in-flight generation
+  // Voice Library (browse ElevenLabs voices, preview, save to Voices)
+  const [voiceLib, setVoiceLib] = useState([]);
+  const [voiceLibLoaded, setVoiceLibLoaded] = useState(false);
+  const [voiceLibLoading, setVoiceLibLoading] = useState(false);
+  const [voiceLibError, setVoiceLibError] = useState(null);
+  const [voiceLibSearch, setVoiceLibSearch] = useState('');
+  const [voiceLibPlayingId, setVoiceLibPlayingId] = useState(null);
+  const voiceLibAudioRef = useRef(null);
+  const [voiceLibSource, setVoiceLibSource] = useState('mine'); // 'mine' | 'community'
+  const [communityVoices, setCommunityVoices] = useState([]);
+  const [communityLoaded, setCommunityLoaded] = useState(false);
+  const [communityLoading, setCommunityLoading] = useState(false);
+  const [communityError, setCommunityError] = useState(null);
+  const [communitySearch, setCommunitySearch] = useState('');
+  const [communityLanguage, setCommunityLanguage] = useState('es');
+  const [communityGender, setCommunityGender] = useState('');
+  const [communityAccent, setCommunityAccent] = useState('');
+  const [communityHasMore, setCommunityHasMore] = useState(false);
+  const [communityPage, setCommunityPage] = useState(0);
+  const [addingVoiceId, setAddingVoiceId] = useState(null);
+  const [communityAdded, setCommunityAdded] = useState([]); // shared voice_ids added this session
   const studioImageRef = useRef(null);
 
   // Consistency tab state
@@ -165,6 +198,10 @@ function ComicEditor() {
   }, [chatMessages, id]);
 
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+  // Lazily load the ElevenLabs voice library the first time its tab is opened.
+  useEffect(() => {
+    if (activeTab === 'voicelibrary' && !voiceLibLoaded && !voiceLibLoading) loadVoiceLibrary();
+  }, [activeTab]);
 
   // Studio inpaint: global mouseup listener
   useEffect(() => {
@@ -777,6 +814,342 @@ function ComicEditor() {
     e.target.value = '';
   };
 
+  // Style Sheet: upload an image to use as a locked style reference. Persists in
+  // promptSettings.styleSheetImages (on the comic or collection, like other refs).
+  // On upload we auto-analyze the image into a reusable ART-STYLE prompt that gets
+  // injected when generating subsequent images in the series.
+  const styleSheetUploadRef = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target.result.split(',')[1];
+      try {
+        const savePayload = { image: base64 };
+        if (settingsSource === 'collection' && settingsCollectionId) {
+          savePayload.collectionId = settingsCollectionId;
+        } else {
+          savePayload.comicId = id;
+        }
+        const resp = await api.post('/images/save-reference', savePayload);
+        const newPath = resp.data.path;
+        setSettings(prev => {
+          const updated = { ...prev, styleSheetImages: [...(prev.styleSheetImages || []), { path: newPath, stylePrompt: '' }] };
+          saveSettings(updated, true);
+          return updated;
+        });
+        // Analyze the art style in the background, then persist the prompt.
+        setStyleSheetDescribing(prev => [...prev, newPath]);
+        try {
+          const styleResp = await api.post('/chat/describe-style', { image: base64 }, { timeout: 120000 });
+          const stylePrompt = styleResp.data.stylePrompt || '';
+          setSettings(prev => {
+            const updated = {
+              ...prev,
+              styleSheetImages: (prev.styleSheetImages || []).map(r =>
+                r.path === newPath ? { ...r, stylePrompt } : r)
+            };
+            saveSettings(updated, true);
+            return updated;
+          });
+        } catch (err) {
+          alert('Style analysis failed: ' + (err.response?.data?.error || err.message));
+        } finally {
+          setStyleSheetDescribing(prev => prev.filter(p => p !== newPath));
+        }
+      } catch (error) {
+        alert('Upload failed: ' + (error.response?.data?.error || error.message));
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const styleSheetRemoveRef = (imgPath) => {
+    setSettings(prev => {
+      const updated = { ...prev, styleSheetImages: (prev.styleSheetImages || []).filter(r => r.path !== imgPath) };
+      saveSettings(updated, true);
+      return updated;
+    });
+  };
+
+  // Edit a reference's style prompt (persisted on blur).
+  const styleSheetUpdatePrompt = (imgPath, text) => {
+    setSettings(prev => ({
+      ...prev,
+      styleSheetImages: (prev.styleSheetImages || []).map(r => r.path === imgPath ? { ...r, stylePrompt: text } : r)
+    }));
+  };
+  const styleSheetPersist = () => saveSettings(settingsRef.current, true);
+
+  // Re-run the style analysis for an existing reference.
+  const styleSheetRedescribe = async (imgPath) => {
+    setStyleSheetDescribing(prev => [...prev, imgPath]);
+    try {
+      const imgResp = await fetch(`${imgPath}`);
+      const blob = await imgResp.blob();
+      const base64 = await new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result.split(',')[1]);
+        r.readAsDataURL(blob);
+      });
+      const styleResp = await api.post('/chat/describe-style', { image: base64 }, { timeout: 120000 });
+      const stylePrompt = styleResp.data.stylePrompt || '';
+      setSettings(prev => {
+        const updated = {
+          ...prev,
+          styleSheetImages: (prev.styleSheetImages || []).map(r => r.path === imgPath ? { ...r, stylePrompt } : r)
+        };
+        saveSettings(updated, true);
+        return updated;
+      });
+    } catch (err) {
+      alert('Style analysis failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setStyleSheetDescribing(prev => prev.filter(p => p !== imgPath));
+    }
+  };
+
+  // Wrap the user's prompt with style-sheet layout instructions + baked negatives so
+  // the model lays out a proper reference sheet in the locked style.
+  const buildStyleSheetPrompt = (mode, userPrompt) => {
+    // Front-load the medium: image models weight the earliest tokens hardest, so the
+    // very first thing must establish "hand-drawn comic, NOT a photo" — then the scene,
+    // then layout, with the verbose extracted style left as trailing supporting detail.
+    const lead = `Hand-drawn comic / manhwa / webtoon illustration, cel-shaded, NOT a photograph, NOT photorealistic, NOT a 3D render.`;
+    const layout = mode === 'location'
+      ? `Lay out as a LOCATION REFERENCE SHEET: the same place from a wide establishing view, an alternate angle, and a close detail, on a plain neutral background, kept consistent across views.`
+      : `Lay out as a CHARACTER TURNAROUND SHEET: the same character front, three-quarter, side and back at matching scale, plus two expression close-ups, on a plain neutral background, identical across views.`;
+    const negatives = [];
+    if (settings.hardNegatives) negatives.push(settings.hardNegatives);
+    if (settings.globalDoNot) negatives.push(settings.globalDoNot);
+    const negTail = negatives.length ? ` Avoid: ${negatives.join('; ')}.` : '';
+    // Trailing, lower-weight detail (the rich extracted style description).
+    const stylePrompts = (settings.styleSheetImages || []).map(r => r.stylePrompt).filter(Boolean);
+    const styleDetail = stylePrompts.length ? `\n\nStyle details to match: ${stylePrompts.join(' ')}` : '';
+    return `${lead}\n\nScene: ${userPrompt.trim()}\n\n${layout}${negTail}${styleDetail}`;
+  };
+
+  const styleSheetGenerate = async () => {
+    if (!styleSheetPrompt.trim() || styleSheetGenerating) return;
+    const refs = settings.styleSheetImages || [];
+    if (refs.length === 0) {
+      alert('Upload at least one style reference first.');
+      return;
+    }
+    const controller = new AbortController();
+    styleSheetAbortRef.current = controller;
+    setStyleSheetGenerating(true);
+    try {
+      const response = await api.post('/images/generate-stylesheet', {
+        prompt: buildStyleSheetPrompt(styleSheetMode, styleSheetPrompt),
+        provider: styleSheetProvider,
+        aspectRatio: styleSheetAspect,
+        referenceImages: refs.map(r => r.path),
+        openaiQuality: styleSheetQuality
+      }, { timeout: 600000, signal: controller.signal });
+      const newItem = {
+        path: response.data.path,
+        prompt: styleSheetPrompt,
+        promptSent: response.data.promptSent,
+        refsLoaded: response.data.refsLoaded,
+        mode: styleSheetMode,
+        provider: styleSheetProvider,
+        timestamp: Date.now()
+      };
+      setStyleSheetGallery(prev => [newItem, ...prev]);
+    } catch (error) {
+      // Ignore user-initiated cancels; surface real failures.
+      if (error.code !== 'ERR_CANCELED' && error.name !== 'CanceledError') {
+        alert('Generation failed: ' + (error.response?.data?.error || error.message));
+      }
+    } finally {
+      styleSheetAbortRef.current = null;
+      setStyleSheetGenerating(false);
+    }
+  };
+
+  const styleSheetStop = () => {
+    styleSheetAbortRef.current?.abort();
+  };
+
+  // --- Voice Library ---
+  const loadVoiceLibrary = async () => {
+    setVoiceLibLoading(true);
+    setVoiceLibError(null);
+    try {
+      const res = await api.get('/audio/voices');
+      setVoiceLib(res.data.voices || []);
+      setVoiceLibLoaded(true);
+    } catch (e) {
+      setVoiceLibError(e.response?.data?.error || e.message);
+    } finally {
+      setVoiceLibLoading(false);
+    }
+  };
+
+  const voiceLibPreview = (voice) => {
+    // Stop whatever is playing.
+    if (voiceLibAudioRef.current) {
+      voiceLibAudioRef.current.pause();
+      voiceLibAudioRef.current = null;
+    }
+    if (voiceLibPlayingId === voice.voice_id) { setVoiceLibPlayingId(null); return; }
+    if (!voice.preview_url) { alert('No preview available for this voice.'); return; }
+    const audio = new Audio(voice.preview_url);
+    audio.onended = () => setVoiceLibPlayingId(null);
+    audio.onerror = () => { setVoiceLibPlayingId(null); alert('Could not play preview.'); };
+    audio.play().catch(() => {});
+    voiceLibAudioRef.current = audio;
+    setVoiceLibPlayingId(voice.voice_id);
+  };
+
+  const voiceLibSave = async (voice) => {
+    if ((comic.voices || []).some(v => v.voiceId === voice.voice_id)) {
+      alert('This voice is already in your Voices.');
+      return;
+    }
+    const characterName = prompt('Character name for this voice:', voice.name);
+    if (!characterName || !characterName.trim()) return;
+    const updatedVoices = [...(comic.voices || []), { name: characterName.trim(), voiceId: voice.voice_id }];
+    try {
+      await api.put(`/comics/${id}`, { voices: updatedVoices });
+      setComic({ ...comic, voices: updatedVoices });
+    } catch (e) {
+      alert('Failed to save voice: ' + (e.response?.data?.error || e.message));
+    }
+  };
+
+  const loadCommunityVoices = async (page = 0, append = false, overrides = {}) => {
+    const search = overrides.search ?? communitySearch;
+    const language = overrides.language ?? communityLanguage;
+    const gender = overrides.gender ?? communityGender;
+    const accent = overrides.accent ?? communityAccent;
+    setCommunityLoading(true);
+    setCommunityError(null);
+    try {
+      const res = await api.get('/audio/shared-voices', {
+        params: { search, language, gender, accent, page, page_size: 30 }
+      });
+      setCommunityVoices(prev => append ? [...prev, ...(res.data.voices || [])] : (res.data.voices || []));
+      setCommunityHasMore(!!res.data.has_more);
+      setCommunityPage(page);
+      setCommunityLoaded(true);
+    } catch (e) {
+      setCommunityError(e.response?.data?.error || e.message);
+    } finally {
+      setCommunityLoading(false);
+    }
+  };
+
+  // Add a community voice to the ElevenLabs library, then save it to this comic's Voices.
+  const communityAddAndSave = async (voice) => {
+    const characterName = prompt('Character name for this voice:', voice.name);
+    if (!characterName || !characterName.trim()) return;
+    const name = characterName.trim();
+    setAddingVoiceId(voice.voice_id);
+    try {
+      const res = await api.post('/audio/add-shared-voice', {
+        public_owner_id: voice.public_owner_id,
+        voice_id: voice.voice_id,
+        name
+      });
+      const newId = res.data.voice_id;
+      if (!(comic.voices || []).some(v => v.voiceId === newId)) {
+        const updatedVoices = [...(comic.voices || []), { name, voiceId: newId }];
+        await api.put(`/comics/${id}`, { voices: updatedVoices });
+        setComic({ ...comic, voices: updatedVoices });
+      }
+      setCommunityAdded(prev => prev.includes(voice.voice_id) ? prev : [...prev, voice.voice_id]);
+      setVoiceLibLoaded(false); // refresh "My Voices" next time it's opened
+      alert(`Added “${name}” to your ElevenLabs library and this ${comic.collectionId ? 'collection' : 'comic'}’s Voices.`);
+    } catch (e) {
+      const msg = e.response?.data?.error || e.message;
+      if (/voices_write|missing_permissions/i.test(msg)) {
+        alert('Adding a community voice needs the “Voices → Write” permission on your ElevenLabs API key. Enable it in the ElevenLabs dashboard and try again.');
+      } else {
+        alert('Failed to add voice: ' + msg);
+      }
+    } finally {
+      setAddingVoiceId(null);
+    }
+  };
+
+  const styleSheetDownload = (item) => {
+    const a = document.createElement('a');
+    a.href = `${item.path}`;
+    a.download = `stylesheet-${item.mode}-${item.timestamp}.png`;
+    a.click();
+  };
+
+  // Copy a generated result into the project's images folder so it can live in
+  // prompt settings (returns the saved path).
+  const styleSheetCopyToProject = async (item) => {
+    const imgResp = await fetch(`${item.path}`);
+    const blob = await imgResp.blob();
+    const base64 = await new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result.split(',')[1]);
+      r.readAsDataURL(blob);
+    });
+    const savePayload = { image: base64 };
+    if (settingsSource === 'collection' && settingsCollectionId) {
+      savePayload.collectionId = settingsCollectionId;
+    } else {
+      savePayload.comicId = id;
+    }
+    const resp = await api.post('/images/save-reference', savePayload);
+    return resp.data.path;
+  };
+
+  const styleSheetSaveAsCharacter = async (item) => {
+    const name = prompt('Name for this character:');
+    if (!name || !name.trim()) return;
+    try {
+      const savedPath = await styleSheetCopyToProject(item);
+      setSettings(prev => {
+        const updated = {
+          ...prev,
+          characters: [...(prev.characters || []), {
+            id: `char-${Date.now()}`,
+            name: name.trim(),
+            description: item.prompt,
+            image: savedPath
+          }]
+        };
+        saveSettings(updated, true);
+        return updated;
+      });
+      alert('Saved to Characters (Prompt Settings).');
+    } catch (error) {
+      alert('Failed to save: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const styleSheetSaveToStyleBible = async (item) => {
+    const name = prompt('Name for this style bible entry:', item.mode === 'location' ? 'location' : 'reference');
+    if (!name || !name.trim()) return;
+    try {
+      const savedPath = await styleSheetCopyToProject(item);
+      setSettings(prev => {
+        const updated = {
+          ...prev,
+          styleBibleImages: [...(prev.styleBibleImages || []), {
+            id: `style-img-${Date.now()}`,
+            name: name.trim(),
+            image: savedPath,
+            description: item.prompt
+          }]
+        };
+        saveSettings(updated, true);
+        return updated;
+      });
+      alert('Added to Style Bible (Prompt Settings).');
+    } catch (error) {
+      alert('Failed to save: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   const studioExecuteInpaint = async (provider) => {
     if (studioSelectedImage == null || !studioInpaintRect || !studioInpaintPrompt.trim()) return;
     const item = studioGallery[studioSelectedImage];
@@ -1140,7 +1513,17 @@ function ComicEditor() {
             {id} 📋
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <p style={{ color: '#888', margin: 0 }}>{comic.description}</p>
+            <textarea
+              value={comic.description || ''}
+              placeholder="Add a description…"
+              rows={2}
+              onChange={(e) => setComic(prev => ({ ...prev, description: e.target.value }))}
+              onBlur={(e) => {
+                api.put(`/comics/${id}`, { description: e.target.value })
+                  .catch(err => console.error('Failed to update description:', err));
+              }}
+              style={{ flex: 1, minWidth: '20rem', color: '#ccc', background: 'rgba(255,255,255,0.04)', border: '1px solid #444', borderRadius: '4px', padding: '0.4rem 0.6rem', fontSize: '0.9rem', resize: 'vertical', fontFamily: 'inherit' }}
+            />
             <select
               value={comic.level || 'beginner'}
               onChange={(e) => {
@@ -1194,11 +1577,25 @@ function ComicEditor() {
           Voices ({(comic.voices || []).length})
         </button>
         <button
+          className={`btn ${activeTab === 'voicelibrary' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('voicelibrary')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Voice Library
+        </button>
+        <button
           className={`btn ${activeTab === 'studio' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('studio')}
           style={{ padding: '0.6rem 1.2rem' }}
         >
           Studio
+        </button>
+        <button
+          className={`btn ${activeTab === 'stylesheet' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('stylesheet')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Style Sheet
         </button>
         <button
           className={`btn ${activeTab === 'consistency' ? 'btn-primary' : 'btn-secondary'}`}
@@ -1254,7 +1651,7 @@ function ComicEditor() {
 
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'stretch' }}>
       {/* Left column: Tab Content */}
-      <div style={{ width: '700px', flexShrink: 0 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
 
       {/* Pages Tab */}
       {activeTab === 'pages' && (
@@ -3053,6 +3450,199 @@ function ComicEditor() {
       )}
 
       {/* Voices Tab */}
+      {activeTab === 'voicelibrary' && (
+        <div style={{ maxWidth: '800px' }}>
+          <h2 style={{ margin: '0 0 0.75rem' }}>Voice Library</h2>
+
+          {/* Source toggle */}
+          <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem' }}>
+            <button
+              className={`btn btn-sm ${voiceLibSource === 'mine' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setVoiceLibSource('mine')}
+              style={{ padding: '0.35rem 0.9rem', fontSize: '0.85rem' }}
+            >My Voices</button>
+            <button
+              className={`btn btn-sm ${voiceLibSource === 'community' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => { setVoiceLibSource('community'); if (!communityLoaded && !communityLoading) loadCommunityVoices(0, false); }}
+              style={{ padding: '0.35rem 0.9rem', fontSize: '0.85rem' }}
+            >Community</button>
+          </div>
+
+          {voiceLibSource === 'mine' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <p style={{ color: '#888', fontSize: '0.85rem', margin: 0 }}>
+                  Voices in your ElevenLabs account. Preview and save into this {comic.collectionId ? 'collection' : 'comic'}’s Voices.
+                </p>
+                <button onClick={loadVoiceLibrary} disabled={voiceLibLoading} className="btn btn-secondary btn-sm" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', flexShrink: 0 }}>
+                  {voiceLibLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+
+              <input
+                type="text"
+                value={voiceLibSearch}
+                onChange={(e) => setVoiceLibSearch(e.target.value)}
+                placeholder="Filter by name (e.g. Diego)…"
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.95rem', margin: '0.5rem 0 0.4rem' }}
+              />
+              {voiceLib.length > 0 && (
+                <p style={{ color: '#aaa', fontSize: '0.75rem', margin: '0 0 0.75rem' }}>
+                  {(() => {
+                    const q = voiceLibSearch.trim().toLowerCase();
+                    const shown = q ? voiceLib.filter(v => `${v.name} ${v.category || ''} ${Object.values(v.labels || {}).join(' ')}`.toLowerCase().includes(q)).length : voiceLib.length;
+                    return `Showing ${shown} of ${voiceLib.length}. Most premade voices are multilingual — they speak Spanish regardless of the language label, so don't filter by “Spanish” here.`;
+                  })()}
+                </p>
+              )}
+
+              {voiceLibError && (
+                <p style={{ color: '#e74c3c', fontSize: '0.85rem' }}>Couldn’t load voices: {voiceLibError}</p>
+              )}
+              {voiceLibLoading && voiceLib.length === 0 && (
+                <p style={{ color: '#888' }}>Loading voices…</p>
+              )}
+              {voiceLibLoaded && !voiceLibLoading && voiceLib.length === 0 && !voiceLibError && (
+                <p style={{ color: '#888', fontStyle: 'italic' }}>No voices found in your ElevenLabs account.</p>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {voiceLib
+                  .filter(v => {
+                    const q = voiceLibSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    const hay = `${v.name} ${v.category || ''} ${Object.values(v.labels || {}).join(' ')}`.toLowerCase();
+                    return hay.includes(q);
+                  })
+                  .map(voice => {
+                    const saved = (comic.voices || []).some(x => x.voiceId === voice.voice_id);
+                    const labelTags = Object.values(voice.labels || {}).filter(Boolean);
+                    const playing = voiceLibPlayingId === voice.voice_id;
+                    return (
+                      <div key={voice.voice_id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '8px', padding: '0.75rem' }}>
+                        <button
+                          onClick={() => voiceLibPreview(voice)}
+                          title={voice.preview_url ? 'Preview' : 'No preview available'}
+                          style={{ flexShrink: 0, width: '36px', height: '36px', borderRadius: '50%', border: 'none', cursor: 'pointer', background: playing ? '#e74c3c' : '#2980b9', color: '#fff', fontSize: '0.9rem' }}
+                        >{playing ? '■' : '▶'}</button>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 'bold' }}>{voice.name}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                            {[voice.category, ...labelTags].filter(Boolean).join(' · ')}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: '#aaa', fontFamily: 'monospace' }}>{voice.voice_id}</div>
+                        </div>
+                        {saved ? (
+                          <span style={{ color: '#27ae60', fontSize: '0.85rem', fontWeight: 'bold' }}>✓ Added</span>
+                        ) : (
+                          <button onClick={() => voiceLibSave(voice)} className="btn btn-primary btn-sm" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>Save to Voices</button>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+
+          {voiceLibSource === 'community' && (
+            <>
+              <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+                Search ElevenLabs’ full community library. “Add to Voices” adds the voice to your ElevenLabs account and into this {comic.collectionId ? 'collection' : 'comic'}.
+              </p>
+              <p style={{ color: '#aaa', fontSize: '0.75rem', marginBottom: '0.75rem' }}>
+                To find Spanish voices, use the <b>Language</b> filter — not the search box (typing “Spanish” there matches across all languages).
+              </p>
+
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <select value={communityLanguage} onChange={(e) => { const v = e.target.value; setCommunityLanguage(v); loadCommunityVoices(0, false, { language: v }); }} style={{ padding: '0.55rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.85rem' }}>
+                  <option value="">Any language</option>
+                  <option value="es">Spanish</option>
+                  <option value="en">English</option>
+                  <option value="fr">French</option>
+                  <option value="de">German</option>
+                  <option value="it">Italian</option>
+                  <option value="pt">Portuguese</option>
+                </select>
+                <select value={communityGender} onChange={(e) => { const v = e.target.value; setCommunityGender(v); loadCommunityVoices(0, false, { gender: v }); }} style={{ padding: '0.55rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.85rem' }}>
+                  <option value="">Any gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="neutral">Neutral</option>
+                </select>
+                <select value={communityAccent} onChange={(e) => { const v = e.target.value; setCommunityAccent(v); loadCommunityVoices(0, false, { accent: v }); }} style={{ padding: '0.55rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.85rem' }}>
+                  <option value="">Any accent</option>
+                  <option value="peninsular">Peninsular (Spain)</option>
+                  <option value="latin american">Latin American</option>
+                  <option value="mexican">Mexican</option>
+                  <option value="argentine">Argentine</option>
+                  <option value="colombian">Colombian</option>
+                  <option value="chilean">Chilean</option>
+                  <option value="cuban">Cuban</option>
+                  <option value="peruvian">Peruvian</option>
+                </select>
+                <input
+                  type="text"
+                  value={communitySearch}
+                  onChange={(e) => setCommunitySearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') loadCommunityVoices(0, false); }}
+                  placeholder="Name or style (optional): narrator, raspy…"
+                  style={{ flex: 1, minWidth: '180px', padding: '0.6rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.95rem' }}
+                />
+                <button onClick={() => loadCommunityVoices(0, false)} disabled={communityLoading} className="btn btn-primary btn-sm" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                  {communityLoading ? 'Searching…' : 'Search'}
+                </button>
+              </div>
+
+              {communityLoaded && communityVoices.length > 0 && (
+                <p style={{ color: '#aaa', fontSize: '0.75rem', marginBottom: '0.5rem' }}>{communityVoices.length} loaded{communityHasMore ? ' (more available)' : ''}</p>
+              )}
+
+              {communityError && (
+                <p style={{ color: '#e74c3c', fontSize: '0.85rem' }}>Couldn’t load voices: {communityError}</p>
+              )}
+              {communityLoaded && !communityLoading && communityVoices.length === 0 && !communityError && (
+                <p style={{ color: '#888', fontStyle: 'italic' }}>No community voices matched.</p>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {communityVoices.map(voice => {
+                  const playing = voiceLibPlayingId === voice.voice_id;
+                  const tags = [voice.gender, voice.age, voice.accent, voice.language, voice.use_case, voice.descriptive].filter(Boolean);
+                  const adding = addingVoiceId === voice.voice_id;
+                  const added = communityAdded.includes(voice.voice_id);
+                  return (
+                    <div key={`${voice.public_owner_id}-${voice.voice_id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: added ? '#eafaf0' : '#f8f9fa', border: added ? '1px solid #27ae60' : '1px solid #ddd', borderRadius: '8px', padding: '0.75rem' }}>
+                      <button
+                        onClick={() => voiceLibPreview(voice)}
+                        title={voice.preview_url ? 'Preview' : 'No preview available'}
+                        style={{ flexShrink: 0, width: '36px', height: '36px', borderRadius: '50%', border: 'none', cursor: 'pointer', background: playing ? '#e74c3c' : '#2980b9', color: '#fff', fontSize: '0.9rem' }}
+                      >{playing ? '■' : '▶'}</button>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 'bold' }}>{voice.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#888' }}>{tags.join(' · ')}</div>
+                      </div>
+                      {added ? (
+                        <span style={{ color: '#27ae60', fontSize: '0.85rem', fontWeight: 'bold', flexShrink: 0 }}>✓ Added</span>
+                      ) : (
+                        <button onClick={() => communityAddAndSave(voice)} disabled={adding} className="btn btn-primary btn-sm" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', flexShrink: 0 }}>
+                          {adding ? 'Adding…' : 'Add to Voices'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {communityHasMore && !communityLoading && (
+                <button onClick={() => loadCommunityVoices(communityPage + 1, true)} className="btn btn-secondary btn-sm" style={{ marginTop: '0.75rem', padding: '0.4rem 1rem', fontSize: '0.8rem' }}>
+                  Load more
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {activeTab === 'voices' && (
         <div style={{ maxWidth: '800px' }}>
           <h2 style={{ marginBottom: '1rem' }}>Voice Configuration</h2>
@@ -3621,6 +4211,199 @@ function ComicEditor() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Style Sheet Tab */}
+      {activeTab === 'stylesheet' && (
+        <div style={{ maxWidth: '800px' }}>
+          <h2 style={{ marginBottom: '0.5rem' }}>Style Sheet</h2>
+          <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+            Build character and location reference sheets in a locked art style. Start by uploading
+            one or more images that define the style you want to enforce — these get pinned as the
+            style anchor for everything generated here.
+          </p>
+
+          <h3 style={{ fontSize: '1rem', marginBottom: '0.35rem' }}>Style references</h3>
+          <p style={{ color: '#999', fontSize: '0.8rem', marginBottom: '0.75rem' }}>
+            Upload example art whose style you want to match (line work, shading, palette).
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '0.75rem' }}>
+            {(settings.styleSheetImages || []).map((ref, idx) => {
+              const describing = styleSheetDescribing.includes(ref.path);
+              return (
+                <div key={ref.path || idx} style={{ display: 'flex', gap: '0.75rem', border: '1px solid #2a2a3e', borderRadius: '8px', padding: '0.5rem', alignItems: 'flex-start' }}>
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <img
+                      onClick={() => setRefLightbox(ref.path)}
+                      src={`${ref.path}`}
+                      alt={`Style reference ${idx + 1}`}
+                      title="Click to enlarge"
+                      style={{ height: '140px', borderRadius: '6px', display: 'block', cursor: 'pointer', border: '2px solid #6E40F0' }}
+                    />
+                    <button
+                      onClick={() => styleSheetRemoveRef(ref.path)}
+                      title="Remove"
+                      style={{
+                        position: 'absolute', top: '-8px', right: '-8px', background: '#e74c3c', color: '#fff',
+                        border: 'none', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.8rem',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      }}
+                    >×</button>
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                      <small style={{ color: '#888' }}>
+                        {describing ? 'Analyzing art style…' : 'Extracted style prompt'}
+                      </small>
+                      <button
+                        onClick={() => styleSheetRedescribe(ref.path)}
+                        disabled={describing}
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}
+                      >{describing ? '…' : 'Re-analyze'}</button>
+                    </div>
+                    <textarea
+                      value={ref.stylePrompt || ''}
+                      onChange={(e) => styleSheetUpdatePrompt(ref.path, e.target.value)}
+                      onBlur={styleSheetPersist}
+                      placeholder={describing ? 'Generating a detailed style description…' : 'Style description (used to keep new images on-style)'}
+                      style={{ height: '140px', minHeight: '110px', width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.82rem', resize: 'both', fontFamily: 'inherit' }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            <button
+              onClick={() => styleSheetFileInputRef.current?.click()}
+              className="btn btn-secondary"
+              style={{ minHeight: '60px', border: '2px dashed #aaa', borderRadius: '8px', fontSize: '0.85rem' }}
+            >
+              + Upload style reference
+            </button>
+            <input type="file" ref={styleSheetFileInputRef} onChange={styleSheetUploadRef} accept="image/*" style={{ display: 'none' }} />
+          </div>
+
+          {(settings.styleSheetImages || []).length === 0 && (
+            <p style={{ color: '#bbb', fontSize: '0.8rem', fontStyle: 'italic' }}>
+              No style references yet. Upload at least one to anchor the style.
+            </p>
+          )}
+
+          {/* Generator */}
+          <div style={{ borderTop: '1px solid #2a2a3e', marginTop: '1.5rem', paddingTop: '1.25rem' }}>
+            <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Generate a sheet</h3>
+
+            {/* Mode toggle */}
+            <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.75rem' }}>
+              <button
+                className={`btn btn-sm ${styleSheetMode === 'character' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setStyleSheetMode('character')}
+                style={{ padding: '0.35rem 0.8rem', fontSize: '0.85rem' }}
+              >Character</button>
+              <button
+                className={`btn btn-sm ${styleSheetMode === 'location' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setStyleSheetMode('location')}
+                style={{ padding: '0.35rem 0.8rem', fontSize: '0.85rem' }}
+              >Location</button>
+            </div>
+
+            {/* Prompt */}
+            <textarea
+              value={styleSheetPrompt}
+              onChange={(e) => setStyleSheetPrompt(e.target.value)}
+              placeholder={styleSheetMode === 'character'
+                ? 'Describe the character: name, age, build, face, hair, clothing, props, personality…'
+                : 'Describe the location: type of place, architecture, key features, mood, lighting, palette…'}
+              rows={5}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.95rem', marginBottom: '0.75rem', resize: 'both' }}
+            />
+
+            {/* Controls */}
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <span style={{ fontSize: '0.85rem', color: '#666', marginRight: '0.25rem' }}>Provider:</span>
+                <button className={`btn btn-sm ${styleSheetProvider === 'gemini' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetProvider('gemini')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Gemini</button>
+                <button className={`btn btn-sm ${styleSheetProvider === 'openai' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetProvider('openai')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>OpenAI</button>
+              </div>
+              {styleSheetProvider === 'openai' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span style={{ fontSize: '0.85rem', color: '#666', marginRight: '0.25rem' }}>ChatGPT:</span>
+                  <button className={`btn btn-sm ${styleSheetQuality === 'high' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetQuality('high')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>High</button>
+                  <button className={`btn btn-sm ${styleSheetQuality === 'medium' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetQuality('medium')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Medium (~4x cheaper)</button>
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <span style={{ fontSize: '0.85rem', color: '#666', marginRight: '0.25rem' }}>Aspect:</span>
+                <button className={`btn btn-sm ${styleSheetAspect === 'landscape' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetAspect('landscape')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Landscape</button>
+                <button className={`btn btn-sm ${styleSheetAspect === 'square' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetAspect('square')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Square</button>
+                <button className={`btn btn-sm ${styleSheetAspect === 'portrait' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetAspect('portrait')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Portrait</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <button
+                onClick={styleSheetGenerate}
+                disabled={styleSheetGenerating || !styleSheetPrompt.trim() || (settings.styleSheetImages || []).length === 0}
+                className="btn btn-primary"
+                style={{ padding: '0.6rem 1.5rem' }}
+              >
+                {styleSheetGenerating ? 'Generating…' : `Generate ${styleSheetMode === 'location' ? 'Location' : 'Character'} Sheet`}
+              </button>
+              {styleSheetGenerating && (
+                <button
+                  onClick={styleSheetStop}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.6rem 1.2rem', color: '#e74c3c' }}
+                >Stop</button>
+              )}
+            </div>
+
+            {/* Results */}
+            {styleSheetGallery.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                  <h3 style={{ fontSize: '1rem', margin: 0 }}>Results ({styleSheetGallery.length})</h3>
+                  <button
+                    onClick={() => setStyleSheetGallery([])}
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                  >Clear all</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {styleSheetGallery.map((item, idx) => (
+                    <div key={idx} style={{ border: '1px solid #2a2a3e', borderRadius: '8px', padding: '0.5rem' }}>
+                      <img
+                        src={`${item.path}`}
+                        alt={item.prompt.substring(0, 40)}
+                        onClick={() => setRefLightbox(item.path)}
+                        title="Click to enlarge"
+                        style={{ width: '100%', borderRadius: '6px', cursor: 'pointer', display: 'block' }}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase' }}>{item.mode} · {item.provider}{typeof item.refsLoaded === 'number' ? ` · ${item.refsLoaded} ref(s) sent` : ''}</span>
+                        <button onClick={() => styleSheetSaveAsCharacter(item)} className="btn btn-primary btn-sm" style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}>Save as Character</button>
+                        <button onClick={() => styleSheetSaveToStyleBible(item)} className="btn btn-secondary btn-sm" style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}>Add to Style Bible</button>
+                        <button onClick={() => styleSheetDownload(item)} className="btn btn-secondary btn-sm" style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}>Download</button>
+                        <button
+                          onClick={() => setStyleSheetGallery(prev => prev.filter((_, i) => i !== idx))}
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', color: '#e74c3c' }}
+                        >Delete</button>
+                      </div>
+                      {item.promptSent && (
+                        <details style={{ marginTop: '0.4rem' }}>
+                          <summary style={{ cursor: 'pointer', fontSize: '0.72rem', color: '#888' }}>Prompt sent to model</summary>
+                          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.7rem', color: '#aaa', background: '#11111a', padding: '0.5rem', borderRadius: '6px', marginTop: '0.3rem', maxHeight: '200px', overflow: 'auto' }}>{item.promptSent}</pre>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -4254,7 +5037,8 @@ function ComicEditor() {
 
       {/* Right column: Chat Sidebar */}
       <div style={{
-        flex: 1,
+        flex: '0 0 20%',
+        maxWidth: '20%',
         minWidth: 0,
         background: '#1a1a2e',
         border: '1px solid #16213e',
