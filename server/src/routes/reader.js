@@ -85,6 +85,17 @@ async function getDirectorySize(dirPath) {
 }
 
 // GET /api/reader/catalog — list published comics for the reader app store
+// Public: the global admin notebook (grammar pages) for the reader app.
+router.get('/notebook', async (req, res) => {
+  try {
+    const NotebookNote = require('../models/NotebookNote');
+    const notes = await NotebookNote.find().sort({ order: 1, createdAt: 1 }).lean();
+    res.json({ notes: notes.map(n => ({ id: n.id, title: n.title || '', body: n.body || '' })) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/catalog', async (req, res) => {
   try {
     const comics = await Comic.find({ published: true })

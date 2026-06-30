@@ -4,6 +4,7 @@ import ComicEditor from './pages/ComicEditor';
 import ComicSettings from './pages/ComicSettings';
 import PageEditor from './pages/PageEditor';
 import ReorderComics from './pages/ReorderComics';
+import NotebookAdmin from './pages/NotebookAdmin';
 import './App.css';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Routes>
             <Route path="/" element={<ComicList />} />
             <Route path="/order" element={<ReorderComics />} />
+            <Route path="/notebook" element={<NotebookAdmin />} />
             <Route path="/comic/:id" element={<ComicEditor />} />
             <Route path="/comic/:id/settings" element={<ComicSettings />} />
             <Route path="/comic/:id/page/:pageId" element={<PageEditor />} />

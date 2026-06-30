@@ -11,6 +11,7 @@ const imageRoutes = require('./routes/images');
 const audioRoutes = require('./routes/audio');
 const chatRoutes = require('./routes/chat');
 const readerRoutes = require('./routes/reader');
+const notebookRoutes = require('./routes/notebook');
 const loginRoutes = require('./routes/login');
 const { authMiddleware } = require('./middleware/auth');
 
@@ -40,6 +41,7 @@ app.use('/api/images', imageRoutes);
 app.use('/api/audio', audioRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/reader', readerRoutes);
+app.use('/api/notebook', notebookRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
