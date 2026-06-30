@@ -465,6 +465,7 @@ function PageEditor({ isCover = false }) {
   });
   const [chatInput, setChatInput] = useState('');
   const [comicNotes, setComicNotes] = useState('');
+  const [notesCollapsed, setNotesCollapsed] = useState(false);
   const notesTextareaRef = useRef(null);
   const notesScrollRestored = useRef(false);
   const [isSendingChat, setIsSendingChat] = useState(false);
@@ -572,8 +573,12 @@ function PageEditor({ isCover = false }) {
   const [hotspotResizeCorner, setHotspotResizeCorner] = useState(null);
   const canvasRef = useRef(null);
 
+  // Coordinate space — keep at 400×600 so fonts, bubble proportions and the
+  // baked/exported output are unchanged. The editor is enlarged purely visually
+  // via DISPLAY_SCALE below (a CSS zoom), which scales fonts and bubbles together.
   const CANVAS_WIDTH = 400;
   const CANVAS_HEIGHT = 600;
+  const DISPLAY_SCALE = 1.65; // visual zoom of the editing canvas + baked view
   const SNAP_THRESHOLD = 0.03; // Snap to lines/edges within 3%
 
   useEffect(() => {
@@ -5378,6 +5383,7 @@ function PageEditor({ isCover = false }) {
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
+              zoom: DISPLAY_SCALE,
               background: page.masterImage ? 'transparent' : '#f5f5f5',
               border: '2px solid #ddd',
               borderRadius: '4px',
@@ -6694,6 +6700,7 @@ function PageEditor({ isCover = false }) {
               style={{
                 width: CANVAS_WIDTH,
                 height: CANVAS_HEIGHT,
+                zoom: DISPLAY_SCALE,
                 objectFit: 'contain',
                 border: '2px solid #27ae60',
                 borderRadius: '4px',
@@ -11434,177 +11441,13 @@ function PageEditor({ isCover = false }) {
           )}
         </div>
 
-        {/* ChatGPT Panel */}
-        <div className="chat-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1rem', color: '#333' }}>ChatGPT</h3>
-            <button
-              onClick={clearChat}
-              style={{
-                padding: '0.25rem 0.5rem',
-                fontSize: '0.7rem',
-                background: '#95a5a6',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '3px',
-                cursor: 'pointer'
-              }}
-            >
-              Clear
-            </button>
-          </div>
-
-          {/* Messages */}
-          <div className="chat-messages">
-            {chatMessages.length === 0 && (
-              <div style={{ color: '#888', fontSize: '0.85rem', textAlign: 'center', padding: '2rem 1rem' }}>
-                <p>Start a conversation with ChatGPT</p>
-                <p style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>You can upload images or share your generated page</p>
-              </div>
-            )}
-            {chatMessages.map((msg, idx) => (
-              <div key={idx} className={`chat-message ${msg.role}`}>
-                {msg.images && msg.images.length > 0 && (
-                  <div style={{ marginBottom: '0.5rem' }}>
-                    {msg.images.map((img, imgIdx) => (
-                      <img key={imgIdx} src={img} alt="Uploaded" style={{ maxHeight: '100px' }} />
-                    ))}
-                  </div>
-                )}
-                <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content || '[No content]'}</div>
-              </div>
-            ))}
-            {isSendingChat && (
-              <div className="chat-message assistant" style={{ fontStyle: 'italic' }}>
-                Thinking...
-              </div>
-            )}
-            <div ref={chatMessagesEndRef} />
-          </div>
-
-          {/* Pending images */}
-          {chatImages.length > 0 && (
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-              {chatImages.map((img, idx) => (
-                <div key={idx} style={{ position: 'relative' }}>
-                  <img src={img.preview} alt={img.name} style={{ height: '50px', borderRadius: '4px', border: '1px solid #ddd' }} />
-                  <button
-                    onClick={() => removeChatImage(idx)}
-                    style={{
-                      position: 'absolute',
-                      top: '-5px',
-                      right: '-5px',
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      background: '#c0392b',
-                      color: '#fff',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '10px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Input area */}
-          <div className="chat-input-area">
-            <textarea
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendChatMessage();
-                }
-              }}
-              placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
-              rows={3}
-              disabled={isSendingChat}
-            />
-            <div className="chat-buttons">
-              <button
-                onClick={sendChatMessage}
-                disabled={isSendingChat || (!chatInput.trim() && chatImages.length === 0)}
-                style={{
-                  padding: '0.4rem 1rem',
-                  background: isSendingChat ? '#95a5a6' : '#e94560',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: isSendingChat ? 'wait' : 'pointer',
-                  fontSize: '0.85rem'
-                }}
-              >
-                {isSendingChat ? 'Sending...' : 'Send'}
-              </button>
-              <input
-                type="file"
-                ref={chatFileInputRef}
-                onChange={handleChatFileUpload}
-                accept="image/*"
-                multiple
-                style={{ display: 'none' }}
-              />
-              <button
-                onClick={() => chatFileInputRef.current?.click()}
-                disabled={isSendingChat}
-                style={{
-                  padding: '0.4rem 0.75rem',
-                  background: '#3498db',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem'
-                }}
-              >
-                Upload Image
-              </button>
-              <button
-                onClick={uploadGeneratedImageToChat}
-                disabled={isSendingChat || !generatedImage?.path}
-                style={{
-                  padding: '0.4rem 0.75rem',
-                  background: generatedImage?.path ? '#27ae60' : '#95a5a6',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: generatedImage?.path ? 'pointer' : 'not-allowed',
-                  fontSize: '0.85rem'
-                }}
-                title={generatedImage?.path ? 'Add generated image to chat' : 'Generate an image first'}
-              >
-                Add Generated
-              </button>
-              <button
-                onClick={() => setChatInput(prev => prev + (prev ? '\n\n' : '') + buildFullPrompt())}
-                disabled={isSendingChat}
-                style={{
-                  padding: '0.4rem 0.75rem',
-                  background: '#9b59b6',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem'
-                }}
-                title="Add the full prompt to chat input"
-              >
-                Add Prompt
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* Notes Panel */}
+        {notesCollapsed ? (
+          <div style={{ width: '34px', background: '#f5f5f5', borderRadius: '12px', border: '1px solid #ddd', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '0.6rem', gap: '0.6rem', height: 'calc(100vh - 180px)' }}>
+            <button onClick={() => setNotesCollapsed(false)} title="Show notes" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>📝</button>
+            <button onClick={() => setNotesCollapsed(false)} title="Show notes" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', fontSize: '1.1rem' }}>‹</button>
+          </div>
+        ) : (
         <div style={{
           width: '280px',
           background: '#f5f5f5',
@@ -11618,6 +11461,7 @@ function PageEditor({ isCover = false }) {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', color: '#333' }}>Notes</h3>
+            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
             <button
               onClick={async () => {
                 try {
@@ -11639,6 +11483,8 @@ function PageEditor({ isCover = false }) {
             >
               Save
             </button>
+            <button onClick={() => setNotesCollapsed(true)} title="Collapse notes" style={{ padding: '0.25rem 0.45rem', fontSize: '0.85rem', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '3px', cursor: 'pointer' }}>›</button>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem' }}>
             <button
@@ -11744,6 +11590,7 @@ function PageEditor({ isCover = false }) {
             />
           </div>
         </div>
+        )}
       </div>
 
       {/* Shared preview content: used by both Preview modal and off-screen Bake target */}
@@ -11755,6 +11602,9 @@ function PageEditor({ isCover = false }) {
               position: 'relative',
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
+              // Zoom for on-screen display only; the bake target stays 1:1 so
+              // the exported image is unchanged.
+              zoom: ref === bakeTargetRef ? 1 : DISPLAY_SCALE,
               background: '#fff',
               overflow: 'hidden'
             }}
@@ -12068,7 +11918,7 @@ function PageEditor({ isCover = false }) {
                 style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}
                 onClick={() => setShowPagePreview(false)}
               >
-                <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => setShowPagePreview(false)}
                     style={{ position: 'absolute', top: -40, right: 0, background: '#fff', border: 'none', borderRadius: '4px', padding: '0.5rem 1rem', cursor: 'pointer', fontSize: '0.9rem' }}

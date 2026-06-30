@@ -1,6 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+
+// Render note text with ==highlights== shown as yellow marker spans.
+function renderHighlighted(text) {
+  const parts = [];
+  const regex = /==(.+?)==/g;
+  let last = 0, m, key = 0;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(<mark key={key++} style={{ background: '#fff176', padding: '0 2px', borderRadius: '2px' }}>{m[1]}</mark>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
 
 // Global admin notebook editor. Notes here ship to all readers via
 // GET /api/reader/notebook and appear in the app's Notebook tab (read-only).
@@ -9,6 +23,19 @@ function NotebookAdmin() {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
+  const bodyRefs = useRef({});
+
+  // Wrap the current textarea selection in ==…== (the highlight marker).
+  const highlightSelection = (note) => {
+    const ta = bodyRefs.current[note.id];
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    if (start === end) { alert('Select some text first, then click Highlight.'); return; }
+    const body = note.body || '';
+    const newBody = body.slice(0, start) + '==' + body.slice(start, end) + '==' + body.slice(end);
+    editLocal(note.id, 'body', newBody);
+    persist({ ...note, body: newBody });
+  };
 
   useEffect(() => { load(); }, []);
 
@@ -110,6 +137,7 @@ function NotebookAdmin() {
                 <button onClick={() => removeNote(note.id)} className="btn btn-danger" style={{ padding: '0.35rem 0.6rem' }} title="Delete">🗑</button>
               </div>
               <textarea
+                ref={(el) => { bodyRefs.current[note.id] = el; }}
                 value={note.body}
                 onChange={(e) => editLocal(note.id, 'body', e.target.value)}
                 onBlur={() => persist(note)}
@@ -117,7 +145,18 @@ function NotebookAdmin() {
                 rows={6}
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.95rem', resize: 'vertical', fontFamily: 'inherit' }}
               />
-              {savingId === note.id && <span style={{ fontSize: '0.75rem', color: '#27ae60' }}>Saving…</span>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.4rem' }}>
+                <button onClick={() => highlightSelection(note)} className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }} title="Select text in the box above, then click to highlight">
+                  🖍 Highlight selection
+                </button>
+                {savingId === note.id && <span style={{ fontSize: '0.75rem', color: '#27ae60' }}>Saving…</span>}
+              </div>
+              {(note.body || '').includes('==') && (
+                <div style={{ marginTop: '0.5rem', padding: '0.6rem', background: '#fafafa', border: '1px dashed #ddd', borderRadius: '6px' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#999', marginBottom: '0.25rem' }}>Preview</div>
+                  <div style={{ fontSize: '0.95rem', whiteSpace: 'pre-wrap' }}>{renderHighlighted(note.body)}</div>
+                </div>
+              )}
             </div>
           ))}
         </div>
