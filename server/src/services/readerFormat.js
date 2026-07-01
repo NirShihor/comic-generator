@@ -433,6 +433,7 @@ function transformToReaderFormat(comic, comicSlug) {
     coverImage: `${comicSlug}_cover`,
     ...(comic.cover?.landscapeImage && { coverLandscape: `${comicSlug}_cover_landscape` }),
     ...(comic.cover?.bannerTitlePosition && { bannerTitlePosition: comic.cover.bannerTitlePosition }),
+    ...(comic.bubbleDotColor && { bubbleDotColor: comic.bubbleDotColor }),
     level: comic.level || 'beginner',
     totalPages: pages.length,
     estimatedMinutes: pages.length * 2,

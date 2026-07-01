@@ -1537,6 +1537,22 @@ function ComicEditor() {
               <option value="intermediate">Intermediate</option>
               <option value="advanced">Advanced</option>
             </select>
+            <label
+              title="Colour of the flashing dot on the open bubble in the reader — pick one that stands out against this comic's art"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#888' }}
+            >
+              Bubble dot
+              <input
+                type="color"
+                value={comic.bubbleDotColor || '#409B08'}
+                onChange={(e) => {
+                  const color = e.target.value;
+                  setComic(prev => ({ ...prev, bubbleDotColor: color }));
+                  api.put(`/comics/${id}`, { bubbleDotColor: color }).catch(err => console.error('Failed to update bubble dot color:', err));
+                }}
+                style={{ width: '34px', height: '24px', padding: 0, border: '1px solid #555', borderRadius: '4px', background: 'none', cursor: 'pointer' }}
+              />
+            </label>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>

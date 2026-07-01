@@ -1083,6 +1083,7 @@ function PageEditor({ isCover = false }) {
       }
       // Reset all page state before loading new page data
       // (prevents stale state from previous page leaking into empty/new pages)
+      justLoadedRef.current = true;   // snapshot the loaded state as "clean"
       setLines([]);
       setPanels([]);
       setPanelsComputed(false);
@@ -2513,6 +2514,52 @@ function PageEditor({ isCover = false }) {
 
   // Update panel's artworkImage and auto-save to DB (returns promise)
   const pendingSavesRef = useRef(0);
+
+  // --- Unsaved-changes tracking (for the "leave page" warning) ---
+  // We watch the fields that the manual Save (savePage) persists and compare a
+  // serialized snapshot. Fields that auto-save on their own (panel crop/zoom,
+  // sentence audio/alternatives/transformations) are ignored so they don't
+  // trigger false "unsaved" warnings.
+  const [pageDirty, setPageDirty] = useState(false);
+  const pageDirtyRef = useRef(false);
+  const cleanSnapshotRef = useRef('');
+  const justLoadedRef = useRef(true);
+  const DIRTY_IGNORE_KEYS = useRef(new Set([
+    'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation',
+    'artworkImage', 'bakedCropImage', 'refImages', 'annotations',
+    'alternatives', 'transformations', 'audioUrl', 'translationAudioUrl', 'wordTimestamps'
+  ])).current;
+  const serializeForDirty = () => JSON.stringify(
+    { lines, panels, bubbles, hotspots },
+    (k, v) => (DIRTY_IGNORE_KEYS.has(k) ? undefined : v)
+  );
+  // Recompute dirty when the saved-fields change; snapshot as clean right after a load.
+  useEffect(() => {
+    const snap = serializeForDirty();
+    if (justLoadedRef.current) {
+      justLoadedRef.current = false;
+      cleanSnapshotRef.current = snap;
+      setPageDirty(false);
+    } else {
+      setPageDirty(snap !== cleanSnapshotRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, panels, bubbles, hotspots]);
+  useEffect(() => { pageDirtyRef.current = pageDirty; }, [pageDirty]);
+  // Warn on browser close / refresh with unsaved changes.
+  useEffect(() => {
+    const handler = (e) => { if (pageDirtyRef.current) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+  // Mark the page clean after a successful manual save (after state settles).
+  const markPageSaved = () => {
+    setTimeout(() => { cleanSnapshotRef.current = serializeForDirty(); setPageDirty(false); }, 0);
+  };
+  // Returns true if it's OK to navigate away (nothing unsaved, or user confirmed).
+  const confirmLeavePage = () => !pageDirtyRef.current
+    || window.confirm('You have unsaved changes on this page. Leave without saving?');
+
   const updatePanelArtwork = async (panelId, imagePath) => {
     setPanels(prev => prev.map(p =>
       p.id === panelId ? { ...p, artworkImage: imagePath } : p
@@ -2679,6 +2726,7 @@ function PageEditor({ isCover = false }) {
           bubbles
         });
         showToast('Cover saved!');
+        markPageSaved();
         return;
       }
 
@@ -2758,6 +2806,7 @@ function PageEditor({ isCover = false }) {
       });
       setPage(fullPageData);
       showToast('Page saved!');
+      markPageSaved();
     } catch (error) {
       console.error('Failed to save page:', error);
       alert('Failed to save page');
@@ -5085,6 +5134,7 @@ function PageEditor({ isCover = false }) {
             href={`/comic/${id}`}
             onClick={async (e) => {
               e.preventDefault();
+              if (!confirmLeavePage()) return;
               while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
               navigate(`/comic/${id}`);
             }}
@@ -5099,6 +5149,7 @@ function PageEditor({ isCover = false }) {
                 <button
                   onClick={async () => {
                     if (prevPage) {
+                      if (!confirmLeavePage()) return;
                       // Wait for any pending panel saves before navigating
                       while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
                       navigate(`/comic/${id}/page/${prevPage.id}`);
@@ -5112,6 +5163,7 @@ function PageEditor({ isCover = false }) {
                 <button
                   onClick={async () => {
                     if (nextPage) {
+                      if (!confirmLeavePage()) return;
                       while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
                       navigate(`/comic/${id}/page/${nextPage.id}`);
                     }
@@ -5120,6 +5172,22 @@ function PageEditor({ isCover = false }) {
                   style={{ padding: '0.3rem 0.6rem', fontSize: '0.85rem', background: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: nextPage ? 'pointer' : 'default', opacity: nextPage ? 1 : 0.4 }}
                 >
                   Next →
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirmLeavePage()) return;
+                    while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
+                    try {
+                      const response = await api.post(`/comics/${id}/pages`, { afterPageNumber: page.pageNumber });
+                      navigate(`/comic/${id}/page/${response.data.id}`);
+                    } catch (err) {
+                      alert('Failed to add page: ' + (err.response?.data?.error || err.message));
+                    }
+                  }}
+                  title="Insert a new blank page right after this one and open it"
+                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.85rem', background: '#27ae60', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  + Add page after
                 </button>
               </div>
             )}

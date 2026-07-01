@@ -223,6 +223,9 @@ const ComicSchema = new mongoose.Schema({
   title: { type: String, required: true },
   titleEn: String,   // optional English title, shown under the Spanish in the reader
   description: String,
+  // Hex color for the reader's "open bubble" flashing dot — set per comic so it
+  // stands out against that comic's colour scheme (e.g. "#409B08").
+  bubbleDotColor: { type: String, default: '' },
   level: { type: String, enum: ['beginner', 'intermediate', 'advanced'], default: 'beginner' },
   language: { type: String, default: 'es' },
   targetLanguage: { type: String, default: 'en' },
