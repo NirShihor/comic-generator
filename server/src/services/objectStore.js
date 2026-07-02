@@ -43,24 +43,29 @@ function client() {
   return _client;
 }
 
-// Stable key by comic id (slug can change if the title is edited).
-function bundleKey(comicId) {
-  return `bundles/${comicId}.zip`;
+// Object key by comic id, versioned by a short content hash of the bundle.
+// Tigris caches by object PATH honouring our long max-age, and does NOT evict
+// on overwrite — so a fixed key would pin every reader to the first upload for
+// 30 days. Versioning the key means each re-export is a brand-new URL the CDN
+// has never seen (guaranteed fresh); stale edges for old versions age out on
+// their own. `version` is empty only for comics mirrored before this change or
+// not yet re-synced, which fall back to the legacy fixed key.
+function bundleKey(comicId, version) {
+  return version ? `bundles/${comicId}-${version}.zip` : `bundles/${comicId}.zip`;
 }
 
 // Stream a local file up to the bucket (multipart-safe for large bundles).
-async function uploadBundle(comicId, filePath) {
+async function uploadBundle(comicId, filePath, version) {
   if (!objectStoreEnabled) return false;
   const upload = new Upload({
     client: client(),
     params: {
       Bucket: BUCKET,
-      Key: bundleKey(comicId),
+      Key: bundleKey(comicId, version),
       Body: fs.createReadStream(filePath),
       ContentType: 'application/zip',
-      // Cache aggressively at the CDN edge so a warmed object stays fast and
-      // doesn't expire back to a slow origin fetch. Re-uploading the same key
-      // (e.g. after a re-export) replaces the cached copy, so this is safe.
+      // Cache aggressively at the CDN edge — safe now that keys are versioned,
+      // so a new bundle never collides with a cached older one.
       CacheControl: 'public, max-age=2592000', // 30 days
     },
   });
@@ -68,10 +73,10 @@ async function uploadBundle(comicId, filePath) {
   return true;
 }
 
-async function bundleExists(comicId) {
+async function bundleExists(comicId, version) {
   if (!objectStoreEnabled) return false;
   try {
-    await client().send(new HeadObjectCommand({ Bucket: BUCKET, Key: bundleKey(comicId) }));
+    await client().send(new HeadObjectCommand({ Bucket: BUCKET, Key: bundleKey(comicId, version) }));
     return true;
   } catch {
     return false;
@@ -80,11 +85,11 @@ async function bundleExists(comicId) {
 
 // Time-limited GET URL the reader can be redirected to. Tigris caches the
 // underlying object at the edge, so repeat downloads are fast worldwide.
-async function presignedBundleUrl(comicId, expiresIn = 3600) {
+async function presignedBundleUrl(comicId, version, expiresIn = 3600) {
   if (!objectStoreEnabled) return null;
   return getSignedUrl(
     client(),
-    new GetObjectCommand({ Bucket: BUCKET, Key: bundleKey(comicId) }),
+    new GetObjectCommand({ Bucket: BUCKET, Key: bundleKey(comicId, version) }),
     { expiresIn }
   );
 }

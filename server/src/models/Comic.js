@@ -170,6 +170,20 @@ const HotspotSchema = new mongoose.Schema({
   height: Number,
   label: String,
   borderColor: String,
+  // Optional traced outline (normalized page coords). When set (>=3 points) the
+  // reader draws this polygon instead of the x/y/width/height rectangle; the
+  // rect stays as the bounding box for hit-testing and layout.
+  points: [{
+    x: Number,
+    y: Number
+  }],
+  // Peak enlargement of the traced cut-out on the reader's pulse, as a fraction
+  // (0.64 = grows 64%). Unset → reader default.
+  pulseScale: Number,
+  // Extra brightness added at the pulse peak (0.2 = +20%). Unset → reader default.
+  pulseBrightness: Number,
+  // Optional glow tint (hex) washed over the cut-out at the pulse peak.
+  pulseTint: String,
   slides: [HotspotSlideSchema]
 }, { _id: false });
 
@@ -226,6 +240,10 @@ const ComicSchema = new mongoose.Schema({
   // Hex color for the reader's "open bubble" flashing dot — set per comic so it
   // stands out against that comic's colour scheme (e.g. "#409B08").
   bubbleDotColor: { type: String, default: '' },
+  // Short content hash of the currently-mirrored download bundle. Baked into the
+  // Tigris object key (bundles/<id>-<version>.zip) so each re-export gets a fresh
+  // URL the CDN has never cached — overwriting a fixed key leaves stale edges.
+  bundleVersion: { type: String, default: '' },
   level: { type: String, enum: ['beginner', 'intermediate', 'advanced'], default: 'beginner' },
   language: { type: String, default: 'es' },
   targetLanguage: { type: String, default: 'en' },

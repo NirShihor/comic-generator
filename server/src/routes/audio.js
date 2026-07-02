@@ -338,7 +338,7 @@ Add audio tags in square brackets to make the speech more expressive and natural
 
 Available audio tags:
 - Emotions: [excited], [sad], [angry], [happy], [fearful], [surprised], [disgusted], [contemptuous]
-- Delivery: [whispers], [shouts], [laughs], [sighs], [gasps], [cries], [screams]
+- Delivery: [whispers], [shouts], [laughs], [sighs], [gasps], [cries], [screams], [emphasise]
 - Pacing: [pause], [slowly], [quickly]
 - Actions: [clears throat], [sniffles], [yawns]
 
@@ -724,8 +724,14 @@ router.post('/generate-word-audio', async (req, res) => {
 
       const originalText = wordMap.get(fileKey);
       try {
+        // Append a period so ElevenLabs fully articulates the word ending. Bare
+        // ultra-short words (e.g. "en", "un") otherwise get their trailing
+        // consonant clipped. The period isn't spoken — it just gives a clean
+        // falling intonation so the final sound isn't cut.
+        const trimmedWord = (originalText || '').trim();
+        const ttsText = /[.!?…,;:]$/.test(trimmedWord) ? trimmedWord : `${trimmedWord}.`;
         const requestBody = {
-          text: originalText,
+          text: ttsText,
           model_id: modelId,
           voice_settings: {
             stability,

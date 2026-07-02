@@ -1417,6 +1417,15 @@ async function newestBundleZip(dir) {
   return stamped[0].f;
 }
 
+// Short version tag for a bundle, derived from its size + mtime so it changes on
+// every re-export. Baked into the Tigris object key for cache-busting (see
+// objectStore.bundleKey). Cheap — no full-file read.
+async function bundleVersionFor(zipPath) {
+  const crypto = require('crypto');
+  const st = await fs.stat(zipPath);
+  return crypto.createHash('sha1').update(`${st.size}-${st.mtimeMs}`).digest('hex').slice(0, 12);
+}
+
 const BUNDLE_TMP_DIR = path.join(PROJECTS_DIR, '.upload-tmp');
 const bundleUpload = multer({
   storage: multer.diskStorage({
@@ -1458,9 +1467,12 @@ router.post('/:id/upload-bundle', bundleUpload.single('bundle'), async (req, res
       try {
         const zipFile = await newestBundleZip(exportDir);
         if (zipFile) {
-          await uploadBundle(id, path.join(exportDir, zipFile));
+          const zipPath = path.join(exportDir, zipFile);
+          const version = await bundleVersionFor(zipPath);
+          await uploadBundle(id, zipPath, version);
+          await Comic.updateOne({ id }, { $set: { bundleVersion: version } });
           mirrored = true;
-          console.log(`[upload-bundle] ${id}: mirrored ${zipFile} to object storage`);
+          console.log(`[upload-bundle] ${id}: mirrored ${zipFile} to object storage (v=${version})`);
         } else {
           console.warn(`[upload-bundle] ${id}: no .zip in export dir to mirror`);
         }
@@ -1496,9 +1508,11 @@ router.post('/mirror-bundles', async (req, res) => {
       try {
         const zipPath = path.join(exportDir, zipFile);
         const st = await fs.stat(zipPath);
-        await uploadBundle(e.name, zipPath);
-        results.push({ id: e.name, ok: true, zip: zipFile, bytes: st.size });
-        console.log(`[mirror-bundles] mirrored ${e.name}/${zipFile} (${st.size} bytes)`);
+        const version = await bundleVersionFor(zipPath);
+        await uploadBundle(e.name, zipPath, version);
+        await Comic.updateOne({ id: e.name }, { $set: { bundleVersion: version } });
+        results.push({ id: e.name, ok: true, zip: zipFile, bytes: st.size, version });
+        console.log(`[mirror-bundles] mirrored ${e.name}/${zipFile} (${st.size} bytes, v=${version})`);
       } catch (err) {
         results.push({ id: e.name, ok: false, error: err.message });
         console.warn(`[mirror-bundles] ${e.name} failed: ${err.message}`);

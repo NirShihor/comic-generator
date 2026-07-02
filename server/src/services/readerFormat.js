@@ -231,12 +231,27 @@ function transformToReaderFormat(comic, comicSlug) {
 
     // Build hotspots for this page
     const pageHotspots = (page.hotspots || []).map((hotspot, hIdx) => {
+      // If the hotspot has a traced outline, derive its bounding box from the
+      // points so the reader's tap target/layout matches the shape exactly.
+      const pts = (hotspot.points || []).filter(p => p && typeof p.x === 'number' && typeof p.y === 'number');
+      const hasPolygon = pts.length >= 3;
+      const box = hasPolygon
+        ? (() => {
+            const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+            const minX = Math.min(...xs), minY = Math.min(...ys);
+            return { x: minX, y: minY, width: Math.max(...xs) - minX, height: Math.max(...ys) - minY };
+          })()
+        : { x: hotspot.x, y: hotspot.y, width: hotspot.width, height: hotspot.height };
       return {
         id: `${comicSlug}-hotspot-${page.pageNumber}-${hIdx + 1}`,
-        x: hotspot.x,
-        y: hotspot.y,
-        width: hotspot.width,
-        height: hotspot.height,
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        ...(hasPolygon && { points: pts.map(p => ({ x: p.x, y: p.y })) }),
+        ...(typeof hotspot.pulseScale === 'number' && { pulseScale: hotspot.pulseScale }),
+        ...(typeof hotspot.pulseBrightness === 'number' && { pulseBrightness: hotspot.pulseBrightness }),
+        ...(hotspot.pulseTint && { pulseTint: hotspot.pulseTint }),
         ...(hotspot.label && { label: hotspot.label }),
         ...(hotspot.borderColor && { borderColor: hotspot.borderColor }),
         slides: (hotspot.slides || []).map((slide, sIdx) => {

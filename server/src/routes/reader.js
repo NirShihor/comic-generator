@@ -267,9 +267,13 @@ router.get('/comics/:id/bundle', async (req, res) => {
     // not yet re-synced fall through to streaming from the volume below.
     if (objectStoreEnabled) {
       try {
-        if (await bundleExists(req.params.id)) {
-          const url = await presignedBundleUrl(req.params.id, 3600);
-          console.log(`[BUNDLE] Redirecting ${req.params.id} to object storage`);
+        // The mirrored object key is versioned by content hash (cache-busting),
+        // so we need the comic's current bundleVersion to build the right key.
+        const meta = await Comic.findOne({ id: req.params.id }, { bundleVersion: 1 }).lean();
+        const version = meta?.bundleVersion || '';
+        if (await bundleExists(req.params.id, version)) {
+          const url = await presignedBundleUrl(req.params.id, version, 3600);
+          console.log(`[BUNDLE] Redirecting ${req.params.id} to object storage (v=${version || 'legacy'})`);
           return res.redirect(302, url);
         }
       } catch (e) {

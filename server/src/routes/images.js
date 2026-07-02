@@ -17,76 +17,65 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-  // Build content parts: linked panel images first, then style refs, then prompt
+  // Build content parts. For NORMAL generation the fixed style/character refs go
+  // FIRST (they are the art-style anchor); continuity refs (previous panels) go
+  // AFTER and are for scene/character matching only — never the style authority.
+  // For ANGLE CHANGE the source scene (a linked ref) must stay primary, so keep
+  // linked-first in that case.
   const parts = [];
   let linkedCount = 0;
   let styleCount = 0;
 
-  // Add linked panel reference images (continuity refs - user prompt controls usage)
-  for (const imgPath of linkedRefPaths) {
+  const appendImage = async (imgPath, withAnnotations) => {
     const fullPath = path.join(__dirname, '../..', imgPath);
     try {
       await fs.access(fullPath);
-      let resizedBuffer = await sharp(fullPath)
+      let buf = await sharp(fullPath)
         .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 85 })
         .toBuffer();
-      // Burn annotations if present for this image
-      if (annotationsMap[imgPath] && annotationsMap[imgPath].length > 0) {
-        resizedBuffer = await burnAnnotationsOntoImage(resizedBuffer, annotationsMap[imgPath]);
+      if (withAnnotations && annotationsMap[imgPath] && annotationsMap[imgPath].length > 0) {
+        buf = await burnAnnotationsOntoImage(buf, annotationsMap[imgPath]);
       }
-      parts.push({
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: resizedBuffer.toString('base64')
-        }
-      });
-      linkedCount++;
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
+      return true;
     } catch (err) {
-      console.log(`Gemini: linked ref image not found, skipping: ${fullPath}`);
+      console.log(`Gemini: ref image not found, skipping: ${fullPath}`);
+      return false;
     }
+  };
+
+  if (isAngleChange) {
+    for (const p of linkedRefPaths) { if (await appendImage(p, true)) linkedCount++; }
+    for (const p of styleRefPaths) { if (await appendImage(p, false)) styleCount++; }
+  } else {
+    for (const p of styleRefPaths) { if (await appendImage(p, false)) styleCount++; }
+    for (const p of linkedRefPaths) { if (await appendImage(p, true)) linkedCount++; }
   }
 
-  // Add style/character reference images
-  for (const imgPath of styleRefPaths) {
-    const fullPath = path.join(__dirname, '../..', imgPath);
-    try {
-      await fs.access(fullPath);
-      const resizedBuffer = await sharp(fullPath)
-        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 85 })
-        .toBuffer();
-      parts.push({
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: resizedBuffer.toString('base64')
-        }
-      });
-      styleCount++;
-    } catch (err) {
-      console.log(`Gemini: style ref image not found, skipping: ${fullPath}`);
-    }
-  }
-
-  // Add the text prompt with appropriate reference image instructions
+  // Build the reference-image instructions to match the ordering above.
   let textPrompt = prompt;
   if (isAngleChange && linkedCount > 0) {
     const angleNote = `CAMERA ANGLE CHANGE — The FIRST attached image is the CURRENT scene. You MUST recreate this EXACT SAME scene — same characters, same clothing, same environment, same props, same lighting — but viewed from a DIFFERENT camera angle as specified in the prompt below. DO NOT add or remove characters. DO NOT change any visual details. The ONLY thing that changes is the camera position.`;
     const styleNote = styleCount > 0 ? `\n\nThe remaining ${styleCount} image(s) are style references for art consistency only.` : '';
     textPrompt = `${angleNote}${styleNote}\n\n${prompt}`;
-  } else if (styleCount > 0) {
-    let styleNote;
-    if (hasMasterStyleImage) {
-      const otherRefs = styleCount - 1;
-      styleNote = `IMPORTANT: The FIRST attached image is a MASTER STYLE GUIDE. Use it ONLY to match the art technique, line work, shading, ink style, and overall aesthetic. Do NOT copy any characters, subjects, scenes, or content from this image — extract ONLY the visual drawing style.`;
-      if (otherRefs > 0) {
-        styleNote += `\nThe remaining ${otherRefs} image(s) are CHARACTER and STYLE REFERENCES — use them to match character appearance and visual consistency.`;
+  } else if (styleCount > 0 || linkedCount > 0) {
+    const notes = [];
+    if (styleCount > 0) {
+      if (hasMasterStyleImage) {
+        notes.push(`The FIRST attached image is the MASTER STYLE GUIDE — the DEFINITIVE art style (line work, inking, shading, colour palette, level of stylization). Reproduce this art style exactly. Do NOT copy its characters, subjects or scene — extract ONLY the drawing style.`);
+        const otherStyle = styleCount - 1;
+        if (otherStyle > 0) notes.push(`The next ${otherStyle} image(s) are CHARACTER/STYLE references — match character appearance and visual consistency.`);
+      } else {
+        notes.push(`The first ${styleCount} attached image(s) are STYLE and CHARACTER references — match the art style and character appearance. Do NOT copy them.`);
       }
-      styleNote += `\nGenerate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.`;
-    } else {
-      styleNote = `IMPORTANT: ${styleCount} of the attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.`;
     }
-    textPrompt = `${styleNote}\n\n${prompt}`;
+    if (linkedCount > 0) {
+      const isOne = linkedCount === 1;
+      notes.push(`The ${isOne ? 'final attached image is a CONTINUITY reference' : `final ${linkedCount} attached images are CONTINUITY references`} from earlier panels. Use ${isOne ? 'it' : 'them'} ONLY to keep the SAME characters, clothing, props, setting and layout consistent — but take the ART STYLE strictly from the master style guide above, NOT from ${isOne ? 'it' : 'them'} (${isOne ? 'it' : 'they'} may have drifted from the intended style).`);
+    }
+    notes.push(`Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.`);
+    textPrompt = `${notes.join('\n')}\n\n${prompt}`;
   }
   // Add aspect ratio instructions
   const aspectInstructions = {
@@ -1106,7 +1095,7 @@ router.post('/inpaint-region', (req, res) => {
       const maxRetries = 3;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const response = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-lite-image',
+          model: 'gemini-3-pro-image-preview',   // inpainting stays on Nano Banana Pro (better fidelity)
           contents: parts,
           config: { responseModalities: ['TEXT', 'IMAGE'] }
         });
@@ -1133,6 +1122,34 @@ router.post('/inpaint-region', (req, res) => {
           .resize(srcMeta.width, srcMeta.height, { fit: 'cover', position: 'centre' })
           .png()
           .toBuffer();
+      }
+
+      // CONTAIN TO THE GREEN BOX. Gemini regenerates the whole panel, so to
+      // guarantee that nothing outside the selected rectangle changes, we paste
+      // the regenerated content back into ONLY that rectangle over the untouched
+      // original. A small feather softens the boundary so there's no hard seam.
+      {
+        const W = srcMeta.width, H = srcMeta.height;
+        const rx = Math.max(0, Math.round(rect.x * W));
+        const ry = Math.max(0, Math.round(rect.y * H));
+        const rw = Math.min(W - rx, Math.round(rect.width * W));
+        const rh = Math.min(H - ry, Math.round(rect.height * H));
+        if (rw > 0 && rh > 0) {
+          const feather = Math.max(1, Math.min(Math.round(Math.min(rw, rh) * 0.05), 20));
+          const maskSvg = `<svg width="${W}" height="${H}"><rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="white"/></svg>`;
+          const rectMask = await sharp(Buffer.from(maskSvg)).blur(feather).png().toBuffer();
+          // Keep the generated pixels only inside the (feathered) rectangle…
+          const maskedGen = await sharp(buffer)
+            .ensureAlpha()
+            .composite([{ input: rectMask, blend: 'dest-in' }])
+            .png()
+            .toBuffer();
+          // …then lay that over the original, which is untouched everywhere else.
+          buffer = await sharp(fullSourcePath)
+            .composite([{ input: maskedGen }])
+            .png()
+            .toBuffer();
+        }
       }
 
 

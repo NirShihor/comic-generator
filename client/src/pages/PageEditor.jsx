@@ -571,6 +571,12 @@ function PageEditor({ isCover = false }) {
   const [hotspotDragOffset, setHotspotDragOffset] = useState({ x: 0, y: 0 });
   const [isResizingHotspot, setIsResizingHotspot] = useState(false);
   const [hotspotResizeCorner, setHotspotResizeCorner] = useState(null);
+  // Polygon tracing: click points around an item to trace its shape.
+  const [isTracingHotspot, setIsTracingHotspot] = useState(false);
+  const [tracePoints, setTracePoints] = useState([]);          // in-progress points [{x,y}]
+  const [draggingTracePoint, setDraggingTracePoint] = useState(null); // index while dragging an in-progress point
+  const [draggingVertex, setDraggingVertex] = useState(null);  // { hotspotId, index } while editing
+  const [hotspotClipboard, setHotspotClipboard] = useState(null); // copied { label, slides } for paste
   const canvasRef = useRef(null);
 
   // Coordinate space — keep at 400×600 so fonts, bubble proportions and the
@@ -1848,6 +1854,7 @@ function PageEditor({ isCover = false }) {
       width: 0.15,
       height: 0.1,
       label: '',
+      borderColor: '#00bcd4',
       slides: []
     };
     setHotspots(prev => [...prev, newHotspot]);
@@ -1860,6 +1867,43 @@ function PageEditor({ isCover = false }) {
     setHotspots(prev => prev.map(h =>
       h.id === hotspotId ? { ...h, ...updates } : h
     ));
+  };
+
+  // Bounding box (normalized) of a set of traced points.
+  const bboxFromPoints = (pts) => {
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const minX = Math.min(...xs), minY = Math.min(...ys);
+    return { x: minX, y: minY, width: Math.max(...xs) - minX, height: Math.max(...ys) - minY };
+  };
+
+  // Finish tracing: turn the placed points into a polygon hotspot.
+  const finishTrace = () => {
+    if (tracePoints.length < 3) return;
+    const box = bboxFromPoints(tracePoints);
+    const newHotspot = {
+      id: `hotspot-${Date.now()}`,
+      ...box,
+      points: tracePoints,
+      label: '',
+      borderColor: '#00bcd4',
+      slides: []
+    };
+    setHotspots(prev => [...prev, newHotspot]);
+    setSelectedHotspotId(newHotspot.id);
+    setSelectedBubbleId(null);
+    setTracePoints([]);
+    setIsTracingHotspot(false);
+  };
+
+  const cancelTrace = () => { setTracePoints([]); setIsTracingHotspot(false); };
+
+  // Move one vertex of an existing polygon hotspot and keep its bbox in sync.
+  const moveHotspotVertex = (hotspotId, index, coords) => {
+    setHotspots(prev => prev.map(h => {
+      if (h.id !== hotspotId || !h.points) return h;
+      const pts = h.points.map((p, i) => (i === index ? { x: coords.x, y: coords.y } : p));
+      return { ...h, points: pts, ...bboxFromPoints(pts) };
+    }));
   };
 
   const deleteHotspot = (hotspotId) => {
@@ -1902,6 +1946,32 @@ function PageEditor({ isCover = false }) {
       if (h.id !== hotspotId) return h;
       return { ...h, slides: (h.slides || []).filter(s => s.id !== slideId) };
     }));
+  };
+
+  // Copy a hotspot's content (its slides + label) so it can be pasted into
+  // another hotspot. Geometry (shape/points/position/border) is NOT copied.
+  const copyHotspotContent = (hotspot) => {
+    setHotspotClipboard({
+      label: hotspot.label || '',
+      slides: JSON.parse(JSON.stringify(hotspot.slides || []))
+    });
+  };
+
+  const pasteHotspotContent = (hotspotId) => {
+    if (!hotspotClipboard) return;
+    const target = hotspots.find(h => h.id === hotspotId);
+    if (target && (target.slides || []).length > 0 &&
+        !window.confirm('This hotspot already has content. Replace it with the copied content?')) return;
+    const stamp = Date.now();
+    // Deep clone and give slides fresh ids so they don't collide with the source.
+    const slides = (hotspotClipboard.slides || []).map((s, i) => ({
+      ...JSON.parse(JSON.stringify(s)),
+      id: `slide-${stamp}-${i}`
+    }));
+    updateHotspot(hotspotId, {
+      slides,
+      ...(hotspotClipboard.label ? { label: hotspotClipboard.label } : {})
+    });
   };
 
   const uploadSlideImage = async (hotspotId, slideId, event) => {
@@ -2103,6 +2173,19 @@ function PageEditor({ isCover = false }) {
 
   const handleCanvasMouseDown = (e) => {
     if (editorMode === 'bubbles') {
+      // Tracing a polygon: each click drops a point; clicking near the first
+      // point (once there are >=3) closes the shape.
+      if (isTracingHotspot && !e.target.dataset.tracePoint) {
+        const coords = getRelativeCoords(e);
+        if (coords) {
+          if (tracePoints.length >= 3) {
+            const f = tracePoints[0];
+            if (Math.hypot(coords.x - f.x, coords.y - f.y) < 0.02) { finishTrace(); return; }
+          }
+          setTracePoints(prev => [...prev, { x: coords.x, y: coords.y }]);
+        }
+        return;
+      }
       // Only add bubble if in "adding bubble" mode and clicking on empty space
       if (isAddingHotspot && !e.target.dataset.bubbleId && !e.target.dataset.resizeHandle && !e.target.dataset.hotspotId) {
         const coords = getRelativeCoords(e);
@@ -2360,11 +2443,22 @@ function PageEditor({ isCover = false }) {
             rotation: angle
           });
         }
+      } else if (draggingTracePoint !== null) {
+        setTracePoints(prev => prev.map((p, i) => (i === draggingTracePoint ? { x: coords.x, y: coords.y } : p)));
+      } else if (draggingVertex) {
+        moveHotspotVertex(draggingVertex.hotspotId, draggingVertex.index, coords);
       } else if (isDraggingHotspot && selectedHotspotId) {
-        updateHotspot(selectedHotspotId, {
-          x: Math.max(0, Math.min(1, coords.x - hotspotDragOffset.x)),
-          y: Math.max(0, Math.min(1, coords.y - hotspotDragOffset.y))
-        });
+        const hotspot = hotspots.find(h => h.id === selectedHotspotId);
+        const newX = Math.max(0, Math.min(1, coords.x - hotspotDragOffset.x));
+        const newY = Math.max(0, Math.min(1, coords.y - hotspotDragOffset.y));
+        if (hotspot && hotspot.points && hotspot.points.length >= 3) {
+          // Translate the whole traced outline with the box.
+          const dx = newX - hotspot.x, dy = newY - hotspot.y;
+          const pts = hotspot.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+          updateHotspot(selectedHotspotId, { points: pts, ...bboxFromPoints(pts) });
+        } else {
+          updateHotspot(selectedHotspotId, { x: newX, y: newY });
+        }
       } else if (isResizingHotspot && selectedHotspotId) {
         const hotspot = hotspots.find(h => h.id === selectedHotspotId);
         if (hotspot) {
@@ -2373,7 +2467,14 @@ function PageEditor({ isCover = false }) {
           if (hotspotResizeCorner.includes('left')) { newW = Math.max(0.05, hotspot.x + hotspot.width - coords.x); newX = coords.x; }
           if (hotspotResizeCorner.includes('bottom')) newH = Math.max(0.03, coords.y - hotspot.y);
           if (hotspotResizeCorner.includes('top')) { newH = Math.max(0.03, hotspot.y + hotspot.height - coords.y); newY = coords.y; }
-          updateHotspot(selectedHotspotId, { x: newX, y: newY, width: newW, height: newH });
+          if (hotspot.points && hotspot.points.length >= 3 && hotspot.width > 0 && hotspot.height > 0) {
+            // Scale the traced outline to match the resized box.
+            const sx = newW / hotspot.width, sy = newH / hotspot.height;
+            const pts = hotspot.points.map(p => ({ x: newX + (p.x - hotspot.x) * sx, y: newY + (p.y - hotspot.y) * sy }));
+            updateHotspot(selectedHotspotId, { points: pts, ...bboxFromPoints(pts) });
+          } else {
+            updateHotspot(selectedHotspotId, { x: newX, y: newY, width: newW, height: newH });
+          }
         }
       }
     } else {
@@ -2392,6 +2493,8 @@ function PageEditor({ isCover = false }) {
       setIsDraggingHotspot(false);
       setIsResizingHotspot(false);
       setHotspotResizeCorner(null);
+      setDraggingVertex(null);
+      setDraggingTracePoint(null);
       setIsDraggingTailCtrl2(false);
       setIsDraggingRotation(false);
     } else {
@@ -5225,7 +5328,9 @@ function PageEditor({ isCover = false }) {
             ? (isAddingBubble ? 'Click on canvas to place bubble' : 'Add bubbles for title text')
             : editorMode === 'layout'
               ? (isDrawingFloatingPanel ? 'Draw a rectangle for the floating panel' : 'Draw lines by dragging | Drag lines to reposition')
-              : isAddingBubble
+              : isTracingHotspot
+                ? 'Click to add points · drag any point to adjust · Finish to close'
+                : isAddingBubble
                 ? 'Click on canvas to place bubble'
                 : isAddingHotspot
                   ? 'Click on canvas to place hotspot'
@@ -5256,6 +5361,28 @@ function PageEditor({ isCover = false }) {
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: isAddingHotspot ? '#00bcd4' : undefined, border: isAddingHotspot ? 'none' : undefined, color: isAddingHotspot ? '#fff' : undefined }}
           >
             {isAddingHotspot ? 'Cancel' : '+ Hotspot'}
+          </button>
+        )}
+        {editorMode === 'bubbles' && !isCover && (
+          <button
+            className={`btn ${isTracingHotspot ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => {
+              if (isTracingHotspot) { cancelTrace(); }
+              else { setIsTracingHotspot(true); setIsAddingHotspot(false); setIsAddingBubble(false); }
+            }}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: isTracingHotspot ? '#00bcd4' : undefined, border: isTracingHotspot ? 'none' : undefined, color: isTracingHotspot ? '#fff' : undefined }}
+            title="Trace a hotspot's shape by clicking points around the item"
+          >
+            {isTracingHotspot ? 'Cancel trace' : '✐ Trace shape'}
+          </button>
+        )}
+        {isTracingHotspot && tracePoints.length >= 3 && (
+          <button
+            className="btn btn-primary"
+            onClick={finishTrace}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', background: '#27ae60', border: 'none', color: '#fff' }}
+          >
+            ✓ Finish shape ({tracePoints.length})
           </button>
         )}
         {editorMode === 'bubbles' && page.masterImage && bubbles.length > 0 && (
@@ -6574,7 +6701,9 @@ function PageEditor({ isCover = false }) {
             {/* Hotspot overlays */}
             {editorMode === 'bubbles' && hotspots.map((hotspot, hIdx) => {
               const isSelected = selectedHotspotId === hotspot.id;
-              const hColor = hotspot.borderColor || '#00bcd4';
+              // 'transparent' hides the frame in the reader; show a gray placeholder
+              // in the editor so it stays visible and selectable.
+              const hColor = hotspot.borderColor === 'transparent' ? '#94a3b8' : (hotspot.borderColor || '#00bcd4');
               // Parse hex to RGB for semi-transparent background
               const hR = parseInt(hColor.slice(1, 3), 16) || 0;
               const hG = parseInt(hColor.slice(3, 5), 16) || 0;
@@ -6594,7 +6723,8 @@ function PageEditor({ isCover = false }) {
                     border: isSelected ? `2px solid ${hColor}` : `2px dashed ${hColor}`,
                     background: isSelected ? `rgba(${hR}, ${hG}, ${hB}, 0.2)` : `rgba(${hR}, ${hG}, ${hB}, 0.08)`,
                     zIndex: 45,
-                    pointerEvents: 'auto',
+                    // Let trace clicks fall through to the canvas while tracing.
+                    pointerEvents: isTracingHotspot ? 'none' : 'auto',
                     cursor: isDraggingHotspot ? 'grabbing' : 'grab',
                     boxSizing: 'border-box'
                   }}
@@ -6632,6 +6762,77 @@ function PageEditor({ isCover = false }) {
                 </div>
               );
             })}
+
+            {/* Traced-shape outlines + polygon tracing overlay */}
+            {editorMode === 'bubbles' && (
+              <>
+                <svg
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 44, overflow: 'visible' }}
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                >
+                  {hotspots.filter(h => h.points && h.points.length >= 3).map(h => {
+                    const c = h.borderColor === 'transparent' ? '#94a3b8' : (h.borderColor || '#00bcd4');
+                    const sel = selectedHotspotId === h.id;
+                    const pts = h.points.map(p => `${p.x * 100},${p.y * 100}`).join(' ');
+                    return (
+                      <polygon key={`poly-${h.id}`} points={pts}
+                        fill={sel ? `${c}33` : `${c}18`} stroke={c}
+                        strokeWidth={sel ? 2 : 1.5} strokeDasharray={sel ? undefined : '3 2'}
+                        vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                    );
+                  })}
+                  {isTracingHotspot && tracePoints.length > 0 && (
+                    <polyline
+                      points={tracePoints.map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
+                      fill="none" stroke="#00bcd4" strokeWidth={2}
+                      vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                  )}
+                  {isTracingHotspot && tracePoints.length >= 3 && (
+                    <line
+                      x1={tracePoints[tracePoints.length - 1].x * 100} y1={tracePoints[tracePoints.length - 1].y * 100}
+                      x2={tracePoints[0].x * 100} y2={tracePoints[0].y * 100}
+                      stroke="#00bcd4" strokeWidth={1} strokeDasharray="2 2"
+                      vectorEffect="non-scaling-stroke" />
+                  )}
+                </svg>
+
+                {/* Draggable vertices of the selected traced hotspot */}
+                {(() => {
+                  const h = hotspots.find(x => x.id === selectedHotspotId && x.points && x.points.length >= 3);
+                  if (!h) return null;
+                  const c = h.borderColor === 'transparent' ? '#94a3b8' : (h.borderColor || '#00bcd4');
+                  return h.points.map((p, i) => (
+                    <div key={`v-${h.id}-${i}`}
+                      data-hotspot-id={h.id}
+                      onMouseDown={(e) => { e.stopPropagation(); setDraggingVertex({ hotspotId: h.id, index: i }); setSelectedHotspotId(h.id); }}
+                      style={{ position: 'absolute', left: `${p.x * 100}%`, top: `${p.y * 100}%`,
+                               width: 10, height: 10, marginLeft: -5, marginTop: -5,
+                               background: '#fff', border: `2px solid ${c}`,
+                               borderRadius: '50%', cursor: 'move', zIndex: 47, boxSizing: 'border-box' }} />
+                  ));
+                })()}
+
+                {/* In-progress trace points — draggable to adjust before closing.
+                    First point is green (the shape's start); close via Finish. */}
+                {isTracingHotspot && tracePoints.map((p, i) => {
+                  const isStart = i === 0 && tracePoints.length >= 3;
+                  return (
+                    <div key={`tp-${i}`}
+                      data-trace-point="1"
+                      onMouseDown={(e) => { e.stopPropagation(); setDraggingTracePoint(i); }}
+                      title="Drag to adjust this point"
+                      style={{ position: 'absolute', left: `${p.x * 100}%`, top: `${p.y * 100}%`,
+                               width: i === 0 ? 13 : 10, height: i === 0 ? 13 : 10,
+                               marginLeft: i === 0 ? -6.5 : -5, marginTop: i === 0 ? -6.5 : -5,
+                               background: i === 0 ? '#27ae60' : '#00bcd4',
+                               border: '2px solid #fff', borderRadius: '50%',
+                               cursor: 'move', zIndex: 48, boxSizing: 'border-box',
+                               boxShadow: isStart ? '0 0 0 3px rgba(39,174,96,0.35)' : '0 1px 3px rgba(0,0,0,0.4)' }} />
+                  );
+                })}
+              </>
+            )}
 
             {/* Instructions */}
             {editorMode === 'layout' && lines.length === 0 && (
@@ -7640,7 +7841,7 @@ function PageEditor({ isCover = false }) {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[sighs]', '[pause]'].map(tag => {
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]'].map(tag => {
                                 const tagKey = `${sentence.id}-${tag}`;
                                 const isCopied = copiedTag === tagKey;
                                 return (
@@ -7689,7 +7890,7 @@ function PageEditor({ isCover = false }) {
                               }}
                             />
                             <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[sighs]', '[pause]'].map(tag => {
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]'].map(tag => {
                                 const tagKey = `${sentence.id}-en-${tag}`;
                                 const isCopied = copiedTag === tagKey;
                                 return (
@@ -8971,12 +9172,30 @@ function PageEditor({ isCover = false }) {
               <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#e0f7fa', borderRadius: '6px', border: '1px solid #00bcd4' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <h4 style={{ margin: 0, color: '#00838f', fontSize: '0.9rem' }}>Hotspot Details</h4>
-                  <button
-                    onClick={() => { deleteHotspot(hotspot.id); }}
-                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-                  >
-                    Delete Hotspot
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <button
+                      onClick={() => copyHotspotContent(hotspot)}
+                      title="Copy this hotspot's slides & label"
+                      style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#0288d1', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                    >
+                      Copy
+                    </button>
+                    {hotspotClipboard && (
+                      <button
+                        onClick={() => pasteHotspotContent(hotspot.id)}
+                        title={`Paste ${(hotspotClipboard.slides || []).length} slide(s) into this hotspot`}
+                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#27ae60', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                      >
+                        Paste
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { deleteHotspot(hotspot.id); }}
+                      style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
 
                 {/* Label */}
@@ -8995,12 +9214,74 @@ function PageEditor({ isCover = false }) {
                 <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.75rem', color: '#555' }}>Frame Color</label>
                   <ColorPicker
-                    value={hotspot.borderColor || '#00bcd4'}
+                    value={hotspot.borderColor && hotspot.borderColor !== 'transparent' ? hotspot.borderColor : '#00bcd4'}
                     onChange={(e) => updateHotspot(hotspot.id, { borderColor: e.target.value })}
                     onClick={(e) => e.stopPropagation()}
-                    style={{ width: '28px', height: '22px', border: '1px solid #ccc', borderRadius: '3px' }}
+                    disabled={hotspot.borderColor === 'transparent'}
+                    style={{ width: '28px', height: '22px', border: '1px solid #ccc', borderRadius: '3px', opacity: hotspot.borderColor === 'transparent' ? 0.4 : 1 }}
                   />
+                  <label style={{ fontSize: '0.75rem', color: '#555', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}
+                    title="Hide the frame in the reader (invisible border — leaves just the tappable area / floating cut-out)">
+                    <input
+                      type="checkbox"
+                      checked={hotspot.borderColor === 'transparent'}
+                      onChange={(e) => updateHotspot(hotspot.id, { borderColor: e.target.checked ? 'transparent' : '#00bcd4' })}
+                    />
+                    Transparent
+                  </label>
                 </div>
+
+                {/* Pulse enlargement (traced hotspots only — controls how much the
+                    cut-out grows on the reader's pulse) */}
+                {(hotspot.points || []).length >= 3 && (
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <label style={{ fontSize: '0.75rem', color: '#555', display: 'block', marginBottom: '0.2rem' }}>
+                      Pulse enlargement: {Math.round((hotspot.pulseScale ?? 0.64) * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0" max="150" step="5"
+                      value={Math.round((hotspot.pulseScale ?? 0.64) * 100)}
+                      onChange={(e) => updateHotspot(hotspot.id, { pulseScale: parseInt(e.target.value, 10) / 100 })}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                )}
+
+                {/* Pulse brightness + glow tint (traced hotspots only) */}
+                {(hotspot.points || []).length >= 3 && (
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <label style={{ fontSize: '0.75rem', color: '#555', display: 'block', marginBottom: '0.2rem' }}>
+                      Pulse brightness: {Math.round((hotspot.pulseBrightness ?? 0.2) * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0" max="80" step="5"
+                      value={Math.round((hotspot.pulseBrightness ?? 0.2) * 100)}
+                      onChange={(e) => updateHotspot(hotspot.id, { pulseBrightness: parseInt(e.target.value, 10) / 100 })}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ width: '100%' }}
+                    />
+                    <label style={{ fontSize: '0.75rem', color: '#555', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.3rem', cursor: 'pointer' }}
+                      title="Wash a colour over the image as it enlarges (a coloured glow)">
+                      <input
+                        type="checkbox"
+                        checked={!!hotspot.pulseTint}
+                        onChange={(e) => updateHotspot(hotspot.id, { pulseTint: e.target.checked ? '#ffffff' : '' })}
+                      />
+                      Glow tint
+                      {hotspot.pulseTint && (
+                        <ColorPicker
+                          value={hotspot.pulseTint || '#ffffff'}
+                          onChange={(e) => updateHotspot(hotspot.id, { pulseTint: e.target.value })}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ width: '28px', height: '22px', border: '1px solid #ccc', borderRadius: '3px' }}
+                        />
+                      )}
+                    </label>
+                  </div>
+                )}
 
                 {/* Voice selector */}
                 <div style={{ marginBottom: '0.5rem' }}>
