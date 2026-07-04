@@ -2734,6 +2734,31 @@ function ComicEditor() {
             </button>
           </div>
 
+          {/* Image generation agent */}
+          <div style={{ background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '8px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '0.3rem', color: '#333' }}>Image generation agent</h3>
+            <p style={{ color: '#888', fontSize: '0.85rem', margin: '0 0 0.8rem' }}>
+              Which AI creates this comic's page/panel images by default (used by "Generate All" and the primary Generate). The per-panel OpenAI/Gemini buttons still override per generation. Gemini uses the current best page-generation model.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {[{ v: 'openai', label: 'ChatGPT (OpenAI)' }, { v: 'gemini', label: 'Gemini' }].map(opt => {
+                const active = (comic.imageProvider || 'openai') === opt.v;
+                return (
+                  <button key={opt.v}
+                    onClick={async () => {
+                      try {
+                        await api.put(`/comics/${id}`, { imageProvider: opt.v });
+                        setComic({ ...comic, imageProvider: opt.v });
+                      } catch (e) { alert('Failed to update image agent'); }
+                    }}
+                    style={{ padding: '0.5rem 1.2rem', borderRadius: '6px', border: active ? 'none' : '1px solid #ccc', cursor: 'pointer', fontWeight: active ? 'bold' : 'normal', color: active ? '#fff' : '#333', background: active ? '#4a90d9' : '#fff' }}>
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Cover — Landscape (Reader detail-view banner) */}
           <div style={{
             background: '#f8f9fa',

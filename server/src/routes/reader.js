@@ -364,15 +364,20 @@ router.get('/cover-thumbnail/:id', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
 
+    // Prefer the source cover (uploads/projects); fall back to the exported cover
+    // (projects/<id>/export/<slug>/images/<slug>_cover.jpg), which — unlike the
+    // uploads source — is reliably synced to this server via the bundle sync.
+    const candidates = [];
     const coverPath = comic.cover?.bakedImage || comic.cover?.image;
-    if (!coverPath) {
-      return res.status(404).json({ error: 'No cover image' });
-    }
+    if (coverPath) candidates.push(path.join(__dirname, '../..', coverPath));
+    const slug = sanitizeTitle(comic.title);
+    candidates.push(path.join(PROJECTS_DIR, comic.id, 'export', slug, 'images', `${slug}_cover.jpg`));
 
-    const fullPath = path.join(__dirname, '../..', coverPath);
-    try {
-      await fs.access(fullPath);
-    } catch {
+    let fullPath = null;
+    for (const c of candidates) {
+      try { await fs.access(c); fullPath = c; break; } catch {}
+    }
+    if (!fullPath) {
       return res.status(404).json({ error: 'Cover file not found' });
     }
 
@@ -394,15 +399,23 @@ router.get('/cover-thumbnail/:id', async (req, res) => {
 router.get('/collection-thumbnail/:collectionId', async (req, res) => {
   try {
     const collection = await Collection.findOne({ id: req.params.collectionId }).lean();
-    if (!collection || !collection.coverImage) {
-      return res.status(404).json({ error: 'No collection cover image' });
+
+    // Prefer the collection's source cover; fall back to an exported
+    // collection_cover.jpg from any episode's synced export dir.
+    const candidates = [];
+    if (collection?.coverImage) candidates.push(path.join(__dirname, '../..', collection.coverImage));
+    const episodes = await Comic.find({ collectionId: req.params.collectionId }).select('id title').lean();
+    for (const ep of episodes) {
+      const slug = sanitizeTitle(ep.title);
+      candidates.push(path.join(PROJECTS_DIR, ep.id, 'export', slug, 'images', 'collection_cover.jpg'));
     }
 
-    const fullPath = path.join(__dirname, '../..', collection.coverImage);
-    try {
-      await fs.access(fullPath);
-    } catch {
-      return res.status(404).json({ error: 'Cover file not found' });
+    let fullPath = null;
+    for (const c of candidates) {
+      try { await fs.access(c); fullPath = c; break; } catch {}
+    }
+    if (!fullPath) {
+      return res.status(404).json({ error: 'No collection cover image' });
     }
 
     const thumbnail = await sharp(fullPath)

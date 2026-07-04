@@ -3201,7 +3201,7 @@ function PageEditor({ isCover = false }) {
   };
 
   // Generate a single panel image
-  const generatePanelImage = async (panel, panelIndex, provider = 'openai', isAngleChange = false) => {
+  const generatePanelImage = async (panel, panelIndex, provider = comic?.imageProvider || 'openai', isAngleChange = false) => {
     if (!panel.content?.trim()) {
       alert(`Panel ${panelIndex + 1} has no content. Please add content first.`);
       return;
@@ -3386,7 +3386,7 @@ function PageEditor({ isCover = false }) {
   };
 
   // Refine a generated panel image using it as reference with improvement instructions
-  const refinePanelImage = async (panel, panelIndex, refinementPrompt, provider = 'openai') => {
+  const refinePanelImage = async (panel, panelIndex, refinementPrompt, provider = comic?.imageProvider || 'openai') => {
     if (!refinementPrompt?.trim()) return;
     const currentPath = panelImages[panel.id]?.path;
     if (!currentPath) return;
@@ -4388,7 +4388,7 @@ function PageEditor({ isCover = false }) {
     }
 
     // Extra settle time for SVG filters and bubble shapes (covers especially need this)
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 450));
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     try {
@@ -6807,8 +6807,8 @@ function PageEditor({ isCover = false }) {
                       data-hotspot-id={h.id}
                       onMouseDown={(e) => { e.stopPropagation(); setDraggingVertex({ hotspotId: h.id, index: i }); setSelectedHotspotId(h.id); }}
                       style={{ position: 'absolute', left: `${p.x * 100}%`, top: `${p.y * 100}%`,
-                               width: 10, height: 10, marginLeft: -5, marginTop: -5,
-                               background: '#fff', border: `2px solid ${c}`,
+                               width: 6, height: 6, marginLeft: -3, marginTop: -3,
+                               background: '#fff', border: `1px solid ${c}`,
                                borderRadius: '50%', cursor: 'move', zIndex: 47, boxSizing: 'border-box' }} />
                   ));
                 })()}
@@ -6823,12 +6823,12 @@ function PageEditor({ isCover = false }) {
                       onMouseDown={(e) => { e.stopPropagation(); setDraggingTracePoint(i); }}
                       title="Drag to adjust this point"
                       style={{ position: 'absolute', left: `${p.x * 100}%`, top: `${p.y * 100}%`,
-                               width: i === 0 ? 13 : 10, height: i === 0 ? 13 : 10,
-                               marginLeft: i === 0 ? -6.5 : -5, marginTop: i === 0 ? -6.5 : -5,
+                               width: i === 0 ? 8 : 6, height: i === 0 ? 8 : 6,
+                               marginLeft: i === 0 ? -4 : -3, marginTop: i === 0 ? -4 : -3,
                                background: i === 0 ? '#27ae60' : '#00bcd4',
-                               border: '2px solid #fff', borderRadius: '50%',
+                               border: '1px solid #fff', borderRadius: '50%',
                                cursor: 'move', zIndex: 48, boxSizing: 'border-box',
-                               boxShadow: isStart ? '0 0 0 3px rgba(39,174,96,0.35)' : '0 1px 3px rgba(0,0,0,0.4)' }} />
+                               boxShadow: isStart ? '0 0 0 2px rgba(39,174,96,0.35)' : '0 1px 2px rgba(0,0,0,0.4)' }} />
                   );
                 })}
               </>
@@ -9236,12 +9236,12 @@ function PageEditor({ isCover = false }) {
                 {(hotspot.points || []).length >= 3 && (
                   <div style={{ marginBottom: '0.5rem' }}>
                     <label style={{ fontSize: '0.75rem', color: '#555', display: 'block', marginBottom: '0.2rem' }}>
-                      Pulse enlargement: {Math.round((hotspot.pulseScale ?? 0.64) * 100)}%
+                      Pulse enlargement: {Math.round((hotspot.pulseScale ?? 0.12) * 100)}%
                     </label>
                     <input
                       type="range"
                       min="0" max="150" step="5"
-                      value={Math.round((hotspot.pulseScale ?? 0.64) * 100)}
+                      value={Math.round((hotspot.pulseScale ?? 0.12) * 100)}
                       onChange={(e) => updateHotspot(hotspot.id, { pulseScale: parseInt(e.target.value, 10) / 100 })}
                       onClick={(e) => e.stopPropagation()}
                       style={{ width: '100%' }}
@@ -12207,7 +12207,11 @@ function PageEditor({ isCover = false }) {
                       overflow: bubble.backgroundImageUrl ? 'hidden' : 'visible',
                       transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + ((bubble.type === 'thought' || bubble.type === 'narration') ? (bubble.rotation ?? 0) : 0)}deg)`,
                       transformOrigin: 'center center',
-                      filter: bubble.type === 'thought' ? 'none' : `url(#roughEdge${filtSuffix})`
+                      // html2canvas can't render a CSS url() filter and drops the
+                      // whole element when it hits one — so skip roughEdge in the
+                      // bake (the inline roughBubble SVG filter still gives the
+                      // hand-drawn shape). Keep it in the on-screen preview.
+                      filter: (bubble.type === 'thought' || ref === bakeTargetRef) ? 'none' : `url(#roughEdge${filtSuffix})`
                     }}
                   >
                     {bubble.type === 'thought' && bubble.backgroundImageUrl && (

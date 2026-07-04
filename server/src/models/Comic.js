@@ -240,6 +240,9 @@ const ComicSchema = new mongoose.Schema({
   // Hex color for the reader's "open bubble" flashing dot — set per comic so it
   // stands out against that comic's colour scheme (e.g. "#409B08").
   bubbleDotColor: { type: String, default: '' },
+  // Default image-generation agent for this comic's pages/panels ('openai' = ChatGPT,
+  // 'gemini' uses the current best page-gen model). Per-panel buttons can override.
+  imageProvider: { type: String, enum: ['openai', 'gemini'], default: 'openai' },
   // Short content hash of the currently-mirrored download bundle. Baked into the
   // Tigris object key (bundles/<id>-<version>.zip) so each re-export gets a fresh
   // URL the CDN has never cached — overwriting a fixed key leaves stale edges.
