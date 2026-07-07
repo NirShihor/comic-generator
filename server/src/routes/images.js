@@ -110,6 +110,9 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
       const blockReason = response.promptFeedback?.blockReason;
       const safety = JSON.stringify(candidate?.safetyRatings || response.promptFeedback?.safetyRatings || []);
       console.log(`Gemini attempt ${attempt}/${maxRetries}: no image data (finishReason: ${finishReason}, blockReason: ${blockReason || 'none'}, safety: ${safety})`);
+      if (blockReason) {
+        console.log(`Gemini BLOCKED — refs: ${styleCount} style + ${linkedCount} linked; prompt sent:\n${textPrompt}`);
+      }
       if (attempt < maxRetries) {
         await new Promise(r => setTimeout(r, 1000 * attempt));
         continue;
