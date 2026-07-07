@@ -659,18 +659,29 @@ Return ONLY the JSON object, no other text.`;
           { role: 'system', content: 'You are a precise language assistant. Always respond with valid JSON only.' },
           { role: 'user', content: prompt }
         ],
-        max_completion_tokens: 4000
+        // Force syntactically valid JSON (no code fences, trailing commas, or the
+        // "..." from the example being echoed) and give enough room that a 20-word
+        // chunk of verbs (9 forms each) can't get truncated mid-object.
+        response_format: { type: 'json_object' },
+        max_completion_tokens: 8000
       });
 
       const responseText = completion.choices[0].message.content.trim();
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        for (const [base, forms] of Object.entries(parsed)) {
-          if (Array.isArray(forms) && forms.length > 0) {
-            allForms.set(base.toLowerCase(), forms);
+      try {
+        // json_object mode returns a clean object; keep the brace-extract as a fallback.
+        const jsonText = responseText.startsWith('{') ? responseText : (responseText.match(/\{[\s\S]*\}/)?.[0] || '');
+        if (jsonText) {
+          const parsed = JSON.parse(jsonText);
+          for (const [base, forms] of Object.entries(parsed)) {
+            if (Array.isArray(forms) && forms.length > 0) {
+              allForms.set(base.toLowerCase(), forms);
+            }
           }
         }
+      } catch (parseErr) {
+        // A single malformed/truncated chunk shouldn't abort the whole run —
+        // skip it (its words keep whatever forms they had) and carry on.
+        console.warn(`Word forms: skipping chunk ${chunkIndex} — bad JSON: ${parseErr.message}`);
       }
 
       // Stream progress after each chunk

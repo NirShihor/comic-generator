@@ -141,6 +141,7 @@ function transformToReaderFormat(comic, comicSlug) {
             id: bubbleId,
             type: bubble.type || 'narration',
             ...(bubble.fontSize && { fontSize: bubble.fontSize }),
+            ...(bubble.bgTransparent && { bgTransparent: true }),
             position: {
               x: bubble.x,
               y: bubble.y,
@@ -364,6 +365,7 @@ function transformToReaderFormat(comic, comicSlug) {
               type: bubble.type || 'speech',
               ...(bubble.fontSize && { fontSize: bubble.fontSize }),
               ...(bubble.isSoundEffect && { isSoundEffect: true }),
+              ...(bubble.bgTransparent && { bgTransparent: true }),
               ...(bubble.imageUrl && { imageUrl: bubble.imageUrl }),
               ...(bubble.backgroundImageUrl && { backgroundImageUrl: bubble.backgroundImageUrl }),
               position: {

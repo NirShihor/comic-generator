@@ -8,6 +8,8 @@ function ComicList() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [comicToDelete, setComicToDelete] = useState(null);
   const [newComic, setNewComic] = useState({ title: '', titleEn: '', description: '', level: 'beginner' });
+  // When set, the create modal is adding a new episode to this collection.
+  const [newComicCollection, setNewComicCollection] = useState(null);
   const [collapsedCollections, setCollapsedCollections] = useState({});
   const [renamingComic, setRenamingComic] = useState(null);
   const [renameTitle, setRenameTitle] = useState('');
@@ -119,14 +121,30 @@ function ComicList() {
 
   const createComic = async () => {
     try {
-      const response = await api.post('/comics', newComic);
+      // When adding to a collection, associate it and default to the next episode
+      // number so it inherits the collection's prompt settings automatically.
+      const payload = newComicCollection
+        ? { ...newComic, collectionId: newComicCollection.id,
+            collectionTitle: newComicCollection.title,
+            episodeNumber: newComicCollection.nextEpisode }
+        : newComic;
+      const response = await api.post('/comics', payload);
       setComics([...comics, response.data]);
       setShowModal(false);
       setNewComic({ title: '', titleEn: '', description: '', level: 'beginner' });
+      setNewComicCollection(null);
       navigate(`/comic/${response.data.id}`);
     } catch (error) {
       console.error('Failed to create comic:', error);
     }
+  };
+
+  // Open the create modal pre-associated with a collection ("New episode").
+  const openNewEpisodeModal = (collection) => {
+    const nextEpisode = Math.max(0, ...collection.comics.map(c => c.episodeNumber || 0)) + 1;
+    setNewComicCollection({ id: collection.id, title: collection.title, nextEpisode });
+    setNewComic({ title: '', titleEn: '', description: '', level: 'beginner' });
+    setShowModal(true);
   };
 
   const renderComicCard = (comic, isInCollection) => (
@@ -215,7 +233,7 @@ function ComicList() {
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
           <button
             className="btn btn-primary"
-            onClick={() => setShowModal(true)}
+            onClick={() => { setNewComicCollection(null); setShowModal(true); }}
             style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
           >
             + New Comic
@@ -279,6 +297,14 @@ function ComicList() {
                   {collection.id} 📋
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); openNewEpisodeModal(collection); }}
+                title={`Create a new episode in "${collection.title}" — it joins this collection automatically`}
+                style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff', background: '#007bff', border: 'none', borderRadius: '5px', padding: '0.3rem 0.6rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                + New episode
+              </button>
             </div>
 
             {/* Collection comics */}
@@ -299,9 +325,15 @@ function ComicList() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowModal(false); setNewComicCollection(null); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>Create New Comic</h2>
+            <h2>{newComicCollection ? 'New Episode' : 'Create New Comic'}</h2>
+            {newComicCollection && (
+              <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: '#555' }}>
+                Adding to collection <strong>{newComicCollection.title}</strong> as episode{' '}
+                <strong>{newComicCollection.nextEpisode}</strong> — it inherits the collection's prompt settings.
+              </p>
+            )}
 
             <div className="form-group">
               <label>Title</label>
@@ -346,11 +378,11 @@ function ComicList() {
             </div>
 
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowModal(false)}>
+              <button className="btn btn-secondary" onClick={() => { setShowModal(false); setNewComicCollection(null); }}>
                 Cancel
               </button>
               <button className="btn btn-primary" onClick={createComic}>
-                Create
+                {newComicCollection ? 'Create Episode' : 'Create'}
               </button>
             </div>
           </div>

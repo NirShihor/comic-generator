@@ -7,6 +7,53 @@ import html2canvas from 'html2canvas';
 const getRefPath = (ref) => typeof ref === 'string' ? ref : ref.path;
 const getRefAnnotations = (ref) => typeof ref === 'string' ? [] : (ref.annotations || []);
 
+// Draw an image into a canvas context with object-fit: cover (match the bake target).
+function drawImageCover(ctx, img, W, H) {
+  const ir = img.naturalWidth / img.naturalHeight;
+  const tr = W / H;
+  let dw, dh, dx, dy;
+  if (ir > tr) { dh = H; dw = H * ir; dx = (W - dw) / 2; dy = 0; }
+  else { dw = W; dh = W / ir; dx = 0; dy = (H - dh) / 2; }
+  ctx.drawImage(img, dx, dy, dw, dh);
+}
+
+// True when every "verifiable" bubble visibly differs from the source artwork in
+// its own region — i.e. it actually rendered into the baked canvas. html2canvas
+// intermittently drops a whole bubble in its off-screen clone (the cover title
+// especially), so we use this to detect the drop and retry instead of making the
+// user re-bake by hand. Fails safe (returns true) if the pixels can't be read.
+function verifyBubblesBaked(bakedCanvas, sourceImg, bubbles, W, H) {
+  try {
+    const src = document.createElement('canvas');
+    src.width = W; src.height = H;
+    const sctx = src.getContext('2d', { willReadFrequently: true });
+    drawImageCover(sctx, sourceImg, W, H);
+    const bctx = bakedCanvas.getContext('2d', { willReadFrequently: true });
+    for (const b of bubbles) {
+      const bx = Math.round(b.x * W), by = Math.round(b.y * H);
+      const bw = Math.round(b.width * W), bh = Math.round(b.height * H);
+      // Sample the central 70% so the small render rotation can't push us off-bubble.
+      const ix = Math.max(0, bx + Math.round(bw * 0.15));
+      const iy = Math.max(0, by + Math.round(bh * 0.15));
+      const iw = Math.min(W - ix, Math.round(bw * 0.7));
+      const ih = Math.min(H - iy, Math.round(bh * 0.7));
+      if (iw < 4 || ih < 4) continue;
+      const bd = bctx.getImageData(ix, iy, iw, ih).data;
+      const sd = sctx.getImageData(ix, iy, iw, ih).data;
+      let diff = 0; const total = iw * ih;
+      for (let i = 0; i < bd.length; i += 4) {
+        const d = Math.abs(bd[i] - sd[i]) + Math.abs(bd[i + 1] - sd[i + 1]) + Math.abs(bd[i + 2] - sd[i + 2]);
+        if (d > 40) diff++;
+      }
+      if (diff / total < 0.12) return false;   // region ~= artwork → bubble didn't render
+    }
+    return true;
+  } catch (e) {
+    console.warn('Bake verify skipped (pixels unreadable):', e.message);
+    return true;   // don't block the bake if we can't read pixels
+  }
+}
+
 // Simple color picker popup with swatches + custom hex input
 function ColorPicker({ value, onChange, onClick, disabled, style }) {
   const [open, setOpen] = useState(false);
@@ -380,6 +427,11 @@ function PageEditor({ isCover = false }) {
   const [panelFraming, setPanelFraming] = useState({});
   const [otherPagePanels, setOtherPagePanels] = useState([]);
   const [showOtherPages, setShowOtherPages] = useState({});
+  // Reference panels from OTHER comics in the same collection (for cross-episode
+  // visual consistency). Flat list: {comicId, comicTitle, episodeNumber, pageNumber,
+  // panelIndex, panelId, artworkImage}.
+  const [collectionPanels, setCollectionPanels] = useState([]);
+  const [showCollectionRefs, setShowCollectionRefs] = useState({});
   const [generatingAllPanels, setGeneratingAllPanels] = useState(false);
   const [biblePickerPanelId, setBiblePickerPanelId] = useState(null);
   const [pageBibleRefs, setPageBibleRefsRaw] = useState(() => {
@@ -1078,6 +1130,7 @@ function PageEditor({ isCover = false }) {
         setOtherPagePanels(otherPanels);
         // Load prompt settings via resolver (after comic data loaded)
         loadPromptSettings();
+        loadCollectionRefs();
         return;
       }
 
@@ -1176,6 +1229,7 @@ function PageEditor({ isCover = false }) {
       setOtherPagePanels(otherPanels);
       // Load prompt settings via resolver
       loadPromptSettings();
+      loadCollectionRefs();
     } catch (error) {
       console.error('Failed to load comic:', error);
     }
@@ -1192,6 +1246,42 @@ function PageEditor({ isCover = false }) {
       }
     } catch (err) {
       console.error('Failed to load prompt settings from resolver:', err);
+    }
+  };
+
+  // Panels from the OTHER comics in this comic's collection, usable as reference
+  // images for cross-episode consistency. Flattened for the reference picker.
+  const loadCollectionRefs = async () => {
+    try {
+      const res = await api.get(`/comics/${id}/collection-refs`);
+      const flat = [];
+      (res.data.comics || []).forEach(c => {
+        (c.pages || []).forEach((pg, pgIdx) => {
+          const pgNum = pg.pageNumber || pgIdx + 1;
+          if (pg.masterImage) {
+            flat.push({
+              comicId: c.id, comicTitle: c.title, episodeNumber: c.episodeNumber,
+              pageNumber: pgNum, panelIndex: -1,
+              panelId: `col-master-${c.id}-${pgNum}`,
+              artworkImage: pg.masterImage
+            });
+          }
+          (pg.panels || []).forEach((pnl, pnlIdx) => {
+            if (pnl.artworkImage) {
+              flat.push({
+                comicId: c.id, comicTitle: c.title, episodeNumber: c.episodeNumber,
+                pageNumber: pgNum, panelIndex: pnlIdx,
+                panelId: `col-${c.id}-${pnl.id}`,
+                artworkImage: pnl.artworkImage
+              });
+            }
+          });
+        });
+      });
+      setCollectionPanels(flat);
+    } catch (err) {
+      console.error('Failed to load collection reference panels:', err);
+      setCollectionPanels([]);
     }
   };
 
@@ -2204,7 +2294,14 @@ function PageEditor({ isCover = false }) {
         setSelectedHotspotId(null);
       }
     } else {
-      // Layout mode — check for floating panel corner handle or body drag
+      // Layout mode. While "draw floating panel" is armed, a mousedown always
+      // starts a NEW panel — even on top of an existing floating panel or its
+      // corner handle — so panels can be stacked/overlapped.
+      if (isDrawingFloatingPanel) {
+        handleMouseDown(e);
+        return;
+      }
+      // Otherwise, check for floating panel corner handle or body drag
       if (e.target.dataset.cornerDrag) {
         const panelId = e.target.dataset.cornerDrag;
         const cornerIndex = parseInt(e.target.dataset.cornerIndex, 10);
@@ -4355,14 +4452,16 @@ function PageEditor({ isCover = false }) {
     // Extra frame to let fonts apply to rendered elements
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-    // Ensure the master image in the bake target is fully loaded (not cached stale version)
+    // Ensure the master image in the bake target is fully loaded (not cached stale
+    // version). Keep the loaded element around to verify bubbles baked (see below).
+    let bakeSourceImg = null;
     if (page.masterImage) {
       const imgUrl = `${page.masterImage}`;
-      await new Promise((resolve) => {
+      bakeSourceImg = await new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        img.onload = resolve;
-        img.onerror = resolve;
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
         img.src = imgUrl;
       });
       // Also force the bake target's img to reload
@@ -4396,14 +4495,35 @@ function PageEditor({ isCover = false }) {
       if (!targetEl) throw new Error('Bake target not rendered');
 
       const scale = 1024 / CANVAS_WIDTH; // 2.56x for 1024x1536 output
-      const canvas = await html2canvas(targetEl, {
-        scale,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT
-      });
+
+      // html2canvas occasionally drops a whole bubble in its off-screen clone (the
+      // cover title especially) — it's intermittent, which is why a re-bake usually
+      // "fixes" it. Capture, verify the bubbles actually landed, and retry a few
+      // times automatically so it doesn't take several manual attempts.
+      const verifiableBubbles = bubbles.filter(b =>
+        !b.hidden && b.type !== 'image' && !(b.bgTransparent && b.noBorder));
+      let canvas = null;
+      const maxBakeAttempts = 4;
+      for (let attempt = 1; attempt <= maxBakeAttempts; attempt++) {
+        canvas = await html2canvas(targetEl, {
+          scale,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          width: CANVAS_WIDTH,
+          height: CANVAS_HEIGHT,
+          onclone: async (clonedDoc) => { try { await clonedDoc.fonts.ready; } catch (e) {} }
+        });
+        if (verifiableBubbles.length === 0 || !bakeSourceImg) break;
+        if (verifyBubblesBaked(canvas, bakeSourceImg, verifiableBubbles, canvas.width, canvas.height)) break;
+        if (attempt < maxBakeAttempts) {
+          console.warn(`Bake attempt ${attempt}: a bubble didn't render — retrying…`);
+          await new Promise(r => setTimeout(r, 350 + attempt * 250));
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        } else {
+          console.warn('Bake: a bubble still looks missing after retries; using best effort.');
+        }
+      }
 
       // Second pass: re-render the bake target with bubble text blanked and
       // capture an "empty bubbles" image (used by the reader's practice modes).
@@ -10494,6 +10614,62 @@ function PageEditor({ isCover = false }) {
                                   }}
                                 >
                                   Pg{op.pageNumber}-P{op.panelIndex + 1}
+                                </button>
+                              );
+                            })}
+                          </>
+                        )}
+                        {/* Cross-collection panel references (other comics in this collection) */}
+                        {collectionPanels.length > 0 && (
+                          <>
+                            <span style={{ fontSize: '0.6rem', color: '#999', marginLeft: '0.2rem' }}>|</span>
+                            <button
+                              onClick={() => setShowCollectionRefs(prev => ({ ...prev, [panel.id]: !prev[panel.id] }))}
+                              style={{
+                                padding: '0.15rem 0.35rem',
+                                fontSize: '0.6rem',
+                                background: showCollectionRefs[panel.id] ? '#f8d7e8' : '#f5f5f5',
+                                color: '#666',
+                                border: '1px solid #aaa',
+                                borderRadius: '3px',
+                                cursor: 'pointer'
+                              }}
+                              title="Show panels from other comics in this collection"
+                            >
+                              {showCollectionRefs[panel.id] ? '▾' : '▸'} Collection
+                            </button>
+                            {showCollectionRefs[panel.id] && collectionPanels.map((cp) => {
+                              const alreadyLinked = (panelImages[panel.id]?.refImages || []).some(r => getRefPath(r) === cp.artworkImage);
+                              const label = cp.panelIndex === -1 ? `Pg${cp.pageNumber}` : `Pg${cp.pageNumber}-P${cp.panelIndex + 1}`;
+                              const epTag = cp.episodeNumber != null ? `E${cp.episodeNumber}` : (cp.comicTitle || '?').slice(0, 6);
+                              return (
+                                <button
+                                  key={cp.panelId}
+                                  onClick={() => {
+                                    if (!alreadyLinked) {
+                                      setPanelImages(prev => ({
+                                        ...prev,
+                                        [panel.id]: {
+                                          ...prev[panel.id],
+                                          refImages: [...(prev[panel.id]?.refImages || []), { path: cp.artworkImage, annotations: [] }]
+                                        }
+                                      }));
+                                    }
+                                  }}
+                                  disabled={alreadyLinked}
+                                  title={alreadyLinked ? `${cp.comicTitle} — ${label} already linked` : `Use ${cp.comicTitle} — ${label} as reference`}
+                                  style={{
+                                    padding: '0.15rem 0.35rem',
+                                    fontSize: '0.6rem',
+                                    background: alreadyLinked ? '#ddd' : '#fdeef6',
+                                    color: alreadyLinked ? '#999' : '#c2185b',
+                                    border: `1px solid ${alreadyLinked ? '#ccc' : '#c2185b'}`,
+                                    borderRadius: '3px',
+                                    cursor: alreadyLinked ? 'default' : 'pointer',
+                                    opacity: alreadyLinked ? 0.6 : 1
+                                  }}
+                                >
+                                  {epTag}·{label}
                                 </button>
                               );
                             })}

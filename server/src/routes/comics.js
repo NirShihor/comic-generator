@@ -251,6 +251,40 @@ router.get('/:id/prompt-settings', async (req, res) => {
   }
 });
 
+// Reference-image panels from the OTHER comics in the same collection, so panels
+// can be linked as references across the whole collection (keeps art consistent
+// between episodes). Image paths are stored as full /projects/<comicId>/... paths,
+// so they resolve for any comic — no per-comic path rewriting needed.
+router.get('/:id/collection-refs', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    if (!comic.collectionId) return res.json({ comics: [] });
+
+    const siblings = await Comic.find({
+      collectionId: comic.collectionId,
+      id: { $ne: comic.id }
+    }).sort({ episodeNumber: 1, createdAt: 1 });
+
+    const comics = siblings.map(c => ({
+      id: c.id,
+      title: c.title,
+      episodeNumber: c.episodeNumber ?? null,
+      pages: (c.pages || []).map((pg, i) => ({
+        pageNumber: pg.pageNumber || i + 1,
+        masterImage: pg.masterImage || null,
+        panels: (pg.panels || [])
+          .filter(pnl => pnl.artworkImage)
+          .map(pnl => ({ id: pnl.id, artworkImage: pnl.artworkImage }))
+      })).filter(pg => pg.masterImage || pg.panels.length > 0)
+    }));
+
+    res.json({ comics });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const comic = await Comic.findOne({ id: req.params.id });
@@ -285,6 +319,13 @@ router.post('/', async (req, res) => {
       level: req.body.level || 'beginner',
       language: 'es',
       targetLanguage: 'en',
+      // Optional collection association (e.g. "New episode" from a collection):
+      // the comic then resolves its prompt settings from the collection.
+      ...(req.body.collectionId ? {
+        collectionId: req.body.collectionId,
+        collectionTitle: req.body.collectionTitle || '',
+        episodeNumber: req.body.episodeNumber
+      } : {}),
       cover: {
         image: '',
         sceneImage: ''
