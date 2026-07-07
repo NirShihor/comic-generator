@@ -3141,7 +3141,7 @@ function PageEditor({ isCover = false }) {
     // Standard consistency directive — always included so characters and locations
     // stay locked to the style guide and reference sheets (Gemini in particular
     // otherwise drifts and does its own thing).
-    prompt += `CONSISTENCY (MANDATORY)\nMake sure all characters and the location/setting adhere to the style guide and reference sheets EXACTLY — the same character designs, faces, hair, clothing, colours and proportions, and the same environment and props. Do not redesign, restyle, re-age, or invent variations.\n\n`;
+    prompt += `CONSISTENCY (MANDATORY)\nMake sure all characters and the location/setting adhere to the style guide and reference sheets EXACTLY — the same character designs, faces, hair, clothing, colours and proportions, and the same environment and props. Do not redesign, restyle, or invent variations.\n\n`;
 
     // Single panel content
     prompt += `SINGLE PANEL IMAGE\n\n`;

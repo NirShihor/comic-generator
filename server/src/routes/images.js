@@ -105,12 +105,17 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
 
     if (!candidate || !candidate.content || !candidate.content.parts) {
       const finishReason = candidate?.finishReason || 'unknown';
-      console.log(`Gemini attempt ${attempt}/${maxRetries}: no image data (finishReason: ${finishReason})`);
+      // A missing candidate usually means the PROMPT was blocked by a safety filter;
+      // surface the reason so it's not just "unknown".
+      const blockReason = response.promptFeedback?.blockReason;
+      const safety = JSON.stringify(candidate?.safetyRatings || response.promptFeedback?.safetyRatings || []);
+      console.log(`Gemini attempt ${attempt}/${maxRetries}: no image data (finishReason: ${finishReason}, blockReason: ${blockReason || 'none'}, safety: ${safety})`);
       if (attempt < maxRetries) {
         await new Promise(r => setTimeout(r, 1000 * attempt));
         continue;
       }
-      throw new Error(`Gemini returned no image data after ${maxRetries} attempts (finishReason: ${finishReason})`);
+      const reason = blockReason ? `blocked: ${blockReason}` : `finishReason: ${finishReason}`;
+      throw new Error(`Gemini returned no image data after ${maxRetries} attempts (${reason})`);
     }
 
     // Find the image part in the response
