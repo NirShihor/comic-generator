@@ -14,7 +14,7 @@ function App() {
       <div className="app">
         <nav className="navbar">
           <Link to="/" className="nav-brand">Comic Generator</Link>
-          <Link to="/backgrounds" style={{ marginLeft: 'auto', color: '#fff', textDecoration: 'none', fontSize: '0.9rem' }}>Backgrounds</Link>
+          <Link to="/backgrounds" style={{ color: '#007bff', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 600 }}>Backgrounds</Link>
         </nav>
 
         <main className="main-content">
