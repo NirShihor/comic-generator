@@ -2882,7 +2882,13 @@ function ComicEditor() {
                   const availableChars = settings.characters?.filter(c => c.image) || [];
                   const availableStyles = (settings.styleBibleImages || []).filter(img => img.image);
                   const hasMaster = !!settings.masterStyleImage;
-                  if (availableChars.length === 0 && availableStyles.length === 0 && !hasMaster) return null;
+                  // Pages of this comic — usable as references so the banner can
+                  // reuse an actual scene/pose from the story. Strip cache-busters.
+                  const availablePages = [...(comic.pages || [])]
+                    .filter(p => p.masterImage)
+                    .sort((a, b) => a.pageNumber - b.pageNumber)
+                    .map(p => ({ src: p.masterImage.split('?')[0], label: `Page ${p.pageNumber}` }));
+                  if (availableChars.length === 0 && availableStyles.length === 0 && !hasMaster && availablePages.length === 0) return null;
                   const toggle = (img) => setCoverLandscapeRefs(prev => prev.includes(img) ? prev.filter(p => p !== img) : [...prev, img]);
                   const chip = (src, label, key) => (
                     <div key={key} style={{ position: 'relative', border: coverLandscapeRefs.includes(src) ? '3px solid #27ae60' : '2px solid #ddd', borderRadius: '6px', padding: '2px', textAlign: 'center' }}>
@@ -2904,6 +2910,14 @@ function ComicEditor() {
                         {availableChars.map(c => chip(c.image, c.name, c.id))}
                         {availableStyles.map((img, idx) => chip(img.image, img.name || `Style ${idx + 1}`, img.id || idx))}
                       </div>
+                      {availablePages.length > 0 && (
+                        <>
+                          <small style={{ color: '#888', display: 'block', marginTop: '0.5rem' }}>From comic pages</small>
+                          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                            {availablePages.map(pg => chip(pg.src, pg.label, `page-${pg.src}`))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })()}
@@ -2924,7 +2938,7 @@ function ComicEditor() {
                         fullPrompt += '\n';
                       }
                       if (settings.doNotInclude) fullPrompt += `DO NOT INCLUDE: ${settings.doNotInclude}\n\n`;
-                      fullPrompt += `SCENE:\n${coverLandscapePrompt}\n\nThis is a LANDSCAPE BANNER IMAGE for a comic, shown as a wide header at the top of the comic. Make it dramatic and cinematic, composed for a horizontal 3:2 banner with the key subject framed toward the upper portion. Landscape orientation. IMPORTANT: the artwork must FILL THE ENTIRE FRAME edge to edge (full bleed) — do NOT add any borders, frames, margins, or empty/white space around the image.`;
+                      fullPrompt += `SCENE:\n${coverLandscapePrompt}\n\nThis is a LANDSCAPE BANNER IMAGE for a comic, shown as a wide header at the top of the comic. Make it dramatic and cinematic, composed for a horizontal 3:2 banner with the key subject framed toward the upper portion. Landscape orientation. IMPORTANT: the artwork must FILL THE ENTIRE FRAME edge to edge (full bleed) — do NOT add any borders, frames, margins, or empty/white space around the image. COMPOSE A SINGLE UNIFIED SCENE — this is NOT a character sheet or turnaround. Use the reference images ONLY for character identity, costume, and art style; do NOT reproduce their layout, multiple poses, turnaround/angle rows, or repeated figures. Show each named character exactly once.`;
 
                       const referenceImages = [...coverLandscapeRefs];
                       const hasMasterSelected = settings.masterStyleImage && coverLandscapeRefs.includes(settings.masterStyleImage);
