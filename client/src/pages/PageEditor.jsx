@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import html2canvas from 'html2canvas';
@@ -609,6 +609,10 @@ function PageEditor({ isCover = false }) {
 
   // Editor mode and bubble state
   const [editorMode, setEditorMode] = useState(isCover ? 'bubbles' : 'layout'); // 'layout' or 'bubbles'
+  const [showReadingOrder, setShowReadingOrder] = useState(true); // overlay reading-order numbers on bubbles
+  const [showBgPicker, setShowBgPicker] = useState(false);        // background-library picker for the page image
+  const [bgLibrary, setBgLibrary] = useState([]);
+  const [bgApplyingId, setBgApplyingId] = useState(null);
   const [bubbles, setBubbles] = useState([]);
   const [selectedBubbleId, setSelectedBubbleId] = useState(null);
   const [isDraggingBubble, setIsDraggingBubble] = useState(false);
@@ -1052,6 +1056,35 @@ function PageEditor({ isCover = false }) {
     } catch (error) {
       console.error('Fill dictionary failed:', error);
       alert('Failed to fill dictionary: ' + error.message);
+    }
+  };
+
+  // Open the background-library picker and load the current library.
+  const openBgPicker = async () => {
+    setShowBgPicker(true);
+    try {
+      const res = await api.get('/backgrounds');
+      setBgLibrary(res.data);
+    } catch (err) {
+      console.error('Failed to load backgrounds:', err);
+    }
+  };
+
+  // Apply a library background as THIS page's image. Reuses the page PUT, which
+  // copies a /uploads image into the project and regenerates panel scene crops
+  // from it — the same path as uploading a page image directly.
+  const applyBackgroundToPage = async (bg) => {
+    if (!window.confirm(`Replace this page's image with "${bg.name || 'this background'}"?`)) return;
+    setBgApplyingId(bg.id);
+    try {
+      await api.put(`/comics/${id}/pages/${pageId}`, { masterImage: bg.image, panels });
+      await loadComic();
+      setShowBgPicker(false);
+      showToast('Background applied to page');
+    } catch (err) {
+      alert('Failed to apply background: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setBgApplyingId(null);
     }
   };
 
@@ -1779,6 +1812,68 @@ function PageEditor({ isCover = false }) {
     if (!bubble.sentences || bubble.sentences.length === 0) return '';
     return bubble.sentences.map(s => s.text).join(' ');
   };
+
+  // Reading-order numbers for bubbles — mirrors server/src/services/readerFormat.js
+  // so the editor shows the SAME order the reader will use. Each bubble is grouped
+  // by the panel its CENTRE falls in (panels read by panelOrder; floating panels
+  // claim their bubbles first), then within a panel sorted top-to-bottom with a
+  // left-to-right tiebreak when two tops are within 2% of page height. (Grid panels
+  // with diagonal divider lines are approximated by their bounding box here;
+  // floating panels use their exact corners.)
+  const readingOrderMap = useMemo(() => {
+    const map = {};
+    const pointInPolygon = (px, py, corners) => {
+      let inside = false;
+      for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
+        const xi = corners[i].x, yi = corners[i].y;
+        const xj = corners[j].x, yj = corners[j].y;
+        if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      return inside;
+    };
+    const shapeOf = (p) => {
+      if (p.floating && p.corners && p.corners.length === 4) return p.corners;
+      const t = p.tapZone || { x: 0, y: 0, width: 1, height: 1 };
+      return [
+        { x: t.x, y: t.y }, { x: t.x + t.width, y: t.y },
+        { x: t.x + t.width, y: t.y + t.height }, { x: t.x, y: t.y + t.height },
+      ];
+    };
+    const contains = (panel, b) => {
+      const cx = (b.x || 0) + (b.width || 0) / 2;
+      const cy = (b.y || 0) + (b.height || 0) / 2;
+      return pointInPolygon(cx, cy, shapeOf(panel));
+    };
+    const sortReading = (a, b) => {
+      const ay = a.y || 0, by = b.y || 0, ax = a.x || 0, bx = b.x || 0;
+      if (Math.abs(ay - by) < 0.02) return ax - bx; // same row → left to right
+      return ay - by;                                // otherwise top to bottom
+    };
+
+    const panelList = panels || [];
+    // Assignment priority: floating panels claim their bubbles first, then the
+    // rest by panelOrder — so a bubble inside both a floating panel and its
+    // background is read with the floating one.
+    const forAssign = [...panelList].sort((a, b) =>
+      ((b.floating ? 1 : 0) - (a.floating ? 1 : 0)) || ((a.panelOrder || 0) - (b.panelOrder || 0)));
+    const assigned = new Set();
+    const members = new Map();
+    for (const panel of forAssign) {
+      const mine = bubbles.filter(b => !assigned.has(b.id) && contains(panel, b));
+      mine.forEach(b => assigned.add(b.id));
+      members.set(panel, mine);
+    }
+    // Numbering order: panels in panelOrder (floating last on a tie), then any
+    // bubbles that fell outside every panel.
+    const forNumber = [...panelList].sort((a, b) =>
+      ((a.panelOrder || 0) - (b.panelOrder || 0)) || ((a.floating ? 1 : 0) - (b.floating ? 1 : 0)));
+    let n = 0;
+    for (const panel of forNumber) {
+      [...(members.get(panel) || [])].sort(sortReading).forEach(b => { map[b.id] = ++n; });
+    }
+    bubbles.filter(b => !assigned.has(b.id)).sort(sortReading).forEach(b => { map[b.id] = ++n; });
+    return map;
+  }, [bubbles, panels]);
 
   // Sentence management
   const addSentence = (bubbleId) => {
@@ -5477,6 +5572,16 @@ function PageEditor({ isCover = false }) {
             {isDrawingFloatingPanel ? 'Cancel' : '+ Floating Panel'}
           </button>
         )}
+        {!isCover && (
+          <button
+            className="btn btn-secondary"
+            onClick={openBgPicker}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+            title="Replace this page's image with one from your background library"
+          >
+            🖼 From Backgrounds
+          </button>
+        )}
         {editorMode === 'bubbles' && (
           <button
             className={`btn ${isAddingBubble ? 'btn-primary' : 'btn-secondary'}`}
@@ -5484,6 +5589,16 @@ function PageEditor({ isCover = false }) {
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
           >
             {isAddingBubble ? 'Cancel' : '+ Add Bubble'}
+          </button>
+        )}
+        {editorMode === 'bubbles' && bubbles.length > 0 && (
+          <button
+            className={`btn ${showReadingOrder ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setShowReadingOrder(v => !v)}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+            title="Show the numbered order bubbles will be read in the reader (matches export)"
+          >
+            {showReadingOrder ? '① Reading order: on' : '① Reading order: off'}
           </button>
         )}
         {editorMode === 'bubbles' && !isCover && (
@@ -6188,6 +6303,25 @@ function PageEditor({ isCover = false }) {
 
               return (
                 <div key={bubble.id}>
+                  {/* Reading-order badge — matches the order the reader will use */}
+                  {editorMode === 'bubbles' && showReadingOrder && readingOrderMap[bubble.id] != null && (
+                    <div style={{
+                      position: 'absolute',
+                      left: bubble.x * CANVAS_WIDTH,
+                      top: bubble.y * CANVAS_HEIGHT,
+                      transform: 'translate(-50%, -50%)',
+                      minWidth: '18px', height: '18px', padding: '0 4px',
+                      borderRadius: '9px',
+                      background: '#ff9800', color: '#fff',
+                      fontSize: '11px', fontWeight: 700, lineHeight: '18px',
+                      textAlign: 'center', boxSizing: 'border-box',
+                      border: '1.5px solid #fff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                      pointerEvents: 'none', zIndex: 50,
+                    }}>
+                      {readingOrderMap[bubble.id]}
+                    </div>
+                  )}
                   {/* Unified Speech Bubble with integrated tail */}
                   {bubble.type === 'speech' && bubble.showTail !== false && (() => {
                     // Bubble dimensions in pixels
@@ -7087,6 +7221,39 @@ function PageEditor({ isCover = false }) {
         </div>
 
         {/* Baked Image Preview */}
+        {showBgPicker && (
+          <div onClick={() => setShowBgPicker(false)}
+               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+            <div onClick={e => e.stopPropagation()}
+                 style={{ background: '#fff', borderRadius: '8px', padding: '1rem', maxWidth: '820px', width: '100%', maxHeight: '85vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h3 style={{ margin: 0 }}>Choose a background for this page</h3>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <a href="/backgrounds" target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: '#007bff' }}>Manage library ↗</a>
+                  <button onClick={() => setShowBgPicker(false)} style={{ border: 'none', background: 'none', fontSize: '1.3rem', lineHeight: 1, cursor: 'pointer' }}>×</button>
+                </div>
+              </div>
+              {bgLibrary.length === 0 ? (
+                <p style={{ color: '#888' }}>No backgrounds in your library yet. Add some on the Backgrounds page.</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                  {bgLibrary.map(bg => (
+                    <button key={bg.id} onClick={() => applyBackgroundToPage(bg)} disabled={bgApplyingId != null}
+                            style={{ border: '1px solid #ddd', borderRadius: '6px', overflow: 'hidden', background: '#fff', cursor: bgApplyingId != null ? 'default' : 'pointer', padding: 0, textAlign: 'left' }}>
+                      <img src={bg.image} alt={bg.name}
+                           style={{ width: '100%', height: '110px', objectFit: 'cover', display: 'block', background: '#f0f0f0', opacity: bgApplyingId === bg.id ? 0.5 : 1 }} />
+                      <div style={{ padding: '0.4rem', fontSize: '0.8rem' }}>
+                        <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bg.name || 'Untitled'}</div>
+                        {bg.collectionTitle && <div style={{ color: '#999', fontSize: '0.7rem' }}>{bg.collectionTitle}</div>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {showBakedPreview && page.bakedImage && (
           <div style={{ marginBottom: '1rem', position: 'relative' }}>
             <button
