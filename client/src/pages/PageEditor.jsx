@@ -45,7 +45,12 @@ function verifyBubblesBaked(bakedCanvas, sourceImg, bubbles, W, H) {
         const d = Math.abs(bd[i] - sd[i]) + Math.abs(bd[i + 1] - sd[i + 1]) + Math.abs(bd[i + 2] - sd[i + 2]);
         if (d > 40) diff++;
       }
-      if (diff / total < 0.12) return false;   // region ~= artwork → bubble didn't render
+      // A filled/bordered bubble repaints most of its region, so it must differ a
+      // lot from the artwork. A transparent, borderless bubble (e.g. the cover
+      // title) contributes only sparse text strokes over the art, so use a much
+      // lower bar — otherwise a rendered title reads as "missing".
+      const minFrac = (b.bgTransparent && b.noBorder) ? 0.02 : 0.12;
+      if (diff / total < minFrac) return false;   // region ~= artwork → bubble didn't render
     }
     return true;
   } catch (e) {
@@ -3138,11 +3143,6 @@ function PageEditor({ isCover = false }) {
       prompt += `HARD NEGATIVES\n${settings.hardNegatives}\n\n`;
     }
 
-    // Standard consistency directive — always included so characters and locations
-    // stay locked to the style guide and reference sheets (Gemini in particular
-    // otherwise drifts and does its own thing).
-    prompt += `CONSISTENCY (MANDATORY)\nMake sure all characters and the location/setting adhere to the style guide and reference sheets EXACTLY — the same character designs, faces, hair, clothing, colours and proportions, and the same environment and props. Do not redesign, restyle, or invent variations.\n\n`;
-
     // Single panel content
     prompt += `SINGLE PANEL IMAGE\n\n`;
     prompt += `This is Panel ${panelIndex + 1} of ${panels.length} on ${isCover ? 'the COVER' : `PAGE ${page.pageNumber}`}.\n\n`;
@@ -4505,10 +4505,17 @@ function PageEditor({ isCover = false }) {
       // cover title especially) — it's intermittent, which is why a re-bake usually
       // "fixes" it. Capture, verify the bubbles actually landed, and retry a few
       // times automatically so it doesn't take several manual attempts.
+      // Verify any bubble that leaves something detectable in its region: a fill
+      // or border, OR (for transparent/borderless bubbles like the cover title)
+      // actual text. Previously transparent+borderless bubbles were skipped
+      // entirely, which meant a cover whose only bubble is the title had NOTHING
+      // to verify — so the retry loop broke immediately and html2canvas's
+      // intermittent title-drop went uncaught, forcing manual re-exports.
       const verifiableBubbles = bubbles.filter(b =>
-        !b.hidden && b.type !== 'image' && !(b.bgTransparent && b.noBorder));
+        !b.hidden && b.type !== 'image' &&
+        (!(b.bgTransparent && b.noBorder) || getBubbleDisplayText(b).trim().length > 0));
       let canvas = null;
-      const maxBakeAttempts = 4;
+      const maxBakeAttempts = 6;
       for (let attempt = 1; attempt <= maxBakeAttempts; attempt++) {
         canvas = await html2canvas(targetEl, {
           scale,
