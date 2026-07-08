@@ -523,7 +523,10 @@ function PageEditor({ isCover = false }) {
   const [chatInput, setChatInput] = useState('');
   const [comicNotes, setComicNotes] = useState('');
   const [notesCollapsed, setNotesCollapsed] = useState(false);
+  const [notesExpanded, setNotesExpanded] = useState(false);   // pop-up (large) notes
+  const [notesSize, setNotesSize] = useState(null);            // {width,height} px once dragged; null = default
   const notesTextareaRef = useRef(null);
+  const notesPopupRef = useRef(null);
   const notesScrollRestored = useRef(false);
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [chatImages, setChatImages] = useState([]); // Images to send with next message
@@ -3033,6 +3036,79 @@ function PageEditor({ isCover = false }) {
     setComicNotes(cleaned);
     setComic(prev => prev ? { ...prev, notes: cleaned } : prev);
   };
+
+  const saveNotes = async () => {
+    try {
+      await api.put(`/comics/${id}`, { notes: comicNotes });
+      showToast('Notes saved!');
+    } catch (err) {
+      console.error('Failed to save notes:', err);
+    }
+  };
+
+  // Drag the bottom-right corner of the popped-up notes to resize it.
+  const startNotesResize = (e) => {
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const rect = notesPopupRef.current?.getBoundingClientRect();
+    const startW = rect?.width || 700, startH = rect?.height || 500;
+    const onMove = (ev) => {
+      setNotesSize({
+        width: Math.max(340, Math.min(window.innerWidth - 40, startW + (ev.clientX - startX))),
+        height: Math.max(240, Math.min(window.innerHeight - 40, startH + (ev.clientY - startY)))
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // The notes toolbar + editor body, shared by the docked panel and the pop-up
+  // so they never diverge. Only one is mounted at a time (they're mutually
+  // exclusive), so the single notesTextareaRef is unambiguous.
+  const renderNotesEditor = () => (
+    <>
+      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem' }}>
+        <button
+          onClick={toggleNotesHighlight}
+          title="Highlight selected text (select text first)"
+          style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', background: '#ffe066', color: '#333', border: '1px solid #e6c800', borderRadius: '3px', cursor: 'pointer' }}
+        >
+          Highlight
+        </button>
+        {hasHighlights(comicNotes) && (
+          <button
+            onClick={clearNotesHighlights}
+            title="Clear all highlights"
+            style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', background: '#eee', color: '#666', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer' }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+        {hasHighlights(comicNotes) && (
+          <div
+            aria-hidden="true"
+            ref={(el) => { if (el && notesTextareaRef.current) { el.scrollTop = notesTextareaRef.current.scrollTop; } }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, padding: '0.5rem', fontSize: '0.8rem', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', lineHeight: '1.4', whiteSpace: 'pre-wrap', wordWrap: 'break-word', overflowWrap: 'break-word', overflow: 'hidden', pointerEvents: 'none', borderRadius: '6px', border: '1px solid transparent', boxSizing: 'border-box', color: 'transparent' }}
+            dangerouslySetInnerHTML={{ __html: (comicNotes || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\u2060([\s\S]*?)\u2061/g, '<mark style="background:#ffe066;color:transparent;border-radius:2px">$1</mark>') }}
+          />
+        )}
+        <textarea
+          ref={notesTextareaRef}
+          value={comicNotes}
+          onChange={(e) => { setComicNotes(e.target.value); setComic(prev => prev ? { ...prev, notes: e.target.value } : prev); }}
+          onScroll={(e) => { const overlay = e.target.previousSibling; if (overlay) overlay.scrollTop = e.target.scrollTop; try { sessionStorage.setItem(`notes-scroll-${id}`, e.target.scrollTop); } catch {} }}
+          placeholder="Paste or type notes here... (shared across all pages in this comic)"
+          style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #ccc', background: hasHighlights(comicNotes) ? 'transparent' : '#fff', caretColor: '#333', fontSize: '0.8rem', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', lineHeight: '1.4', resize: 'none', boxSizing: 'border-box' }}
+        />
+      </div>
+    </>
+  );
 
   const savePage = async () => {
     try {
@@ -12165,10 +12241,16 @@ function PageEditor({ isCover = false }) {
         </div>
 
         {/* Notes Panel */}
-        {notesCollapsed ? (
+        {(notesCollapsed || notesExpanded) ? (
           <div style={{ width: '34px', background: '#f5f5f5', borderRadius: '12px', border: '1px solid #ddd', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '0.6rem', gap: '0.6rem', height: 'calc(100vh - 180px)' }}>
-            <button onClick={() => setNotesCollapsed(false)} title="Show notes" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>📝</button>
-            <button onClick={() => setNotesCollapsed(false)} title="Show notes" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', fontSize: '1.1rem' }}>‹</button>
+            {notesExpanded ? (
+              <button onClick={() => setNotesExpanded(false)} title="Dock notes to the side" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>📝</button>
+            ) : (
+              <>
+                <button onClick={() => setNotesCollapsed(false)} title="Show notes" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>📝</button>
+                <button onClick={() => setNotesCollapsed(false)} title="Show notes" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', fontSize: '1.1rem' }}>‹</button>
+              </>
+            )}
           </div>
         ) : (
         <div style={{
@@ -12206,6 +12288,7 @@ function PageEditor({ isCover = false }) {
             >
               Save
             </button>
+            <button onClick={() => setNotesExpanded(true)} title="Pop out / expand notes" style={{ padding: '0.25rem 0.45rem', fontSize: '0.85rem', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '3px', cursor: 'pointer' }}>⤢</button>
             <button onClick={() => setNotesCollapsed(true)} title="Collapse notes" style={{ padding: '0.25rem 0.45rem', fontSize: '0.85rem', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '3px', cursor: 'pointer' }}>›</button>
             </div>
           </div>
@@ -12313,6 +12396,42 @@ function PageEditor({ isCover = false }) {
             />
           </div>
         </div>
+        )}
+
+        {/* Notes pop-up: large, drag-resizable, docks back to the right rail */}
+        {notesExpanded && (
+          <>
+            <div
+              onClick={() => setNotesExpanded(false)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000 }}
+            />
+            <div
+              ref={notesPopupRef}
+              style={{
+                position: 'fixed', top: '5vh', left: '50%', transform: 'translateX(-50%)',
+                width: notesSize?.width ? `${notesSize.width}px` : '80vw',
+                height: notesSize?.height ? `${notesSize.height}px` : '82vh',
+                maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)',
+                background: '#f5f5f5', borderRadius: '12px', padding: '1rem',
+                border: '1px solid #ddd', boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+                display: 'flex', flexDirection: 'column', zIndex: 1001
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#333' }}>Notes</h3>
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  <button onClick={saveNotes} style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', background: '#27ae60', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}>Save</button>
+                  <button onClick={() => setNotesExpanded(false)} title="Dock to the side" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '3px', cursor: 'pointer' }}>⤡ Dock</button>
+                </div>
+              </div>
+              {renderNotesEditor()}
+              <div
+                onMouseDown={startNotesResize}
+                title="Drag to resize"
+                style={{ position: 'absolute', right: '3px', bottom: '3px', width: '18px', height: '18px', cursor: 'nwse-resize', background: 'linear-gradient(135deg, transparent 55%, #9e9e9e 55%, #9e9e9e 65%, transparent 65%, transparent 75%, #9e9e9e 75%, #9e9e9e 85%, transparent 85%)', borderRadius: '0 0 10px 0' }}
+              />
+            </div>
+          </>
         )}
       </div>
 
