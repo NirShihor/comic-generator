@@ -288,6 +288,17 @@ function ComicList() {
                 <span style={{ fontSize: '0.8rem', color: '#999' }}>
                   ({collection.comics.length} episode{collection.comics.length !== 1 ? 's' : ''})
                 </span>
+              </div>
+              {/* New episode button stacked ABOVE the collection ID */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); openNewEpisodeModal(collection); }}
+                  title={`Create a new episode in "${collection.title}" — it joins this collection automatically`}
+                  style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff', background: '#007bff', border: 'none', borderRadius: '5px', padding: '0.3rem 0.6rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  + New episode
+                </button>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(collection.id); }}
@@ -297,14 +308,6 @@ function ComicList() {
                   {collection.id} 📋
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); openNewEpisodeModal(collection); }}
-                title={`Create a new episode in "${collection.title}" — it joins this collection automatically`}
-                style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff', background: '#007bff', border: 'none', borderRadius: '5px', padding: '0.3rem 0.6rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
-              >
-                + New episode
-              </button>
             </div>
 
             {/* Collection comics */}
