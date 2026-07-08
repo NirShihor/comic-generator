@@ -1070,17 +1070,36 @@ function PageEditor({ isCover = false }) {
     }
   };
 
-  // Apply a library background as THIS page's image. Reuses the page PUT, which
-  // copies a /uploads image into the project and regenerates panel scene crops
-  // from it — the same path as uploading a page image directly.
+  // Apply a library background to the page's BASE panel only — the first
+  // non-floating panel (the background layer). Floating panels on top keep their
+  // own art. Uses the same per-panel mechanism as a manual panel upload, so it
+  // does NOT touch or re-crop the other panels.
   const applyBackgroundToPage = async (bg) => {
-    if (!window.confirm(`Replace this page's image with "${bg.name || 'this background'}"?`)) return;
+    const ordered = [...panels].sort((a, b) => (a.panelOrder || 0) - (b.panelOrder || 0));
+    const base = ordered.find(p => !p.floating) || ordered[0];
+    if (!base) { alert('This page has no panel to apply a background to.'); return; }
+    if (!window.confirm(`Use "${bg.name || 'this background'}" as the first panel's image? Floating panels are left untouched.`)) return;
     setBgApplyingId(bg.id);
     try {
-      await api.put(`/comics/${id}/pages/${pageId}`, { masterImage: bg.image, panels });
-      await loadComic();
+      setPanelImages(prev => ({
+        ...prev,
+        [base.id]: {
+          ...prev[base.id],
+          path: bg.image,
+          generating: null,
+          error: null,
+          fitMode: prev[base.id]?.fitMode || 'stretch',
+          cropX: prev[base.id]?.cropX ?? 0,
+          cropY: prev[base.id]?.cropY ?? 0,
+          zoom: prev[base.id]?.zoom ?? 1,
+          brightness: prev[base.id]?.brightness ?? 1,
+          contrast: prev[base.id]?.contrast ?? 1,
+          saturation: prev[base.id]?.saturation ?? 1
+        }
+      }));
+      await updatePanelArtwork(base.id, bg.image);
       setShowBgPicker(false);
-      showToast('Background applied to page');
+      showToast('Background applied to the first panel');
     } catch (err) {
       alert('Failed to apply background: ' + (err.response?.data?.error || err.message));
     } finally {
@@ -7227,7 +7246,7 @@ function PageEditor({ isCover = false }) {
             <div onClick={e => e.stopPropagation()}
                  style={{ background: '#fff', borderRadius: '8px', padding: '1rem', maxWidth: '820px', width: '100%', maxHeight: '85vh', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <h3 style={{ margin: 0 }}>Choose a background for this page</h3>
+                <h3 style={{ margin: 0 }}>Choose a background for the first panel</h3>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                   <a href="/backgrounds" target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: '#007bff' }}>Manage library ↗</a>
                   <button onClick={() => setShowBgPicker(false)} style={{ border: 'none', background: 'none', fontSize: '1.3rem', lineHeight: 1, cursor: 'pointer' }}>×</button>
