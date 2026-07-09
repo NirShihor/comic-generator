@@ -30,9 +30,11 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
     const fullPath = path.join(__dirname, '../..', imgPath);
     try {
       await fs.access(fullPath);
+      // Send refs at a higher resolution/quality than before (was 1024/JPEG-85):
+      // more facial and wardrobe detail for the model to lock characters onto.
       let buf = await sharp(fullPath)
-        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 85 })
+        .resize(1536, 1536, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 92 })
         .toBuffer();
       if (withAnnotations && annotationsMap[imgPath] && annotationsMap[imgPath].length > 0) {
         buf = await burnAnnotationsOntoImage(buf, annotationsMap[imgPath]);
@@ -63,18 +65,18 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
     const notes = [];
     if (styleCount > 0) {
       if (hasMasterStyleImage) {
-        notes.push(`The FIRST attached image is the MASTER STYLE GUIDE — the DEFINITIVE art style (line work, inking, shading, colour palette, level of stylization). Reproduce this art style exactly. Do NOT copy its characters, subjects or scene — extract ONLY the drawing style.`);
+        notes.push(`The FIRST attached image is the MASTER STYLE GUIDE — the DEFINITIVE art style (line work, inking, shading, colour palette, level of stylization). Reproduce this art style exactly. Take ONLY the drawing style from it, not its particular scene.`);
         const otherStyle = styleCount - 1;
-        if (otherStyle > 0) notes.push(`The next ${otherStyle} image(s) are CHARACTER/STYLE references — match character appearance and visual consistency.`);
+        if (otherStyle > 0) notes.push(`The next ${otherStyle} image(s) are CHARACTER references — these ARE the characters. Match their faces, hair, build, wardrobe and colours closely and consistently; keep them recognisably identical and do not redesign them.`);
       } else {
-        notes.push(`The first ${styleCount} attached image(s) are STYLE and CHARACTER references — match the art style and character appearance. Do NOT copy them.`);
+        notes.push(`The first ${styleCount} attached image(s) are STYLE and CHARACTER references. Match the art style, and reproduce the characters' faces, hair, build, wardrobe and colours closely and consistently — these are the same characters, so keep them recognisably identical.`);
       }
     }
     if (linkedCount > 0) {
       const isOne = linkedCount === 1;
-      notes.push(`The ${isOne ? 'final attached image is a CONTINUITY reference' : `final ${linkedCount} attached images are CONTINUITY references`} from earlier panels. Use ${isOne ? 'it' : 'them'} ONLY to keep the SAME characters, clothing, props, setting and layout consistent — but take the ART STYLE strictly from the master style guide above, NOT from ${isOne ? 'it' : 'them'} (${isOne ? 'it' : 'they'} may have drifted from the intended style).`);
+      notes.push(`The ${isOne ? 'final attached image is a CONTINUITY reference' : `final ${linkedCount} attached images are CONTINUITY references`} from earlier panels. Reproduce the SAME characters, clothing, props and setting faithfully from ${isOne ? 'it' : 'them'} so the panels stay consistent. Take the ART STYLE from the master style guide above, but match every character and scene detail to ${isOne ? 'this reference' : 'these references'}.`);
     }
-    notes.push(`Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.`);
+    notes.push(`Compose the new scene described in the prompt below, keeping the characters, wardrobe and world faithful to the references above.`);
     textPrompt = `${notes.join('\n')}\n\n${prompt}`;
   }
   // Add aspect ratio instructions
