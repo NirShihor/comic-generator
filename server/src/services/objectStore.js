@@ -94,10 +94,28 @@ async function presignedBundleUrl(comicId, version, expiresIn = 3600) {
   );
 }
 
+// Pre-warm the CDN for a freshly-uploaded bundle: fetch it once so the first
+// real reader isn't the one paying the cold origin-fetch cost. Warms the edge
+// nearest wherever this runs (the fly machine's region) and pulls the object
+// into Tigris's cache path. Drains the body without buffering it all in memory.
+async function warmBundle(comicId, version) {
+  if (!objectStoreEnabled) return false;
+  try {
+    const url = await presignedBundleUrl(comicId, version, 600);
+    const res = await fetch(url);
+    if (!res.ok || !res.body) return false;
+    for await (const _chunk of res.body) { /* discard — we only want the fetch */ }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 module.exports = {
   objectStoreEnabled,
   bundleKey,
   uploadBundle,
   bundleExists,
   presignedBundleUrl,
+  warmBundle,
 };

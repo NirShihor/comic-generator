@@ -8,7 +8,7 @@ const sharp = require('sharp');
 const Comic = require('../models/Comic');
 const ArchivedPage = require('../models/ArchivedPage');
 const { sanitizeTitle, sanitizeWordForFilename, transformToReaderFormat, computePanelCorners } = require('../services/readerFormat');
-const { objectStoreEnabled, uploadBundle } = require('../services/objectStore');
+const { objectStoreEnabled, uploadBundle, warmBundle } = require('../services/objectStore');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
@@ -1514,6 +1514,11 @@ router.post('/:id/upload-bundle', bundleUpload.single('bundle'), async (req, res
           await Comic.updateOne({ id }, { $set: { bundleVersion: version } });
           mirrored = true;
           console.log(`[upload-bundle] ${id}: mirrored ${zipFile} to object storage (v=${version})`);
+          // Pre-warm the CDN edge so the first real reader isn't the one paying the
+          // cold origin-fetch cost. Fire-and-forget — don't delay the response.
+          warmBundle(id, version)
+            .then(ok => console.log(`[upload-bundle] ${id}: CDN pre-warm ${ok ? 'done' : 'skipped'} (v=${version})`))
+            .catch(() => {});
         } else {
           console.warn(`[upload-bundle] ${id}: no .zip in export dir to mirror`);
         }
