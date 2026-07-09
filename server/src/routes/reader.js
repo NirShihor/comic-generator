@@ -10,7 +10,7 @@ const { sanitizeTitle, transformToReaderFormat } = require('../services/readerFo
 const { generateFlowReply } = require('../services/flowPractice');
 const { generateSpeech, generateSpeechTimed } = require('../services/tts');
 const { objectStoreEnabled, bundleExists, presignedBundleUrl } = require('../services/objectStore');
-const { GoogleGenAI } = require('@google/genai');
+const OpenAI = require('openai');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 
@@ -441,12 +441,12 @@ router.post('/explain', async (req, res) => {
     if (!word || !String(word).trim()) {
       return res.status(400).json({ error: 'word is required' });
     }
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: 'Explanations are not configured on the server.' });
     }
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    const instructions = [
+    const system = [
       'You are a warm, concise Spanish tutor for an English-speaking learner reading a comic.',
       'You are given a Spanish WORD, the SENTENCE it appears in, and the English meaning of that sentence.',
       'Explain what the word is doing in THIS sentence: its part of speech and grammatical role, and why it is there.',
@@ -456,14 +456,19 @@ router.post('/explain', async (req, res) => {
       'Keep it short — a few short paragraphs. Friendly, concrete, plain text (no markdown headings). Do not pad.'
     ].join('\n');
 
-    const prompt = `${instructions}\n\nWORD: "${word}"\nSENTENCE: "${sentence || ''}"\nENGLISH: "${translation || ''}"\n\nExplain "${word}" as it is used here.`;
+    const user = `WORD: "${word}"\nSENTENCE: "${sentence || ''}"\nENGLISH: "${translation || ''}"\n\nExplain "${word}" as it is used here.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user }
+      ],
+      max_tokens: 450,
+      temperature: 0.3
     });
 
-    const explanation = (response.text || '').trim();
+    const explanation = completion.choices?.[0]?.message?.content?.trim() || '';
     if (!explanation) return res.status(502).json({ error: 'No explanation was returned.' });
     res.json({ explanation });
   } catch (error) {
