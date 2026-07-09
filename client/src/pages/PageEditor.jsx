@@ -8235,7 +8235,7 @@ function PageEditor({ isCover = false }) {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]'].map(tag => {
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[crying]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]'].map(tag => {
                                 const tagKey = `${sentence.id}-${tag}`;
                                 const isCopied = copiedTag === tagKey;
                                 return (
@@ -8283,37 +8283,6 @@ function PageEditor({ isCover = false }) {
                                 marginBottom: '0.25rem'
                               }}
                             />
-                            <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[hopeful]', '[worried]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]'].map(tag => {
-                                const tagKey = `${sentence.id}-en-${tag}`;
-                                const isCopied = copiedTag === tagKey;
-                                return (
-                                <button
-                                  key={tag}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigator.clipboard.writeText(tag);
-                                    setCopiedTag(tagKey);
-                                    setTimeout(() => setCopiedTag(prev => prev === tagKey ? null : prev), 600);
-                                  }}
-                                  style={{
-                                    padding: '0.15rem 0.4rem',
-                                    fontSize: '0.7rem',
-                                    background: isCopied ? '#27ae60' : '#f0f0f0',
-                                    color: isCopied ? '#fff' : '#666',
-                                    border: `1px solid ${isCopied ? '#27ae60' : '#ddd'}`,
-                                    borderRadius: '3px',
-                                    cursor: 'pointer',
-                                    fontFamily: 'monospace',
-                                    transition: 'all 0.15s ease'
-                                  }}
-                                  title={`Copy ${tag} to clipboard`}
-                                >
-                                  {tag}
-                                </button>
-                                );
-                              })}
-                            </div>
                             <input
                               type="text"
                               value={sentence.translation}
@@ -9214,6 +9183,26 @@ function PageEditor({ isCover = false }) {
                           }}
                         >
                           {bubble.locked ? 'Unlock Bubble' : 'Lock Bubble'}
+                        </button>
+
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowPagePreview(true); }}
+                          disabled={!page.masterImage}
+                          title="Preview the page (same as the Preview button at the top)"
+                          style={{
+                            padding: '0.3rem 0.6rem',
+                            background: '#3498db',
+                            border: 'none',
+                            borderRadius: '3px',
+                            color: '#fff',
+                            cursor: page.masterImage ? 'pointer' : 'default',
+                            fontSize: '0.75rem',
+                            width: '100%',
+                            marginTop: '0.5rem',
+                            opacity: page.masterImage ? 1 : 0.5
+                          }}
+                        >
+                          Preview
                         </button>
                       </div>
                       )}
