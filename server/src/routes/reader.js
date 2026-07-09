@@ -10,6 +10,7 @@ const { sanitizeTitle, transformToReaderFormat } = require('../services/readerFo
 const { generateFlowReply } = require('../services/flowPractice');
 const { generateSpeech, generateSpeechTimed } = require('../services/tts');
 const { objectStoreEnabled, bundleExists, presignedBundleUrl } = require('../services/objectStore');
+const OpenAI = require('openai');
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 
@@ -428,6 +429,50 @@ router.get('/collection-thumbnail/:collectionId', async (req, res) => {
     res.send(thumbnail);
   } catch (error) {
     console.error('Collection thumbnail error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/reader/explain — a short, contextual grammar explanation of a Spanish
+// word AS USED in its sentence. Uses a cheap model. Body: { word, sentence, translation }.
+router.post('/explain', async (req, res) => {
+  try {
+    const { word, sentence, translation } = req.body || {};
+    if (!word || !String(word).trim()) {
+      return res.status(400).json({ error: 'word is required' });
+    }
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: 'Explanations are not configured on the server.' });
+    }
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const system = [
+      'You are a warm, concise Spanish tutor for an English-speaking learner reading a comic.',
+      'You are given a Spanish WORD, the SENTENCE it appears in, and the English meaning of that sentence.',
+      'Explain what the word is doing in THIS sentence: its part of speech and grammatical role, and why it is there.',
+      '- If it is a verb form, give the infinitive and a short present-tense conjugation table (me/te/se/nos/se or yo/tú/él…).',
+      '- If it is a reflexive/object pronoun, article, or preposition, say what it refers back to or connects.',
+      'Ground every point in the actual sentence and quote small fragments of it.',
+      'Keep it short — a few short paragraphs. Friendly, concrete, plain text (no markdown headings). Do not pad.'
+    ].join('\n');
+
+    const user = `WORD: "${word}"\nSENTENCE: "${sentence || ''}"\nENGLISH: "${translation || ''}"\n\nExplain "${word}" as it is used here.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user }
+      ],
+      max_tokens: 450,
+      temperature: 0.3
+    });
+
+    const explanation = completion.choices?.[0]?.message?.content?.trim() || '';
+    if (!explanation) return res.status(502).json({ error: 'No explanation was returned.' });
+    res.json({ explanation });
+  } catch (error) {
+    console.error('reader/explain error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
