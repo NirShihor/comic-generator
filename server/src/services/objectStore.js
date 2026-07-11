@@ -28,6 +28,13 @@ const objectStoreEnabled = !!(
   process.env.AWS_SECRET_ACCESS_KEY
 );
 
+// Regions the bundles are pinned to. The fly machine lives in iad, so without
+// pinning, Tigris stores objects ONLY in iad — and every European download
+// streams transatlantic (measured ~0.2–0.8 MB/s at UK evening peak vs 8 MB/s
+// line speed). Pinning to iad+lhr keeps a copy in Europe so downloads serve
+// from the nearest region.
+const TIGRIS_REGIONS = process.env.TIGRIS_REGIONS || 'iad,lhr';
+
 let _client = null;
 function client() {
   if (!_client) {
@@ -39,6 +46,19 @@ function client() {
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
       },
     });
+    // Add the placement header on WRITES only. It must never leak into
+    // presigned GET generation: any extra signed header would become part of
+    // the signature and break the reader's plain-URL downloads.
+    _client.middlewareStack.add(
+      (next, context) => (args) => {
+        if (context.commandName === 'PutObjectCommand' ||
+            context.commandName === 'CreateMultipartUploadCommand') {
+          args.request.headers['X-Tigris-Regions'] = TIGRIS_REGIONS;
+        }
+        return next(args);
+      },
+      { step: 'build', name: 'tigrisRegionPinning' }
+    );
   }
   return _client;
 }
