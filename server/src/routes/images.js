@@ -96,7 +96,10 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-image',
+      // Nano Banana Pro — matches the inpainting path. The 3.1 Lite tier was
+      // faster/cheaper but noticeably weaker at reference adherence and at
+      // obeying "don't change anything else" in refinements.
+      model: 'gemini-3-pro-image-preview',
       contents: parts,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
