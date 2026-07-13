@@ -2460,8 +2460,20 @@ function PageEditor({ isCover = false }) {
         const bubble = bubbles.find(b => b.id === selectedBubbleId);
         const tailOverflow = bubble ? (bubble.tailLength ?? 0.35) * (bubble.height || 0.1) : 0;
         const rot = bubble ? Math.abs(bubble.rotation || 0) : 0;
-        // Allow negative y when bubble is rotated so the flipped tail can reach the panel top
-        const minY = rot > 90 ? -tailOverflow : 0;
+        // Clamp on the VISUAL (rotated) bounding box, not the raw rect: a rotated
+        // bubble's stored rect can be much taller than what's drawn, so clamping
+        // the rect at y=0 stopped the visible bubble well short of the page top.
+        let minY = 0;
+        if (bubble && rot !== 0) {
+          const W = (bubble.width || 0.1) * CANVAS_WIDTH;
+          const H = (bubble.height || 0.1) * CANVAS_HEIGHT;
+          const rad = (bubble.rotation || 0) * Math.PI / 180;
+          const bboxH = Math.abs(W * Math.sin(rad)) + Math.abs(H * Math.cos(rad));
+          // Visual top touches the page top when cy == bboxH/2.
+          minY = bboxH / (2 * CANVAS_HEIGHT) - (bubble.height || 0.1) / 2;
+        }
+        // Rotated past 90° the tail flips upward — let it reach the panel top too.
+        if (rot > 90) minY = Math.min(minY, -tailOverflow);
         const maxY = rot > 90 ? 1 : 1 + tailOverflow;
         updateBubble(selectedBubbleId, {
           x: Math.max(0, Math.min(1, coords.x - dragOffset.x)),
@@ -6398,12 +6410,22 @@ function PageEditor({ isCover = false }) {
 
               return (
                 <div key={bubble.id}>
-                  {/* Reading-order badge — matches the order the reader will use */}
-                  {editorMode === 'bubbles' && showReadingOrder && readingOrderMap[bubble.id] != null && (
+                  {/* Reading-order badge — matches the order the reader will use.
+                      Placed at the VISUAL top-left (rotated bounding box): for a
+                      rotated bubble the raw rect corner can sit far from the art. */}
+                  {editorMode === 'bubbles' && showReadingOrder && readingOrderMap[bubble.id] != null && (() => {
+                    const W = (bubble.width || 0.1) * CANVAS_WIDTH;
+                    const H = (bubble.height || 0.1) * CANVAS_HEIGHT;
+                    const rad = ((bubble.rotation || 0) * Math.PI) / 180;
+                    const bboxW = Math.abs(W * Math.cos(rad)) + Math.abs(H * Math.sin(rad));
+                    const bboxH = Math.abs(W * Math.sin(rad)) + Math.abs(H * Math.cos(rad));
+                    const cxPx = (bubble.x + (bubble.width || 0.1) / 2) * CANVAS_WIDTH;
+                    const cyPx = (bubble.y + (bubble.height || 0.1) / 2) * CANVAS_HEIGHT;
+                    return (
                     <div style={{
                       position: 'absolute',
-                      left: bubble.x * CANVAS_WIDTH,
-                      top: bubble.y * CANVAS_HEIGHT,
+                      left: cxPx - bboxW / 2,
+                      top: cyPx - bboxH / 2,
                       transform: 'translate(-50%, -50%)',
                       minWidth: '18px', height: '18px', padding: '0 4px',
                       borderRadius: '9px',
@@ -6416,7 +6438,8 @@ function PageEditor({ isCover = false }) {
                     }}>
                       {readingOrderMap[bubble.id]}
                     </div>
-                  )}
+                    );
+                  })()}
                   {/* Unified Speech Bubble with integrated tail */}
                   {bubble.type === 'speech' && bubble.showTail !== false && (() => {
                     // Bubble dimensions in pixels
