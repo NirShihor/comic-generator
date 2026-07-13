@@ -31,9 +31,14 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(authMiddleware);
 app.use('/login', loginRoutes);
 
-// Serve uploaded files
+// Serve uploaded files. no-store on project assets: regenerated audio/images
+// overwrite the SAME filename, so any browser caching serves the OLD file —
+// the editor's Play kept playing stale audio after a Regen until the cache
+// happened to evict (looked like the regeneration "taking many attempts").
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-app.use('/projects', express.static(path.join(__dirname, '../projects')));
+app.use('/projects', express.static(path.join(__dirname, '../projects'), {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+}));
 
 // Routes
 app.use('/api/comics', comicRoutes);

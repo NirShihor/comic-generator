@@ -8366,7 +8366,7 @@ function PageEditor({ isCover = false }) {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (audioRef.current) audioRef.current.pause();
-                                      const audio = new Audio(`/projects/${id}/audio/${alt.audioUrl}.mp3`);
+                                      const audio = new Audio(`/projects/${id}/audio/${alt.audioUrl}.mp3?t=${Date.now()}`);
                                       audioRef.current = audio;
                                       audio.play();
                                     }}
@@ -8423,7 +8423,7 @@ function PageEditor({ isCover = false }) {
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (audioRef.current) audioRef.current.pause();
-                                        const audio = new Audio(`/projects/${id}/audio/${sentence.audioUrl}.mp3`);
+                                        const audio = new Audio(`/projects/${id}/audio/${sentence.audioUrl}.mp3?t=${Date.now()}`);
                                         audioRef.current = audio;
                                         audio.play();
                                       }}
@@ -8826,7 +8826,7 @@ function PageEditor({ isCover = false }) {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (audioRef.current) audioRef.current.pause();
-                                      const audio = new Audio(`/projects/${id}/audio/${sentence.translationAudioUrl}.mp3`);
+                                      const audio = new Audio(`/projects/${id}/audio/${sentence.translationAudioUrl}.mp3?t=${Date.now()}`);
                                       audioRef.current = audio;
                                       audio.play();
                                     }}
@@ -9089,7 +9089,7 @@ function PageEditor({ isCover = false }) {
                                       if (audioRef.current) audioRef.current.pause();
                                       const sanitized = word.text.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
                                       if (sanitized) {
-                                        const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3`);
+                                        const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3?t=${Date.now()}`);
                                         audioRef.current = audio;
                                         audio.play().catch(() => {});
                                       }
@@ -9117,7 +9117,7 @@ function PageEditor({ isCover = false }) {
                                         if (audioRef.current) audioRef.current.pause();
                                         const sanitized = word.baseForm.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
                                         if (sanitized) {
-                                          const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3`);
+                                          const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3?t=${Date.now()}`);
                                           audioRef.current = audio;
                                           audio.play().catch(() => {});
                                         }
@@ -9857,7 +9857,7 @@ function PageEditor({ isCover = false }) {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (audioRef.current) audioRef.current.pause();
-                              const audio = new Audio(`/projects/${id}/audio/${slide.audioUrl}.mp3`);
+                              const audio = new Audio(`/projects/${id}/audio/${slide.audioUrl}.mp3?t=${Date.now()}`);
                               audioRef.current = audio;
                               audio.play();
                             }}
@@ -9877,7 +9877,7 @@ function PageEditor({ isCover = false }) {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (audioRef.current) audioRef.current.pause();
-                                const audio = new Audio(`/projects/${id}/audio/${slide.translationAudioUrl}.mp3`);
+                                const audio = new Audio(`/projects/${id}/audio/${slide.translationAudioUrl}.mp3?t=${Date.now()}`);
                                 audioRef.current = audio;
                                 audio.play();
                               }}
