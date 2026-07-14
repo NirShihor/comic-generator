@@ -3278,7 +3278,8 @@ function PageEditor({ isCover = false }) {
     }
 
     // Panel Content
-    prompt += `${isCover ? 'COVER' : `PAGE ${page.pageNumber}`} — PANEL CONTENT\n\n`;
+    prompt += `${isCover ? 'COVER' : `PAGE ${page.pageNumber}`} — PANEL CONTENT\n`;
+    prompt += `(THE SCENES TO DRAW — these OVERRIDE any locations, settings or scenes mentioned in the style/character sections above; those are style and lore reference only.)\n\n`;
     panels.forEach((panel, i) => {
       prompt += `Panel ${i + 1}:\n${stripHighlightMarkers(panel.content) || '(No content specified)'}\n\n`;
     });
@@ -3354,7 +3355,7 @@ function PageEditor({ isCover = false }) {
     if (isCover) {
       prompt += `IMPORTANT: this is a full-bleed cover — the artwork must FILL THE ENTIRE FRAME edge to edge, with NO borders, frames, margins, or empty/white space around the image.\n\n`;
     }
-    prompt += `Panel Content:\n${stripHighlightMarkers(panel.content) || '(No content specified)'}\n\n`;
+    prompt += `Panel Content (THE SCENE TO DRAW — this OVERRIDES any locations, settings or scenes mentioned in the style/character sections above; those are style and lore reference only):\n${stripHighlightMarkers(panel.content) || '(No content specified)'}\n\n`;
 
     // Per-panel framing options
     const framing = panelFraming[panel.id];
