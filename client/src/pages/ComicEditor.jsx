@@ -45,6 +45,7 @@ function ComicEditor() {
   const [coverLandscapeZoom, setCoverLandscapeZoom] = useState(1);
   const [coverLandscapeCropX, setCoverLandscapeCropX] = useState(0);
   const [coverLandscapeCropY, setCoverLandscapeCropY] = useState(0);
+  const [coverLandscapeRefinePrompt, setCoverLandscapeRefinePrompt] = useState('');
   const coverLandscapeAdjTimer = useRef(null);
   const [refLightbox, setRefLightbox] = useState(null);  // reference image path to enlarge
   const [settingsTab, setSettingsTab] = useState('style');
@@ -3046,6 +3047,70 @@ function ComicEditor() {
                     }}
                   />
                 </label>
+
+                {/* Refine the existing landscape cover: current image is the edit
+                    target, refinement instructions describe the change. */}
+                {coverLandscapeImage && (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.75rem' }}>
+                    <input
+                      type="text"
+                      value={coverLandscapeRefinePrompt}
+                      onChange={(e) => setCoverLandscapeRefinePrompt(e.target.value)}
+                      placeholder="Refinement instructions (e.g. make the sky stormy, remove the second rider...)"
+                      style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.85rem', border: '1px solid #444', borderRadius: '4px', background: 'rgba(255,255,255,0.04)', color: '#ccc' }}
+                    />
+                    <button
+                      className="btn btn-secondary"
+                      disabled={coverLandscapeGenerating || !coverLandscapeRefinePrompt.trim()}
+                      onClick={async () => {
+                        setCoverLandscapeGenerating(true);
+                        try {
+                          let fullPrompt = '';
+                          if (settings.styleBible) fullPrompt += `ART STYLE GUIDE:\n${settings.styleBible}\n\n`;
+                          fullPrompt += `REFINEMENT of the attached landscape banner image. Apply ONLY these changes:\n${coverLandscapeRefinePrompt}\n\n`
+                            + `Keep everything else in the image exactly the same — same composition, characters, colors and art style. `
+                            + `Landscape orientation, full bleed edge to edge, no borders or margins.`;
+
+                          const response = await api.post('/images/generate-panel', {
+                            prompt: fullPrompt,
+                            panelId: `comic-cover-landscape-${id}`,
+                            aspectRatio: 'landscape',
+                            referenceImages: [...coverLandscapeRefs],
+                            linkedPanelImages: [coverLandscapeImage],
+                            isRefinement: true,
+                            provider: 'openai',
+                            openaiQuality: 'high',
+                            hasMasterStyleImage: !!(settings.masterStyleImage && coverLandscapeRefs.includes(settings.masterStyleImage))
+                          }, { timeout: 600000 });
+
+                          const genData = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+                          if (genData.error) throw new Error(genData.error);
+                          if (!genData.path) throw new Error('Image generation did not return a file path');
+
+                          const saveRes = await api.post('/images/save-to-project', {
+                            comicId: id,
+                            filename: genData.path.split('/').pop(),
+                            imageType: 'cover-landscape'
+                          });
+                          const finalPath = `${saveRes.data.path}`;
+                          setCoverLandscapeImage(finalPath);
+                          const updatedCover = { ...(comic.cover || {}), landscapeImage: finalPath };
+                          await api.put(`/comics/${id}`, { cover: updatedCover });
+                          setComic(prev => ({ ...prev, cover: updatedCover }));
+                          setCoverLandscapeRefinePrompt('');
+                        } catch (err) {
+                          console.error('Landscape cover refinement failed:', err);
+                          alert('Failed to refine landscape cover: ' + (err.response?.data?.error || err.message));
+                        } finally {
+                          setCoverLandscapeGenerating(false);
+                        }
+                      }}
+                      style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+                    >
+                      {coverLandscapeGenerating ? 'Working…' : 'Refine'}
+                    </button>
+                  </div>
+                )}
 
                 <div style={{ marginTop: '0.75rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#555' }}>
