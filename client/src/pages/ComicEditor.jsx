@@ -1949,6 +1949,7 @@ function ComicEditor() {
                                   )
                                 }));
                               }}
+                              onBlur={() => saveSettings(settingsRef.current, true)}
                               placeholder="Name (e.g. landscape, building...)"
                               style={{
                                 background: 'transparent',
@@ -1986,15 +1987,33 @@ function ComicEditor() {
                               Remove
                             </button>
                           </div>
-                          <p style={{
-                            color: '#ddd',
-                            fontSize: '0.85rem',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                            margin: 0
-                          }}>
-                            {item.description}
-                          </p>
+                          <textarea
+                            value={item.description || ''}
+                            onChange={(e) => {
+                              setSettings(prev => ({
+                                ...prev,
+                                styleBibleImages: prev.styleBibleImages.map((img, i) =>
+                                  i === index ? { ...img, description: e.target.value } : img
+                                )
+                              }));
+                            }}
+                            onBlur={() => saveSettings(settingsRef.current, true)}
+                            placeholder="Description of this reference (visual facts only — avoid invented names, places or lore)"
+                            style={{
+                              width: '100%',
+                              minHeight: '120px',
+                              padding: '0.5rem',
+                              borderRadius: '4px',
+                              border: '1px solid #333',
+                              background: 'transparent',
+                              color: '#ddd',
+                              fontSize: '0.85rem',
+                              fontFamily: 'inherit',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              resize: 'vertical'
+                            }}
+                          />
                         </div>
                       </div>
                     ))}
