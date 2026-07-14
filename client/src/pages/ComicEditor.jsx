@@ -1900,6 +1900,7 @@ function ComicEditor() {
                 <textarea
                   value={settings.styleBible}
                   onChange={(e) => updateSetting('styleBible', e.target.value)}
+                  onBlur={() => saveSettings(settingsRef.current, true)}
                   style={{
                     width: '100%',
                     minHeight: '400px',
@@ -2031,6 +2032,7 @@ function ComicEditor() {
                 <textarea
                   value={settings.cameraInks}
                   onChange={(e) => updateSetting('cameraInks', e.target.value)}
+                  onBlur={() => saveSettings(settingsRef.current, true)}
                   style={{
                     width: '100%',
                     minHeight: '200px',
@@ -2069,6 +2071,7 @@ function ComicEditor() {
                         type="text"
                         value={char.name}
                         onChange={(e) => updateCharacter(index, 'name', e.target.value)}
+                        onBlur={() => saveSettings(settingsRef.current, true)}
                         placeholder="Character name"
                         style={{
                           padding: '0.5rem',
@@ -2109,6 +2112,7 @@ function ComicEditor() {
                     <textarea
                       value={char.description}
                       onChange={(e) => updateCharacter(index, 'description', e.target.value)}
+                      onBlur={() => saveSettings(settingsRef.current, true)}
                       placeholder="Description (appearance, build, clothing, distinguishing features, materials, colors...)"
                       style={{
                         width: '100%',
@@ -2177,6 +2181,7 @@ function ComicEditor() {
                 <textarea
                   value={settings.globalDoNot}
                   onChange={(e) => updateSetting('globalDoNot', e.target.value)}
+                  onBlur={() => saveSettings(settingsRef.current, true)}
                   style={{
                     width: '100%',
                     minHeight: '180px',
@@ -2196,6 +2201,7 @@ function ComicEditor() {
                 <textarea
                   value={settings.hardNegatives}
                   onChange={(e) => updateSetting('hardNegatives', e.target.value)}
+                  onBlur={() => saveSettings(settingsRef.current, true)}
                   style={{
                     width: '100%',
                     minHeight: '150px',
