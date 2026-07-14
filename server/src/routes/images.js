@@ -749,8 +749,23 @@ Other attached images are style/character references — use them for art style 
         const safeLimit = 30000;
         const maxPromptLen = safeLimit - refInstructions.length;
         if (finalPrompt.length > maxPromptLen) {
-          console.log(`Panel prompt too long (${refInstructions.length + finalPrompt.length} chars total), truncating to fit ${safeLimit} limit`);
-          finalPrompt = finalPrompt.substring(0, maxPromptLen);
+          // NEVER truncate the tail: the panel content (the actual scene to draw)
+          // comes AFTER the style/character bibles, so blind head-keeping used to
+          // silently discard the instructions — the model painted lore-only
+          // establishing shots and ignored every panel edit. Preserve everything
+          // from the panel-content marker on; trim the reference text before it.
+          const marker = 'SINGLE PANEL IMAGE';
+          const idx = finalPrompt.lastIndexOf(marker);
+          if (idx !== -1 && finalPrompt.length - idx < maxPromptLen) {
+            const tail = finalPrompt.slice(idx);
+            const notice = '\n\n[reference text trimmed to fit the prompt limit]\n\n';
+            const headBudget = Math.max(0, maxPromptLen - tail.length - notice.length);
+            console.log(`Panel prompt too long (${refInstructions.length + finalPrompt.length} chars), trimming reference sections to ${headBudget} chars; panel content (${tail.length} chars) preserved`);
+            finalPrompt = finalPrompt.slice(0, headBudget) + notice + tail;
+          } else {
+            console.log(`Panel prompt too long (${refInstructions.length + finalPrompt.length} chars total), truncating to fit ${safeLimit} limit`);
+            finalPrompt = finalPrompt.substring(0, maxPromptLen);
+          }
         }
 
         console.log(`[DEBUG] images.edit: model=gpt-image-2, refs=${allRefStreams.length}, size=${size}, prompt len=${(refInstructions + finalPrompt).length}`);

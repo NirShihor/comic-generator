@@ -2976,6 +2976,12 @@ function PageEditor({ isCover = false }) {
     ? text.replace(/\[\[/g, '').replace(/\]\]/g, '').replace(/[\u2060\u2061]/g, '')
     : '';
 
+  // Cap a reference description's contribution to the prompt. The auto-generated
+  // descriptions run 2\u20136k chars each; with several refs selected they blew past
+  // the 30k prompt limit and the panel content was truncated away entirely.
+  const clipRefDescription = (text, max = 1500) =>
+    text && text.length > max ? text.slice(0, max) + '\u2026' : (text || '');
+
   // Check if text has any highlights
   const hasHighlights = (text) => text && text.includes(HL_START);
 
@@ -3244,7 +3250,7 @@ function PageEditor({ isCover = false }) {
     if (settings.styleBibleImages && settings.styleBibleImages.length > 0) {
       prompt += `🎨 STYLE REFERENCE DESCRIPTIONS\n`;
       settings.styleBibleImages.forEach((img, i) => {
-        prompt += `\nStyle Reference ${i + 1}:\n${img.description}\n`;
+        prompt += `\nStyle Reference ${i + 1}:\n${clipRefDescription(img.description)}\n`;
       });
       prompt += '\n';
     }
@@ -3262,7 +3268,7 @@ function PageEditor({ isCover = false }) {
     if (settings.characters && settings.characters.length > 0) {
       prompt += `CHARACTER BIBLE (MAINTAIN CONSISTENCY)\n`;
       settings.characters.forEach(char => {
-        prompt += `\nCharacter: ${char.name}\n${char.description}\n`;
+        prompt += `\nCharacter: ${char.name}\n${clipRefDescription(char.description)}\n`;
       });
       prompt += '\n';
     }
@@ -3315,7 +3321,7 @@ function PageEditor({ isCover = false }) {
       if (selectedStyleImages.length > 0) {
         prompt += `🎨 STYLE REFERENCE DESCRIPTIONS\n`;
         selectedStyleImages.forEach((img, i) => {
-          prompt += `\nStyle Reference ${i + 1}:\n${img.description}\n`;
+          prompt += `\nStyle Reference ${i + 1}:\n${clipRefDescription(img.description)}\n`;
         });
         prompt += '\n';
       }
@@ -3334,7 +3340,7 @@ function PageEditor({ isCover = false }) {
       if (selectedChars.length > 0) {
         prompt += `CHARACTER BIBLE (MAINTAIN CONSISTENCY)\n`;
         selectedChars.forEach(char => {
-          prompt += `\nCharacter: ${char.name}\n${char.description}\n`;
+          prompt += `\nCharacter: ${char.name}\n${clipRefDescription(char.description)}\n`;
         });
         prompt += '\n';
       }
