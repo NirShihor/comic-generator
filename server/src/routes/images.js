@@ -96,10 +96,10 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const response = await ai.models.generateContent({
-      // Nano Banana Pro — matches the inpainting path. The 3.1 Lite tier was
-      // faster/cheaper but noticeably weaker at reference adherence and at
-      // obeying "don't change anything else" in refinements.
-      model: 'gemini-3-pro-image-preview',
+      // Nano Banana 2 Lite — latest 3.1-series image model, fast and cheap.
+      // (An earlier "weak adherence" verdict against Lite turned out to be the
+      // prompt-truncation bug that discarded panel content — not the model.)
+      model: 'gemini-3.1-flash-lite-image',
       contents: parts,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
@@ -1123,7 +1123,7 @@ router.post('/inpaint-region', (req, res) => {
       const maxRetries = 3;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const response = await ai.models.generateContent({
-          model: 'gemini-3-pro-image-preview',   // inpainting stays on Nano Banana Pro (better fidelity)
+          model: 'gemini-3.1-flash-lite-image',   // fast latest model (was Pro; revisit if inpaint fidelity drops)
           contents: parts,
           config: { responseModalities: ['TEXT', 'IMAGE'] }
         });
