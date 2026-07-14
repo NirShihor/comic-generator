@@ -1246,6 +1246,7 @@ function PageEditor({ isCover = false }) {
               brightness: p.brightness ?? 1,
               contrast: p.contrast ?? 1,
               saturation: p.saturation ?? 1,
+              memory: p.memory || false,
               refImages: p.refImages || [],
               annotations: p.annotations || []
             };
@@ -2762,6 +2763,7 @@ function PageEditor({ isCover = false }) {
         brightness: existing.brightness,
         contrast: existing.contrast,
         saturation: existing.saturation,
+        memory: existing.memory,
         refImages: existing.refImages,
         annotations: existing.annotations,
       };
@@ -2859,7 +2861,7 @@ function PageEditor({ isCover = false }) {
   const cleanSnapshotRef = useRef('');
   const justLoadedRef = useRef(true);
   const DIRTY_IGNORE_KEYS = useRef(new Set([
-    'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation',
+    'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation', 'memory',
     'artworkImage', 'bakedCropImage', 'refImages', 'annotations',
     'alternatives', 'transformations', 'audioUrl', 'translationAudioUrl', 'wordTimestamps'
   ])).current;
@@ -3156,6 +3158,7 @@ function PageEditor({ isCover = false }) {
             brightness: existing.brightness,
             contrast: existing.contrast,
             saturation: existing.saturation,
+            memory: existing.memory,
             refImages: existing.refImages,
             annotations: existing.annotations,
           };
@@ -4049,6 +4052,49 @@ function PageEditor({ isCover = false }) {
       ctx.stroke();
     };
 
+    // Wavy (scalloped) line for memory/flashback panel borders — the classic
+    // comics convention. Alternating bulges perpendicular to the edge.
+    const drawWavyLine = (x1, y1, x2, y2) => {
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;   // unit normal
+      const wavelength = 56;                 // px at 2048-wide canvas
+      const amplitude = 9;
+      const waves = Math.max(2, Math.round(len / wavelength));
+      const seg = 1 / waves;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      for (let i = 0; i < waves; i++) {
+        const tMid = (i + 0.5) * seg;
+        const tEnd = (i + 1) * seg;
+        const bulge = (i % 2 === 0 ? 1 : -1) * amplitude;
+        ctx.quadraticCurveTo(
+          x1 + dx * tMid + nx * bulge, y1 + dy * tMid + ny * bulge,
+          x1 + dx * tEnd, y1 + dy * tEnd
+        );
+      }
+      ctx.stroke();
+    };
+
+    // Feathered white edges inside a memory panel — art dissolves into haze.
+    const drawMemoryFeather = (fx, fy, fw, fh) => {
+      const feather = Math.min(fw, fh) * 0.07;
+      const mk = (gx0, gy0, gx1, gy1) => {
+        const g = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
+        g.addColorStop(0, 'rgba(255,255,255,0.9)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        return g;
+      };
+      ctx.fillStyle = mk(fx, 0, fx + feather, 0);
+      ctx.fillRect(fx, fy, feather, fh);
+      ctx.fillStyle = mk(fx + fw, 0, fx + fw - feather, 0);
+      ctx.fillRect(fx + fw - feather, fy, feather, fh);
+      ctx.fillStyle = mk(0, fy, 0, fy + feather);
+      ctx.fillRect(fx, fy, fw, feather);
+      ctx.fillStyle = mk(0, fy + fh, 0, fy + fh - feather);
+      ctx.fillRect(fx, fy + fh - feather, fw, feather);
+    };
+
     // Find the divider line matching a panel edge
     const findMatchingLine = (edge, tapZone) => {
       const tolerance = 0.02;
@@ -4253,6 +4299,10 @@ function PageEditor({ isCover = false }) {
       if (hasFilters) {
         ctx.filter = 'none';
       }
+      // Memory panel: fade the art into white haze at the edges (inside the clip).
+      if (panelData?.memory) {
+        drawMemoryFeather(drawX, drawY, drawW, drawH);
+      }
       ctx.restore();
     }
 
@@ -4322,7 +4372,10 @@ function PageEditor({ isCover = false }) {
       const blX = adjustedX + (leftDiag ? leftDiag.endOffset : 0);
       const blY = adjustedY + adjustedH + (bottomDiag ? bottomDiag.startOffset : 0);
 
-      // Draw multiple passes for thicker, more organic look
+      // Draw multiple passes for thicker, more organic look.
+      // Memory panels get the wavy flashback border instead of the wobbly line.
+      const isMemoryPanel = !!panelImages[panel.id]?.memory;
+      const drawEdge = isMemoryPanel ? drawWavyLine : drawWobblyLine;
       const bt = borderThicknessRef.current;
       if (bt > 0) {
         const borderScale = bt / 100;
@@ -4331,13 +4384,13 @@ function PageEditor({ isCover = false }) {
           ctx.lineWidth = baseLine * borderScale;
 
           // Top edge (TL → TR)
-          drawWobblyLine(tlX, tlY, trX, trY);
+          drawEdge(tlX, tlY, trX, trY);
           // Right edge (TR → BR)
-          drawWobblyLine(trX, trY, brX, brY);
+          drawEdge(trX, trY, brX, brY);
           // Bottom edge (BR → BL)
-          drawWobblyLine(brX, brY, blX, blY);
+          drawEdge(brX, brY, blX, blY);
           // Left edge (BL → TL)
-          drawWobblyLine(blX, blY, tlX, tlY);
+          drawEdge(blX, blY, tlX, tlY);
         }
       }
     }
@@ -4454,9 +4507,15 @@ function PageEditor({ isCover = false }) {
       if (hasFilters) {
         ctx.filter = 'none';
       }
+      // Memory panel: fade the art into white haze at the edges (inside the clip).
+      if (panelData?.memory) {
+        drawMemoryFeather(bboxX, bboxY, bboxW, bboxH);
+      }
       ctx.restore();
 
-      // Draw wobbly border along each edge of the polygon
+      // Draw wobbly border along each edge of the polygon — wavy for memory panels
+      const isMemoryFloat = !!panelData?.memory;
+      const drawFloatEdge = isMemoryFloat ? drawWavyLine : drawWobblyLine;
       const btFloat = floatingBorderThicknessRef.current;
       if (btFloat > 0) {
         const borderScale = btFloat / 100;
@@ -4467,7 +4526,7 @@ function PageEditor({ isCover = false }) {
           for (let i = 0; i < innerCorners.length; i++) {
             const from = innerCorners[i];
             const to = innerCorners[(i + 1) % innerCorners.length];
-            drawWobblyLine(from.x, from.y, to.x, to.y);
+            drawFloatEdge(from.x, from.y, to.x, to.y);
           }
         }
       }
@@ -11876,6 +11935,31 @@ function PageEditor({ isCover = false }) {
                                   >
                                     Crop
                                   </button>
+                                  {!isCover && (
+                                    <button
+                                      onClick={() => {
+                                        const next = !(panelData?.memory);
+                                        setPanelImages(prev => ({
+                                          ...prev,
+                                          [panel.id]: { ...prev[panel.id], memory: next }
+                                        }));
+                                        savePanelAdjustments(panel.id, { memory: next });
+                                        setTimeout(() => compositePageFromPanels(), 50);
+                                      }}
+                                      title="Flashback/memory panel: wavy border + faded edges"
+                                      style={{
+                                        padding: '0.2rem 0.5rem',
+                                        fontSize: '0.7rem',
+                                        background: panelData?.memory ? '#8e44ad' : '#ddd',
+                                        color: panelData?.memory ? 'white' : '#666',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      Memory
+                                    </button>
+                                  )}
                                   <button
                                     onClick={async () => {
                                       if (!panelData?.path) return;

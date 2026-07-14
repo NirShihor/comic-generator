@@ -119,6 +119,8 @@ const PanelSchema = new mongoose.Schema({
   cropX: { type: Number, default: 0 },
   cropY: { type: Number, default: 0 },
   zoom: { type: Number, default: 1 },
+  // Memory/flashback panel: baked with a wavy border + feathered white edges.
+  memory: { type: Boolean, default: false },
   brightness: { type: Number, default: 1 },
   contrast: { type: Number, default: 1 },
   saturation: { type: Number, default: 1 },

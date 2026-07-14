@@ -640,7 +640,7 @@ router.patch('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
     }
 
     // Merge provided fields onto the panel
-    const allowedFields = ['artworkImage', 'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation', 'refImages', 'annotations'];
+    const allowedFields = ['artworkImage', 'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation', 'refImages', 'annotations', 'memory'];
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         panel[field] = req.body[field];
