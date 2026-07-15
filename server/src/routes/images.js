@@ -704,8 +704,12 @@ router.post('/generate-panel', (req, res) => {
         const sourceStreams = await loadReferenceImages([angleSourceImage]);
         allRefStreams = [...sourceStreams];
       } else {
+        // Linked refs go SHARP for new generations too (they used to be heavily
+        // blurred as an anti-cloning measure, which destroyed exactly what page
+        // refs are attached FOR — character faces/clothing continuity). The
+        // anti-cloning job moved into the reference instructions instead.
         const linkedRefStreams = linkedRefs.length > 0
-          ? (isRefinement ? await loadReferenceImages(linkedRefs, annotationsMap) : await loadBlurredReferenceImages(linkedRefs))
+          ? await loadReferenceImages(linkedRefs, annotationsMap)
           : [];
         const styleRefStreams = styleRefs.length > 0
           ? await loadReferenceImages(styleRefs)
@@ -728,8 +732,10 @@ The ONLY thing that changes is the camera position/angle. Everything else must b
 Other attached images are style/character references ONLY — do NOT add characters from reference images into the scene.\n\n`;
         } else if (linkedRefs.length > 0) {
           refInstructions = `REFERENCE IMAGE INSTRUCTIONS:
-Some attached images are SCENE REFERENCES — use them to match the setting, environment, color palette, lighting, and art style.
-Maintain visual consistency with the reference scene while following the prompt below for the specific action and composition.
+Some attached images are SCENE/CONTINUITY REFERENCES from other panels of this comic.
+Any character who appears in BOTH a reference image and the prompt below must look EXACTLY the same as in the reference — same face, same hair, same clothing, same build.
+Also match the setting, environment, color palette, lighting, and art style of the references.
+Do NOT copy a reference's composition or layout — compose the NEW scene described in the prompt below.
 Other attached images are style/character references — use them for art style and character appearance consistency only.\n\n`;
         } else if (hasMasterStyleImage) {
           const otherRefs = styleRefs.length - 1;
