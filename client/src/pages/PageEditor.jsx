@@ -616,6 +616,9 @@ function PageEditor({ isCover = false }) {
   const [showBgPicker, setShowBgPicker] = useState(false);        // background-library picker for the page image
   const [bgLibrary, setBgLibrary] = useState([]);
   const [bgApplyingId, setBgApplyingId] = useState(null);
+  // Collapsed panel-content cards (panelId → bool). A panel carrying a library
+  // background gets auto-collapsed — its prompt/refs machinery is irrelevant.
+  const [collapsedPanels, setCollapsedPanels] = useState({});
   const [bubbles, setBubbles] = useState([]);
   const [selectedBubbleId, setSelectedBubbleId] = useState(null);
   const [isDraggingBubble, setIsDraggingBubble] = useState(false);
@@ -1102,6 +1105,9 @@ function PageEditor({ isCover = false }) {
       }));
       await updatePanelArtwork(base.id, bg.image);
       setShowBgPicker(false);
+      // The panel is just a library background now — its prompt/refs card is
+      // dead weight, so tuck it away (the ▶ toggle brings it back).
+      setCollapsedPanels(prev => ({ ...prev, [base.id]: true }));
       showToast('Background applied to the first panel');
     } catch (err) {
       alert('Failed to apply background: ' + (err.response?.data?.error || err.message));
@@ -10520,9 +10526,18 @@ function PageEditor({ isCover = false }) {
                   </p>
                 ) : (
                   panels.map((panel, i) => (
-                    <div key={panel.id} style={{ marginBottom: '1rem', padding: '0.75rem', background: i % 2 === 0 ? '#f0f0f0' : '#fff', borderRadius: '8px', border: '2px solid #bbb' }}>
+                    <div key={panel.id} style={{ marginBottom: '1rem', padding: '0.75rem', background: i % 2 === 0 ? '#f0f0f0' : '#fff', borderRadius: '8px', border: '2px solid #bbb', ...(collapsedPanels[panel.id] ? { maxHeight: '52px', overflow: 'hidden' } : {}) }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                         <label style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>
+                          {!isCover && (
+                            <button
+                              onClick={() => setCollapsedPanels(prev => ({ ...prev, [panel.id]: !prev[panel.id] }))}
+                              title={collapsedPanels[panel.id] ? 'Expand panel' : 'Collapse panel'}
+                              style={{ marginRight: '0.4rem', fontSize: '0.7rem', color: '#999', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            >
+                              {collapsedPanels[panel.id] ? '▶' : '▼'}
+                            </button>
+                          )}
                           {isCover ? 'Cover' : `Panel ${i + 1}`}
                           {!isCover && (
                           <span style={{ fontWeight: 'normal', marginLeft: '0.5rem', color: '#999' }}>
