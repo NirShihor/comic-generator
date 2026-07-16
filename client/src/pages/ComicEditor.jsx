@@ -61,6 +61,7 @@ function ComicEditor() {
   const [wordAudioGenerating, setWordAudioGenerating] = useState(false);
   const [wordAudioProgress, setWordAudioProgress] = useState(null);
   const [wordAudioForceRegenerate, setWordAudioForceRegenerate] = useState(false);
+  const [wordFormsForceRegenerate, setWordFormsForceRegenerate] = useState(false);
   const [wordFormsGenerating, setWordFormsGenerating] = useState(false);
   const [wordFormsResult, setWordFormsResult] = useState(null);
   const [grammarNotesGenerating, setGrammarNotesGenerating] = useState(false);
@@ -4102,7 +4103,9 @@ function ComicEditor() {
                     const response = await fetch('/api/chat/generate-word-forms', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ comicId: id, forceRegenerate: true })
+                      // Only words WITHOUT forms by default — force was hard-coded
+                      // true for a while, redoing every word on every click.
+                      body: JSON.stringify({ comicId: id, forceRegenerate: wordFormsForceRegenerate })
                     });
                     if (!response.ok) {
                       const err = await response.json();
@@ -4160,6 +4163,14 @@ function ComicEditor() {
               >
                 {wordFormsGenerating ? 'Generating Forms...' : 'Generate Word Forms'}
               </button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#666', marginTop: '0.5rem' }}>
+                <input
+                  type="checkbox"
+                  checked={wordFormsForceRegenerate}
+                  onChange={(e) => setWordFormsForceRegenerate(e.target.checked)}
+                />
+                Force regenerate all (redo words that already have forms)
+              </label>
               {wordFormsResult && wordFormsResult.inProgress && (
                 <div style={{ background: '#fff3cd', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
                   <p style={{ margin: 0, color: '#856404' }}>
