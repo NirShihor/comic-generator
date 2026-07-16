@@ -3141,6 +3141,11 @@ function PageEditor({ isCover = false }) {
     </>
   );
 
+  // Always-current savePage for deferred callers (e.g. auto-save on bubble lock
+  // fires after the state update lands; a direct call would save stale bubbles).
+  const savePageRef = useRef(null);
+  useEffect(() => { savePageRef.current = savePage; });
+
   const savePage = async () => {
     try {
       if (isCover) {
@@ -7864,7 +7869,7 @@ function PageEditor({ isCover = false }) {
                     <span style={{ fontWeight: 'bold' }}>Bubble {i + 1} {bubble.locked ? '(locked)' : ''}</span>
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
                       <button
-                        onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { locked: !bubble.locked }); }}
+                        onClick={(e) => { e.stopPropagation(); const locking = !bubble.locked; updateBubble(bubble.id, { locked: locking }); if (locking) setTimeout(() => savePageRef.current?.(), 150); }}
                         style={{
                           padding: '0.2rem 0.5rem',
                           background: bubble.locked ? '#e67e22' : '#95a5a6',
@@ -9300,7 +9305,7 @@ function PageEditor({ isCover = false }) {
                         </button>
 
                         <button
-                          onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { locked: !bubble.locked }); }}
+                          onClick={(e) => { e.stopPropagation(); const locking = !bubble.locked; updateBubble(bubble.id, { locked: locking }); if (locking) setTimeout(() => savePageRef.current?.(), 150); }}
                           style={{
                             padding: '0.3rem 0.6rem',
                             background: bubble.locked ? '#e67e22' : '#95a5a6',
