@@ -596,6 +596,11 @@ function PageEditor({ isCover = false }) {
   const [inpaintGenerating, setInpaintGenerating] = useState(null); // null|'openai'|'gemini'
   const [inpaintSaved, setInpaintSaved] = useState(false);
   const [inpaintAnnotations, setInpaintAnnotations] = useState([]); // [{id, x, y}] numbered dots for spatial reference
+  // Panels with an inpaint currently in flight — inpaints run in the background
+  // (you can exit the lightbox and start another panel's), capped at 3 at once.
+  const inpaintInFlightRef = useRef(new Set());
+  const inpaintModeRef = useRef(null);
+  useEffect(() => { inpaintModeRef.current = inpaintMode; }, [inpaintMode]);
   // Global mouseup handler for inpaint rect drawing (handles mouse-up outside image)
   useEffect(() => {
     if (!inpaintDrawing) return;
@@ -3763,6 +3768,10 @@ function PageEditor({ isCover = false }) {
   const startInpaintMode = (panel, panelIndex) => {
     const imagePath = panelImages[panel.id]?.path;
     if (!imagePath) return;
+    if (inpaintInFlightRef.current.has(panel.id)) {
+      showToast('This panel has an inpaint still running — its image is about to change');
+      return;
+    }
     setInpaintMode({ panelId: panel.id, panelIndex, panel });
     setInpaintRect(null);
     setInpaintPrompt('');
@@ -3773,12 +3782,26 @@ function PageEditor({ isCover = false }) {
     setLightboxRefContext(null);
   };
 
-  // Execute inpainting on a region
+  // Execute inpainting on a region. Runs in the BACKGROUND: you can exit the
+  // lightbox and start an inpaint on another panel while this one processes
+  // (up to 3 concurrently; one per panel — same-panel passes would race on
+  // the same source image and lose each other's changes).
   const executeInpaint = async (provider = 'openai') => {
     if (!inpaintMode || !inpaintRect || !inpaintPrompt.trim()) return;
-    const { panelId, panel } = inpaintMode;
+    const { panelId, panel, panelIndex } = inpaintMode;
     const currentPath = panelImages[panelId]?.path;
     if (!currentPath) return;
+    if (inpaintInFlightRef.current.has(panelId)) {
+      showToast('This panel already has an inpaint running — wait for it to finish');
+      return;
+    }
+    if (inpaintInFlightRef.current.size >= 3) {
+      showToast('Up to 3 inpaints can run at once — wait for one to finish');
+      return;
+    }
+    inpaintInFlightRef.current.add(panelId);
+    const panelLabel = `Panel ${(panelIndex ?? 0) + 1}`;
+    showToast('Inpainting started — you can close this view and keep working');
 
     setInpaintGenerating(provider);
     setPanelImages(prev => ({
@@ -3816,12 +3839,17 @@ function PageEditor({ isCover = false }) {
       }));
       updatePanelArtwork(panelId, response.data.path);
 
-      // Update lightbox to show result; clear rect and annotations for another pass
-      setLightboxImage(`${response.data.path}`);
-      setInpaintRect(null);
-      setInpaintPrompt('');
-      setInpaintAnnotations([]);
-      setInpaintGenerating(null);
+      if (inpaintModeRef.current?.panelId === panelId) {
+        // Still in this panel's inpaint view: show the result, ready for another pass
+        setLightboxImage(`${response.data.path}`);
+        setInpaintRect(null);
+        setInpaintPrompt('');
+        setInpaintAnnotations([]);
+        setInpaintGenerating(null);
+      } else {
+        // Finished in the background — the panel image is updated in place
+        showToast(`Inpaint finished on ${panelLabel}`);
+      }
     } catch (error) {
       console.error('Inpaint failed:', error);
       setPanelImages(prev => ({
@@ -3832,7 +3860,13 @@ function PageEditor({ isCover = false }) {
           error: error.response?.data?.error || error.message
         }
       }));
-      setInpaintGenerating(null);
+      if (inpaintModeRef.current?.panelId === panelId) {
+        setInpaintGenerating(null);
+      } else {
+        showToast(`Inpaint FAILED on ${panelLabel}: ${error.response?.data?.error || error.message}`);
+      }
+    } finally {
+      inpaintInFlightRef.current.delete(panelId);
     }
   };
 
