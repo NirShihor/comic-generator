@@ -699,12 +699,20 @@ router.put('/:id/cover', async (req, res) => {
 
           const coverFilename = `${sanitizedTitle}_cover.png`;
           const coverImagePath = path.join(imagesDir, coverFilename);
-          await fs.copyFile(sourceImagePath, coverImagePath);
+          // Skip the copy when the incoming path IS already the canonical cover
+          // file: copying a file onto itself only bumps its mtime — which made
+          // the export's "is the baked cover fresh?" heuristic decide the bake
+          // was stale after ANY ordinary cover save, exporting bubble-less covers.
+          if (path.resolve(sourceImagePath) !== path.resolve(coverImagePath)) {
+            await fs.copyFile(sourceImagePath, coverImagePath);
+          }
           comic.cover.image = `/projects/${req.params.id}/images/${coverFilename}`;
 
           const coverSceneFilename = `${sanitizedTitle}_cover_s1.png`;
           const coverSceneImagePath = path.join(imagesDir, coverSceneFilename);
-          await fs.copyFile(sourceImagePath, coverSceneImagePath);
+          if (path.resolve(sourceImagePath) !== path.resolve(coverSceneImagePath)) {
+            await fs.copyFile(sourceImagePath, coverSceneImagePath);
+          }
           comic.cover.sceneImage = `/projects/${req.params.id}/images/${coverSceneFilename}`;
 
           // Clear stale baked image when a new upload replaces the cover
