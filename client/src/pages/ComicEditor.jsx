@@ -117,6 +117,11 @@ function ComicEditor() {
   const [styleSheetGallery, setStyleSheetGallery] = useState([]);
   const [styleSheetDescribing, setStyleSheetDescribing] = useState([]); // ref paths currently being analyzed
   const styleSheetAbortRef = useRef(null); // cancels an in-flight generation
+  // "From comics" picker: pull a panel/page image from a collection comic as a style ref
+  const [styleSheetPickerOpen, setStyleSheetPickerOpen] = useState(false);
+  const [styleSheetPickerComics, setStyleSheetPickerComics] = useState(null); // null = not fetched yet
+  const [styleSheetPickerComicId, setStyleSheetPickerComicId] = useState(null);
+  const [styleSheetPickerBusy, setStyleSheetPickerBusy] = useState(false);
   // Voice Library (browse ElevenLabs voices, preview, save to Voices)
   const [voiceLib, setVoiceLib] = useState([]);
   const [voiceLibLoaded, setVoiceLibLoaded] = useState(false);
@@ -816,10 +821,46 @@ function ComicEditor() {
     e.target.value = '';
   };
 
-  // Style Sheet: upload an image to use as a locked style reference. Persists in
-  // promptSettings.styleSheetImages (on the comic or collection, like other refs).
-  // On upload we auto-analyze the image into a reusable ART-STYLE prompt that gets
-  // injected when generating subsequent images in the series.
+  // Style Sheet: add an image (base64) as a locked style reference. Persists in
+  // promptSettings.styleSheetImages (on the comic or collection, like other refs),
+  // then auto-analyzes the image into a reusable ART-STYLE prompt that gets
+  // injected when generating subsequent images in the series. Shared by the
+  // file-upload path and the "From comics" picker.
+  const styleSheetAddBase64 = async (base64) => {
+    const savePayload = { image: base64 };
+    if (settingsSource === 'collection' && settingsCollectionId) {
+      savePayload.collectionId = settingsCollectionId;
+    } else {
+      savePayload.comicId = id;
+    }
+    const resp = await api.post('/images/save-reference', savePayload);
+    const newPath = resp.data.path;
+    setSettings(prev => {
+      const updated = { ...prev, styleSheetImages: [...(prev.styleSheetImages || []), { path: newPath, stylePrompt: '' }] };
+      saveSettings(updated, true);
+      return updated;
+    });
+    // Analyze the art style in the background, then persist the prompt.
+    setStyleSheetDescribing(prev => [...prev, newPath]);
+    try {
+      const styleResp = await api.post('/chat/describe-style', { image: base64 }, { timeout: 120000 });
+      const stylePrompt = styleResp.data.stylePrompt || '';
+      setSettings(prev => {
+        const updated = {
+          ...prev,
+          styleSheetImages: (prev.styleSheetImages || []).map(r =>
+            r.path === newPath ? { ...r, stylePrompt } : r)
+        };
+        saveSettings(updated, true);
+        return updated;
+      });
+    } catch (err) {
+      alert('Style analysis failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setStyleSheetDescribing(prev => prev.filter(p => p !== newPath));
+    }
+  };
+
   const styleSheetUploadRef = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -827,44 +868,54 @@ function ComicEditor() {
     reader.onload = async (event) => {
       const base64 = event.target.result.split(',')[1];
       try {
-        const savePayload = { image: base64 };
-        if (settingsSource === 'collection' && settingsCollectionId) {
-          savePayload.collectionId = settingsCollectionId;
-        } else {
-          savePayload.comicId = id;
-        }
-        const resp = await api.post('/images/save-reference', savePayload);
-        const newPath = resp.data.path;
-        setSettings(prev => {
-          const updated = { ...prev, styleSheetImages: [...(prev.styleSheetImages || []), { path: newPath, stylePrompt: '' }] };
-          saveSettings(updated, true);
-          return updated;
-        });
-        // Analyze the art style in the background, then persist the prompt.
-        setStyleSheetDescribing(prev => [...prev, newPath]);
-        try {
-          const styleResp = await api.post('/chat/describe-style', { image: base64 }, { timeout: 120000 });
-          const stylePrompt = styleResp.data.stylePrompt || '';
-          setSettings(prev => {
-            const updated = {
-              ...prev,
-              styleSheetImages: (prev.styleSheetImages || []).map(r =>
-                r.path === newPath ? { ...r, stylePrompt } : r)
-            };
-            saveSettings(updated, true);
-            return updated;
-          });
-        } catch (err) {
-          alert('Style analysis failed: ' + (err.response?.data?.error || err.message));
-        } finally {
-          setStyleSheetDescribing(prev => prev.filter(p => p !== newPath));
-        }
+        await styleSheetAddBase64(base64);
       } catch (error) {
         alert('Upload failed: ' + (error.response?.data?.error || error.message));
       }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  };
+
+  // "From comics": browse the collection's comics and grab a panel / page image
+  // as a style reference — same pipeline as an upload from disk.
+  const openStyleSheetPicker = async () => {
+    setStyleSheetPickerOpen(true);
+    if (styleSheetPickerComics) return;   // already fetched this session
+    try {
+      const res = await api.get('/comics');
+      let list = res.data || [];
+      if (comic?.collectionId) {
+        const sameCollection = list.filter(c => c.collectionId === comic.collectionId);
+        if (sameCollection.length) list = sameCollection;
+      }
+      list.sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0));
+      setStyleSheetPickerComics(list);
+      // Default to a sibling comic — pulling style from the one being edited is rarer.
+      setStyleSheetPickerComicId((list.find(c => c.id !== id) || list[0])?.id || null);
+    } catch (err) {
+      setStyleSheetPickerOpen(false);
+      alert('Failed to load comics: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const styleSheetPickFromComic = async (imgPath) => {
+    setStyleSheetPickerBusy(true);
+    try {
+      const imgResp = await fetch(`${imgPath}`);
+      const blob = await imgResp.blob();
+      const base64 = await new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result.split(',')[1]);
+        r.readAsDataURL(blob);
+      });
+      setStyleSheetPickerOpen(false);
+      await styleSheetAddBase64(base64);
+    } catch (err) {
+      alert('Failed to add reference: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setStyleSheetPickerBusy(false);
+    }
   };
 
   const styleSheetRemoveRef = (imgPath) => {
@@ -4432,13 +4483,23 @@ function ComicEditor() {
                 </div>
               );
             })}
-            <button
-              onClick={() => styleSheetFileInputRef.current?.click()}
-              className="btn btn-secondary"
-              style={{ minHeight: '60px', border: '2px dashed #aaa', borderRadius: '8px', fontSize: '0.85rem' }}
-            >
-              + Upload style reference
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => styleSheetFileInputRef.current?.click()}
+                className="btn btn-secondary"
+                style={{ flex: 1, minHeight: '60px', border: '2px dashed #aaa', borderRadius: '8px', fontSize: '0.85rem' }}
+              >
+                + Upload style reference
+              </button>
+              <button
+                onClick={openStyleSheetPicker}
+                className="btn btn-secondary"
+                title="Pick a panel or page from a comic in this collection"
+                style={{ flex: 1, minHeight: '60px', border: '2px dashed #aaa', borderRadius: '8px', fontSize: '0.85rem' }}
+              >
+                + From comics
+              </button>
+            </div>
             <input type="file" ref={styleSheetFileInputRef} onChange={styleSheetUploadRef} accept="image/*" style={{ display: 'none' }} />
           </div>
 
@@ -5430,6 +5491,97 @@ function ComicEditor() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Style Sheet "From comics" picker */}
+      {styleSheetPickerOpen && (
+        <div
+          onClick={() => !styleSheetPickerBusy && setStyleSheetPickerOpen(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.85)', zIndex: 10000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#1a1a2e', borderRadius: '10px', padding: '1rem',
+              width: 'min(1000px, 92vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', color: '#eee' }}>Pick a style reference from a comic</h3>
+              <button
+                onClick={() => setStyleSheetPickerOpen(false)}
+                disabled={styleSheetPickerBusy}
+                style={{
+                  background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%',
+                  width: '26px', height: '26px', fontSize: '1rem', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >&times;</button>
+            </div>
+
+            {!styleSheetPickerComics ? (
+              <p style={{ color: '#aaa' }}>Loading comics…</p>
+            ) : (
+              <>
+                {/* Comic tabs */}
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                  {styleSheetPickerComics.map(c => (
+                    <button
+                      key={c.id}
+                      className={`btn btn-sm ${styleSheetPickerComicId === c.id ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setStyleSheetPickerComicId(c.id)}
+                      style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}
+                    >
+                      {c.title}{c.id === id ? ' (this comic)' : ''}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Image grid: panels per page; page master as fallback */}
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {(() => {
+                    const sel = styleSheetPickerComics.find(c => c.id === styleSheetPickerComicId);
+                    if (!sel) return <p style={{ color: '#aaa' }}>No comic selected.</p>;
+                    const pages = [...(sel.pages || [])].sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
+                    return pages.map(p => {
+                      const panelImgs = (p.panels || [])
+                        .slice().sort((a, b) => (a.panelOrder || 0) - (b.panelOrder || 0))
+                        .map(pan => pan.artworkImage).filter(Boolean);
+                      const imgs = panelImgs.length ? panelImgs : (p.masterImage ? [p.masterImage] : []);
+                      if (!imgs.length) return null;
+                      return (
+                        <div key={p.pageNumber} style={{ marginBottom: '0.75rem' }}>
+                          <small style={{ color: '#888' }}>Page {p.pageNumber}</small>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                            {imgs.map((img, i) => (
+                              <img
+                                key={`${img}-${i}`}
+                                src={`${img}`}
+                                alt={`Page ${p.pageNumber} panel ${i + 1}`}
+                                onClick={() => !styleSheetPickerBusy && styleSheetPickFromComic(img)}
+                                style={{
+                                  height: '120px', borderRadius: '6px', cursor: styleSheetPickerBusy ? 'wait' : 'pointer',
+                                  border: '2px solid #2a2a3e', opacity: styleSheetPickerBusy ? 0.5 : 1
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+                {styleSheetPickerBusy && (
+                  <p style={{ color: '#F0BB29', margin: '0.5rem 0 0' }}>Adding reference…</p>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
