@@ -3442,6 +3442,20 @@ function PageEditor({ isCover = false }) {
     return 'square';
   };
 
+  // A panel's selectedBibleRefs can hold IDs of since-DELETED bible entries
+  // (deleting a character doesn't touch panel selections). Those ghosts have no
+  // checkbox row and no thumbnail, but naive .length counts them — "1 ref"
+  // showing with nothing visible anywhere. Count only IDs that still resolve.
+  const liveBibleRefIds = (panel) => {
+    const ids = panel?.selectedBibleRefs || [];
+    if (!ids.length) return ids;
+    const existing = new Set([
+      ...(promptSettings.styleBibleImages || []).map(img => String(img.id)),
+      ...(promptSettings.characters || []).map(c => String(c.id))
+    ]);
+    return ids.filter(id => existing.has(String(id)));
+  };
+
   // Toggle a bible ref (style image or character) for a panel
   const togglePanelBibleRef = (panelId, refId) => {
     const refIdStr = String(refId);
@@ -10676,14 +10690,14 @@ function PageEditor({ isCover = false }) {
                             style={{
                               padding: '0.25rem 0.5rem',
                               fontSize: '0.7rem',
-                              background: (panel.selectedBibleRefs?.length > 0) ? '#e8d5f5' : '#f0f0f0',
-                              color: (panel.selectedBibleRefs?.length > 0) ? '#6c3483' : '#555',
-                              border: `1px solid ${(panel.selectedBibleRefs?.length > 0) ? '#6c3483' : '#ccc'}`,
+                              background: (liveBibleRefIds(panel).length > 0) ? '#e8d5f5' : '#f0f0f0',
+                              color: (liveBibleRefIds(panel).length > 0) ? '#6c3483' : '#555',
+                              border: `1px solid ${(liveBibleRefIds(panel).length > 0) ? '#6c3483' : '#ccc'}`,
                               borderRadius: '4px',
                               cursor: 'pointer'
                             }}
                           >
-                            Refs{panel.selectedBibleRefs?.length > 0 ? ` (${panel.selectedBibleRefs.length})` : ''}
+                            Refs{liveBibleRefIds(panel).length > 0 ? ` (${liveBibleRefIds(panel).length})` : ''}
                           </button>
                         </div>
                       </div>
@@ -10867,8 +10881,8 @@ function PageEditor({ isCover = false }) {
                         }}
                       >
                         {showPanelRefs[panel.id] ? '▾' : '▸'} Ref Images
-                        {(panelImages[panel.id]?.refImages?.length > 0 || panel.selectedBibleRefs?.length > 0)
-                          ? ` (${(panelImages[panel.id]?.refImages?.length || 0) + (panel.selectedBibleRefs?.length || 0)})`
+                        {(panelImages[panel.id]?.refImages?.length > 0 || liveBibleRefIds(panel).length > 0)
+                          ? ` (${(panelImages[panel.id]?.refImages?.length || 0) + liveBibleRefIds(panel).length})`
                           : ''}
                       </button>
                       {showPanelRefs[panel.id] && <div style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
