@@ -96,9 +96,9 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const response = await ai.models.generateContent({
-      // Nano Banana Pro — strongest fidelity/adherence tier; used for all
-      // Gemini image work (generation, refinement, inpainting).
-      model: 'gemini-3-pro-image-preview',
+      // Flash image model — back from Nano Banana Pro at Nir's request (2026-07-19,
+      // trying whether the lite tier adheres to character refs better here).
+      model: 'gemini-3.1-flash-image-preview',
       contents: parts,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
@@ -1128,7 +1128,7 @@ router.post('/inpaint-region', (req, res) => {
       const maxRetries = 3;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const response = await ai.models.generateContent({
-          model: 'gemini-3-pro-image-preview',   // Nano Banana Pro — best inpaint fidelity
+          model: 'gemini-3.1-flash-image-preview',   // flash tier (matches generation; was Nano Banana Pro)
           contents: parts,
           config: { responseModalities: ['TEXT', 'IMAGE'] }
         });
