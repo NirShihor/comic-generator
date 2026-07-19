@@ -299,6 +299,25 @@ function ComicEditor() {
     }
   };
 
+  // Drag-and-drop page reordering (Pages tab)
+  const [dragPageId, setDragPageId] = useState(null);
+  const [dragOverPageId, setDragOverPageId] = useState(null);
+
+  const reorderPages = async (draggedId, targetId) => {
+    if (!draggedId || !targetId || draggedId === targetId) return;
+    const ordered = [...comic.pages].sort((a, b) => a.pageNumber - b.pageNumber).map(p => p.id);
+    const from = ordered.indexOf(draggedId);
+    const to = ordered.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    ordered.splice(to, 0, ordered.splice(from, 1)[0]);
+    try {
+      await api.post(`/comics/${id}/pages/reorder`, { pageIds: ordered });
+      await loadComic();
+    } catch (error) {
+      alert('Failed to reorder pages: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   const addPage = async (afterPageNumber = null) => {
     try {
       const response = await api.post(`/comics/${id}/pages`, afterPageNumber != null ? { afterPageNumber } : {});
@@ -1789,12 +1808,38 @@ function ComicEditor() {
               <p style={{ fontWeight: 'bold', color: '#e94560' }}>Cover</p>
             </div>
 
-            {/* Regular Pages (sorted by pageNumber, with insert buttons between) */}
+            {/* Regular Pages (sorted by pageNumber, with insert buttons between).
+                Drag a page onto another to move it there (drop = insert at that spot). */}
             {[...comic.pages].sort((a, b) => a.pageNumber - b.pageNumber).map((page) => (
               <React.Fragment key={page.id}>
                 <div
                   className="page-thumbnail"
-                  style={{ position: 'relative', cursor: 'pointer' }}
+                  draggable
+                  onDragStart={(e) => {
+                    setDragPageId(page.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOverPageId !== page.id) setDragOverPageId(page.id);
+                  }}
+                  onDragLeave={() => setDragOverPageId(prev => (prev === page.id ? null : prev))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    reorderPages(dragPageId, page.id);
+                    setDragPageId(null);
+                    setDragOverPageId(null);
+                  }}
+                  onDragEnd={() => { setDragPageId(null); setDragOverPageId(null); }}
+                  style={{
+                    position: 'relative',
+                    cursor: 'pointer',
+                    opacity: dragPageId === page.id ? 0.4 : 1,
+                    outline: dragOverPageId === page.id && dragPageId !== page.id ? '3px solid #6c3483' : 'none',
+                    outlineOffset: '2px',
+                    borderRadius: '4px'
+                  }}
                   onClick={() => navigate(`/comic/${id}/page/${page.id}`)}
                 >
                   {page.masterImage ? (

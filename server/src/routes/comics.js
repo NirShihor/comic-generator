@@ -505,6 +505,35 @@ router.post('/:id/pages', async (req, res) => {
   }
 });
 
+// Reorder pages. Body: { pageIds: [...] } — every page id exactly once, in the
+// desired order. Reassigns pageNumber 1..N to match. Stored image/audio paths
+// live on the page documents, so they follow their page; files baked later
+// simply pick up the new number.
+router.post('/:id/pages/reorder', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+    const { pageIds } = req.body || {};
+    const byId = new Map(comic.pages.map(p => [p.id, p]));
+    if (!Array.isArray(pageIds) || pageIds.length !== comic.pages.length ||
+        new Set(pageIds).size !== pageIds.length || pageIds.some(pid => !byId.has(pid))) {
+      return res.status(400).json({ error: 'pageIds must list every page id exactly once' });
+    }
+    comic.pages = pageIds.map((pid, i) => {
+      const p = byId.get(pid);
+      p.pageNumber = i + 1;
+      return p;
+    });
+    comic.markModified('pages');
+    await comic.save();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Update page (dividerLines and panels)
 router.put('/:id/pages/:pageId', async (req, res) => {
   try {
