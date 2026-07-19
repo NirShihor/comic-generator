@@ -1155,16 +1155,49 @@ function ComicEditor() {
     return resp.data.path;
   };
 
+  // After saving a generated sheet into Prompt Settings, replace the entry's
+  // description (initially the user's GENERATION prompt) with a full
+  // describe-image analysis of the sheet. The generation prompt says what was
+  // ASKED FOR ("a nice looking boy from her school"), not the design that came
+  // out — at panel time it carries no wardrobe/colour detail, so characters
+  // drift. field = 'characters' | 'styleBibleImages'.
+  const styleSheetDescribeAndUpdate = async (savedPath, field, entryId) => {
+    try {
+      const imgResp = await fetch(`${savedPath}`);
+      const blob = await imgResp.blob();
+      const base64 = await new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result.split(',')[1]);
+        r.readAsDataURL(blob);
+      });
+      const descResp = await api.post('/chat/describe-image', { image: base64 }, { timeout: 120000 });
+      const desc = descResp.data.message;
+      if (desc) {
+        setSettings(prev => {
+          const updated = {
+            ...prev,
+            [field]: (prev[field] || []).map(e => e.id === entryId ? { ...e, description: desc } : e)
+          };
+          saveSettings(updated, true);
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.warn('Auto-describe failed (kept the generation prompt):', err.message);
+    }
+  };
+
   const styleSheetSaveAsCharacter = async (item) => {
     const name = prompt('Name for this character:');
     if (!name || !name.trim()) return;
     try {
       const savedPath = await styleSheetCopyToProject(item);
+      const entryId = `char-${Date.now()}`;
       setSettings(prev => {
         const updated = {
           ...prev,
           characters: [...(prev.characters || []), {
-            id: `char-${Date.now()}`,
+            id: entryId,
             name: name.trim(),
             description: item.prompt,
             image: savedPath
@@ -1173,7 +1206,8 @@ function ComicEditor() {
         saveSettings(updated, true);
         return updated;
       });
-      alert('Saved to Characters (Prompt Settings).');
+      alert('Saved to Characters (Prompt Settings). Analyzing the sheet now — a detailed description will replace the generation prompt shortly.');
+      styleSheetDescribeAndUpdate(savedPath, 'characters', entryId);
     } catch (error) {
       alert('Failed to save: ' + (error.response?.data?.error || error.message));
     }
@@ -1184,11 +1218,12 @@ function ComicEditor() {
     if (!name || !name.trim()) return;
     try {
       const savedPath = await styleSheetCopyToProject(item);
+      const entryId = `style-img-${Date.now()}`;
       setSettings(prev => {
         const updated = {
           ...prev,
           styleBibleImages: [...(prev.styleBibleImages || []), {
-            id: `style-img-${Date.now()}`,
+            id: entryId,
             name: name.trim(),
             image: savedPath,
             description: item.prompt
@@ -1197,7 +1232,8 @@ function ComicEditor() {
         saveSettings(updated, true);
         return updated;
       });
-      alert('Added to Style Bible (Prompt Settings).');
+      alert('Added to Style Bible (Prompt Settings). Analyzing the sheet now — a detailed description will replace the generation prompt shortly.');
+      styleSheetDescribeAndUpdate(savedPath, 'styleBibleImages', entryId);
     } catch (error) {
       alert('Failed to save: ' + (error.response?.data?.error || error.message));
     }
