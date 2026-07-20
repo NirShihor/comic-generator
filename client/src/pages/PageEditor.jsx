@@ -7,6 +7,20 @@ import html2canvas from 'html2canvas';
 const getRefPath = (ref) => typeof ref === 'string' ? ref : ref.path;
 const getRefAnnotations = (ref) => typeof ref === 'string' ? [] : (ref.annotations || []);
 
+// Text outline for bubble text (narration titles etc), as layered text-shadows:
+// html2canvas can't render -webkit-text-stroke, so the bake needs shadows. 16
+// directions keep curves smooth at typical widths without visible blur.
+const bubbleTextOutline = (bubble) => {
+  const w = bubble.textStrokeWidth || 0;
+  if (!w || !bubble.textStrokeColor) return 'none';
+  const shadows = [];
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    shadows.push(`${(Math.cos(a) * w).toFixed(2)}px ${(Math.sin(a) * w).toFixed(2)}px 0 ${bubble.textStrokeColor}`);
+  }
+  return shadows.join(', ');
+};
+
 // Draw an image into a canvas context with object-fit: cover (match the bake target).
 function drawImageCover(ctx, img, W, H) {
   const ir = img.naturalWidth / img.naturalHeight;
@@ -6757,6 +6771,7 @@ function PageEditor({ isCover = false }) {
                                     fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                                     fontStyle: bubble.italic ? 'italic' : 'normal',
                                     color: bubble.textColor || '#000000',
+                                    textShadow: bubbleTextOutline(bubble),
                                     textAlign: bubble.textAlign || 'center',
                                     width: '100%',
                                     wordBreak: 'break-word',
@@ -7082,6 +7097,7 @@ function PageEditor({ isCover = false }) {
                         fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                         fontStyle: bubble.italic ? 'italic' : 'normal',
                         color: bubble.textColor || '#000000',
+                        textShadow: bubbleTextOutline(bubble),
                         opacity: bubble.hidden ? 0 : 1,
                         textAlign: bubble.textAlign || 'center',
                         width: '100%',
@@ -8302,6 +8318,30 @@ function PageEditor({ isCover = false }) {
                             onClick={(e) => e.stopPropagation()}
                             style={{ width: '40px', height: '28px', border: '1px solid #ccc', borderRadius: '4px' }}
                           />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginBottom: '0.2rem' }}>
+                            Outline
+                          </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <ColorPicker
+                              value={bubble.textStrokeColor || '#ffffff'}
+                              onChange={(e) => updateBubble(bubble.id, { textStrokeColor: e.target.value, textStrokeWidth: bubble.textStrokeWidth || 1 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '40px', height: '28px', border: '1px solid #ccc', borderRadius: '4px' }}
+                            />
+                            <input
+                              type="range"
+                              min="0"
+                              max="6"
+                              step="0.5"
+                              value={bubble.textStrokeWidth || 0}
+                              onChange={(e) => updateBubble(bubble.id, { textStrokeWidth: parseFloat(e.target.value) })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '50px', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: '0.7rem', color: '#888', minWidth: '20px' }}>{bubble.textStrokeWidth || 0}</span>
+                          </div>
                         </div>
                       </div>
 
@@ -12740,6 +12780,7 @@ function PageEditor({ isCover = false }) {
                                 fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                                 fontStyle: bubble.italic ? 'italic' : 'normal',
                                 color: bubble.textColor || '#000000',
+                                textShadow: bubbleTextOutline(bubble),
                                 textAlign: bubble.textAlign || 'center',
                                 width: '100%',
                                 wordBreak: 'break-word',
@@ -12902,6 +12943,7 @@ function PageEditor({ isCover = false }) {
                       fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                       fontStyle: bubble.italic ? 'italic' : 'normal',
                       color: bubble.textColor || '#000000',
+                      textShadow: bubbleTextOutline(bubble),
                       textAlign: bubble.textAlign || 'center',
                       width: '100%',
                       wordBreak: 'break-word',

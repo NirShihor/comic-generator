@@ -79,6 +79,9 @@ const BubbleSchema = new mongoose.Schema({
   fontId: String,
   fontSize: Number,
   textColor: String,
+  // Text outline (narration titles etc): colour + width in px; width 0/absent = off.
+  textStrokeColor: String,
+  textStrokeWidth: Number,
   textAlign: { type: String, enum: ['left', 'center', 'right'], default: 'center' },
   italic: Boolean,
   uppercase: Boolean,
