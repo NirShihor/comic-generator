@@ -536,6 +536,9 @@ function PageEditor({ isCover = false }) {
   });
   const [chatInput, setChatInput] = useState('');
   const [comicNotes, setComicNotes] = useState('');
+  // Large hover preview for the tiny ref chips (P1 / Pg2-P1 / E1·Pg3-P2):
+  // see what an image contains without linking it first. { src, x, y }.
+  const [refChipPreview, setRefChipPreview] = useState(null);
   const [notesCollapsed, setNotesCollapsed] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);   // pop-up (large) notes
   const [notesSize, setNotesSize] = useState(null);            // {width,height} px once dragged; null = default
@@ -5371,6 +5374,23 @@ function PageEditor({ isCover = false }) {
           />
         </div>
       )}
+      {/* Ref-chip hover preview: large floating image following the cursor */}
+      {refChipPreview && (() => {
+        const W = Math.min(480, window.innerWidth - 40);
+        const flip = refChipPreview.x + 24 + W > window.innerWidth;
+        const left = flip ? Math.max(8, refChipPreview.x - 24 - W) : refChipPreview.x + 24;
+        const top = Math.max(8, Math.min(refChipPreview.y - 120, window.innerHeight * 0.35));
+        return (
+          <div style={{ position: 'fixed', left, top, zIndex: 10001, pointerEvents: 'none' }}>
+            <img
+              src={`${refChipPreview.src}`}
+              alt=""
+              style={{ width: `${W}px`, maxHeight: '62vh', objectFit: 'contain', background: '#fff', border: '2px solid #fff', borderRadius: '8px', boxShadow: '0 10px 34px rgba(0,0,0,0.5)', display: 'block' }}
+            />
+          </div>
+        );
+      })()}
+
       {lightboxImage && (
         <div
           onClick={() => {
@@ -11008,6 +11028,9 @@ function PageEditor({ isCover = false }) {
                                       }));
                                     }
                                   }}
+                                  onMouseEnter={(e) => setRefChipPreview({ src: panelImages[p.id].path, x: e.clientX, y: e.clientY })}
+                                  onMouseMove={(e) => setRefChipPreview(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev)}
+                                  onMouseLeave={() => setRefChipPreview(null)}
                                   disabled={alreadyLinked}
                                   title={alreadyLinked ? `Panel ${pi + 1} already linked` : `Use Panel ${pi + 1}'s image as reference`}
                                   style={{
@@ -11062,6 +11085,9 @@ function PageEditor({ isCover = false }) {
                                       }));
                                     }
                                   }}
+                                  onMouseEnter={(e) => setRefChipPreview({ src: op.artworkImage, x: e.clientX, y: e.clientY })}
+                                  onMouseMove={(e) => setRefChipPreview(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev)}
+                                  onMouseLeave={() => setRefChipPreview(null)}
                                   disabled={alreadyLinked}
                                   title={alreadyLinked ? `Pg${op.pageNumber}-P${op.panelIndex + 1} already linked` : `Use Page ${op.pageNumber}, Panel ${op.panelIndex + 1} as reference`}
                                   style={{
@@ -11118,6 +11144,9 @@ function PageEditor({ isCover = false }) {
                                       }));
                                     }
                                   }}
+                                  onMouseEnter={(e) => setRefChipPreview({ src: cp.artworkImage, x: e.clientX, y: e.clientY })}
+                                  onMouseMove={(e) => setRefChipPreview(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev)}
+                                  onMouseLeave={() => setRefChipPreview(null)}
                                   disabled={alreadyLinked}
                                   title={alreadyLinked ? `${cp.comicTitle} — ${label} already linked` : `Use ${cp.comicTitle} — ${label} as reference`}
                                   style={{
