@@ -292,12 +292,17 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
     const comicObj = comic.toObject();
-    // If comic belongs to a collection, use collection voices
+    // If comic belongs to a collection, use collection voices and shared notes
     if (comic.collectionId) {
       const Collection = require('../models/Collection');
       const collection = await Collection.findOne({ id: comic.collectionId });
       if (collection?.voices?.length > 0) {
         comicObj.voices = collection.voices;
+      }
+      // Notes are shared across the collection ('' counts as set — emptying the
+      // panel must not resurrect a comic's stale pre-migration notes).
+      if (collection && collection.notes != null) {
+        comicObj.notes = collection.notes;
       }
     }
     res.json(comicObj);
@@ -356,6 +361,21 @@ router.put('/:id', async (req, res) => {
     // could accidentally overwrite the collection's voice config.
     if (updateData.voices && (updateData.pages || updateData.cover)) {
       delete updateData.voices;
+    }
+
+    // Notes-panel saves ({ notes } as the primary payload) on a collection
+    // comic go to the collection, so all episodes share one notes pad.
+    if (updateData.notes != null && !updateData.pages && !updateData.cover) {
+      const existingComic = await Comic.findOne({ id: req.params.id });
+      if (existingComic?.collectionId) {
+        const Collection = require('../models/Collection');
+        await Collection.findOneAndUpdate(
+          { id: existingComic.collectionId },
+          { $set: { notes: updateData.notes } },
+          { upsert: true }
+        );
+        delete updateData.notes;
+      }
     }
 
     // If updating voices and comic belongs to a collection, save to collection instead

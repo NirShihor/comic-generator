@@ -34,6 +34,8 @@ const CollectionSchema = new mongoose.Schema({
   coverContrast: { type: Number, default: 1 },
   coverSaturation: { type: Number, default: 1 },
   voices: [VoiceSchema],
+  // Shared Notes panel text — every comic in the collection reads/writes this.
+  notes: String,
   promptSettings: {
     styleBible: String,
     styleBibleImages: [StyleImageSchema],
