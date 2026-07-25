@@ -634,6 +634,20 @@ function PageEditor({ isCover = false }) {
 
   // Editor mode and bubble state
   const [editorMode, setEditorMode] = useState(isCover ? 'bubbles' : 'layout'); // 'layout' or 'bubbles'
+
+  // ?focusBubble=<id> (from Language Review's Implement): once bubbles load,
+  // switch to bubble mode, select the bubble and scroll its card into view.
+  const focusBubbleHandledRef = useRef(false);
+  useEffect(() => {
+    if (focusBubbleHandledRef.current || bubbles.length === 0) return;
+    const fb = new URLSearchParams(window.location.search).get('focusBubble');
+    if (!fb) { focusBubbleHandledRef.current = true; return; }
+    if (!bubbles.some(b => b.id === fb)) return;   // not this page's data yet
+    focusBubbleHandledRef.current = true;
+    setEditorMode('bubbles');
+    setSelectedBubbleId(fb);
+    setTimeout(() => document.getElementById(`bubble-card-${fb}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 400);
+  }, [bubbles]);
   const [showReadingOrder, setShowReadingOrder] = useState(true); // overlay reading-order numbers on bubbles
   const [showBgPicker, setShowBgPicker] = useState(false);        // background-library picker for the page image
   const [bgLibrary, setBgLibrary] = useState([]);
@@ -7933,6 +7947,7 @@ function PageEditor({ isCover = false }) {
               {bubbles.map((bubble, i) => (
                 <div
                   key={bubble.id}
+                  id={`bubble-card-${bubble.id}`}
                   onClick={() => setSelectedBubbleId(bubble.id)}
                   style={{
                     padding: '0.75rem',

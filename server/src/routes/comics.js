@@ -1624,4 +1624,59 @@ router.post('/mirror-bundles', async (req, res) => {
   }
 });
 
+// Language Review "Implement": swap in the corrected source-language text and
+// generate a fresh English translation to match. Updates EVERY sentence on the
+// page with the same original text (chat-style duplicate bubbles stay in sync).
+// Audio regeneration is left to the user.
+router.post('/:id/apply-language-fix', async (req, res) => {
+  try {
+    const { pageId, originalText, correctedText } = req.body || {};
+    if (!pageId || !originalText || !correctedText) {
+      return res.status(400).json({ error: 'pageId, originalText and correctedText are required' });
+    }
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    const page = comic.pages.find(p => p.id === pageId);
+    if (!page) return res.status(404).json({ error: 'Page not found' });
+
+    // Translate the corrected text
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    }
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-5.5',
+      messages: [
+        { role: 'system', content: `You translate ${comic.language === 'es' ? 'Spanish' : comic.language} comic dialogue into natural, conversational English for language learners. Reply with ONLY the translation — no quotes, no commentary.` },
+        { role: 'user', content: correctedText }
+      ],
+      max_completion_tokens: 300
+    });
+    const translation = (completion.choices[0].message.content || '').trim();
+    if (!translation) return res.status(500).json({ error: 'Translation came back empty' });
+
+    let updated = 0;
+    let firstBubbleId = null;
+    for (const bubble of page.bubbles || []) {
+      for (const sentence of bubble.sentences || []) {
+        if (sentence.text === originalText) {
+          sentence.text = correctedText;
+          sentence.translation = translation;
+          updated++;
+          if (!firstBubbleId) firstBubbleId = bubble.id;
+        }
+      }
+    }
+    if (updated === 0) {
+      return res.status(404).json({ error: 'No sentence with that exact text found on the page (was it already edited?)' });
+    }
+    comic.markModified('pages');
+    await comic.save();
+    res.json({ updated, bubbleId: firstBubbleId, translation });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

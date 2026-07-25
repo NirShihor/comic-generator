@@ -165,6 +165,7 @@ function ComicEditor() {
 
   // Language tab state
   const [languageResults, setLanguageResults] = useState([]);
+  const [implementedFixes, setImplementedFixes] = useState({});   // idx -> { status: 'busy'|'done'|'error', translation? }
   const [languageScanning, setLanguageScanning] = useState(false);
   const [languageScanProgress, setLanguageScanProgress] = useState({ current: 0, total: 0 });
   const [languageProvider, setLanguageProvider] = useState('openai');
@@ -5393,6 +5394,42 @@ function ComicEditor() {
                   {issue.suggestedFix && (
                     <div style={{ fontSize: '0.85rem', color: '#27ae60' }}>
                       <strong>Suggested fix:</strong> {issue.suggestedFix}
+                    </div>
+                  )}
+                  {issue.suggestedFix && (
+                    <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <button
+                        onClick={async () => {
+                          if (implementedFixes[idx]?.status === 'busy' || implementedFixes[idx]?.status === 'done') return;
+                          setImplementedFixes(prev => ({ ...prev, [idx]: { status: 'busy' } }));
+                          try {
+                            const resp = await api.post(`/comics/${id}/apply-language-fix`, {
+                              pageId: issue.pageId,
+                              originalText: issue.sentenceText,
+                              correctedText: issue.suggestedFix
+                            }, { timeout: 60000 });
+                            setImplementedFixes(prev => ({ ...prev, [idx]: { status: 'done', translation: resp.data.translation } }));
+                            // Open the corrected bubble in a NEW tab so the review list survives.
+                            window.open(`/comic/${id}/page/${issue.pageId}?focusBubble=${resp.data.bubbleId}`, '_blank');
+                          } catch (err) {
+                            setImplementedFixes(prev => ({ ...prev, [idx]: { status: 'error' } }));
+                            alert('Implement failed: ' + (err.response?.data?.error || err.message));
+                          }
+                        }}
+                        disabled={implementedFixes[idx]?.status === 'busy' || implementedFixes[idx]?.status === 'done'}
+                        style={{
+                          padding: '0.35rem 0.9rem', fontSize: '0.8rem', border: 'none', borderRadius: '4px',
+                          background: implementedFixes[idx]?.status === 'done' ? '#27ae60' : implementedFixes[idx]?.status === 'busy' ? '#95a5a6' : '#2e6bb0',
+                          color: '#fff', cursor: implementedFixes[idx]?.status ? 'default' : 'pointer'
+                        }}
+                      >
+                        {implementedFixes[idx]?.status === 'done' ? '✓ Implemented' : implementedFixes[idx]?.status === 'busy' ? 'Implementing…' : 'Implement'}
+                      </button>
+                      {implementedFixes[idx]?.status === 'done' && (
+                        <span style={{ fontSize: '0.78rem', color: '#27ae60' }}>
+                          New English: “{implementedFixes[idx].translation}” — regenerate both audios in the page editor.
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
