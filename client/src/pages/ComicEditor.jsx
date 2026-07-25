@@ -231,6 +231,16 @@ function ComicEditor() {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
 
+      // Restore the persisted Language Review scan (results survive reloads).
+      if (response.data.languageReview?.results?.length) {
+        setLanguageResults(response.data.languageReview.results);
+        const impl = {};
+        response.data.languageReview.results.forEach((r, i) => {
+          if (r.implemented) impl[i] = { status: 'done', translation: r.implemented.translation };
+        });
+        setImplementedFixes(impl);
+      }
+
       // Load the per-comic landscape cover (reader detail-view banner)
       setCoverLandscapeImage(response.data.cover?.landscapeImage || '');
       setCoverLandscapePrompt(response.data.cover?.landscapePrompt || '');
@@ -1599,6 +1609,9 @@ function ComicEditor() {
 
     setLanguageResults(allResults);
     setLanguageScanning(false);
+    // Persist the scan on the comic — it is expensive to redo.
+    api.put(`/comics/${id}`, { languageReview: { scannedAt: new Date().toISOString(), results: allResults } })
+      .catch(err => console.error('Failed to persist language review:', err));
   };
 
   return (
@@ -5409,6 +5422,14 @@ function ComicEditor() {
                               correctedText: issue.suggestedFix
                             }, { timeout: 60000 });
                             setImplementedFixes(prev => ({ ...prev, [idx]: { status: 'done', translation: resp.data.translation } }));
+                            // Persist the implemented status with the review, so
+                            // ✓ Implemented survives reloads too.
+                            setLanguageResults(prev => {
+                              const updated = prev.map((r, i) => i === idx ? { ...r, implemented: { translation: resp.data.translation } } : r);
+                              api.put(`/comics/${id}`, { languageReview: { scannedAt: new Date().toISOString(), results: updated } })
+                                .catch(err => console.error('Failed to persist implement status:', err));
+                              return updated;
+                            });
                             // Open the corrected bubble in a NEW tab so the review list survives.
                             window.open(`/comic/${id}/page/${issue.pageId}?focusBubble=${resp.data.bubbleId}`, '_blank');
                           } catch (err) {

@@ -326,6 +326,12 @@ const ComicSchema = new mongoose.Schema({
     }
   },
   notes: String,
+  // Persisted Language Review scan (results + per-issue implemented status) —
+  // scans are expensive, so they must survive reloads.
+  languageReview: {
+    scannedAt: Date,
+    results: [mongoose.Schema.Types.Mixed]
+  },
   collectionId: String,
   collectionTitle: String,
   episodeNumber: Number,
