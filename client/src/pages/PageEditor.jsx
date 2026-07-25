@@ -8235,7 +8235,7 @@ function PageEditor({ isCover = false }) {
                           </label>
                           <ColorPicker
                             value={bubble.bgColor || '#ffffff'}
-                            onChange={(e) => { updateBubble(bubble.id, { bgColor: e.target.value, bgTransparent: false }); setDefaultBubbleStyle(prev => { const updated = { ...prev, bgColor: e.target.value }; api.put(`/comics/${id}`, { defaultBubbleStyle: updated }).catch(err => console.error('Failed to save defaults:', err)); return updated; }); }}
+                            onChange={(e) => updateBubble(bubble.id, { bgColor: e.target.value, bgTransparent: false })}
                             onClick={(e) => e.stopPropagation()}
                             disabled={bubble.bgTransparent}
                             style={{
@@ -8337,7 +8337,7 @@ function PageEditor({ isCover = false }) {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                             <ColorPicker
                               value={bubble.borderColor || '#000000'}
-                              onChange={(e) => { updateBubble(bubble.id, { borderColor: e.target.value }); setDefaultBubbleStyle(prev => { const updated = { ...prev, borderColor: e.target.value }; api.put(`/comics/${id}`, { defaultBubbleStyle: updated }).catch(err => console.error('Failed to save defaults:', err)); return updated; }); }}
+                              onChange={(e) => updateBubble(bubble.id, { borderColor: e.target.value })}
                               onClick={(e) => e.stopPropagation()}
                               disabled={bubble.noBorder}
                               style={{ width: '32px', height: '24px', border: '1px solid #ccc', borderRadius: '4px' }}
@@ -8362,7 +8362,7 @@ function PageEditor({ isCover = false }) {
                           </label>
                           <ColorPicker
                             value={bubble.textColor || '#000000'}
-                            onChange={(e) => { updateBubble(bubble.id, { textColor: e.target.value }); setDefaultBubbleStyle(prev => { const updated = { ...prev, textColor: e.target.value }; api.put(`/comics/${id}`, { defaultBubbleStyle: updated }).catch(err => console.error('Failed to save defaults:', err)); return updated; }); }}
+                            onChange={(e) => updateBubble(bubble.id, { textColor: e.target.value })}
                             onClick={(e) => e.stopPropagation()}
                             style={{ width: '40px', height: '28px', border: '1px solid #ccc', borderRadius: '4px' }}
                           />
