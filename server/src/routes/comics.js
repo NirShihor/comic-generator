@@ -37,10 +37,12 @@ async function cropAndSaveScene(sourceImagePath, outputPath, region, imageWidth,
 }
 
 // Convert a source image to JPEG and save to outputPath.
-// Caps width at maxWidth (default 1024) so exported art matches the reader's
-// display resolution — the raw AI masters are 2048px, which is 4× the pixels a
-// phone ever shows and bloats the download bundle for no visible benefit.
-async function convertToJpeg(sourcePath, outputPath, maxWidth = 1024) {
+// Caps width at maxWidth so exported art doesn't ship the raw 2048px masters.
+// 1536 (was 1024): at 1024 the thin bubble-text strokes lost half their
+// resolution and read as soft GREY on a retina phone instead of crisp black.
+// 1536 restores legibility at ~56% of the full-res bundle weight — affordable
+// now that downloads are served from the dual-region CDN.
+async function convertToJpeg(sourcePath, outputPath, maxWidth = 1536) {
   let pipe = sharp(sourcePath);
   if (maxWidth) pipe = pipe.resize(maxWidth, null, { withoutEnlargement: true });
   await pipe.jpeg({ quality: 85 }).toFile(outputPath);
