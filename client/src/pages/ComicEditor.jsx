@@ -62,6 +62,9 @@ function ComicEditor() {
   const [wordAudioProgress, setWordAudioProgress] = useState(null);
   const [wordAudioForceRegenerate, setWordAudioForceRegenerate] = useState(false);
   const [wordFormsForceRegenerate, setWordFormsForceRegenerate] = useState(false);
+  // English-audio audit (missing EN audio per bubble)
+  const [enAudioChecking, setEnAudioChecking] = useState(false);
+  const [enAudioCheck, setEnAudioCheck] = useState(null);
   const [wordFormsGenerating, setWordFormsGenerating] = useState(false);
   const [wordFormsResult, setWordFormsResult] = useState(null);
   const [grammarNotesGenerating, setGrammarNotesGenerating] = useState(false);
@@ -4070,6 +4073,69 @@ function ComicEditor() {
               <li>Copy the Voice ID from the URL or the voice settings</li>
               <li>The ID looks like: <code style={{ background: '#fff', padding: '0.2rem 0.4rem', borderRadius: '3px' }}>EXAVITQu4vr4xnSDxMaL</code></li>
             </ol>
+          </div>
+
+          {/* English audio audit */}
+          <div style={{
+            background: '#eef3fb',
+            border: '1px solid #a9c4e8',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            marginTop: '1.5rem'
+          }}>
+            <h3 style={{ marginBottom: '0.5rem', color: '#1f4e8c' }}>English Audio Check</h3>
+            <p style={{ color: '#666', marginBottom: '1rem', fontSize: '0.9rem' }}>
+              Scan every bubble in this comic (cover included) and list the ones missing English audio —
+              no translation text, no generated EN audio, or an audio file that has gone missing on disk.
+            </p>
+            <button
+              onClick={async () => {
+                setEnAudioChecking(true);
+                setEnAudioCheck(null);
+                try {
+                  const res = await api.get(`/audio/english-audio-check/${id}`, { timeout: 120000 });
+                  setEnAudioCheck(res.data);
+                } catch (err) {
+                  alert('Check failed: ' + (err.response?.data?.error || err.message));
+                } finally {
+                  setEnAudioChecking(false);
+                }
+              }}
+              disabled={enAudioChecking}
+              style={{
+                padding: '0.5rem 1.2rem',
+                background: enAudioChecking ? '#95a5a6' : '#2e6bb0',
+                color: '#fff', border: 'none', borderRadius: '4px',
+                cursor: enAudioChecking ? 'default' : 'pointer', fontSize: '0.95rem'
+              }}
+            >
+              {enAudioChecking ? 'Checking…' : 'Check English Audio'}
+            </button>
+            {enAudioCheck && enAudioCheck.missingCount === 0 && (
+              <div style={{ background: '#d4edda', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                <p style={{ margin: 0, color: '#155724' }}>
+                  All good — {enAudioCheck.checked} sentences checked, every one has English audio.
+                </p>
+              </div>
+            )}
+            {enAudioCheck && enAudioCheck.missingCount > 0 && (
+              <div style={{ background: '#fff3cd', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                <p style={{ margin: '0 0 0.5rem 0', color: '#856404', fontWeight: 'bold' }}>
+                  {enAudioCheck.missingCount} of {enAudioCheck.checked} sentences missing English audio:
+                </p>
+                <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    {enAudioCheck.missing.map((m, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid #eadfa8' }}>
+                        <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', whiteSpace: 'nowrap', color: '#856404', fontWeight: 'bold', verticalAlign: 'top' }}>{m.page}</td>
+                        <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', color: '#555', verticalAlign: 'top' }}>“{m.text}”</td>
+                        <td style={{ padding: '0.3rem 0', whiteSpace: 'nowrap', color: '#b23b3b', verticalAlign: 'top' }}>{m.issue}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Word Audio Generation */}

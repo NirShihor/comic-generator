@@ -794,6 +794,54 @@ router.post('/generate-word-audio', async (req, res) => {
 });
 
 // Generate translation (English) audio for all sentences in a comic
+// Audit: which bubbles are missing ENGLISH (translation) audio? Read-only —
+// walks every page bubble (cover included), skipping sound effects / image
+// bubbles, and reports sentences with no translation, no translationAudioUrl,
+// or a URL whose file is missing on disk.
+router.get('/english-audio-check/:comicId', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    const audioDir = path.join(PROJECTS_DIR, req.params.comicId, 'audio');
+
+    const missing = [];
+    let checked = 0;
+    const checkBubbles = async (bubbles, pageLabel) => {
+      for (const b of bubbles || []) {
+        if (b.isSoundEffect || b.type === 'image') continue;
+        for (const sentence of b.sentences || []) {
+          if (!sentence.text || !sentence.text.trim()) continue;
+          checked++;
+          const snippet = sentence.text.slice(0, 60);
+          if (!sentence.translation || !sentence.translation.trim()) {
+            missing.push({ page: pageLabel, text: snippet, issue: 'no English translation text' });
+            continue;
+          }
+          if (!sentence.translationAudioUrl) {
+            missing.push({ page: pageLabel, text: snippet, issue: 'no English audio' });
+            continue;
+          }
+          const fname = path.basename(sentence.translationAudioUrl);
+          try {
+            await fs.access(path.join(audioDir, fname.endsWith('.mp3') ? fname : `${fname}.mp3`));
+          } catch {
+            missing.push({ page: pageLabel, text: snippet, issue: 'English audio file missing on disk' });
+          }
+        }
+      }
+    };
+
+    await checkBubbles(comic.cover?.bubbles, 'Cover');
+    for (const page of [...(comic.pages || [])].sort((a, b) => a.pageNumber - b.pageNumber)) {
+      await checkBubbles(page.bubbles, `Page ${page.pageNumber}`);
+    }
+
+    res.json({ checked, missingCount: missing.length, missing });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/generate-translation-audio', async (req, res) => {
   try {
     const {
