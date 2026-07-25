@@ -635,6 +635,15 @@ function PageEditor({ isCover = false }) {
   // Editor mode and bubble state
   const [editorMode, setEditorMode] = useState(isCover ? 'bubbles' : 'layout'); // 'layout' or 'bubbles'
 
+  const [showReadingOrder, setShowReadingOrder] = useState(true); // overlay reading-order numbers on bubbles
+  const [showBgPicker, setShowBgPicker] = useState(false);        // background-library picker for the page image
+  const [bgLibrary, setBgLibrary] = useState([]);
+  const [bgApplyingId, setBgApplyingId] = useState(null);
+  // Collapsed panel-content cards (panelId → bool). A panel carrying a library
+  // background gets auto-collapsed — its prompt/refs machinery is irrelevant.
+  const [collapsedPanels, setCollapsedPanels] = useState({});
+  const [bubbles, setBubbles] = useState([]);
+  const [selectedBubbleId, setSelectedBubbleId] = useState(null);
   // ?focusBubble=<id> (from Language Review's Implement): once bubbles load,
   // switch to bubble mode, select the bubble and scroll its card into view.
   const focusBubbleHandledRef = useRef(false);
@@ -648,15 +657,6 @@ function PageEditor({ isCover = false }) {
     setSelectedBubbleId(fb);
     setTimeout(() => document.getElementById(`bubble-card-${fb}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 400);
   }, [bubbles]);
-  const [showReadingOrder, setShowReadingOrder] = useState(true); // overlay reading-order numbers on bubbles
-  const [showBgPicker, setShowBgPicker] = useState(false);        // background-library picker for the page image
-  const [bgLibrary, setBgLibrary] = useState([]);
-  const [bgApplyingId, setBgApplyingId] = useState(null);
-  // Collapsed panel-content cards (panelId → bool). A panel carrying a library
-  // background gets auto-collapsed — its prompt/refs machinery is irrelevant.
-  const [collapsedPanels, setCollapsedPanels] = useState({});
-  const [bubbles, setBubbles] = useState([]);
-  const [selectedBubbleId, setSelectedBubbleId] = useState(null);
   const [isDraggingBubble, setIsDraggingBubble] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isResizingBubble, setIsResizingBubble] = useState(false);
