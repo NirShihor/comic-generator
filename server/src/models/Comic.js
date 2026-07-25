@@ -82,6 +82,9 @@ const BubbleSchema = new mongoose.Schema({
   // Text outline (narration titles etc): colour + width in px; width 0/absent = off.
   textStrokeColor: String,
   textStrokeWidth: Number,
+  // Manual reading-order override within the bubble's panel (1-based). Absent =
+  // automatic (top-to-bottom, left-to-right).
+  orderIndex: Number,
   textAlign: { type: String, enum: ['left', 'center', 'right'], default: 'center' },
   italic: Boolean,
   uppercase: Boolean,

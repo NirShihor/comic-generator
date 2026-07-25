@@ -1914,13 +1914,41 @@ function PageEditor({ isCover = false }) {
       mine.forEach(b => assigned.add(b.id));
       members.set(panel, mine);
     }
+    // Bubbles outside every panel join the NEAREST one (matches the export,
+    // which now does the same) instead of dangling at the end of the sequence.
+    for (const b of bubbles.filter(b => !assigned.has(b.id))) {
+      let best = null, bestD = Infinity;
+      for (const panel of panelList) {
+        const t = panel.tapZone || { x: 0, y: 0, width: 1, height: 1 };
+        const cx = t.x + t.width / 2, cy = t.y + t.height / 2;
+        const bx = (b.x || 0) + (b.width || 0) / 2, by = (b.y || 0) + (b.height || 0) / 2;
+        const d = (bx - cx) ** 2 + (by - cy) ** 2;
+        if (d < bestD) { bestD = d; best = panel; }
+      }
+      if (best) { members.get(best)?.push(b); assigned.add(b.id); }
+    }
+    // Within a panel: geometric reading order, except a manual orderIndex
+    // takes that position (manual wins a tied number).
+    const orderAware = (list) => {
+      const geo = [...list].sort(sortReading);
+      const rank = new Map(geo.map((b, i) => [b.id, i + 1]));
+      return geo.slice().sort((a, b) => {
+        const ka = a.orderIndex != null ? a.orderIndex : rank.get(a.id);
+        const kb = b.orderIndex != null ? b.orderIndex : rank.get(b.id);
+        if (ka !== kb) return ka - kb;
+        const ma = a.orderIndex != null ? 0 : 1;
+        const mb = b.orderIndex != null ? 0 : 1;
+        if (ma !== mb) return ma - mb;
+        return sortReading(a, b);
+      });
+    };
     // Numbering order: panels in panelOrder (floating last on a tie), then any
-    // bubbles that fell outside every panel.
+    // bubbles that somehow still fell outside (no panels at all).
     const forNumber = [...panelList].sort((a, b) =>
       ((a.panelOrder || 0) - (b.panelOrder || 0)) || ((a.floating ? 1 : 0) - (b.floating ? 1 : 0)));
     let n = 0;
     for (const panel of forNumber) {
-      [...(members.get(panel) || [])].sort(sortReading).forEach(b => { map[b.id] = ++n; });
+      orderAware(members.get(panel) || []).forEach(b => { map[b.id] = ++n; });
     }
     bubbles.filter(b => !assigned.has(b.id)).sort(sortReading).forEach(b => { map[b.id] = ++n; });
     return map;
@@ -9572,6 +9600,21 @@ function PageEditor({ isCover = false }) {
                           </div>
                         </>
                       )}
+
+                      {/* Manual reading-order override */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                        <label style={{ fontSize: '0.75rem', color: '#888' }}>Order</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={bubble.orderIndex ?? ''}
+                          placeholder="auto"
+                          onChange={(e) => updateBubble(bubble.id, { orderIndex: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ width: '58px', padding: '0.2rem 0.3rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.8rem' }}
+                        />
+                        <span style={{ fontSize: '0.68rem', color: '#aaa' }}>within this bubble's panel — blank = automatic</span>
+                      </div>
 
                       {/* Bubble Angle (for thought and narration bubbles) */}
                       {(bubble.type === 'thought' || bubble.type === 'narration') && (
