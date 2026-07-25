@@ -842,6 +842,40 @@ router.get('/english-audio-check/:comicId', async (req, res) => {
   }
 });
 
+// Bulk-clean ElevenLabs intonation [tags] out of ENGLISH translations. The
+// tags stay in place while iterating on EN audio (regeneration needs them);
+// run this once happy — mirrors what the bubble-text save does for Spanish.
+router.post('/clean-english-tags/:comicId', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+
+    const strip = (t) => t.replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim();
+    let cleaned = 0;
+    const cleanBubbles = (bubbles) => {
+      for (const b of bubbles || []) {
+        for (const sentence of b.sentences || []) {
+          if (sentence.translation && /\[[^\]]+\]/.test(sentence.translation)) {
+            sentence.translation = strip(sentence.translation);
+            cleaned++;
+          }
+        }
+      }
+    };
+    cleanBubbles(comic.cover?.bubbles);
+    for (const page of comic.pages || []) cleanBubbles(page.bubbles);
+
+    if (cleaned > 0) {
+      comic.markModified('pages');
+      comic.markModified('cover');
+      await comic.save();
+    }
+    res.json({ cleaned });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/generate-translation-audio', async (req, res) => {
   try {
     const {

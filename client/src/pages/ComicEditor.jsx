@@ -4111,6 +4111,27 @@ function ComicEditor() {
             >
               {enAudioChecking ? 'Checking…' : 'Check English Audio'}
             </button>
+            <button
+              onClick={async () => {
+                if (!window.confirm('Strip all [intonation tags] from the English translations of this comic? Do this only once you are happy with the EN audio — regenerating audio afterwards loses the intonation.')) return;
+                try {
+                  const res = await api.post(`/audio/clean-english-tags/${id}`, {}, { timeout: 60000 });
+                  alert(res.data.cleaned > 0
+                    ? `Cleaned [tags] from ${res.data.cleaned} English translation(s).`
+                    : 'No [tags] found in any English translation — nothing to clean.');
+                } catch (err) {
+                  alert('Clean failed: ' + (err.response?.data?.error || err.message));
+                }
+              }}
+              style={{
+                padding: '0.5rem 1.2rem', marginLeft: '0.6rem',
+                background: '#8e44ad', color: '#fff', border: 'none', borderRadius: '4px',
+                cursor: 'pointer', fontSize: '0.95rem'
+              }}
+              title="Remove ElevenLabs [tags] from all English translations — run once the EN audio is final"
+            >
+              Clean [tags] from English
+            </button>
             {enAudioCheck && enAudioCheck.missingCount === 0 && (
               <div style={{ background: '#d4edda', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
                 <p style={{ margin: 0, color: '#155724' }}>
