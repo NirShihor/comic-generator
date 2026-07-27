@@ -1333,6 +1333,18 @@ router.post('/save-to-project', async (req, res) => {
 
     await fs.copyFile(sourcePath, destPath);
 
+    // Cover bake: record it in the DB HERE, atomically with the file write.
+    // The client used to persist it via a follow-up whole-comic PUT, which
+    // raced with other cover saves — the field kept vanishing and the export
+    // fell back to mtime guessing (the recurring bubble-less cover).
+    if (imageType === 'cover-baked') {
+      const Comic = require('../models/Comic');
+      await Comic.updateOne(
+        { id: comicId },
+        { $set: { 'cover.bakedImage': `/projects/${comicId}/images/${newFilename}` } }
+      );
+    }
+
     res.json({
       filename: newFilename,
       path: `/projects/${comicId}/images/${newFilename}`

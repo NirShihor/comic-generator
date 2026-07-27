@@ -365,6 +365,17 @@ router.put('/:id', async (req, res) => {
       delete updateData.voices;
     }
 
+    // Whole-comic saves built from stale client state can carry a cover object
+    // whose bakedImage predates the latest bake (that field is written server-
+    // side at bake time) — never let them blank it while the art is unchanged.
+    if (updateData.cover) {
+      const existing = await Comic.findOne({ id: req.params.id }, { cover: 1 });
+      if (existing?.cover?.bakedImage && !updateData.cover.bakedImage &&
+          (updateData.cover.image || '').split('?')[0] === (existing.cover.image || '').split('?')[0]) {
+        updateData.cover.bakedImage = existing.cover.bakedImage;
+      }
+    }
+
     // Notes-panel saves ({ notes } as the primary payload) on a collection
     // comic go to the collection, so all episodes share one notes pad.
     if (updateData.notes != null && !updateData.pages && !updateData.cover) {
@@ -756,6 +767,11 @@ router.put('/:id/cover', async (req, res) => {
           // was stale after ANY ordinary cover save, exporting bubble-less covers.
           if (path.resolve(sourceImagePath) !== path.resolve(coverImagePath)) {
             await fs.copyFile(sourceImagePath, coverImagePath);
+            // The art just changed → any existing bake is stale. Clear the DB
+            // field AND delete the baked file, so nothing downstream can ever
+            // pick an old title-bubble render over the new art.
+            comic.cover.bakedImage = '';
+            await deleteFileIfExists(path.join(imagesDir, `${req.params.id}_cover_baked.png`));
           }
           comic.cover.image = `/projects/${req.params.id}/images/${coverFilename}`;
 
@@ -765,11 +781,6 @@ router.put('/:id/cover', async (req, res) => {
             await fs.copyFile(sourceImagePath, coverSceneImagePath);
           }
           comic.cover.sceneImage = `/projects/${req.params.id}/images/${coverSceneFilename}`;
-
-          // Clear stale baked image when a new upload replaces the cover
-          if (cleanImage.startsWith('/uploads/')) {
-            comic.cover.bakedImage = '';
-          }
 
           console.log(`Saved cover images: ${coverFilename}, ${coverSceneFilename}`);
         } catch (err) {
@@ -855,20 +866,28 @@ router.post('/:id/export-full', async (req, res) => {
     const projectAudioDir = path.join(PROJECTS_DIR, req.params.id, 'audio');
 
     if (comicObj.cover?.image) {
-      let coverImage = comicObj.cover.bakedImage || comicObj.cover.image;
-      // The cover's baked file (art + title bubble) is created reliably by the
-      // editor, but the `cover.bakedImage` DB field doesn't always persist (race
-      // with cover re-saves). So prefer the baked file on disk when it's at least
-      // as new as the cover art — this is what reliably includes the title bubble.
-      try {
-        const bakedDiskPath = path.join(PROJECTS_DIR, req.params.id, 'images', `${req.params.id}_cover_baked.png`);
-        const srcDiskPath = path.join(__dirname, '../..', (comicObj.cover.image || '').split('?')[0]);
-        const [bakedStat, srcStat] = await Promise.all([fs.stat(bakedDiskPath), fs.stat(srcDiskPath)]);
-        if (bakedStat.mtimeMs >= srcStat.mtimeMs) {
-          coverImage = `/projects/${req.params.id}/images/${req.params.id}_cover_baked.png`;
-        }
-      } catch (e) {
-        // No baked file (or art missing) — fall back to the chosen coverImage.
+      // The recorded bake is authoritative: cover.bakedImage is written
+      // atomically when the bake file is saved and cleared whenever the art is
+      // replaced — no more mtime guessing (which mis-fired on ordinary saves
+      // and produced the recurring bubble-less cover exports).
+      let coverImage = comicObj.cover.image;
+      if (comicObj.cover.bakedImage) {
+        const cleanBaked = comicObj.cover.bakedImage.split('?')[0];
+        try {
+          await fs.access(path.join(__dirname, '../..', cleanBaked));
+          coverImage = cleanBaked;
+        } catch (e) { /* baked file gone — use the art */ }
+      } else {
+        // Legacy comics baked before the field was recorded reliably: fall back
+        // to the old freshness heuristic once; any new bake records the field.
+        try {
+          const bakedDiskPath = path.join(PROJECTS_DIR, req.params.id, 'images', `${req.params.id}_cover_baked.png`);
+          const srcDiskPath = path.join(__dirname, '../..', (comicObj.cover.image || '').split('?')[0]);
+          const [bakedStat, srcStat] = await Promise.all([fs.stat(bakedDiskPath), fs.stat(srcDiskPath)]);
+          if (bakedStat.mtimeMs >= srcStat.mtimeMs) {
+            coverImage = `/projects/${req.params.id}/images/${req.params.id}_cover_baked.png`;
+          }
+        } catch (e) { /* no baked file — use the art */ }
       }
       const cleanCoverImage = coverImage.split('?')[0];
       const coverSourcePath = path.join(__dirname, '../..', cleanCoverImage);
