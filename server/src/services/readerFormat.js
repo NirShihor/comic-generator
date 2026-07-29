@@ -255,6 +255,8 @@ function transformToReaderFormat(comic, comicSlug) {
         ...(hotspot.pulseTint && { pulseTint: hotspot.pulseTint }),
         ...(hotspot.label && { label: hotspot.label }),
         ...(hotspot.borderColor && { borderColor: hotspot.borderColor }),
+        ...(hotspot.displayStyle === 'button' && { displayStyle: 'button' }),
+        ...(hotspot.buttonLabel && { buttonLabel: hotspot.buttonLabel }),
         slides: (hotspot.slides || []).map((slide, sIdx) => {
           const slideWords = (slide.words || []).map((word) => {
             const wText = sanitizeWordForFilename(word.text);

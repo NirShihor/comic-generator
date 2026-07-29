@@ -7309,8 +7309,14 @@ function PageEditor({ isCover = false }) {
                     top: `${hotspot.y * 100}%`,
                     width: `${hotspot.width * 100}%`,
                     height: `${hotspot.height * 100}%`,
-                    border: isSelected ? `2px solid ${hColor}` : `2px dashed ${hColor}`,
-                    background: isSelected ? `rgba(${hR}, ${hG}, ${hB}, 0.2)` : `rgba(${hR}, ${hG}, ${hB}, 0.08)`,
+                    border: hotspot.displayStyle === 'button'
+                      ? `2px solid ${hColor}`
+                      : (isSelected ? `2px solid ${hColor}` : `2px dashed ${hColor}`),
+                    borderRadius: hotspot.displayStyle === 'button' ? '10px' : '0',
+                    background: hotspot.displayStyle === 'button'
+                      ? `rgba(${hR}, ${hG}, ${hB}, ${isSelected ? 0.55 : 0.4})`
+                      : (isSelected ? `rgba(${hR}, ${hG}, ${hB}, 0.2)` : `rgba(${hR}, ${hG}, ${hB}, 0.08)`),
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                     zIndex: 45,
                     // Let trace clicks fall through to the canvas while tracing.
                     pointerEvents: isTracingHotspot ? 'none' : 'auto',
@@ -7318,6 +7324,11 @@ function PageEditor({ isCover = false }) {
                     boxSizing: 'border-box'
                   }}
                 >
+                  {hotspot.displayStyle === 'button' && (
+                    <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.75rem', textShadow: '0 1px 2px rgba(0,0,0,0.6)', pointerEvents: 'none', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      {hotspot.buttonLabel || hotspot.label || 'Button'}
+                    </span>
+                  )}
                   <span style={{
                     position: 'absolute', top: 2, left: 4,
                     fontSize: '10px', color: hColor, fontWeight: 'bold',
@@ -9859,6 +9870,28 @@ function PageEditor({ isCover = false }) {
                     placeholder="e.g., Ace of Spades"
                     style={{ width: '100%', padding: '0.35rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.8rem' }}
                   />
+                </div>
+
+                {/* Show as button */}
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#555', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}
+                    title="Render as a real tappable button in the reader (instead of a pulsing area). Tapping opens this hotspot's slides popup.">
+                    <input
+                      type="checkbox"
+                      checked={hotspot.displayStyle === 'button'}
+                      onChange={(e) => updateHotspot(hotspot.id, { displayStyle: e.target.checked ? 'button' : '' })}
+                    />
+                    Show as button
+                  </label>
+                  {hotspot.displayStyle === 'button' && (
+                    <input
+                      type="text"
+                      value={hotspot.buttonLabel || ''}
+                      onChange={(e) => updateHotspot(hotspot.id, { buttonLabel: e.target.value })}
+                      placeholder="Button text (falls back to Label)"
+                      style={{ width: '100%', padding: '0.35rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.8rem', marginTop: '0.3rem' }}
+                    />
+                  )}
                 </div>
 
                 {/* Frame Color */}

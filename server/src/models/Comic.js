@@ -192,6 +192,11 @@ const HotspotSchema = new mongoose.Schema({
   pulseBrightness: Number,
   // Optional glow tint (hex) washed over the cut-out at the pulse peak.
   pulseTint: String,
+  // 'button': the reader renders this hotspot as a REAL tappable button
+  // (rounded, labelled) instead of a pulsing area. Tapping opens the same
+  // slides popup — e.g. a message appearing on an in-story phone screen.
+  displayStyle: String,
+  buttonLabel: String,
   slides: [HotspotSlideSchema]
 }, { _id: false });
 
