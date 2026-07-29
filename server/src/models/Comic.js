@@ -197,6 +197,10 @@ const HotspotSchema = new mongoose.Schema({
   // slides popup — e.g. a message appearing on an in-story phone screen.
   displayStyle: String,
   buttonLabel: String,
+  // Generator bubble id: the button opens THAT bubble's popup card (full
+  // bubble behaviour — words, translation, grammar, audio, practice) instead
+  // of the hotspot slides. Mapped to the reader's bubble id at export.
+  triggerBubbleId: String,
   slides: [HotspotSlideSchema]
 }, { _id: false });
 

@@ -9884,13 +9884,28 @@ function PageEditor({ isCover = false }) {
                     Show as button
                   </label>
                   {hotspot.displayStyle === 'button' && (
-                    <input
-                      type="text"
-                      value={hotspot.buttonLabel || ''}
-                      onChange={(e) => updateHotspot(hotspot.id, { buttonLabel: e.target.value })}
-                      placeholder="Button text (falls back to Label)"
-                      style={{ width: '100%', padding: '0.35rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.8rem', marginTop: '0.3rem' }}
-                    />
+                    <>
+                      <input
+                        type="text"
+                        value={hotspot.buttonLabel || ''}
+                        onChange={(e) => updateHotspot(hotspot.id, { buttonLabel: e.target.value })}
+                        placeholder="Button text (falls back to Label)"
+                        style={{ width: '100%', padding: '0.35rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.8rem', marginTop: '0.3rem' }}
+                      />
+                      <select
+                        value={hotspot.triggerBubbleId || ''}
+                        onChange={(e) => updateHotspot(hotspot.id, { triggerBubbleId: e.target.value })}
+                        title="What the button opens: the hotspot's slides popup, or a bubble's full popup card (words, translation, grammar, audio, practice)"
+                        style={{ width: '100%', padding: '0.35rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.8rem', marginTop: '0.3rem' }}
+                      >
+                        <option value="">Opens: slides popup</option>
+                        {bubbles.map((b, i) => (
+                          <option key={b.id} value={b.id}>
+                            Opens bubble {i + 1}: {((b.sentences || [])[0]?.text || '(no text)').slice(0, 35)}
+                          </option>
+                        ))}
+                      </select>
+                    </>
                   )}
                 </div>
 

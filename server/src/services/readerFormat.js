@@ -257,6 +257,9 @@ function transformToReaderFormat(comic, comicSlug) {
         ...(hotspot.borderColor && { borderColor: hotspot.borderColor }),
         ...(hotspot.displayStyle === 'button' && { displayStyle: 'button' }),
         ...(hotspot.buttonLabel && { buttonLabel: hotspot.buttonLabel }),
+        // Temporary: generator bubble id — swapped for the READER bubble id
+        // below, once panel export has assigned reader ids.
+        ...(hotspot.triggerBubbleId && { _triggerGenBubbleId: hotspot.triggerBubbleId }),
         slides: (hotspot.slides || []).map((slide, sIdx) => {
           const slideWords = (slide.words || []).map((word) => {
             const wText = sanitizeWordForFilename(word.text);
@@ -317,6 +320,9 @@ function transformToReaderFormat(comic, comicSlug) {
       }
       if (owner) bubbleOwner.set(bKey, owner);
     }
+
+    // generator bubble id -> reader bubble id (for hotspot button triggers)
+    const bubbleIdMap = new Map();
 
     const exportedPage = {
       id: `${comicSlug}-page-${page.pageNumber}`,
@@ -380,6 +386,7 @@ function transformToReaderFormat(comic, comicSlug) {
           },
           bubbles: panelBubbles.map(bubble => {
             const bubbleId = `${comicSlug}-bubble-${page.pageNumber}-${panelNum}-${bubbleCounter++}`;
+            if (bubble.id) bubbleIdMap.set(bubble.id, bubbleId);
             return {
               id: bubbleId,
               type: bubble.type || 'speech',
@@ -459,6 +466,15 @@ function transformToReaderFormat(comic, comicSlug) {
         };
       }).filter(p => !p.floating || p.bubbles.length > 0)
     };
+    // Resolve hotspot button triggers now that reader bubble ids exist.
+    for (const h of exportedPage.hotspots || []) {
+      if (h._triggerGenBubbleId) {
+        const mapped = bubbleIdMap.get(h._triggerGenBubbleId);
+        if (mapped) h.triggerBubbleId = mapped;
+        delete h._triggerGenBubbleId;
+      }
+    }
+
     pages.push(exportedPage);
   }
 
