@@ -4808,6 +4808,9 @@ function PageEditor({ isCover = false }) {
   // --- Bake Bubbles into Page Image ---
   const [isBaking, setIsBaking] = useState(false);
   const [showBakedPreview, setShowBakedPreview] = useState(false);
+  // Hotspot being previewed from the baked view (slides popup simulation)
+  const [previewHotspot, setPreviewHotspot] = useState(null);
+  const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
   const bakeTargetRef = useRef(null);
   // When true, the off-screen bake target renders bubbles with their text blanked,
   // so we can capture an "empty bubbles" image (for practice modes) in a 2nd pass.
@@ -7596,21 +7599,98 @@ function PageEditor({ isCover = false }) {
             >
               Close
             </button>
-            <img
-              src={`${page.bakedImage}`}
-              alt="Baked page"
-              style={{
-                width: CANVAS_WIDTH,
-                height: CANVAS_HEIGHT,
-                zoom: DISPLAY_SCALE,
-                objectFit: 'contain',
-                border: '2px solid #27ae60',
-                borderRadius: '4px',
-                background: '#fff'
-              }}
-            />
+            <div style={{ position: 'relative', width: CANVAS_WIDTH, height: CANVAS_HEIGHT, zoom: DISPLAY_SCALE }}>
+              <img
+                src={`${page.bakedImage}`}
+                alt="Baked page"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  border: '2px solid #27ae60',
+                  borderRadius: '4px',
+                  background: '#fff',
+                  display: 'block'
+                }}
+              />
+              {/* Live hotspots: pulse + click, like the reader */}
+              <style>{`@keyframes hotspotPulse { 0%,100% { box-shadow: 0 0 4px 1px var(--hs); opacity: .45; } 50% { box-shadow: 0 0 14px 5px var(--hs); opacity: 1; } }`}</style>
+              {hotspots.map(h => {
+                const hColor = h.borderColor === 'transparent' ? 'transparent' : (h.borderColor || '#00bcd4');
+                const isButton = h.displayStyle === 'button';
+                return (
+                  <div
+                    key={h.id}
+                    onClick={() => { setPreviewHotspot(h); setPreviewSlideIdx(0); }}
+                    title={h.label || 'Hotspot'}
+                    style={{
+                      position: 'absolute',
+                      left: `${h.x * 100}%`, top: `${h.y * 100}%`,
+                      width: `${h.width * 100}%`, height: `${h.height * 100}%`,
+                      cursor: 'pointer',
+                      borderRadius: isButton ? '10px' : '6px',
+                      border: isButton ? `2px solid ${hColor}` : (hColor === 'transparent' ? 'none' : `2px solid ${hColor}`),
+                      background: isButton ? hColor : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      '--hs': hColor === 'transparent' ? 'rgba(0,0,0,0)' : hColor,
+                      animation: isButton || hColor === 'transparent' ? 'none' : 'hotspotPulse 1.6s ease-in-out infinite'
+                    }}
+                  >
+                    {isButton && (
+                      <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.8rem', textShadow: '0 1px 2px rgba(0,0,0,0.6)', pointerEvents: 'none' }}>
+                        {h.buttonLabel || h.label || 'Button'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
+
+        {/* Hotspot slides preview popup (baked view simulation of the reader) */}
+        {previewHotspot && (() => {
+          const slides = previewHotspot.slides || [];
+          const slide = slides[previewSlideIdx];
+          return (
+            <div
+              onClick={() => setPreviewHotspot(null)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', width: 'min(460px, 92vw)', maxHeight: '86vh', overflowY: 'auto', padding: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <strong style={{ fontSize: '0.95rem' }}>{previewHotspot.label || 'Hotspot'}</strong>
+                  <button onClick={() => setPreviewHotspot(null)} style={{ background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer' }}>×</button>
+                </div>
+                {!slide && <p style={{ color: '#888', fontSize: '0.85rem' }}>No slides on this hotspot yet.</p>}
+                {slide && (
+                  <>
+                    {slide.imageUrl && (
+                      <img src={`${slide.imageUrl}`} alt="" style={{ width: '100%', maxHeight: '40vh', objectFit: 'contain', background: '#000', borderRadius: '8px', marginBottom: '0.6rem' }} />
+                    )}
+                    {slide.text && <p style={{ fontSize: '1.1rem', fontWeight: 600, textAlign: 'center', margin: '0 0 0.4rem' }}>{slide.text}</p>}
+                    {slide.translation && <p style={{ color: '#666', textAlign: 'center', margin: '0 0 0.6rem' }}>{slide.translation}</p>}
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '0.6rem' }}>
+                      {slide.audioUrl && (
+                        <button onClick={() => new Audio(`${slide.audioUrl.startsWith('/') ? slide.audioUrl : `/projects/${id}/audio/${slide.audioUrl}.mp3`}?t=${Date.now()}`).play()} style={{ padding: '0.35rem 0.9rem', background: '#3498db', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>▶ Play</button>
+                      )}
+                      {slide.translationAudioUrl && (
+                        <button onClick={() => new Audio(`${slide.translationAudioUrl.startsWith('/') ? slide.translationAudioUrl : `/projects/${id}/audio/${slide.translationAudioUrl}.mp3`}?t=${Date.now()}`).play()} style={{ padding: '0.35rem 0.9rem', background: '#8e44ad', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>EN</button>
+                      )}
+                    </div>
+                    {slides.length > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <button disabled={previewSlideIdx === 0} onClick={() => setPreviewSlideIdx(i => i - 1)} style={{ padding: '0.3rem 0.7rem', cursor: 'pointer' }}>←</button>
+                        <span style={{ fontSize: '0.8rem', color: '#888' }}>{previewSlideIdx + 1} / {slides.length}</span>
+                        <button disabled={previewSlideIdx >= slides.length - 1} onClick={() => setPreviewSlideIdx(i => i + 1)} style={{ padding: '0.3rem 0.7rem', cursor: 'pointer' }}>→</button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Sidebar */}
         <div className="sidebar">
