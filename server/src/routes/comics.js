@@ -765,11 +765,27 @@ router.put('/:id/cover', async (req, res) => {
           // file: copying a file onto itself only bumps its mtime — which made
           // the export's "is the baked cover fresh?" heuristic decide the bake
           // was stale after ANY ordinary cover save, exporting bubble-less covers.
-          if (path.resolve(sourceImagePath) !== path.resolve(coverImagePath)) {
+          // "Did the art actually change?" must compare CONTENT, not paths:
+          // the same cover art legitimately lives under several filenames
+          // (id-based from generation saves, title-based canonical), so a
+          // path-inequality test cleared the bake on every ordinary save that
+          // referenced the other name — the recurring bubble-less cover again.
+          let artChanged = true;
+          if (path.resolve(sourceImagePath) === path.resolve(coverImagePath)) {
+            artChanged = false;
+          } else {
+            try {
+              const [src, dst] = await Promise.all([
+                fs.readFile(sourceImagePath), fs.readFile(coverImagePath)
+              ]);
+              artChanged = !src.equals(dst);
+            } catch (e) { /* canonical missing → genuinely new art */ }
+          }
+          if (artChanged) {
             await fs.copyFile(sourceImagePath, coverImagePath);
-            // The art just changed → any existing bake is stale. Clear the DB
-            // field AND delete the baked file, so nothing downstream can ever
-            // pick an old title-bubble render over the new art.
+            // New art → any existing bake is stale. Clear the DB field AND
+            // delete the baked file, so nothing downstream can ever pick an
+            // old title-bubble render over the new art.
             comic.cover.bakedImage = '';
             await deleteFileIfExists(path.join(imagesDir, `${req.params.id}_cover_baked.png`));
           }
