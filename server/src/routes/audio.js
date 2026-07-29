@@ -808,7 +808,8 @@ router.get('/english-audio-check/:comicId', async (req, res) => {
     let checked = 0;
     const checkBubbles = async (bubbles, pageLabel) => {
       for (const b of bubbles || []) {
-        if (b.isSoundEffect || b.type === 'image') continue;
+        // Image bubbles CAN carry (invisible) sentences — check those too.
+        if (b.isSoundEffect) continue;
         for (const sentence of b.sentences || []) {
           if (!sentence.text || !sentence.text.trim()) continue;
           checked++;

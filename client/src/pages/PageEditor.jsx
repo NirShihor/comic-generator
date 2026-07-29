@@ -8419,8 +8419,11 @@ function PageEditor({ isCover = false }) {
                         </div>
                       </div>
 
-                      {/* Sentences (hidden for image bubbles) */}
-                      {bubble.type !== 'image' && (
+                      {/* Sentences — image bubbles carry them too: the text is
+                          never rendered on the page (the bake shows only the
+                          image), but it powers the popup card, audio and
+                          practice — e.g. a message shown on an in-story screen. */}
+                      {(
                       <div style={{ marginBottom: '0.5rem' }}>
                         <label style={{ fontSize: '0.8rem', color: '#666', display: 'block', marginBottom: '0.25rem' }}>
                           Sentences ({(bubble.sentences || []).length}):
