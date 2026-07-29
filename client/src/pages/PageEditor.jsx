@@ -7633,8 +7633,9 @@ function PageEditor({ isCover = false }) {
                       border: isButton ? `2px solid ${hColor}` : (hColor === 'transparent' ? 'none' : `2px solid ${hColor}`),
                       background: isButton ? hColor : 'transparent',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      '--hs': hColor === 'transparent' ? 'rgba(0,0,0,0)' : hColor,
-                      animation: isButton || hColor === 'transparent' ? 'none' : 'hotspotPulse 1.6s ease-in-out infinite'
+                      // Transparent frame still glows (soft cyan halo) — matches the reader.
+                      '--hs': hColor === 'transparent' ? 'rgba(0,188,212,0.75)' : hColor,
+                      animation: isButton ? 'none' : 'hotspotPulse 1.6s ease-in-out infinite'
                     }}
                   >
                     {isButton && (
