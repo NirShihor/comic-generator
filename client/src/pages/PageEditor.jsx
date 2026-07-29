@@ -2278,6 +2278,7 @@ function PageEditor({ isCover = false }) {
     if (editorMode !== 'bubbles') return;
     setSelectedHotspotId(hotspot.id);
     setSelectedBubbleId(null);
+    if (hotspot.locked) return;   // locked: selectable, not draggable
     const coords = getRelativeCoords(e);
     if (!coords) return;
     setIsDraggingHotspot(true);
@@ -7323,7 +7324,7 @@ function PageEditor({ isCover = false }) {
                     zIndex: 45,
                     // Let trace clicks fall through to the canvas while tracing.
                     pointerEvents: isTracingHotspot ? 'none' : 'auto',
-                    cursor: isDraggingHotspot ? 'grabbing' : 'grab',
+                    cursor: hotspot.locked ? 'default' : (isDraggingHotspot ? 'grabbing' : 'grab'),
                     boxSizing: 'border-box'
                   }}
                 >
@@ -7339,7 +7340,7 @@ function PageEditor({ isCover = false }) {
                   }}>
                     H{hIdx + 1} ({(hotspot.slides || []).length})
                   </span>
-                  {isSelected && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map(corner => (
+                  {isSelected && !hotspot.locked && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map(corner => (
                     <div
                       key={corner}
                       data-hotspot-resize={corner.replace('-', '')}
@@ -9918,6 +9919,13 @@ function PageEditor({ isCover = false }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <h4 style={{ margin: 0, color: '#00838f', fontSize: '0.9rem' }}>Hotspot Details</h4>
                   <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <button
+                      onClick={() => updateHotspot(hotspot.id, { locked: !hotspot.locked })}
+                      title={hotspot.locked ? 'Unlock: allow dragging/resizing' : 'Lock in place: disable dragging/resizing'}
+                      style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: hotspot.locked ? '#e67e22' : '#95a5a6', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                    >
+                      {hotspot.locked ? '🔒' : '🔓'}
+                    </button>
                     <button
                       onClick={() => copyHotspotContent(hotspot)}
                       title="Copy this hotspot's slides & label"

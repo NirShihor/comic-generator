@@ -197,6 +197,8 @@ const HotspotSchema = new mongoose.Schema({
   // slides popup — e.g. a message appearing on an in-story phone screen.
   displayStyle: String,
   buttonLabel: String,
+  // Locked in place: drag/resize disabled in the editor (like bubble.locked).
+  locked: Boolean,
   // Generator bubble id: the button opens THAT bubble's popup card (full
   // bubble behaviour — words, translation, grammar, audio, practice) instead
   // of the hotspot slides. Mapped to the reader's bubble id at export.
