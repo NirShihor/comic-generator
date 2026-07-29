@@ -7659,9 +7659,8 @@ function PageEditor({ isCover = false }) {
               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', width: 'min(460px, 92vw)', maxHeight: '86vh', overflowY: 'auto', padding: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                  <strong style={{ fontSize: '0.95rem' }}>{previewHotspot.label || 'Hotspot'}</strong>
-                  <button onClick={() => setPreviewHotspot(null)} style={{ background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer' }}>×</button>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.3rem' }}>
+                  <button onClick={() => setPreviewHotspot(null)} style={{ background: 'transparent', color: '#000', border: 'none', fontSize: '1.3rem', lineHeight: 1, cursor: 'pointer', padding: '0 0.2rem' }}>×</button>
                 </div>
                 {!slide && <p style={{ color: '#888', fontSize: '0.85rem' }}>No slides on this hotspot yet.</p>}
                 {slide && (
