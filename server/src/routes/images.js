@@ -1798,6 +1798,36 @@ The bounding box values should be decimals from 0 to 1 representing percentages 
   }
 });
 
+// Crop a normalized region out of a project image (e.g. the BAKED page) and
+// save it as a new project image — hotspot slides' "From page" capture, so an
+// in-world message baked onto the art becomes the slide image with one click.
+router.post('/crop-region', async (req, res) => {
+  try {
+    const { comicId, imagePath, rect, pad = 0.015 } = req.body;
+    if (!comicId || !imagePath || !rect) {
+      return res.status(400).json({ error: 'comicId, imagePath and rect are required' });
+    }
+    const clean = imagePath.split('?')[0];
+    const src = path.join(__dirname, '../..', clean);
+    const meta = await sharp(src).metadata();
+    const W = meta.width || 1, H = meta.height || 1;
+    const x0 = Math.max(0, rect.x - pad) * W;
+    const y0 = Math.max(0, rect.y - pad) * H;
+    const x1 = Math.min(1, rect.x + rect.width + pad) * W;
+    const y1 = Math.min(1, rect.y + rect.height + pad) * H;
+    const left = Math.round(x0), top = Math.round(y0);
+    const width = Math.max(1, Math.round(x1 - x0));
+    const height = Math.max(1, Math.round(y1 - y0));
+    const destDir = path.join(__dirname, '../../projects', comicId, 'images');
+    await fs.mkdir(destDir, { recursive: true });
+    const filename = `hotspot-crop-${uuidv4()}.png`;
+    await sharp(src).extract({ left, top, width, height }).toFile(path.join(destDir, filename));
+    res.json({ path: `/projects/${comicId}/images/${filename}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /language/review — review translations for contextual accuracy using page image
 router.post('/language/review', async (req, res) => {
   try {

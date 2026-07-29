@@ -10051,12 +10051,52 @@ function PageEditor({ isCover = false }) {
                               Change
                               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadSlideImage(hotspot.id, slide.id, e)} />
                             </label>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const resp = await api.post('/images/crop-region', {
+                                    comicId: id,
+                                    imagePath: (page.bakedImage || page.masterImage || '').split('?')[0],
+                                    rect: { x: hotspot.x, y: hotspot.y, width: hotspot.width, height: hotspot.height }
+                                  });
+                                  updateHotspotSlide(hotspot.id, slide.id, { imageUrl: resp.data.path });
+                                } catch (err) {
+                                  alert('Capture failed: ' + (err.response?.data?.error || err.message));
+                                }
+                              }}
+                              title="Crop this hotspot's area out of the BAKED page (bubbles included) and use it as the slide image"
+                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.65rem', background: '#16a085', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                            >
+                              📷 From page
+                            </button>
                           </div>
                         ) : (
+                          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                           <label style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem', background: '#3498db', color: '#fff', borderRadius: '3px', cursor: 'pointer', display: 'inline-block' }}>
                             Upload Image
                             <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadSlideImage(hotspot.id, slide.id, e)} />
                           </label>
+                          <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const resp = await api.post('/images/crop-region', {
+                                    comicId: id,
+                                    imagePath: (page.bakedImage || page.masterImage || '').split('?')[0],
+                                    rect: { x: hotspot.x, y: hotspot.y, width: hotspot.width, height: hotspot.height }
+                                  });
+                                  updateHotspotSlide(hotspot.id, slide.id, { imageUrl: resp.data.path });
+                                } catch (err) {
+                                  alert('Capture failed: ' + (err.response?.data?.error || err.message));
+                                }
+                              }}
+                              title="Crop this hotspot's area out of the BAKED page (bubbles included) and use it as the slide image"
+                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.65rem', background: '#16a085', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                            >
+                              📷 From page
+                            </button>
+                          </div>
                         )}
                       </div>
 
