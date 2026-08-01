@@ -7634,6 +7634,8 @@ function PageEditor({ isCover = false }) {
                       position: 'absolute',
                       left: `${h.x * 100}%`, top: `${h.y * 100}%`,
                       width: `${h.width * 100}%`, height: `${h.height * 100}%`,
+                      // Tiny hotspots stay clickable in the preview
+                      minWidth: '26px', minHeight: '26px',
                       cursor: 'pointer',
                       borderRadius: isButton ? '10px' : '6px',
                       border: isButton ? `2px solid ${hColor}` : (hColor === 'transparent' ? 'none' : `2px solid ${hColor}`),
