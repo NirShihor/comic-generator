@@ -4811,6 +4811,11 @@ function PageEditor({ isCover = false }) {
   const [showBakedPreview, setShowBakedPreview] = useState(false);
   // Hotspot being previewed from the baked view (slides popup simulation)
   const [previewHotspot, setPreviewHotspot] = useState(null);
+  // Page-level language check
+  const [langCheckRunning, setLangCheckRunning] = useState(false);
+  const [langCheckResults, setLangCheckResults] = useState(null);   // null = not run
+  const [langCheckExtra, setLangCheckExtra] = useState('');
+  const [langCheckImplemented, setLangCheckImplemented] = useState({});
   const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
   const bakeTargetRef = useRef(null);
   // When true, the off-screen bake target renders bubbles with their text blanked,
@@ -9873,6 +9878,101 @@ function PageEditor({ isCover = false }) {
                         />
                       </div>
                     </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* PAGE LANGUAGE CHECK — review just this page's translations */}
+          {editorMode === 'bubbles' && (
+            <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#eef3fb', borderRadius: '6px', border: '1px solid #a9c4e8' }}>
+              <h3 style={{ margin: '0 0 0.4rem', color: '#1f4e8c', fontSize: '0.9rem' }}>Language Check (this page)</h3>
+              <textarea
+                value={langCheckExtra}
+                onChange={(e) => setLangCheckExtra(e.target.value)}
+                placeholder="Optional extra instructions for the reviewer (e.g. 'Focus on the tú/usted between Mateo and the sheriff')"
+                style={{ width: '100%', minHeight: '48px', padding: '0.4rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.78rem', resize: 'vertical', boxSizing: 'border-box', marginBottom: '0.4rem' }}
+              />
+              <button
+                onClick={async () => {
+                  if (langCheckRunning) return;
+                  const pageImage = (page.masterImage || page.bakedImage || '').split('?')[0];
+                  if (!pageImage) { alert('This page has no image yet.'); return; }
+                  const payloadBubbles = bubbles
+                    .filter(b => b.type !== 'image' && !b.isSoundEffect)
+                    .map(b => ({
+                      type: b.type || 'speech',
+                      sentences: (b.sentences || []).filter(sn => sn.text && sn.translation).map(sn => ({ text: sn.text, translation: sn.translation }))
+                    }))
+                    .filter(b => b.sentences.length > 0);
+                  if (payloadBubbles.length === 0) { alert('No bubbles with text + translation on this page.'); return; }
+                  setLangCheckRunning(true);
+                  setLangCheckResults(null);
+                  setLangCheckImplemented({});
+                  try {
+                    const resp = await api.post('/images/language/review', {
+                      pageImagePath: pageImage,
+                      pageNumber: page.pageNumber,
+                      panels: [{ panelId: 'page-level', panelIndex: 0, bubbles: payloadBubbles }],
+                      language: comic?.language || 'es',
+                      targetLanguage: comic?.targetLanguage || 'en',
+                      provider: 'openai',
+                      extraInstructions: langCheckExtra
+                    }, { timeout: 180000 });
+                    setLangCheckResults(resp.data.issues || []);
+                  } catch (err) {
+                    alert('Language check failed: ' + (err.response?.data?.error || err.message));
+                  } finally {
+                    setLangCheckRunning(false);
+                  }
+                }}
+                disabled={langCheckRunning}
+                style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', background: langCheckRunning ? '#95a5a6' : '#2e6bb0', color: '#fff', border: 'none', borderRadius: '4px', cursor: langCheckRunning ? 'default' : 'pointer' }}
+              >
+                {langCheckRunning ? 'Checking…' : 'Check this page'}
+              </button>
+              {langCheckResults && langCheckResults.length === 0 && (
+                <p style={{ margin: '0.5rem 0 0', color: '#155724', fontSize: '0.8rem' }}>No issues found on this page.</p>
+              )}
+              {langCheckResults && langCheckResults.map((issue, idx) => (
+                <div key={idx} style={{ background: '#fff', border: '1px solid #ddd', borderRadius: '6px', padding: '0.5rem', marginTop: '0.5rem', fontSize: '0.78rem' }}>
+                  <div style={{ fontWeight: 'bold', color: '#c0392b', marginBottom: '0.2rem' }}>
+                    {issue.issueType === 'register_inconsistency' ? 'Register' : issue.issueType === 'missing_wrong_context' ? 'Context' : 'Translation'}
+                  </div>
+                  <div><strong>Text:</strong> {issue.sentenceText}</div>
+                  <div style={{ color: '#666' }}><strong>EN:</strong> {issue.sentenceTranslation}</div>
+                  <div style={{ color: '#c0392b', margin: '0.2rem 0' }}>{issue.description}</div>
+                  {issue.suggestedFix && <div style={{ color: '#27ae60' }}><strong>Fix:</strong> {issue.suggestedFix}</div>}
+                  {issue.suggestedFix && (
+                    <button
+                      onClick={async () => {
+                        if (langCheckImplemented[idx]) return;
+                        setLangCheckImplemented(prev => ({ ...prev, [idx]: 'busy' }));
+                        try {
+                          const resp = await api.post(`/comics/${id}/apply-language-fix`, {
+                            pageId: page.id,
+                            originalText: issue.sentenceText,
+                            correctedText: issue.suggestedFix
+                          }, { timeout: 60000 });
+                          // Mirror the change into the editor state so it's visible immediately.
+                          setBubbles(prev => prev.map(b => ({
+                            ...b,
+                            sentences: (b.sentences || []).map(sn => sn.text === issue.sentenceText
+                              ? { ...sn, text: issue.suggestedFix, translation: resp.data.translation }
+                              : sn)
+                          })));
+                          setLangCheckImplemented(prev => ({ ...prev, [idx]: 'done' }));
+                        } catch (err) {
+                          setLangCheckImplemented(prev => ({ ...prev, [idx]: null }));
+                          alert('Implement failed: ' + (err.response?.data?.error || err.message));
+                        }
+                      }}
+                      disabled={!!langCheckImplemented[idx]}
+                      style={{ marginTop: '0.3rem', padding: '0.25rem 0.7rem', fontSize: '0.75rem', background: langCheckImplemented[idx] === 'done' ? '#27ae60' : '#2e6bb0', color: '#fff', border: 'none', borderRadius: '4px', cursor: langCheckImplemented[idx] ? 'default' : 'pointer' }}
+                    >
+                      {langCheckImplemented[idx] === 'done' ? '✓ Implemented' : langCheckImplemented[idx] === 'busy' ? '…' : 'Implement'}
+                    </button>
                   )}
                 </div>
               ))}

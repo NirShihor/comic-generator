@@ -1831,7 +1831,7 @@ router.post('/crop-region', async (req, res) => {
 // POST /language/review — review translations for contextual accuracy using page image
 router.post('/language/review', async (req, res) => {
   try {
-    const { pageImagePath, pageNumber, panels, language = 'es', targetLanguage = 'en', provider = 'openai' } = req.body;
+    const { pageImagePath, pageNumber, panels, language = 'es', targetLanguage = 'en', provider = 'openai', extraInstructions = '' } = req.body;
     console.log(`Language review (${provider}): page ${pageNumber}`);
 
     if (!pageImagePath || !panels || panels.length === 0) {
@@ -1866,6 +1866,11 @@ router.post('/language/review', async (req, res) => {
       }
     }
 
+    // Editor-supplied focus for this run (page-level check's custom prompt box).
+    const extraNote = extraInstructions && extraInstructions.trim()
+      ? `ADDITIONAL REVIEWER INSTRUCTIONS from the editor — follow them as authoritative for this review:\n${extraInstructions.trim()}\n\n`
+      : '';
+
     const promptText = `You are a bilingual language reviewer for a comic book language-learning app.
 You review ${sourceLang} dialogue against ${targetLang} translations in the context of comic panel artwork.
 
@@ -1887,7 +1892,7 @@ Do NOT flag:
 
 IMPORTANT: Before flagging an issue, LOCATE the speech bubble containing that text IN THE IMAGE. Verify which panel it is in and what is happening visually AROUND THAT SPECIFIC BUBBLE. Do not confuse text from one panel with the scene of another panel.
 
-${dialogueInventory}
+${extraNote}${dialogueInventory}
 
 Respond with ONLY a JSON object (no markdown, no extra text):
 {"issues": [{"sentenceText": "the problematic ${sourceLang} text", "sentenceTranslation": "the ${targetLang} translation", "bubbleType": "speech", "issueType": "contextual_translation_error | register_inconsistency | missing_wrong_context", "description": "Clear explanation of what is wrong and which part of the image you are referring to", "suggestedFix": "The corrected ${sourceLang} text"}]}
