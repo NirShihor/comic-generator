@@ -4816,6 +4816,7 @@ function PageEditor({ isCover = false }) {
   const [langCheckResults, setLangCheckResults] = useState(null);   // null = not run
   const [langCheckExtra, setLangCheckExtra] = useState('');
   const [langCheckImplemented, setLangCheckImplemented] = useState({});
+  const [langCheckModifiedBubbles, setLangCheckModifiedBubbles] = useState([]);
   const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
   const bakeTargetRef = useRef(null);
   // When true, the off-screen bake target renders bubbles with their text blanked,
@@ -9910,6 +9911,7 @@ function PageEditor({ isCover = false }) {
                   setLangCheckRunning(true);
                   setLangCheckResults(null);
                   setLangCheckImplemented({});
+                  setLangCheckModifiedBubbles([]);
                   try {
                     const resp = await api.post('/images/language/review', {
                       pageImagePath: pageImage,
@@ -9963,6 +9965,8 @@ function PageEditor({ isCover = false }) {
                               : sn)
                           })));
                           setLangCheckImplemented(prev => ({ ...prev, [idx]: 'done' }));
+                          setLangCheckModifiedBubbles(prev =>
+                            [...new Set([...prev, ...(resp.data.bubbleNumbers || [])])].sort((a, b) => a - b));
                         } catch (err) {
                           setLangCheckImplemented(prev => ({ ...prev, [idx]: null }));
                           alert('Implement failed: ' + (err.response?.data?.error || err.message));
@@ -9976,6 +9980,12 @@ function PageEditor({ isCover = false }) {
                   )}
                 </div>
               ))}
+              {langCheckModifiedBubbles.length > 0 && (
+                <div style={{ background: '#d4edda', border: '1px solid #28a745', borderRadius: '4px', padding: '0.4rem 0.6rem', marginTop: '0.5rem', color: '#155724', fontSize: '0.78rem' }}>
+                  <strong>Modified — regenerate audio (ES + EN) for bubble{langCheckModifiedBubbles.length > 1 ? 's' : ''}:</strong>{' '}
+                  {langCheckModifiedBubbles.join(', ')}
+                </div>
+              )}
             </div>
           )}
 

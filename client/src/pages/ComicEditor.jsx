@@ -5425,7 +5425,7 @@ function ComicEditor() {
                             // Persist the implemented status with the review, so
                             // ✓ Implemented survives reloads too.
                             setLanguageResults(prev => {
-                              const updated = prev.map((r, i) => i === idx ? { ...r, implemented: { translation: resp.data.translation } } : r);
+                              const updated = prev.map((r, i) => i === idx ? { ...r, implemented: { translation: resp.data.translation, bubbleNumbers: resp.data.bubbleNumbers || [] } } : r);
                               api.put(`/comics/${id}`, { languageReview: { scannedAt: new Date().toISOString(), results: updated } })
                                 .catch(err => console.error('Failed to persist implement status:', err));
                               return updated;
@@ -5457,6 +5457,25 @@ function ComicEditor() {
               ))}
             </div>
           )}
+
+          {/* Which bubbles were modified by Implement — the audio regen list */}
+          {(() => {
+            const mods = {};
+            (languageResults || []).forEach(r => {
+              if (r.implemented?.bubbleNumbers?.length) {
+                if (!mods[r.pageNumber]) mods[r.pageNumber] = new Set();
+                r.implemented.bubbleNumbers.forEach(n => mods[r.pageNumber].add(n));
+              }
+            });
+            const pagesList = Object.keys(mods).map(Number).sort((a, b) => a - b);
+            if (pagesList.length === 0) return null;
+            return (
+              <div style={{ background: '#d4edda', border: '1px solid #28a745', borderRadius: '6px', padding: '0.75rem', marginBottom: '1rem', color: '#155724', fontSize: '0.88rem' }}>
+                <strong>Modified bubbles — regenerate audio (ES + EN) for:</strong>{' '}
+                {pagesList.map(pn => `Page ${pn}: bubble${mods[pn].size > 1 ? 's' : ''} ${[...mods[pn]].sort((a, b) => a - b).join(', ')}`).join('  ·  ')}
+              </div>
+            );
+          })()}
 
           {/* Scan complete message */}
           {!languageScanning && languageScanProgress.total > 0 && (
