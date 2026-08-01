@@ -4832,10 +4832,12 @@ function PageEditor({ isCover = false }) {
   const [showEnforcerPreview, setShowEnforcerPreview] = useState(true);
 
   const bakeBubblesToImage = async () => {
-    if (!page.masterImage || bubbles.length === 0) {
-      alert('Need a page image and at least one bubble to bake.');
+    if (!page.masterImage) {
+      alert('Need a page image to bake.');
       return;
     }
+    // Zero bubbles is legitimate: the bake then equals the clean master art,
+    // wiping any ghost bubbles left in an old baked image.
     setIsBaking(true);
     // Wait for React to render the off-screen bake target
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -5952,7 +5954,9 @@ function PageEditor({ isCover = false }) {
             ✓ Finish shape ({tracePoints.length})
           </button>
         )}
-        {editorMode === 'bubbles' && page.masterImage && bubbles.length > 0 && (
+        {/* Available even with ZERO bubbles: a no-bubble bake replaces a stale
+            baked image that still shows since-deleted bubbles. */}
+        {editorMode === 'bubbles' && page.masterImage && (
           <button
             className="btn btn-secondary"
             onClick={bakeBubblesToImage}
