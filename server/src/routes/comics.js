@@ -129,6 +129,34 @@ const getDefaultPromptTemplates = () => ({
   hardNegatives: ''
 });
 
+// Page image files are NAMED by page number (comic-x_p5.png etc.), so any
+// page renumbering MUST also rename the files and rewrite the page's stored
+// paths — otherwise a renumbered page keeps pointing at its old-number file,
+// and the next art generation for that number OVERWRITES it (the cascading
+// duplicate-pages bug when inserting a page mid-comic).
+async function shiftPageNumberTag(comicId, page, fromTag, toTag) {
+  const imagesDir = path.join(PROJECTS_DIR, comicId, 'images');
+  const prefix = `${comicId}${fromTag}`;   // e.g. comic-x_p5
+  let entries = [];
+  try { entries = await fs.readdir(imagesDir); } catch (e) { /* no images dir yet */ }
+  for (const name of entries) {
+    // Boundary check: _p5 must not match _p50 (next char must be . or _)
+    if (name.startsWith(prefix) && /[._]/.test(name[prefix.length] || '')) {
+      const newName = `${comicId}${toTag}` + name.slice(prefix.length);
+      try { await fs.rename(path.join(imagesDir, name), path.join(imagesDir, newName)); } catch (e) {}
+    }
+  }
+  const re = new RegExp(`${comicId}${fromTag}(?=[._])`, 'g');
+  const fix = (v) => (typeof v === 'string' && v) ? v.replace(re, `${comicId}${toTag}`) : v;
+  for (const f of ['masterImage', 'originalMasterImage', 'bakedImage', 'emptyBubblesImage', 'noFloatImage']) {
+    page[f] = fix(page[f]);
+  }
+  for (const panel of page.panels || []) {
+    panel.artworkImage = fix(panel.artworkImage);
+    panel.bakedCropImage = fix(panel.bakedCropImage);
+  }
+}
+
 // Get all comic projects
 router.get('/', async (req, res) => {
   try {
@@ -511,12 +539,16 @@ router.post('/:id/pages', async (req, res) => {
       // Find the insertion array index BEFORE renumbering
       const insertIdx = comic.pages.findIndex(p => p.pageNumber === afterPageNumber + 1);
 
-      // Renumber all pages that come after the insertion point
-      comic.pages.forEach(p => {
-        if (p.pageNumber > afterPageNumber) {
-          p.pageNumber += 1;
-        }
-      });
+      // Renumber all pages after the insertion point — files included.
+      // Highest number first so p9→p10 happens before p8→p9 (no collisions).
+      const shifting = comic.pages
+        .filter(p => p.pageNumber > afterPageNumber)
+        .sort((a, b) => b.pageNumber - a.pageNumber);
+      for (const p of shifting) {
+        await shiftPageNumberTag(req.params.id, p, `_p${p.pageNumber}`, `_p${p.pageNumber + 1}`);
+        p.pageNumber += 1;
+      }
+      comic.markModified('pages');
 
       // Insert at the correct position in the array
       if (insertIdx >= 0) {
@@ -554,11 +586,21 @@ router.post('/:id/pages/reorder', async (req, res) => {
         new Set(pageIds).size !== pageIds.length || pageIds.some(pid => !byId.has(pid))) {
       return res.status(400).json({ error: 'pageIds must list every page id exactly once' });
     }
-    comic.pages = pageIds.map((pid, i) => {
+    // Arbitrary permutation: rename via temporary tags so swaps (p2<->p3)
+    // can't collide, then settle on the final numbers.
+    const changes = [];
+    pageIds.forEach((pid, i) => {
       const p = byId.get(pid);
-      p.pageNumber = i + 1;
-      return p;
+      if (p.pageNumber !== i + 1) changes.push({ p, from: p.pageNumber, to: i + 1 });
     });
+    for (const c of changes) {
+      await shiftPageNumberTag(req.params.id, c.p, `_p${c.from}`, `_ptmp${c.to}`);
+    }
+    for (const c of changes) {
+      await shiftPageNumberTag(req.params.id, c.p, `_ptmp${c.to}`, `_p${c.to}`);
+      c.p.pageNumber = c.to;
+    }
+    comic.pages = pageIds.map(pid => byId.get(pid));
     comic.markModified('pages');
     await comic.save();
     res.json({ success: true });
@@ -1360,9 +1402,17 @@ router.delete('/:id/pages/:pageId', async (req, res) => {
 
     comic.pages.splice(pageIndex, 1);
 
-    comic.pages.forEach((p, idx) => {
-      p.pageNumber = idx + 1;
-    });
+    // Renumber sequentially — renaming each page's files along (lowest first:
+    // p7→p6 before p8→p7, so shifts down never collide).
+    for (let idx = 0; idx < comic.pages.length; idx++) {
+      const p = comic.pages[idx];
+      const to = idx + 1;
+      if (p.pageNumber !== to) {
+        await shiftPageNumberTag(req.params.id, p, `_p${p.pageNumber}`, `_p${to}`);
+        p.pageNumber = to;
+      }
+    }
+    comic.markModified('pages');
 
     await comic.save();
 
