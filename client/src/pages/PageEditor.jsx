@@ -10116,6 +10116,19 @@ function PageEditor({ isCover = false }) {
                   )}
                 </div>
 
+                {/* Advance on close (opt-in) */}
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#555', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}
+                    title="When the reader closes this hotspot's popup, the comic turns to the next page automatically">
+                    <input
+                      type="checkbox"
+                      checked={!!hotspot.advanceOnClose}
+                      onChange={(e) => updateHotspot(hotspot.id, { advanceOnClose: e.target.checked })}
+                    />
+                    Next page on close
+                  </label>
+                </div>
+
                 {/* Frame Color */}
                 <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.75rem', color: '#555' }}>Frame Color</label>

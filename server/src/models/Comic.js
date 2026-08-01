@@ -199,6 +199,8 @@ const HotspotSchema = new mongoose.Schema({
   buttonLabel: String,
   // Locked in place: drag/resize disabled in the editor (like bubble.locked).
   locked: Boolean,
+  // Opt-in: closing this hotspot's popup in the reader turns to the next page.
+  advanceOnClose: Boolean,
   // Generator bubble id: the button opens THAT bubble's popup card (full
   // bubble behaviour — words, translation, grammar, audio, practice) instead
   // of the hotspot slides. Mapped to the reader's bubble id at export.

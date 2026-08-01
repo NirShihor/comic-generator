@@ -257,6 +257,7 @@ function transformToReaderFormat(comic, comicSlug) {
         ...(hotspot.borderColor && { borderColor: hotspot.borderColor }),
         ...(hotspot.displayStyle === 'button' && { displayStyle: 'button' }),
         ...(hotspot.buttonLabel && { buttonLabel: hotspot.buttonLabel }),
+        ...(hotspot.advanceOnClose && { advanceOnClose: true }),
         // Temporary: generator bubble id — swapped for the READER bubble id
         // below, once panel export has assigned reader ids.
         ...(hotspot.triggerBubbleId && { _triggerGenBubbleId: hotspot.triggerBubbleId }),
