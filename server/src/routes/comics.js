@@ -1693,22 +1693,28 @@ router.post('/:id/apply-language-fix', async (req, res) => {
 
     let updated = 0;
     let firstBubbleId = null;
-    for (const bubble of page.bubbles || []) {
+    const bubbleNumbers = [];   // 1-based positions in the page's bubble list
+    (page.bubbles || []).forEach((bubble, bi) => {
+      let touched = false;
       for (const sentence of bubble.sentences || []) {
         if (sentence.text === originalText) {
           sentence.text = correctedText;
           sentence.translation = translation;
           updated++;
-          if (!firstBubbleId) firstBubbleId = bubble.id;
+          touched = true;
         }
       }
-    }
+      if (touched) {
+        if (!firstBubbleId) firstBubbleId = bubble.id;
+        bubbleNumbers.push(bi + 1);
+      }
+    });
     if (updated === 0) {
       return res.status(404).json({ error: 'No sentence with that exact text found on the page (was it already edited?)' });
     }
     comic.markModified('pages');
     await comic.save();
-    res.json({ updated, bubbleId: firstBubbleId, translation });
+    res.json({ updated, bubbleId: firstBubbleId, bubbleNumbers, translation });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
