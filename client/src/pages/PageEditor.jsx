@@ -13076,7 +13076,10 @@ function PageEditor({ isCover = false }) {
                 </filter>
               </defs>
             </svg>
-            {bubbles.filter(b => !(b.hidden && ref === bakeTargetRef)).map((bubble) => {
+            {/* Hidden (data-only) bubbles are excluded from the BAKE and from
+                the PREVIEW alike — the preview's job is to show the baked
+                result, and hidden text was ghosting over the art in it. */}
+            {bubbles.filter(b => !b.hidden).map((bubble) => {
               const bubbleCenterX = bubble.x + bubble.width / 2;
               const bubbleCenterY = bubble.y + bubble.height / 2;
               const tailEndX = bubbleCenterX + (bubble.tailX || 0);
