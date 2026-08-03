@@ -142,6 +142,8 @@ function transformToReaderFormat(comic, comicSlug) {
             type: bubble.type || 'narration',
             ...(bubble.fontSize && { fontSize: bubble.fontSize }),
             ...(bubble.bgTransparent && { bgTransparent: true }),
+              ...(bubble.hidden && { hidden: true }),
+              ...(typeof bubble.highlightWash === 'boolean' && { highlightWash: bubble.highlightWash }),
             position: {
               x: bubble.x,
               y: bubble.y,
@@ -394,6 +396,8 @@ function transformToReaderFormat(comic, comicSlug) {
               ...(bubble.fontSize && { fontSize: bubble.fontSize }),
               ...(bubble.isSoundEffect && { isSoundEffect: true }),
               ...(bubble.bgTransparent && { bgTransparent: true }),
+              ...(bubble.hidden && { hidden: true }),
+              ...(typeof bubble.highlightWash === 'boolean' && { highlightWash: bubble.highlightWash }),
               ...(bubble.imageUrl && { imageUrl: bubble.imageUrl }),
               ...(bubble.backgroundImageUrl && { backgroundImageUrl: bubble.backgroundImageUrl }),
               position: {

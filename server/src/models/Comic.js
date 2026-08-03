@@ -90,6 +90,9 @@ const BubbleSchema = new mongoose.Schema({
   uppercase: Boolean,
   cornerRadius: Number,
   hidden: Boolean, // Hidden bubble: invisible when baked, but text data still exported to reader
+  // Author override for the reader's green selection wash on bubbles with no
+  // drawn background (hidden / transparent). Absent = default (hidden → wash).
+  highlightWash: Boolean,
   // Image bubble fields
   imageUrl: String,
   imagePrompt: String,

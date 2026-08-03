@@ -8392,6 +8392,16 @@ function PageEditor({ isCover = false }) {
                           />
                           Hidden (data only)
                         </label>
+                        <label style={{ fontSize: '0.75rem', color: '#666', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem' }}
+                          title="For bubbles with no drawn background (hidden / transparent): show the reader's soft green wash over the bubble area when it's opened. Default: on for hidden bubbles, off otherwise.">
+                          <input
+                            type="checkbox"
+                            checked={bubble.highlightWash ?? !!bubble.hidden}
+                            onChange={(e) => updateBubble(bubble.id, { highlightWash: e.target.checked })}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          Green highlight in reader
+                        </label>
                         {/* Background Image (thought bubbles only) */}
                         {bubble.type === 'thought' && (
                           <div style={{ marginBottom: '0.5rem', marginTop: '0.3rem', padding: '0.4rem', background: '#f8f8f8', borderRadius: '6px' }}>
