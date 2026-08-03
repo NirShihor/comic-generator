@@ -5677,7 +5677,18 @@ function PageEditor({ isCover = false }) {
                     }}
                     autoFocus
                   />
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
+                    <select
+                      value={openaiQuality}
+                      onChange={(e) => setOpenaiQuality(e.target.value)}
+                      disabled={!!inpaintGenerating}
+                      title="ChatGPT inpaint quality — lower is much faster; for small regions the difference is usually invisible"
+                      style={{ padding: '0.35rem', borderRadius: '4px', border: '1px solid #555', background: '#222', color: '#fff', fontSize: '0.75rem' }}
+                    >
+                      <option value="high">High (slow)</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low (fast)</option>
+                    </select>
                     <button
                       onClick={() => executeInpaint('openai')}
                       disabled={!inpaintPrompt.trim() || !!inpaintGenerating}

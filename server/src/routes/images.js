@@ -1244,7 +1244,10 @@ router.post('/inpaint-region', (req, res) => {
         mask: maskFile,
         prompt: inpaintPrompt,
         n: 1,
-        size: size
+        size: size,
+        // 'low'/'medium' are dramatically faster than 'high' — for small
+        // inpaint regions the difference is usually invisible.
+        quality: openaiQuality
       });
 
       const imageData = response.data[0];
