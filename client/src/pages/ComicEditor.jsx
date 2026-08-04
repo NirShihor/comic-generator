@@ -120,6 +120,7 @@ function ComicEditor() {
   const [styleSheetGallery, setStyleSheetGallery] = useState([]);
   const [styleSheetDescribing, setStyleSheetDescribing] = useState([]); // ref paths currently being analyzed
   const styleSheetAbortRef = useRef(null); // cancels an in-flight generation
+  const [styleSheetRefineTexts, setStyleSheetRefineTexts] = useState({}); // item.path -> refine instruction
   // "From comics" picker: pull a panel/page image from a collection comic as a style ref
   const [styleSheetPickerOpen, setStyleSheetPickerOpen] = useState(false);
   const [styleSheetPickerComics, setStyleSheetPickerComics] = useState(null); // null = not fetched yet
@@ -1041,6 +1042,7 @@ function ComicEditor() {
         refsLoaded: response.data.refsLoaded,
         mode: styleSheetMode,
         provider: styleSheetProvider,
+        aspect: styleSheetAspect,
         timestamp: Date.now()
       };
       setStyleSheetGallery(prev => [newItem, ...prev]);
@@ -1057,6 +1059,45 @@ function ComicEditor() {
 
   const styleSheetStop = () => {
     styleSheetAbortRef.current?.abort();
+  };
+
+  // Refine an existing generated sheet: the sheet itself is the only reference,
+  // and the prompt demands an exact reproduction except for the instruction.
+  const styleSheetRefine = async (item) => {
+    const instruction = (styleSheetRefineTexts[item.path] || '').trim();
+    if (!instruction || styleSheetGenerating) return;
+    const controller = new AbortController();
+    styleSheetAbortRef.current = controller;
+    setStyleSheetGenerating(true);
+    try {
+      const refinePrompt = `REFINEMENT of an existing reference sheet. The attached image IS the current sheet. Reproduce it EXACTLY — same subject, same layout, same panels and poses, same art style, same colours — changing ONLY the following:\n${instruction}\nDo not redesign anything else. Do not change the layout.`;
+      const response = await api.post('/images/generate-stylesheet', {
+        prompt: refinePrompt,
+        provider: styleSheetProvider,
+        aspectRatio: item.aspect || styleSheetAspect,
+        referenceImages: [item.path],
+        openaiQuality: styleSheetQuality
+      }, { timeout: 600000, signal: controller.signal });
+      const newItem = {
+        path: response.data.path,
+        prompt: `[Refine] ${instruction}`,
+        promptSent: response.data.promptSent,
+        refsLoaded: response.data.refsLoaded,
+        mode: item.mode,
+        provider: styleSheetProvider,
+        aspect: item.aspect || styleSheetAspect,
+        timestamp: Date.now()
+      };
+      setStyleSheetGallery(prev => [newItem, ...prev]);
+      setStyleSheetRefineTexts(prev => ({ ...prev, [item.path]: '' }));
+    } catch (error) {
+      if (error.code !== 'ERR_CANCELED' && error.name !== 'CanceledError') {
+        alert('Refine failed: ' + (error.response?.data?.error || error.message));
+      }
+    } finally {
+      styleSheetAbortRef.current = null;
+      setStyleSheetGenerating(false);
+    }
   };
 
   // --- Voice Library ---
@@ -4791,6 +4832,23 @@ function ComicEditor() {
                           className="btn btn-secondary btn-sm"
                           style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', color: '#e74c3c' }}
                         >Delete</button>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem' }}>
+                        <input
+                          type="text"
+                          value={styleSheetRefineTexts[item.path] || ''}
+                          onChange={(e) => setStyleSheetRefineTexts(prev => ({ ...prev, [item.path]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') styleSheetRefine(item); }}
+                          placeholder="Refine this sheet: e.g. 'make the hair shorter, keep everything else'"
+                          disabled={styleSheetGenerating}
+                          style={{ flex: 1, padding: '0.35rem 0.5rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.78rem' }}
+                        />
+                        <button
+                          onClick={() => styleSheetRefine(item)}
+                          disabled={styleSheetGenerating || !(styleSheetRefineTexts[item.path] || '').trim()}
+                          className="btn btn-primary btn-sm"
+                          style={{ padding: '0.25rem 0.7rem', fontSize: '0.75rem' }}
+                        >{styleSheetGenerating ? '…' : 'Refine'}</button>
                       </div>
                       {item.promptSent && (
                         <details style={{ marginTop: '0.4rem' }}>
