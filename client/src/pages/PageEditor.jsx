@@ -490,12 +490,8 @@ function PageEditor({ isCover = false }) {
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [audioModel, setAudioModel] = useState('eleven_v3');
   const [copiedTag, setCopiedTag] = useState(null);
-  const [audioSettings, setAudioSettings] = useState({
-    stability: 0.5,
-    similarity_boost: 0.75,
-    style: 0.0,
-    speed: 1.0
-  });
+  const DEFAULT_AUDIO_SETTINGS = { stability: 0.5, similarity_boost: 0.75, style: 0.0, speed: 1.0 };
+  const [audioSettings, setAudioSettings] = useState({ ...DEFAULT_AUDIO_SETTINGS });
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
 
   // Picking a voice auto-applies its saved per-collection settings (if any).
@@ -504,8 +500,13 @@ function PageEditor({ isCover = false }) {
     const v = (comic?.voices || []).find(v => v.voiceId === voiceId);
     if (v?.settings) {
       const { model, ...sliders } = v.settings;
-      setAudioSettings(prev => ({ ...prev, ...sliders }));
+      setAudioSettings({ ...DEFAULT_AUDIO_SETTINGS, ...sliders });
       if (model) setAudioModel(model);
+    } else if (voiceId) {
+      // Voice with NO saved settings: reset to defaults — otherwise the
+      // previous voice's dialled-in settings silently leak onto this one.
+      setAudioSettings({ ...DEFAULT_AUDIO_SETTINGS });
+      setAudioModel('eleven_v3');
     }
   };
 
