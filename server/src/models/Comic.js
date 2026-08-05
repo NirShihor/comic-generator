@@ -250,7 +250,10 @@ const StyleImageSchema = new mongoose.Schema({
 // Voice Schema (for ElevenLabs voices)
 const VoiceSchema = new mongoose.Schema({
   name: String,
-  voiceId: String
+  voiceId: String,
+  // Saved ElevenLabs settings for this voice (model, stability, similarity_boost,
+  // style, speed) — auto-applied whenever the voice is picked in this collection.
+  settings: mongoose.Schema.Types.Mixed
 }, { _id: false });
 
 // Main Comic Schema

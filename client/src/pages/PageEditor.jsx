@@ -497,6 +497,34 @@ function PageEditor({ isCover = false }) {
     speed: 1.0
   });
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+
+  // Picking a voice auto-applies its saved per-collection settings (if any).
+  const pickVoice = (voiceId) => {
+    setSelectedVoiceId(voiceId);
+    const v = (comic?.voices || []).find(v => v.voiceId === voiceId);
+    if (v?.settings) {
+      const { model, ...sliders } = v.settings;
+      setAudioSettings(prev => ({ ...prev, ...sliders }));
+      if (model) setAudioModel(model);
+    }
+  };
+
+  // Persist the CURRENT sliders + model onto the selected voice (saved on the
+  // collection via the voices PUT redirect, so every episode shares them).
+  const saveVoiceSettings = async () => {
+    if (!selectedVoiceId) return;
+    const updatedVoices = (comic.voices || []).map(v =>
+      v.voiceId === selectedVoiceId
+        ? { ...v, settings: { ...audioSettings, model: audioModel } }
+        : v);
+    try {
+      await api.put(`/comics/${id}`, { voices: updatedVoices });
+      setComic(prev => ({ ...prev, voices: updatedVoices }));
+      showToast('Settings saved for this voice');
+    } catch (err) {
+      alert('Failed to save voice settings: ' + (err.response?.data?.error || err.message));
+    }
+  };
   const [audioEffects, setAudioEffects] = useState({
     preset: 'none',
     semitones: 4,
@@ -8811,7 +8839,7 @@ function PageEditor({ isCover = false }) {
                                 <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
                                   <select
                                     value={selectedVoiceId}
-                                    onChange={(e) => { e.stopPropagation(); setSelectedVoiceId(e.target.value); }}
+                                    onChange={(e) => { e.stopPropagation(); pickVoice(e.target.value); }}
                                     onClick={(e) => e.stopPropagation()}
                                     style={{
                                       flex: 1,
@@ -8910,6 +8938,14 @@ function PageEditor({ isCover = false }) {
                                         />
                                       </div>
                                     ))}
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); saveVoiceSettings(); }}
+                                      disabled={!selectedVoiceId}
+                                      title="Remember these sliders + model for this voice (collection-wide) — auto-applied whenever the voice is picked"
+                                      style={{ marginTop: '0.25rem', padding: '0.2rem 0.5rem', fontSize: '0.65rem', background: selectedVoiceId ? '#2e6bb0' : '#aaa', color: '#fff', border: 'none', borderRadius: '3px', cursor: selectedVoiceId ? 'pointer' : 'default', width: '100%' }}
+                                    >
+                                      Save as this voice's defaults
+                                    </button>
                                   </div>
                                 )}
 
@@ -10231,7 +10267,7 @@ function PageEditor({ isCover = false }) {
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
                       <select
                         value={selectedVoiceId}
-                        onChange={(e) => setSelectedVoiceId(e.target.value)}
+                        onChange={(e) => pickVoice(e.target.value)}
                         style={{ flex: 1, padding: '0.25rem', fontSize: '0.7rem', borderRadius: '3px', border: '1px solid #ccc' }}
                       >
                         <option value="">Select voice...</option>
