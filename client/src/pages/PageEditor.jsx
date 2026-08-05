@@ -3524,7 +3524,12 @@ function PageEditor({ isCover = false }) {
   // Determine aspect ratio based on panel dimensions
   const getPanelAspectRatio = (panel) => {
     const { width, height } = panel.tapZone;
-    const ratio = width / height;
+    // tapZone is in PAGE-NORMALIZED units, but the page itself is portrait
+    // (2:3) — the panel's REAL shape must include that. Without the factor,
+    // every panel skewed one bucket too wide (a truly square panel requested
+    // LANDSCAPE art, a full-page panel requested SQUARE) and the generated
+    // image never fit its slot.
+    const ratio = (width * CANVAS_WIDTH) / (height * CANVAS_HEIGHT);
     if (ratio > 1.3) return 'landscape';
     if (ratio < 0.77) return 'portrait';
     return 'square';
