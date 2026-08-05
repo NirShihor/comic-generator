@@ -8649,7 +8649,7 @@ function PageEditor({ isCover = false }) {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[crying]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]', '[fade slowly]', '[assertive]', '[pleading]', '[loud]'].map(tag => {
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[crying]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]', '[fade out]', '[assertive]', '[pleading]', '[loud]'].map(tag => {
                                 const tagKey = `${sentence.id}-${tag}`;
                                 const isCopied = copiedTag === tagKey;
                                 return (
