@@ -1,0 +1,455 @@
+<title>Comigo — Spanish, by story</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --paper: #F5F3EE;
+    --card: #FDFCF9;
+    --ink: #16182E;
+    --muted: #5E5F78;
+    --accent: #5B5BD6;
+    --deep: #6E40F0;
+    --line: #16182E;
+    --shadow: rgba(22, 24, 46, 0.85);
+    --dot: rgba(22, 24, 46, 0.06);
+    --band: #6E40F0;
+    --band-text: #FFFFFF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12111C;
+      --card: #1C1A2C;
+      --ink: #ECEBF4;
+      --muted: #9C99B8;
+      --line: #ECEBF4;
+      --shadow: rgba(0, 0, 0, 0.75);
+      --dot: rgba(236, 235, 244, 0.05);
+      --band: #6E40F0;
+      --band-text: #FFFFFF;
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #F5F3EE; --card: #FDFCF9; --ink: #16182E; --muted: #5E5F78;
+    --line: #16182E; --shadow: rgba(22,24,46,0.85); --dot: rgba(22,24,46,0.06);
+    --band: #6E40F0; --band-text: #FFFFFF;
+  }
+  :root[data-theme="dark"] {
+    --paper: #12111C; --card: #1C1A2C; --ink: #ECEBF4; --muted: #9C99B8;
+    --line: #ECEBF4; --shadow: rgba(0,0,0,0.75); --dot: rgba(236,235,244,0.05);
+    --band: #6E40F0; --band-text: #FFFFFF;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background-color: var(--paper);
+    background-image: radial-gradient(var(--dot) 1.2px, transparent 1.2px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-family: Charter, Georgia, 'Times New Roman', serif;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .display {
+    font-family: 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', system-ui, sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.015em;
+    line-height: 1.02;
+    text-wrap: balance;
+  }
+  .label {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 26px 0 8px;
+  }
+  .wordmark img { height: 135px; display: block; }
+  .soon {
+    font-family: system-ui, sans-serif; font-size: 0.78rem; font-weight: 600;
+    border: 2px solid var(--line); border-radius: 999px; padding: 6px 14px;
+    background: var(--card);
+  }
+
+  /* ---------- hero ---------- */
+  .hero {
+    display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: 48px; align-items: center; padding: 56px 0 40px;
+  }
+  @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 40px; } }
+
+  .bubble {
+    position: relative;
+    background: var(--card);
+    border: 3px solid var(--line);
+    border-radius: 30px;
+    padding: 30px 34px 26px;
+    box-shadow: 7px 7px 0 var(--shadow);
+    display: inline-block;
+  }
+  .bubble::before {
+    content: ""; position: absolute; bottom: -25px; left: 56px;
+    border: 12px solid transparent; border-top: 22px solid var(--line);
+  }
+  .bubble::after {
+    content: ""; position: absolute; bottom: -16px; left: 60px;
+    border: 8px solid transparent; border-top: 16px solid var(--card);
+  }
+  .bubble h1 { margin: 0; font-size: clamp(2rem, 5.2vw, 3.4rem); }
+  .bubble h1 .row { display: block; }
+
+  .word {
+    position: relative; cursor: pointer; border-radius: 8px; padding: 0 4px;
+    transition: background-color 0.18s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .word:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .word:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .word.lit { background: var(--accent); color: #FFFFFF; }
+  .word .gloss {
+    display: none; position: absolute; left: 50%; top: -12px;
+    transform: translate(-50%, -100%);
+    background: var(--deep); color: #FFFFFF; border: 2px solid #16182E;
+    border-radius: 999px; padding: 3px 12px; white-space: nowrap;
+    font-family: system-ui, sans-serif; font-size: 0.85rem; font-weight: 700;
+    text-transform: none; letter-spacing: 0; z-index: 5;
+  }
+  .word.lit .gloss { display: block; }
+
+  .hero-copy { max-width: 58ch; margin: 26px 4px 0; font-size: 1.06rem; }
+  .hero-copy strong { color: var(--ink); }
+  .tap-hint { margin: 10px 4px 0; color: var(--muted); font-size: 0.9rem; font-style: italic; }
+
+  .cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 28px; }
+  .cta {
+    font-family: system-ui, sans-serif; font-weight: 800; font-size: 1rem;
+    background: var(--accent); color: #FFFFFF; border: 3px solid #16182E;
+    border-radius: 14px; padding: 13px 24px; box-shadow: 5px 5px 0 var(--shadow);
+    text-decoration: none; display: inline-block;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .cta:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--shadow); }
+  .cta-note { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); max-width: 24ch; line-height: 1.4; }
+
+  /* fanned covers */
+  .fan { position: relative; height: 420px; margin: 0 auto; width: 100%; max-width: 400px; }
+  .fan img {
+    position: absolute; width: 218px; border: 3px solid var(--line);
+    border-radius: 10px; box-shadow: 7px 7px 0 var(--shadow);
+    transition: transform 0.25s ease;
+  }
+  .fan img:nth-child(1) { top: 6%;  left: 0;   transform: rotate(-7deg); z-index: 1; }
+  .fan img:nth-child(2) { top: 0;   left: 26%; transform: rotate(2deg);  z-index: 2; }
+  .fan img:nth-child(3) { top: 12%; left: 46%; transform: rotate(9deg);  z-index: 3; }
+  .fan img:hover { transform: rotate(0deg) translateY(-8px); z-index: 6; }
+  @media (max-width: 800px) { .fan { height: 360px; max-width: 340px; } .fan img { width: 180px; } }
+
+  /* ---------- panel strip ---------- */
+  .strip-head { padding: 34px 0 6px; }
+  .strip-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
+  .strip {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; padding: 22px 0 10px;
+  }
+  @media (max-width: 800px) { .strip { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
+    padding: 24px 22px 20px; box-shadow: 6px 6px 0 var(--shadow);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .panel .label { color: var(--muted); }
+  .panel h3 { margin: 0; font-size: 1.5rem; }
+  .panel p { margin: 0; font-size: 0.98rem; }
+  .panel .glyph { font-size: 1.7rem; line-height: 1; }
+
+  /* ---------- practice modes ---------- */
+  .modes-head { padding: 44px 0 4px; }
+  .modes-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
+  .modes-head p { margin: 8px 0 0; color: var(--muted); max-width: 62ch; }
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; padding: 24px 0 8px; }
+  .mode {
+    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
+    padding: 18px 18px 16px; box-shadow: 5px 5px 0 var(--shadow);
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .mode .top { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+  .mode h3 { margin: 0; font-family: system-ui, sans-serif; font-size: 1.02rem; font-weight: 800; }
+  .mode p { margin: 0; font-size: 0.92rem; color: var(--muted); }
+  .screen {
+    font-family: system-ui, sans-serif; font-size: 0.62rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.08em; border-radius: 999px;
+    padding: 3px 9px; background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent); border: 1.5px solid var(--accent);
+  }
+
+  /* ---------- shelf ---------- */
+  .shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 44px 0 4px; flex-wrap: wrap; }
+  .shelf-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
+  .shelf-head p { margin: 0; color: var(--muted); font-style: italic; }
+  .shelf-scroll { overflow-x: auto; padding: 22px 4px 30px; }
+  .shelf { display: flex; gap: 20px; width: max-content; }
+  .book { width: 168px; flex: none; display: flex; flex-direction: column; }
+  .book img {
+    width: 100%; border: 3px solid var(--line); border-radius: 8px;
+    box-shadow: 5px 5px 0 var(--shadow); display: block;
+    transition: transform 0.2s ease;
+  }
+  .book:hover img { transform: translateY(-6px); }
+  .book .meta { padding: 10px 2px 0; }
+  .lvls { padding-top: 9px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+  .book .t { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.85rem; line-height: 1.25; min-height: 2.15rem; }
+  .book .c { font-family: system-ui, sans-serif; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .lvl {
+    display: inline-block; font-family: system-ui, sans-serif;
+    font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    border: 2px solid var(--line); border-radius: 999px; padding: 2px 9px;
+  }
+  .lvl.beginner { background: var(--accent); color: #FFFFFF; border-color: var(--line); }
+  .lvl.intermediate { background: transparent; color: var(--ink); }
+
+  /* ---------- band ---------- */
+  .band { background: var(--band); color: var(--band-text); border-top: 3px solid var(--line); border-bottom: 3px solid var(--line); }
+  .band .wrap { padding: 52px 24px; }
+  .band h2 { font-size: clamp(1.8rem, 4.4vw, 3rem); margin: 0 0 14px; }
+  .band p { max-width: 62ch; margin: 0; font-size: 1.05rem; }
+  .band .accent { background: #FFFFFF; color: #6E40F0; padding: 0 8px; border-radius: 8px; }
+
+  /* ---------- features ---------- */
+  .features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px 34px; padding: 44px 0; }
+  @media (max-width: 700px) { .features { grid-template-columns: 1fr; } }
+  .feat { display: flex; gap: 14px; align-items: flex-start; }
+  .feat .dot {
+    flex: none; width: 14px; height: 14px; margin-top: 7px;
+    background: var(--accent); border: 2.5px solid var(--line); border-radius: 50% 50% 50% 3px;
+  }
+  .feat h4 { margin: 0 0 3px; font-family: system-ui, sans-serif; font-size: 1rem; }
+  .feat p { margin: 0; font-size: 0.94rem; color: var(--muted); }
+
+  /* ---------- footer ---------- */
+  footer { border-top: 3px solid var(--line); }
+  footer .wrap {
+    display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center;
+    justify-content: space-between; padding: 26px 24px 34px;
+    font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted);
+  }
+  footer a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  footer .links { display: flex; gap: 22px; }
+
+  /* ---------- motion ---------- */
+  @media (prefers-reduced-motion: no-preference) {
+    .bubble { animation: pop 0.5s cubic-bezier(0.22, 1.4, 0.36, 1) both; }
+    .fan img { animation: settle 0.7s ease both; }
+    .fan img:nth-child(2) { animation-delay: 0.08s; }
+    .fan img:nth-child(3) { animation-delay: 0.16s; }
+    @keyframes pop { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes settle { from { opacity: 0; translate: 0 18px; } to { opacity: 1; translate: 0 0; } }
+  }
+</style>
+
+<header class="wrap">
+  <div class="wordmark"><img src="{{IMG_logo}}" alt="Comigo"></div>
+  <div class="soon">Coming soon to the App&nbsp;Store</div>
+</header>
+
+<section class="hero wrap">
+  <div>
+    <div class="bubble">
+      <h1 class="display">
+        <span class="row"><span class="word" tabindex="0"><span class="gloss">you aren't</span>No estás</span> <span class="word" tabindex="0"><span class="gloss">studying</span>estudiando.</span></span>
+        <span class="row"><span class="word" tabindex="0"><span class="gloss">you are</span>Estás</span> <span class="word" tabindex="0"><span class="gloss">reading</span>leyendo.</span></span>
+      </h1>
+    </div>
+    <p class="tap-hint">Tap any word — that's the whole idea.</p>
+    <p class="hero-copy">
+      Comigo is a library of <strong>original Spanish comics</strong> — westerns, mysteries,
+      time travel, an alien at the breakfast table. Every bubble is read aloud,
+      every word explains itself when you tap it, and every episode ends with its own
+      listening and speaking practice. It reads like fun. It builds real Spanish.
+    </p>
+    <div class="cta-row">
+      <a class="cta" href="#shelf">Browse the shelf</a>
+      <span class="cta-note">For beginner and intermediate learners</span>
+    </div>
+  </div>
+  <div class="fan" aria-hidden="true">
+    <img src="{{IMG_ollie}}" alt="">
+    <img src="{{IMG_carta}}" alt="">
+    <img src="{{IMG_cuervos}}" alt="">
+  </div>
+</section>
+
+<section class="wrap strip-head">
+  <h2 class="display">How a page works</h2>
+</section>
+<section class="wrap strip">
+  <div class="panel">
+    <span class="glyph">🔊</span>
+    <span class="label">Panel 1 · Read</span>
+    <h3 class="display">Read &amp; listen</h3>
+    <p>Follow the story bubble by bubble with native Spanish audio. Show or hide the English translation whenever you want — or never look at it at all.</p>
+  </div>
+  <div class="panel">
+    <span class="glyph">👆</span>
+    <span class="label">Panel 2 · Tap</span>
+    <h3 class="display">Tap to understand</h3>
+    <p>Any word, tapped, explains itself — meaning, grammar, the form used in that exact sentence — and saves to your notebook for later.</p>
+  </div>
+  <div class="panel">
+    <span class="glyph">🎙️</span>
+    <span class="label">Panel 3 · Speak</span>
+    <h3 class="display">Say the line</h3>
+    <p>Speak the dialogue and Comigo listens and grades you. Hands-free with AirPods, so practice fits a walk, a commute, a queue.</p>
+  </div>
+</section>
+
+<section class="wrap modes-head">
+  <h2 class="display">Finish the episode. Keep the Spanish.</h2>
+  <p>Every episode ends with its own practice suite, built from the story you just read.
+     The off-screen modes are fully hands-free — AirPods in, phone in your pocket.</p>
+</section>
+<section class="wrap modes">
+  <div class="mode">
+    <div class="top"><h3>Just listen</h3><span class="screen">Off screen</span></div>
+    <p>Screen off, eyes free. Hear each line and its meaning — no speaking.</p>
+  </div>
+  <div class="mode">
+    <div class="top"><h3>Listen in Spanish</h3><span class="screen">Off screen</span></div>
+    <p>The whole episode, start to finish, in Spanish only — like an audiobook you can already follow.</p>
+  </div>
+  <div class="mode">
+    <div class="top"><h3>Read &amp; speak</h3><span class="screen">On screen</span></div>
+    <p>Look at the English, say it in Spanish, reveal the text when you need it.</p>
+  </div>
+  <div class="mode">
+    <div class="top"><h3>Listen &amp; speak</h3><span class="screen">Off screen</span></div>
+    <p>Hear a line, speak it back and get graded — Spanish→English or English→Spanish.</p>
+  </div>
+  <div class="mode">
+    <div class="top"><h3>Drill the key words</h3></div>
+    <p>The episode's key vocabulary, drilled three ways: writing, speaking, listening.</p>
+  </div>
+</section>
+
+<section class="wrap shelf-head" id="shelf">
+  <h2 class="display">Eleven series. Thirty episodes.</h2>
+  <p>Zero textbook dialogues.</p>
+</section>
+<div class="wrap shelf-scroll">
+  <div class="shelf">
+    <div class="book">
+      <img src="{{IMG_col-el_rey_negro}}" alt="Cover of El Rey Negro: a gunslinger western">
+      <div class="meta"><div class="t">EL REY NEGRO</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-ollie_dice}}" alt="Cover of Ollie Dice: a girl and her wise little dog">
+      <div class="meta"><div class="t">OLLIE DICE</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span> <span class="lvl intermediate">Intermediate</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-el_visitante}}" alt="Cover of El Visitante: an alien houseguest">
+      <div class="meta"><div class="t">EL VISITANTE</div><div class="c">4 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-los_vientos_del_tiempo}}" alt="Cover of Los Vientos del Tiempo: a time-travel adventure">
+      <div class="meta"><div class="t">LOS VIENTOS DEL TIEMPO</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-el_superviviente}}" alt="Cover of El Superviviente: a survival story">
+      <div class="meta"><div class="t">EL SUPERVIVIENTE</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span> <span class="lvl intermediate">Intermediate</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-la_batalla_despues_de_la}}" alt="Cover of La Batalla Después de la Guerra">
+      <div class="meta"><div class="t">LA BATALLA DESPUÉS DE LA GUERRA</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span> <span class="lvl intermediate">Intermediate</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-los_ninos_es_las_sombras}}" alt="Cover of Los Niños en las Sombras">
+      <div class="meta"><div class="t">LOS NIÑOS EN LAS SOMBRAS</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-el_restaurante}}" alt="Cover of El Restaurante">
+      <div class="meta"><div class="t">EL RESTAURANTE</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-cronicas_de_pino_negro}}" alt="Cover of Crónicas de Pino Negro: a mountain mystery">
+      <div class="meta"><div class="t">CRÓNICAS DE PINO NEGRO</div><div class="c">2 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-la_mensajera}}" alt="Cover of La Mensajera">
+      <div class="meta"><div class="t">LA MENSAJERA</div><div class="c">2 episodes</div><div class="lvls"><span class="lvl intermediate">Intermediate</span></div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_col-la_chica_entre_lugares}}" alt="Cover of La Chica Entre Lugares">
+      <div class="meta"><div class="t">LA CHICA ENTRE LUGARES</div><div class="c">1 episode</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+    </div>
+  </div>
+</div>
+
+<section class="band">
+  <div class="wrap">
+    <h2 class="display">Not another language app.</h2>
+    <p>
+      Comigo is a <span class="accent">comic-reading experience</span> that happens to leave
+      Spanish behind. No streaks, no owl, no sentence about the horse drinking milk.
+      Just stories you actually want to finish — made for adults and older teenagers
+      who dropped every flashcard app they ever tried.
+    </p>
+  </div>
+</section>
+
+<section class="wrap features">
+  <div class="feat"><span class="dot"></span><div>
+    <h4>Native-voice audio, per bubble</h4>
+    <p>Every line performed with tone and character — not text-to-speech monotone.</p>
+  </div></div>
+  <div class="feat"><span class="dot"></span><div>
+    <h4>Reveal or hide translations</h4>
+    <p>English is there when you want the safety net and gone when you don't.</p>
+  </div></div>
+  <div class="feat"><span class="dot"></span><div>
+    <h4>Listen &amp; Speak practice</h4>
+    <p>Hear the line, say the line, get graded — Spanish→Spanish or English→Spanish.</p>
+  </div></div>
+  <div class="feat"><span class="dot"></span><div>
+    <h4>A notebook that fills itself</h4>
+    <p>Words you tap and lists you find in the story are saved for self-testing.</p>
+  </div></div>
+  <div class="feat"><span class="dot"></span><div>
+    <h4>Interactive story pages</h4>
+    <p>Buttons, screens and clues hidden in the artwork open into the language.</p>
+  </div></div>
+  <div class="feat"><span class="dot"></span><div>
+    <h4>Beginner and intermediate levels</h4>
+    <p>Series are levelled, so the next episode is always within reach.</p>
+  </div></div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Comigo</div>
+    <div class="links">
+      <a href="mailto:nirshihor@gmail.com">Support</a>
+      <a href="privacy.html">Privacy Policy</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('.word').forEach(function (w) {
+    function toggle() {
+      var wasLit = w.classList.contains('lit');
+      document.querySelectorAll('.word.lit').forEach(function (o) { o.classList.remove('lit'); });
+      if (!wasLit) w.classList.add('lit');
+    }
+    w.addEventListener('click', toggle);
+    w.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+</script>
