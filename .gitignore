@@ -33,3 +33,5 @@ backups/
 # Cache
 .cache/
 .parcel-cache/
+db-backups/
+db-archive/

@@ -22,6 +22,9 @@ const PORT = process.env.PORT || 3001;
 // Connect to MongoDB
 connectDB();
 
+// Daily EJSON dump of the whole DB (volume-backed on Fly, Time-Machine'd locally)
+require('./services/dbBackup').startDailyBackups();
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
