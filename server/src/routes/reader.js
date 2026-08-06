@@ -16,7 +16,77 @@ const PROJECTS_DIR = path.join(__dirname, '../../projects');
 
 // POST /api/reader/tts — synthesize speech (MP3) for a short piece of text.
 // Body: { text, voice?, instructions? }. Returns audio/mpeg.
-router.post('/tts', async (req, res) => {
+// ---- Public-endpoint rate limiting (in-memory, per IP) ----
+// These routes are unauthenticated and call paid AI APIs; without a cap one
+// abusive client can run up a real bill. Limits sit well above any legitimate
+// single learner's usage (speaking practice ≈ a few requests per minute).
+const rlBuckets = new Map();   // "name:ip" -> [hit timestamps]
+function rateLimit(name, maxPerWindow, windowMs) {
+  return (req, res, next) => {
+    const ip = req.headers['fly-client-ip']
+      || (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+      || req.ip;
+    const key = `${name}:${ip}`;
+    const now = Date.now();
+    let hits = rlBuckets.get(key);
+    if (!hits) { hits = []; rlBuckets.set(key, hits); }
+    while (hits.length && now - hits[0] > windowMs) hits.shift();
+    if (hits.length >= maxPerWindow) {
+      res.setHeader('Retry-After', Math.ceil((hits[0] + windowMs - now) / 1000));
+      return res.status(429).json({ error: 'Too many requests — please slow down.' });
+    }
+    hits.push(now);
+    next();
+  };
+}
+// Sweep idle buckets so the map can't grow unboundedly.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, hits] of rlBuckets) {
+    if (!hits.length || now - hits[hits.length - 1] > 60 * 60 * 1000) rlBuckets.delete(k);
+  }
+}, 10 * 60 * 1000).unref();
+
+const sttUpload = require('multer')({
+  storage: require('multer').memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
+
+// Speech-to-text proxy: the reader used to call OpenAI directly with an API
+// key EMBEDDED IN THE APP BINARY (extractable by anyone). The key now lives
+// only server-side; the app posts its recording here.
+router.post('/transcribe', rateLimit('stt', 240, 10 * 60 * 1000), sttUpload.single('file'), async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: 'Transcription not configured' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'file is required' });
+    const form = new FormData();
+    form.append('model', 'gpt-4o-transcribe');
+    const { language, prompt } = req.body || {};
+    if (language) form.append('language', language);
+    if (prompt) form.append('prompt', prompt);
+    form.append('file', new Blob([req.file.buffer], { type: req.file.mimetype || 'audio/wav' }),
+      req.file.originalname || 'audio.wav');
+    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: form
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      console.error('Transcribe upstream error:', r.status, t.slice(0, 300));
+      return res.status(502).json({ error: `Transcription failed (${r.status})` });
+    }
+    const json = await r.json();
+    res.json({ text: json.text || '' });
+  } catch (error) {
+    console.error('Transcribe error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/tts', rateLimit('tts', 180, 10 * 60 * 1000), async (req, res) => {
   try {
     const { text } = req.body || {};
     const audio = await generateSpeech({ text });
@@ -33,7 +103,7 @@ router.post('/tts', async (req, res) => {
 // for lip-syncing an avatar. Body: { text, voice?, speed? }.
 // Returns JSON: { audio: <base64 mp3>, alignment: { characters,
 // character_start_times_seconds, character_end_times_seconds } }.
-router.post('/tts-timed', async (req, res) => {
+router.post('/tts-timed', rateLimit('tts', 180, 10 * 60 * 1000), async (req, res) => {
   try {
     const { text, voice, speed } = req.body || {};
     const { audioBase64, alignment } = await generateSpeechTimed({ text, voiceId: voice, speed });
@@ -49,7 +119,7 @@ router.post('/tts-timed', async (req, res) => {
 // Body: { comicTitle, sourceLang, targetLang, level?, vocab: [{text, meaning}],
 //         messages: [{role: "user"|"assistant", content}] }  (empty messages = opener)
 // Returns: { reply, usage }
-router.post('/flow-practice', async (req, res) => {
+router.post('/flow-practice', rateLimit('flow', 90, 10 * 60 * 1000), async (req, res) => {
   try {
     const { comicTitle, sourceLang, targetLang, level, vocab, messages } = req.body || {};
     if (!Array.isArray(vocab) || vocab.length === 0) {
@@ -439,7 +509,7 @@ router.get('/collection-thumbnail/:collectionId', async (req, res) => {
 
 // POST /api/reader/explain — a short, contextual grammar explanation of a Spanish
 // word AS USED in its sentence. Uses a cheap model. Body: { word, sentence, translation }.
-router.post('/explain', async (req, res) => {
+router.post('/explain', rateLimit('explain', 60, 10 * 60 * 1000), async (req, res) => {
   try {
     const { word, sentence, translation } = req.body || {};
     if (!word || !String(word).trim()) {
