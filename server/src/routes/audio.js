@@ -712,17 +712,26 @@ router.post('/generate-word-audio', async (req, res) => {
     let skipped = 0;
     let failed = 0;
     const errors = [];
-    const total = uniqueKeys.length;
+    let total = uniqueKeys.length;
 
     console.log(`Word audio: ${total} unique words, ${existingSet.size} already on disk${forceRegenerate ? ' (force regenerate)' : ''}`);
 
-    for (const fileKey of uniqueKeys) {
+    // The word inventory can GROW while this run generates (a Word Grammar
+    // Forms pass finishing, a bubble text save adding words). One click must
+    // cover everything, so after draining the queue we re-collect from the DB
+    // and continue until the inventory is stable.
+    const processed = new Set();
+    let queue = uniqueKeys;
+    let activeMap = wordMap;
+    while (queue.length > 0) {
+    for (const fileKey of queue) {
+      processed.add(fileKey);
       if (existingSet.has(fileKey)) {
         skipped++;
         continue;
       }
 
-      const originalText = wordMap.get(fileKey);
+      const originalText = activeMap.get(fileKey);
       try {
         // Append a period so ElevenLabs fully articulates the word ending. Bare
         // ultra-short words (e.g. "en", "un") otherwise get their trailing
@@ -775,6 +784,18 @@ router.post('/generate-word-audio', async (req, res) => {
         console.error(`  Failed: ${originalText} - ${err.message}`);
         res.write(JSON.stringify({ type: 'progress', generated, skipped, failed, total, current: originalText }) + '\n');
       }
+    }
+
+    // Re-collect: anything added while we were generating?
+    const freshComic = await Comic.findOne({ id: comicId });
+    const freshMap = collectUniqueWords(freshComic.toObject());
+    queue = [...freshMap.keys()].filter(k => !processed.has(k));
+    if (queue.length > 0) {
+      activeMap = freshMap;
+      total += queue.length;
+      console.log(`Word audio: inventory grew mid-run — ${queue.length} new word(s), continuing`);
+      res.write(JSON.stringify({ type: 'progress', generated, skipped, failed, total, current: `+${queue.length} new words appeared — continuing` }) + '\n');
+    }
     }
 
     console.log(`Word audio done: ${generated} generated, ${skipped} skipped, ${failed} failed`);
