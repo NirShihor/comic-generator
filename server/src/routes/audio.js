@@ -712,17 +712,26 @@ router.post('/generate-word-audio', async (req, res) => {
     let skipped = 0;
     let failed = 0;
     const errors = [];
-    const total = uniqueKeys.length;
+    let total = uniqueKeys.length;
 
     console.log(`Word audio: ${total} unique words, ${existingSet.size} already on disk${forceRegenerate ? ' (force regenerate)' : ''}`);
 
-    for (const fileKey of uniqueKeys) {
+    // The word inventory can GROW while this run generates (a Word Grammar
+    // Forms pass finishing, a bubble text save adding words). One click must
+    // cover everything, so after draining the queue we re-collect from the DB
+    // and continue until the inventory is stable.
+    const processed = new Set();
+    let queue = uniqueKeys;
+    let activeMap = wordMap;
+    while (queue.length > 0) {
+    for (const fileKey of queue) {
+      processed.add(fileKey);
       if (existingSet.has(fileKey)) {
         skipped++;
         continue;
       }
 
-      const originalText = wordMap.get(fileKey);
+      const originalText = activeMap.get(fileKey);
       try {
         // Append a period so ElevenLabs fully articulates the word ending. Bare
         // ultra-short words (e.g. "en", "un") otherwise get their trailing
@@ -777,6 +786,18 @@ router.post('/generate-word-audio', async (req, res) => {
       }
     }
 
+    // Re-collect: anything added while we were generating?
+    const freshComic = await Comic.findOne({ id: comicId });
+    const freshMap = collectUniqueWords(freshComic.toObject());
+    queue = [...freshMap.keys()].filter(k => !processed.has(k));
+    if (queue.length > 0) {
+      activeMap = freshMap;
+      total += queue.length;
+      console.log(`Word audio: inventory grew mid-run — ${queue.length} new word(s), continuing`);
+      res.write(JSON.stringify({ type: 'progress', generated, skipped, failed, total, current: `+${queue.length} new words appeared — continuing` }) + '\n');
+    }
+    }
+
     console.log(`Word audio done: ${generated} generated, ${skipped} skipped, ${failed} failed`);
 
     // Final result line
@@ -794,6 +815,89 @@ router.post('/generate-word-audio', async (req, res) => {
 });
 
 // Generate translation (English) audio for all sentences in a comic
+// Audit: which bubbles are missing ENGLISH (translation) audio? Read-only —
+// walks every page bubble (cover included), skipping sound effects / image
+// bubbles, and reports sentences with no translation, no translationAudioUrl,
+// or a URL whose file is missing on disk.
+router.get('/english-audio-check/:comicId', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    const audioDir = path.join(PROJECTS_DIR, req.params.comicId, 'audio');
+
+    const missing = [];
+    let checked = 0;
+    const checkBubbles = async (bubbles, pageLabel) => {
+      for (const b of bubbles || []) {
+        // Image bubbles CAN carry (invisible) sentences — check those too.
+        if (b.isSoundEffect) continue;
+        for (const sentence of b.sentences || []) {
+          if (!sentence.text || !sentence.text.trim()) continue;
+          checked++;
+          const snippet = sentence.text.slice(0, 60);
+          if (!sentence.translation || !sentence.translation.trim()) {
+            missing.push({ page: pageLabel, text: snippet, issue: 'no English translation text' });
+            continue;
+          }
+          if (!sentence.translationAudioUrl) {
+            missing.push({ page: pageLabel, text: snippet, issue: 'no English audio' });
+            continue;
+          }
+          const fname = path.basename(sentence.translationAudioUrl);
+          try {
+            await fs.access(path.join(audioDir, fname.endsWith('.mp3') ? fname : `${fname}.mp3`));
+          } catch {
+            missing.push({ page: pageLabel, text: snippet, issue: 'English audio file missing on disk' });
+          }
+        }
+      }
+    };
+
+    await checkBubbles(comic.cover?.bubbles, 'Cover');
+    for (const page of [...(comic.pages || [])].sort((a, b) => a.pageNumber - b.pageNumber)) {
+      await checkBubbles(page.bubbles, `Page ${page.pageNumber}`);
+    }
+
+    res.json({ checked, missingCount: missing.length, missing });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk-clean ElevenLabs intonation [tags] out of ENGLISH translations. The
+// tags stay in place while iterating on EN audio (regeneration needs them);
+// run this once happy — mirrors what the bubble-text save does for Spanish.
+router.post('/clean-english-tags/:comicId', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+
+    const strip = (t) => t.replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim();
+    let cleaned = 0;
+    const cleanBubbles = (bubbles) => {
+      for (const b of bubbles || []) {
+        for (const sentence of b.sentences || []) {
+          if (sentence.translation && /\[[^\]]+\]/.test(sentence.translation)) {
+            sentence.translation = strip(sentence.translation);
+            cleaned++;
+          }
+        }
+      }
+    };
+    cleanBubbles(comic.cover?.bubbles);
+    for (const page of comic.pages || []) cleanBubbles(page.bubbles);
+
+    if (cleaned > 0) {
+      comic.markModified('pages');
+      comic.markModified('cover');
+      await comic.save();
+    }
+    res.json({ cleaned });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/generate-translation-audio', async (req, res) => {
   try {
     const {

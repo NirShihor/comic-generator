@@ -7,6 +7,20 @@ import html2canvas from 'html2canvas';
 const getRefPath = (ref) => typeof ref === 'string' ? ref : ref.path;
 const getRefAnnotations = (ref) => typeof ref === 'string' ? [] : (ref.annotations || []);
 
+// Text outline for bubble text (narration titles etc), as layered text-shadows:
+// html2canvas can't render -webkit-text-stroke, so the bake needs shadows. 16
+// directions keep curves smooth at typical widths without visible blur.
+const bubbleTextOutline = (bubble) => {
+  const w = bubble.textStrokeWidth || 0;
+  if (!w || !bubble.textStrokeColor) return 'none';
+  const shadows = [];
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    shadows.push(`${(Math.cos(a) * w).toFixed(2)}px ${(Math.sin(a) * w).toFixed(2)}px 0 ${bubble.textStrokeColor}`);
+  }
+  return shadows.join(', ');
+};
+
 // Draw an image into a canvas context with object-fit: cover (match the bake target).
 function drawImageCover(ctx, img, W, H) {
   const ir = img.naturalWidth / img.naturalHeight;
@@ -476,13 +490,42 @@ function PageEditor({ isCover = false }) {
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [audioModel, setAudioModel] = useState('eleven_v3');
   const [copiedTag, setCopiedTag] = useState(null);
-  const [audioSettings, setAudioSettings] = useState({
-    stability: 0.5,
-    similarity_boost: 0.75,
-    style: 0.0,
-    speed: 1.0
-  });
+  const DEFAULT_AUDIO_SETTINGS = { stability: 0.5, similarity_boost: 0.75, style: 0.0, speed: 1.0 };
+  const [audioSettings, setAudioSettings] = useState({ ...DEFAULT_AUDIO_SETTINGS });
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+
+  // Picking a voice auto-applies its saved per-collection settings (if any).
+  const pickVoice = (voiceId) => {
+    setSelectedVoiceId(voiceId);
+    const v = (comic?.voices || []).find(v => v.voiceId === voiceId);
+    if (v?.settings) {
+      const { model, ...sliders } = v.settings;
+      setAudioSettings({ ...DEFAULT_AUDIO_SETTINGS, ...sliders });
+      if (model) setAudioModel(model);
+    } else if (voiceId) {
+      // Voice with NO saved settings: reset to defaults — otherwise the
+      // previous voice's dialled-in settings silently leak onto this one.
+      setAudioSettings({ ...DEFAULT_AUDIO_SETTINGS });
+      setAudioModel('eleven_v3');
+    }
+  };
+
+  // Persist the CURRENT sliders + model onto the selected voice (saved on the
+  // collection via the voices PUT redirect, so every episode shares them).
+  const saveVoiceSettings = async () => {
+    if (!selectedVoiceId) return;
+    const updatedVoices = (comic.voices || []).map(v =>
+      v.voiceId === selectedVoiceId
+        ? { ...v, settings: { ...audioSettings, model: audioModel } }
+        : v);
+    try {
+      await api.put(`/comics/${id}`, { voices: updatedVoices });
+      setComic(prev => ({ ...prev, voices: updatedVoices }));
+      showToast('Settings saved for this voice');
+    } catch (err) {
+      alert('Failed to save voice settings: ' + (err.response?.data?.error || err.message));
+    }
+  };
   const [audioEffects, setAudioEffects] = useState({
     preset: 'none',
     semitones: 4,
@@ -522,6 +565,9 @@ function PageEditor({ isCover = false }) {
   });
   const [chatInput, setChatInput] = useState('');
   const [comicNotes, setComicNotes] = useState('');
+  // Large hover preview for the tiny ref chips (P1 / Pg2-P1 / E1·Pg3-P2):
+  // see what an image contains without linking it first. { src, x, y }.
+  const [refChipPreview, setRefChipPreview] = useState(null);
   const [notesCollapsed, setNotesCollapsed] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);   // pop-up (large) notes
   const [notesSize, setNotesSize] = useState(null);            // {width,height} px once dragged; null = default
@@ -596,6 +642,11 @@ function PageEditor({ isCover = false }) {
   const [inpaintGenerating, setInpaintGenerating] = useState(null); // null|'openai'|'gemini'
   const [inpaintSaved, setInpaintSaved] = useState(false);
   const [inpaintAnnotations, setInpaintAnnotations] = useState([]); // [{id, x, y}] numbered dots for spatial reference
+  // Panels with an inpaint currently in flight — inpaints run in the background
+  // (you can exit the lightbox and start another panel's), capped at 3 at once.
+  const inpaintInFlightRef = useRef(new Set());
+  const inpaintModeRef = useRef(null);
+  useEffect(() => { inpaintModeRef.current = inpaintMode; }, [inpaintMode]);
   // Global mouseup handler for inpaint rect drawing (handles mouse-up outside image)
   useEffect(() => {
     if (!inpaintDrawing) return;
@@ -612,12 +663,29 @@ function PageEditor({ isCover = false }) {
 
   // Editor mode and bubble state
   const [editorMode, setEditorMode] = useState(isCover ? 'bubbles' : 'layout'); // 'layout' or 'bubbles'
+
   const [showReadingOrder, setShowReadingOrder] = useState(true); // overlay reading-order numbers on bubbles
   const [showBgPicker, setShowBgPicker] = useState(false);        // background-library picker for the page image
   const [bgLibrary, setBgLibrary] = useState([]);
   const [bgApplyingId, setBgApplyingId] = useState(null);
+  // Collapsed panel-content cards (panelId → bool). A panel carrying a library
+  // background gets auto-collapsed — its prompt/refs machinery is irrelevant.
+  const [collapsedPanels, setCollapsedPanels] = useState({});
   const [bubbles, setBubbles] = useState([]);
   const [selectedBubbleId, setSelectedBubbleId] = useState(null);
+  // ?focusBubble=<id> (from Language Review's Implement): once bubbles load,
+  // switch to bubble mode, select the bubble and scroll its card into view.
+  const focusBubbleHandledRef = useRef(false);
+  useEffect(() => {
+    if (focusBubbleHandledRef.current || bubbles.length === 0) return;
+    const fb = new URLSearchParams(window.location.search).get('focusBubble');
+    if (!fb) { focusBubbleHandledRef.current = true; return; }
+    if (!bubbles.some(b => b.id === fb)) return;   // not this page's data yet
+    focusBubbleHandledRef.current = true;
+    setEditorMode('bubbles');
+    setSelectedBubbleId(fb);
+    setTimeout(() => document.getElementById(`bubble-card-${fb}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 400);
+  }, [bubbles]);
   const [isDraggingBubble, setIsDraggingBubble] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isResizingBubble, setIsResizingBubble] = useState(false);
@@ -834,7 +902,7 @@ function PageEditor({ isCover = false }) {
       const existingWords = sentence?.words || [];
       const normWord = (s) => (s || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\]]/g, '').trim();
       const cleanWord = (s) => (s || '').replace(/[.,!?;:"""''¿¡…\[\]]+/g, '').trim();
-      const audioTagWords = new Set(['slowly', 'whispering', 'shouting', 'frightened', 'surprised', 'amazed', 'hopeful', 'worried', 'excited', 'pause', 'sighs', 'laughs', 'cries', 'gasps', 'whispers', 'shouts', 'sad', 'angry', 'happy', 'fearful', 'fearfully', 'very']);
+      const audioTagWords = new Set(['slowly', 'whispering', 'shouting', 'frightened', 'surprised', 'amazed', 'hopeful', 'worried', 'excited', 'pause', 'sighs', 'laughs', 'cries', 'gasps', 'whispers', 'shouts', 'sad', 'angry', 'happy', 'fearful', 'fearfully', 'very', 'emphasise', 'emphasize', 'emphasised', 'emphasized', 'fade', 'fades', 'fading', 'assertive', 'assertively', 'pleading', 'pleads', 'loud', 'loudly']);
       const stripTags = (w) => w.replace(/\[.*?\]/g, '').trim();
       const isAudioTag = (w) => { const cleaned = stripTags(w); return !cleaned || audioTagWords.has(normWord(cleaned)); };
       const allWords = timestamps.filter(t => !isAudioTag(t.word)).map(t => {
@@ -1102,6 +1170,9 @@ function PageEditor({ isCover = false }) {
       }));
       await updatePanelArtwork(base.id, bg.image);
       setShowBgPicker(false);
+      // The panel is just a library background now — its prompt/refs card is
+      // dead weight, so tuck it away (the ▶ toggle brings it back).
+      setCollapsedPanels(prev => ({ ...prev, [base.id]: true }));
       showToast('Background applied to the first panel');
     } catch (err) {
       alert('Failed to apply background: ' + (err.response?.data?.error || err.message));
@@ -1246,6 +1317,7 @@ function PageEditor({ isCover = false }) {
               brightness: p.brightness ?? 1,
               contrast: p.contrast ?? 1,
               saturation: p.saturation ?? 1,
+              memory: p.memory || false,
               refImages: p.refImages || [],
               annotations: p.annotations || []
             };
@@ -1885,13 +1957,41 @@ function PageEditor({ isCover = false }) {
       mine.forEach(b => assigned.add(b.id));
       members.set(panel, mine);
     }
+    // Bubbles outside every panel join the NEAREST one (matches the export,
+    // which now does the same) instead of dangling at the end of the sequence.
+    for (const b of bubbles.filter(b => !assigned.has(b.id))) {
+      let best = null, bestD = Infinity;
+      for (const panel of panelList) {
+        const t = panel.tapZone || { x: 0, y: 0, width: 1, height: 1 };
+        const cx = t.x + t.width / 2, cy = t.y + t.height / 2;
+        const bx = (b.x || 0) + (b.width || 0) / 2, by = (b.y || 0) + (b.height || 0) / 2;
+        const d = (bx - cx) ** 2 + (by - cy) ** 2;
+        if (d < bestD) { bestD = d; best = panel; }
+      }
+      if (best) { members.get(best)?.push(b); assigned.add(b.id); }
+    }
+    // Within a panel: geometric reading order, except a manual orderIndex
+    // takes that position (manual wins a tied number).
+    const orderAware = (list) => {
+      const geo = [...list].sort(sortReading);
+      const rank = new Map(geo.map((b, i) => [b.id, i + 1]));
+      return geo.slice().sort((a, b) => {
+        const ka = a.orderIndex != null ? a.orderIndex : rank.get(a.id);
+        const kb = b.orderIndex != null ? b.orderIndex : rank.get(b.id);
+        if (ka !== kb) return ka - kb;
+        const ma = a.orderIndex != null ? 0 : 1;
+        const mb = b.orderIndex != null ? 0 : 1;
+        if (ma !== mb) return ma - mb;
+        return sortReading(a, b);
+      });
+    };
     // Numbering order: panels in panelOrder (floating last on a tie), then any
-    // bubbles that fell outside every panel.
+    // bubbles that somehow still fell outside (no panels at all).
     const forNumber = [...panelList].sort((a, b) =>
       ((a.panelOrder || 0) - (b.panelOrder || 0)) || ((a.floating ? 1 : 0) - (b.floating ? 1 : 0)));
     let n = 0;
     for (const panel of forNumber) {
-      [...(members.get(panel) || [])].sort(sortReading).forEach(b => { map[b.id] = ++n; });
+      orderAware(members.get(panel) || []).forEach(b => { map[b.id] = ++n; });
     }
     bubbles.filter(b => !assigned.has(b.id)).sort(sortReading).forEach(b => { map[b.id] = ++n; });
     return map;
@@ -2207,6 +2307,7 @@ function PageEditor({ isCover = false }) {
     if (editorMode !== 'bubbles') return;
     setSelectedHotspotId(hotspot.id);
     setSelectedBubbleId(null);
+    if (hotspot.locked) return;   // locked: selectable, not draggable
     const coords = getRelativeCoords(e);
     if (!coords) return;
     setIsDraggingHotspot(true);
@@ -2460,8 +2561,20 @@ function PageEditor({ isCover = false }) {
         const bubble = bubbles.find(b => b.id === selectedBubbleId);
         const tailOverflow = bubble ? (bubble.tailLength ?? 0.35) * (bubble.height || 0.1) : 0;
         const rot = bubble ? Math.abs(bubble.rotation || 0) : 0;
-        // Allow negative y when bubble is rotated so the flipped tail can reach the panel top
-        const minY = rot > 90 ? -tailOverflow : 0;
+        // Clamp on the VISUAL (rotated) bounding box, not the raw rect: a rotated
+        // bubble's stored rect can be much taller than what's drawn, so clamping
+        // the rect at y=0 stopped the visible bubble well short of the page top.
+        let minY = 0;
+        if (bubble && rot !== 0) {
+          const W = (bubble.width || 0.1) * CANVAS_WIDTH;
+          const H = (bubble.height || 0.1) * CANVAS_HEIGHT;
+          const rad = (bubble.rotation || 0) * Math.PI / 180;
+          const bboxH = Math.abs(W * Math.sin(rad)) + Math.abs(H * Math.cos(rad));
+          // Visual top touches the page top when cy == bboxH/2.
+          minY = bboxH / (2 * CANVAS_HEIGHT) - (bubble.height || 0.1) / 2;
+        }
+        // Rotated past 90° the tail flips upward — let it reach the panel top too.
+        if (rot > 90) minY = Math.min(minY, -tailOverflow);
         const maxY = rot > 90 ? 1 : 1 + tailOverflow;
         updateBubble(selectedBubbleId, {
           x: Math.max(0, Math.min(1, coords.x - dragOffset.x)),
@@ -2750,6 +2863,7 @@ function PageEditor({ isCover = false }) {
         brightness: existing.brightness,
         contrast: existing.contrast,
         saturation: existing.saturation,
+        memory: existing.memory,
         refImages: existing.refImages,
         annotations: existing.annotations,
       };
@@ -2847,7 +2961,7 @@ function PageEditor({ isCover = false }) {
   const cleanSnapshotRef = useRef('');
   const justLoadedRef = useRef(true);
   const DIRTY_IGNORE_KEYS = useRef(new Set([
-    'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation',
+    'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation', 'memory',
     'artworkImage', 'bakedCropImage', 'refImages', 'annotations',
     'alternatives', 'transformations', 'audioUrl', 'translationAudioUrl', 'wordTimestamps'
   ])).current;
@@ -2961,6 +3075,12 @@ function PageEditor({ isCover = false }) {
   const stripHighlightMarkers = (text) => text
     ? text.replace(/\[\[/g, '').replace(/\]\]/g, '').replace(/[\u2060\u2061]/g, '')
     : '';
+
+  // Cap a reference description's contribution to the prompt. The auto-generated
+  // descriptions run 2\u20136k chars each; with several refs selected they blew past
+  // the 30k prompt limit and the panel content was truncated away entirely.
+  const clipRefDescription = (text, max = 1500) =>
+    text && text.length > max ? text.slice(0, max) + '\u2026' : (text || '');
 
   // Check if text has any highlights
   const hasHighlights = (text) => text && text.includes(HL_START);
@@ -3110,6 +3230,11 @@ function PageEditor({ isCover = false }) {
     </>
   );
 
+  // Always-current savePage for deferred callers (e.g. auto-save on bubble lock
+  // fires after the state update lands; a direct call would save stale bubbles).
+  const savePageRef = useRef(null);
+  useEffect(() => { savePageRef.current = savePage; });
+
   const savePage = async () => {
     try {
       if (isCover) {
@@ -3144,6 +3269,7 @@ function PageEditor({ isCover = false }) {
             brightness: existing.brightness,
             contrast: existing.contrast,
             saturation: existing.saturation,
+            memory: existing.memory,
             refImages: existing.refImages,
             annotations: existing.annotations,
           };
@@ -3229,7 +3355,7 @@ function PageEditor({ isCover = false }) {
     if (settings.styleBibleImages && settings.styleBibleImages.length > 0) {
       prompt += `🎨 STYLE REFERENCE DESCRIPTIONS\n`;
       settings.styleBibleImages.forEach((img, i) => {
-        prompt += `\nStyle Reference ${i + 1}:\n${img.description}\n`;
+        prompt += `\nStyle Reference ${i + 1}:\n${clipRefDescription(img.description)}\n`;
       });
       prompt += '\n';
     }
@@ -3247,7 +3373,7 @@ function PageEditor({ isCover = false }) {
     if (settings.characters && settings.characters.length > 0) {
       prompt += `CHARACTER BIBLE (MAINTAIN CONSISTENCY)\n`;
       settings.characters.forEach(char => {
-        prompt += `\nCharacter: ${char.name}\n${char.description}\n`;
+        prompt += `\nCharacter: ${char.name}\n${clipRefDescription(char.description)}\n`;
       });
       prompt += '\n';
     }
@@ -3263,10 +3389,12 @@ function PageEditor({ isCover = false }) {
     }
 
     // Panel Content
-    prompt += `${isCover ? 'COVER' : `PAGE ${page.pageNumber}`} — PANEL CONTENT\n\n`;
+    prompt += `${isCover ? 'COVER' : `PAGE ${page.pageNumber}`} — PANEL CONTENT\n`;
+    prompt += `(THE PANELS TO DRAW — these OVERRIDE any locations or scenes mentioned in the style/character sections above; those are style and lore reference only.)\n\n`;
     panels.forEach((panel, i) => {
       prompt += `Panel ${i + 1}:\n${stripHighlightMarkers(panel.content) || '(No content specified)'}\n\n`;
     });
+    prompt += `IMPORTANT: EVERY character, person, animal and action listed in each panel above MUST be clearly VISIBLE in that panel. Do not render locations empty.\n\n`;
 
     // Additional instructions
     if (additionalInstructions.trim()) {
@@ -3298,7 +3426,7 @@ function PageEditor({ isCover = false }) {
       if (selectedStyleImages.length > 0) {
         prompt += `🎨 STYLE REFERENCE DESCRIPTIONS\n`;
         selectedStyleImages.forEach((img, i) => {
-          prompt += `\nStyle Reference ${i + 1}:\n${img.description}\n`;
+          prompt += `\nStyle Reference ${i + 1}:\n${clipRefDescription(img.description)}\n`;
         });
         prompt += '\n';
       }
@@ -3317,7 +3445,7 @@ function PageEditor({ isCover = false }) {
       if (selectedChars.length > 0) {
         prompt += `CHARACTER BIBLE (MAINTAIN CONSISTENCY)\n`;
         selectedChars.forEach(char => {
-          prompt += `\nCharacter: ${char.name}\n${char.description}\n`;
+          prompt += `\nCharacter: ${char.name}\n${clipRefDescription(char.description)}\n`;
         });
         prompt += '\n';
       }
@@ -3339,7 +3467,8 @@ function PageEditor({ isCover = false }) {
     if (isCover) {
       prompt += `IMPORTANT: this is a full-bleed cover — the artwork must FILL THE ENTIRE FRAME edge to edge, with NO borders, frames, margins, or empty/white space around the image.\n\n`;
     }
-    prompt += `Panel Content:\n${stripHighlightMarkers(panel.content) || '(No content specified)'}\n\n`;
+    prompt += `Panel Content (THE PANEL TO DRAW — this OVERRIDES any locations or scenes mentioned in the style/character sections above; those are style and lore reference only):\n${stripHighlightMarkers(panel.content) || '(No content specified)'}\n\n`;
+    prompt += `IMPORTANT: EVERY character, person, animal and action listed in the Panel Content above MUST be clearly VISIBLE in the image. Do not render the location empty.\n\n`;
 
     // Per-panel framing options
     const framing = panelFraming[panel.id];
@@ -3396,10 +3525,29 @@ function PageEditor({ isCover = false }) {
   // Determine aspect ratio based on panel dimensions
   const getPanelAspectRatio = (panel) => {
     const { width, height } = panel.tapZone;
-    const ratio = width / height;
+    // tapZone is in PAGE-NORMALIZED units, but the page itself is portrait
+    // (2:3) — the panel's REAL shape must include that. Without the factor,
+    // every panel skewed one bucket too wide (a truly square panel requested
+    // LANDSCAPE art, a full-page panel requested SQUARE) and the generated
+    // image never fit its slot.
+    const ratio = (width * CANVAS_WIDTH) / (height * CANVAS_HEIGHT);
     if (ratio > 1.3) return 'landscape';
     if (ratio < 0.77) return 'portrait';
     return 'square';
+  };
+
+  // A panel's selectedBibleRefs can hold IDs of since-DELETED bible entries
+  // (deleting a character doesn't touch panel selections). Those ghosts have no
+  // checkbox row and no thumbnail, but naive .length counts them — "1 ref"
+  // showing with nothing visible anywhere. Count only IDs that still resolve.
+  const liveBibleRefIds = (panel) => {
+    const ids = panel?.selectedBibleRefs || [];
+    if (!ids.length) return ids;
+    const existing = new Set([
+      ...(promptSettings.styleBibleImages || []).map(img => String(img.id)),
+      ...(promptSettings.characters || []).map(c => String(c.id))
+    ]);
+    return ids.filter(id => existing.has(String(id)));
   };
 
   // Toggle a bible ref (style image or character) for a panel
@@ -3733,6 +3881,10 @@ function PageEditor({ isCover = false }) {
   const startInpaintMode = (panel, panelIndex) => {
     const imagePath = panelImages[panel.id]?.path;
     if (!imagePath) return;
+    if (inpaintInFlightRef.current.has(panel.id)) {
+      showToast('This panel has an inpaint still running — its image is about to change');
+      return;
+    }
     setInpaintMode({ panelId: panel.id, panelIndex, panel });
     setInpaintRect(null);
     setInpaintPrompt('');
@@ -3743,12 +3895,26 @@ function PageEditor({ isCover = false }) {
     setLightboxRefContext(null);
   };
 
-  // Execute inpainting on a region
+  // Execute inpainting on a region. Runs in the BACKGROUND: you can exit the
+  // lightbox and start an inpaint on another panel while this one processes
+  // (up to 3 concurrently; one per panel — same-panel passes would race on
+  // the same source image and lose each other's changes).
   const executeInpaint = async (provider = 'openai') => {
     if (!inpaintMode || !inpaintRect || !inpaintPrompt.trim()) return;
-    const { panelId, panel } = inpaintMode;
+    const { panelId, panel, panelIndex } = inpaintMode;
     const currentPath = panelImages[panelId]?.path;
     if (!currentPath) return;
+    if (inpaintInFlightRef.current.has(panelId)) {
+      showToast('This panel already has an inpaint running — wait for it to finish');
+      return;
+    }
+    if (inpaintInFlightRef.current.size >= 3) {
+      showToast('Up to 3 inpaints can run at once — wait for one to finish');
+      return;
+    }
+    inpaintInFlightRef.current.add(panelId);
+    const panelLabel = `Panel ${(panelIndex ?? 0) + 1}`;
+    showToast('Inpainting started — you can close this view and keep working');
 
     setInpaintGenerating(provider);
     setPanelImages(prev => ({
@@ -3786,12 +3952,17 @@ function PageEditor({ isCover = false }) {
       }));
       updatePanelArtwork(panelId, response.data.path);
 
-      // Update lightbox to show result; clear rect and annotations for another pass
-      setLightboxImage(`${response.data.path}`);
-      setInpaintRect(null);
-      setInpaintPrompt('');
-      setInpaintAnnotations([]);
-      setInpaintGenerating(null);
+      if (inpaintModeRef.current?.panelId === panelId) {
+        // Still in this panel's inpaint view: show the result, ready for another pass
+        setLightboxImage(`${response.data.path}`);
+        setInpaintRect(null);
+        setInpaintPrompt('');
+        setInpaintAnnotations([]);
+        setInpaintGenerating(null);
+      } else {
+        // Finished in the background — the panel image is updated in place
+        showToast(`Inpaint finished on ${panelLabel}`);
+      }
     } catch (error) {
       console.error('Inpaint failed:', error);
       setPanelImages(prev => ({
@@ -3802,7 +3973,13 @@ function PageEditor({ isCover = false }) {
           error: error.response?.data?.error || error.message
         }
       }));
-      setInpaintGenerating(null);
+      if (inpaintModeRef.current?.panelId === panelId) {
+        setInpaintGenerating(null);
+      } else {
+        showToast(`Inpaint FAILED on ${panelLabel}: ${error.response?.data?.error || error.message}`);
+      }
+    } finally {
+      inpaintInFlightRef.current.delete(panelId);
     }
   };
 
@@ -4037,6 +4214,49 @@ function PageEditor({ isCover = false }) {
       ctx.stroke();
     };
 
+    // Wavy (scalloped) line for memory/flashback panel borders — the classic
+    // comics convention. Alternating bulges perpendicular to the edge.
+    const drawWavyLine = (x1, y1, x2, y2) => {
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;   // unit normal
+      const wavelength = 56;                 // px at 2048-wide canvas
+      const amplitude = 9;
+      const waves = Math.max(2, Math.round(len / wavelength));
+      const seg = 1 / waves;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      for (let i = 0; i < waves; i++) {
+        const tMid = (i + 0.5) * seg;
+        const tEnd = (i + 1) * seg;
+        const bulge = (i % 2 === 0 ? 1 : -1) * amplitude;
+        ctx.quadraticCurveTo(
+          x1 + dx * tMid + nx * bulge, y1 + dy * tMid + ny * bulge,
+          x1 + dx * tEnd, y1 + dy * tEnd
+        );
+      }
+      ctx.stroke();
+    };
+
+    // Feathered white edges inside a memory panel — art dissolves into haze.
+    const drawMemoryFeather = (fx, fy, fw, fh) => {
+      const feather = Math.min(fw, fh) * 0.07;
+      const mk = (gx0, gy0, gx1, gy1) => {
+        const g = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
+        g.addColorStop(0, 'rgba(255,255,255,0.9)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        return g;
+      };
+      ctx.fillStyle = mk(fx, 0, fx + feather, 0);
+      ctx.fillRect(fx, fy, feather, fh);
+      ctx.fillStyle = mk(fx + fw, 0, fx + fw - feather, 0);
+      ctx.fillRect(fx + fw - feather, fy, feather, fh);
+      ctx.fillStyle = mk(0, fy, 0, fy + feather);
+      ctx.fillRect(fx, fy, fw, feather);
+      ctx.fillStyle = mk(0, fy + fh, 0, fy + fh - feather);
+      ctx.fillRect(fx, fy + fh - feather, fw, feather);
+    };
+
     // Find the divider line matching a panel edge
     const findMatchingLine = (edge, tapZone) => {
       const tolerance = 0.02;
@@ -4241,6 +4461,10 @@ function PageEditor({ isCover = false }) {
       if (hasFilters) {
         ctx.filter = 'none';
       }
+      // Memory panel: fade the art into white haze at the edges (inside the clip).
+      if (panelData?.memory) {
+        drawMemoryFeather(drawX, drawY, drawW, drawH);
+      }
       ctx.restore();
     }
 
@@ -4310,7 +4534,10 @@ function PageEditor({ isCover = false }) {
       const blX = adjustedX + (leftDiag ? leftDiag.endOffset : 0);
       const blY = adjustedY + adjustedH + (bottomDiag ? bottomDiag.startOffset : 0);
 
-      // Draw multiple passes for thicker, more organic look
+      // Draw multiple passes for thicker, more organic look.
+      // Memory panels get the wavy flashback border instead of the wobbly line.
+      const isMemoryPanel = !!panelImages[panel.id]?.memory;
+      const drawEdge = isMemoryPanel ? drawWavyLine : drawWobblyLine;
       const bt = borderThicknessRef.current;
       if (bt > 0) {
         const borderScale = bt / 100;
@@ -4319,13 +4546,13 @@ function PageEditor({ isCover = false }) {
           ctx.lineWidth = baseLine * borderScale;
 
           // Top edge (TL → TR)
-          drawWobblyLine(tlX, tlY, trX, trY);
+          drawEdge(tlX, tlY, trX, trY);
           // Right edge (TR → BR)
-          drawWobblyLine(trX, trY, brX, brY);
+          drawEdge(trX, trY, brX, brY);
           // Bottom edge (BR → BL)
-          drawWobblyLine(brX, brY, blX, blY);
+          drawEdge(brX, brY, blX, blY);
           // Left edge (BL → TL)
-          drawWobblyLine(blX, blY, tlX, tlY);
+          drawEdge(blX, blY, tlX, tlY);
         }
       }
     }
@@ -4442,9 +4669,15 @@ function PageEditor({ isCover = false }) {
       if (hasFilters) {
         ctx.filter = 'none';
       }
+      // Memory panel: fade the art into white haze at the edges (inside the clip).
+      if (panelData?.memory) {
+        drawMemoryFeather(bboxX, bboxY, bboxW, bboxH);
+      }
       ctx.restore();
 
-      // Draw wobbly border along each edge of the polygon
+      // Draw wobbly border along each edge of the polygon — wavy for memory panels
+      const isMemoryFloat = !!panelData?.memory;
+      const drawFloatEdge = isMemoryFloat ? drawWavyLine : drawWobblyLine;
       const btFloat = floatingBorderThicknessRef.current;
       if (btFloat > 0) {
         const borderScale = btFloat / 100;
@@ -4455,7 +4688,7 @@ function PageEditor({ isCover = false }) {
           for (let i = 0; i < innerCorners.length; i++) {
             const from = innerCorners[i];
             const to = innerCorners[(i + 1) % innerCorners.length];
-            drawWobblyLine(from.x, from.y, to.x, to.y);
+            drawFloatEdge(from.x, from.y, to.x, to.y);
           }
         }
       }
@@ -4610,6 +4843,15 @@ function PageEditor({ isCover = false }) {
   // --- Bake Bubbles into Page Image ---
   const [isBaking, setIsBaking] = useState(false);
   const [showBakedPreview, setShowBakedPreview] = useState(false);
+  // Hotspot being previewed from the baked view (slides popup simulation)
+  const [previewHotspot, setPreviewHotspot] = useState(null);
+  // Page-level language check
+  const [langCheckRunning, setLangCheckRunning] = useState(false);
+  const [langCheckResults, setLangCheckResults] = useState(null);   // null = not run
+  const [langCheckExtra, setLangCheckExtra] = useState('');
+  const [langCheckImplemented, setLangCheckImplemented] = useState({});
+  const [langCheckModifiedBubbles, setLangCheckModifiedBubbles] = useState([]);
+  const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
   const bakeTargetRef = useRef(null);
   // When true, the off-screen bake target renders bubbles with their text blanked,
   // so we can capture an "empty bubbles" image (for practice modes) in a 2nd pass.
@@ -4624,10 +4866,12 @@ function PageEditor({ isCover = false }) {
   const [showEnforcerPreview, setShowEnforcerPreview] = useState(true);
 
   const bakeBubblesToImage = async () => {
-    if (!page.masterImage || bubbles.length === 0) {
-      alert('Need a page image and at least one bubble to bake.');
+    if (!page.masterImage) {
+      alert('Need a page image to bake.');
       return;
     }
+    // Zero bubbles is legitimate: the bake then equals the clean master art,
+    // wiping any ghost bubbles left in an old baked image.
     setIsBaking(true);
     // Wait for React to render the off-screen bake target
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -5218,6 +5462,23 @@ function PageEditor({ isCover = false }) {
           />
         </div>
       )}
+      {/* Ref-chip hover preview: large floating image following the cursor */}
+      {refChipPreview && (() => {
+        const W = Math.min(480, window.innerWidth - 40);
+        const flip = refChipPreview.x + 24 + W > window.innerWidth;
+        const left = flip ? Math.max(8, refChipPreview.x - 24 - W) : refChipPreview.x + 24;
+        const top = Math.max(8, Math.min(refChipPreview.y - 120, window.innerHeight * 0.35));
+        return (
+          <div style={{ position: 'fixed', left, top, zIndex: 10001, pointerEvents: 'none' }}>
+            <img
+              src={`${refChipPreview.src}`}
+              alt=""
+              style={{ width: `${W}px`, maxHeight: '62vh', objectFit: 'contain', background: '#fff', border: '2px solid #fff', borderRadius: '8px', boxShadow: '0 10px 34px rgba(0,0,0,0.5)', display: 'block' }}
+            />
+          </div>
+        );
+      })()}
+
       {lightboxImage && (
         <div
           onClick={() => {
@@ -5450,7 +5711,18 @@ function PageEditor({ isCover = false }) {
                     }}
                     autoFocus
                   />
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
+                    <select
+                      value={openaiQuality}
+                      onChange={(e) => setOpenaiQuality(e.target.value)}
+                      disabled={!!inpaintGenerating}
+                      title="ChatGPT inpaint quality — lower is much faster; for small regions the difference is usually invisible"
+                      style={{ padding: '0.35rem', borderRadius: '4px', border: '1px solid #555', background: '#222', color: '#fff', fontSize: '0.75rem' }}
+                    >
+                      <option value="high">High (slow)</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low (fast)</option>
+                    </select>
                     <button
                       onClick={() => executeInpaint('openai')}
                       disabled={!inpaintPrompt.trim() || !!inpaintGenerating}
@@ -5727,7 +5999,9 @@ function PageEditor({ isCover = false }) {
             ✓ Finish shape ({tracePoints.length})
           </button>
         )}
-        {editorMode === 'bubbles' && page.masterImage && bubbles.length > 0 && (
+        {/* Available even with ZERO bubbles: a no-bubble bake replaces a stale
+            baked image that still shows since-deleted bubbles. */}
+        {editorMode === 'bubbles' && page.masterImage && (
           <button
             className="btn btn-secondary"
             onClick={bakeBubblesToImage}
@@ -6398,12 +6672,22 @@ function PageEditor({ isCover = false }) {
 
               return (
                 <div key={bubble.id}>
-                  {/* Reading-order badge — matches the order the reader will use */}
-                  {editorMode === 'bubbles' && showReadingOrder && readingOrderMap[bubble.id] != null && (
+                  {/* Reading-order badge — matches the order the reader will use.
+                      Placed at the VISUAL top-left (rotated bounding box): for a
+                      rotated bubble the raw rect corner can sit far from the art. */}
+                  {editorMode === 'bubbles' && showReadingOrder && readingOrderMap[bubble.id] != null && (() => {
+                    const W = (bubble.width || 0.1) * CANVAS_WIDTH;
+                    const H = (bubble.height || 0.1) * CANVAS_HEIGHT;
+                    const rad = ((bubble.rotation || 0) * Math.PI) / 180;
+                    const bboxW = Math.abs(W * Math.cos(rad)) + Math.abs(H * Math.sin(rad));
+                    const bboxH = Math.abs(W * Math.sin(rad)) + Math.abs(H * Math.cos(rad));
+                    const cxPx = (bubble.x + (bubble.width || 0.1) / 2) * CANVAS_WIDTH;
+                    const cyPx = (bubble.y + (bubble.height || 0.1) / 2) * CANVAS_HEIGHT;
+                    return (
                     <div style={{
                       position: 'absolute',
-                      left: bubble.x * CANVAS_WIDTH,
-                      top: bubble.y * CANVAS_HEIGHT,
+                      left: cxPx - bboxW / 2,
+                      top: cyPx - bboxH / 2,
                       transform: 'translate(-50%, -50%)',
                       minWidth: '18px', height: '18px', padding: '0 4px',
                       borderRadius: '9px',
@@ -6416,7 +6700,8 @@ function PageEditor({ isCover = false }) {
                     }}>
                       {readingOrderMap[bubble.id]}
                     </div>
-                  )}
+                    );
+                  })()}
                   {/* Unified Speech Bubble with integrated tail */}
                   {bubble.type === 'speech' && bubble.showTail !== false && (() => {
                     // Bubble dimensions in pixels
@@ -6607,6 +6892,7 @@ function PageEditor({ isCover = false }) {
                                     fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                                     fontStyle: bubble.italic ? 'italic' : 'normal',
                                     color: bubble.textColor || '#000000',
+                                    textShadow: bubbleTextOutline(bubble),
                                     textAlign: bubble.textAlign || 'center',
                                     width: '100%',
                                     wordBreak: 'break-word',
@@ -6932,6 +7218,7 @@ function PageEditor({ isCover = false }) {
                         fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                         fontStyle: bubble.italic ? 'italic' : 'normal',
                         color: bubble.textColor || '#000000',
+                        textShadow: bubbleTextOutline(bubble),
                         opacity: bubble.hidden ? 0 : 1,
                         textAlign: bubble.textAlign || 'center',
                         width: '100%',
@@ -7081,15 +7368,26 @@ function PageEditor({ isCover = false }) {
                     top: `${hotspot.y * 100}%`,
                     width: `${hotspot.width * 100}%`,
                     height: `${hotspot.height * 100}%`,
-                    border: isSelected ? `2px solid ${hColor}` : `2px dashed ${hColor}`,
-                    background: isSelected ? `rgba(${hR}, ${hG}, ${hB}, 0.2)` : `rgba(${hR}, ${hG}, ${hB}, 0.08)`,
+                    border: hotspot.displayStyle === 'button'
+                      ? `2px solid ${hColor}`
+                      : (isSelected ? `2px solid ${hColor}` : `2px dashed ${hColor}`),
+                    borderRadius: hotspot.displayStyle === 'button' ? '10px' : '0',
+                    background: hotspot.displayStyle === 'button'
+                      ? `rgba(${hR}, ${hG}, ${hB}, ${isSelected ? 0.55 : 0.4})`
+                      : (isSelected ? `rgba(${hR}, ${hG}, ${hB}, 0.2)` : `rgba(${hR}, ${hG}, ${hB}, 0.08)`),
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                     zIndex: 45,
                     // Let trace clicks fall through to the canvas while tracing.
                     pointerEvents: isTracingHotspot ? 'none' : 'auto',
-                    cursor: isDraggingHotspot ? 'grabbing' : 'grab',
+                    cursor: hotspot.locked ? 'default' : (isDraggingHotspot ? 'grabbing' : 'grab'),
                     boxSizing: 'border-box'
                   }}
                 >
+                  {hotspot.displayStyle === 'button' && (
+                    <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.75rem', textShadow: '0 1px 2px rgba(0,0,0,0.6)', pointerEvents: 'none', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      {hotspot.buttonLabel || hotspot.label || 'Button'}
+                    </span>
+                  )}
                   <span style={{
                     position: 'absolute', top: 2, left: 4,
                     fontSize: '10px', color: hColor, fontWeight: 'bold',
@@ -7097,7 +7395,7 @@ function PageEditor({ isCover = false }) {
                   }}>
                     H{hIdx + 1} ({(hotspot.slides || []).length})
                   </span>
-                  {isSelected && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map(corner => (
+                  {isSelected && !hotspot.locked && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map(corner => (
                     <div
                       key={corner}
                       data-hotspot-resize={corner.replace('-', '')}
@@ -7357,21 +7655,100 @@ function PageEditor({ isCover = false }) {
             >
               Close
             </button>
-            <img
-              src={`${page.bakedImage}`}
-              alt="Baked page"
-              style={{
-                width: CANVAS_WIDTH,
-                height: CANVAS_HEIGHT,
-                zoom: DISPLAY_SCALE,
-                objectFit: 'contain',
-                border: '2px solid #27ae60',
-                borderRadius: '4px',
-                background: '#fff'
-              }}
-            />
+            <div style={{ position: 'relative', width: CANVAS_WIDTH, height: CANVAS_HEIGHT, zoom: DISPLAY_SCALE }}>
+              <img
+                src={`${page.bakedImage}`}
+                alt="Baked page"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  border: '2px solid #27ae60',
+                  borderRadius: '4px',
+                  background: '#fff',
+                  display: 'block'
+                }}
+              />
+              {/* Live hotspots: pulse + click, like the reader */}
+              <style>{`@keyframes hotspotPulse { 0%,100% { box-shadow: 0 0 4px 1px var(--hs); opacity: .45; } 50% { box-shadow: 0 0 14px 5px var(--hs); opacity: 1; } }`}</style>
+              {hotspots.map(h => {
+                const hColor = h.borderColor === 'transparent' ? 'transparent' : (h.borderColor || '#00bcd4');
+                const isButton = h.displayStyle === 'button';
+                return (
+                  <div
+                    key={h.id}
+                    onClick={() => { setPreviewHotspot(h); setPreviewSlideIdx(0); }}
+                    title={h.label || 'Hotspot'}
+                    style={{
+                      position: 'absolute',
+                      left: `${h.x * 100}%`, top: `${h.y * 100}%`,
+                      width: `${h.width * 100}%`, height: `${h.height * 100}%`,
+                      // Tiny hotspots stay clickable in the preview
+                      minWidth: '26px', minHeight: '26px',
+                      cursor: 'pointer',
+                      borderRadius: isButton ? '10px' : '6px',
+                      border: isButton ? `2px solid ${hColor}` : (hColor === 'transparent' ? 'none' : `2px solid ${hColor}`),
+                      background: isButton ? hColor : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      // Transparent frame still glows (soft cyan halo) — matches the reader.
+                      '--hs': hColor === 'transparent' ? 'rgba(0,188,212,0.75)' : hColor,
+                      animation: isButton ? 'none' : 'hotspotPulse 1.6s ease-in-out infinite'
+                    }}
+                  >
+                    {isButton && (
+                      <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.8rem', textShadow: '0 1px 2px rgba(0,0,0,0.6)', pointerEvents: 'none' }}>
+                        {h.buttonLabel || h.label || 'Button'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
+
+        {/* Hotspot slides preview popup (baked view simulation of the reader) */}
+        {previewHotspot && (() => {
+          const slides = previewHotspot.slides || [];
+          const slide = slides[previewSlideIdx];
+          return (
+            <div
+              onClick={() => setPreviewHotspot(null)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', width: 'min(460px, 92vw)', maxHeight: '86vh', overflowY: 'auto', padding: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.3rem' }}>
+                  <button onClick={() => setPreviewHotspot(null)} style={{ background: 'transparent', color: '#000', border: 'none', fontSize: '1.3rem', lineHeight: 1, cursor: 'pointer', padding: '0 0.2rem' }}>×</button>
+                </div>
+                {!slide && <p style={{ color: '#888', fontSize: '0.85rem' }}>No slides on this hotspot yet.</p>}
+                {slide && (
+                  <>
+                    {slide.imageUrl && (
+                      <img src={`${slide.imageUrl}`} alt="" style={{ width: '100%', maxHeight: '40vh', objectFit: 'contain', background: '#000', borderRadius: '8px', marginBottom: '0.6rem' }} />
+                    )}
+                    {slide.text && <p style={{ fontSize: '1.1rem', fontWeight: 600, textAlign: 'center', margin: '0 0 0.4rem' }}>{slide.text}</p>}
+                    {slide.translation && <p style={{ color: '#666', textAlign: 'center', margin: '0 0 0.6rem' }}>{slide.translation}</p>}
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '0.6rem' }}>
+                      {slide.audioUrl && (
+                        <button onClick={() => new Audio(`${slide.audioUrl.startsWith('/') ? slide.audioUrl : `/projects/${id}/audio/${slide.audioUrl}.mp3`}?t=${Date.now()}`).play()} style={{ padding: '0.35rem 0.9rem', background: '#3498db', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>▶ Play</button>
+                      )}
+                      {slide.translationAudioUrl && (
+                        <button onClick={() => new Audio(`${slide.translationAudioUrl.startsWith('/') ? slide.translationAudioUrl : `/projects/${id}/audio/${slide.translationAudioUrl}.mp3`}?t=${Date.now()}`).play()} style={{ padding: '0.35rem 0.9rem', background: '#8e44ad', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>EN</button>
+                      )}
+                    </div>
+                    {slides.length > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <button disabled={previewSlideIdx === 0} onClick={() => setPreviewSlideIdx(i => i - 1)} style={{ padding: '0.3rem 0.7rem', cursor: 'pointer' }}>←</button>
+                        <span style={{ fontSize: '0.8rem', color: '#888' }}>{previewSlideIdx + 1} / {slides.length}</span>
+                        <button disabled={previewSlideIdx >= slides.length - 1} onClick={() => setPreviewSlideIdx(i => i + 1)} style={{ padding: '0.3rem 0.7rem', cursor: 'pointer' }}>→</button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Sidebar */}
         <div className="sidebar">
@@ -7719,6 +8096,7 @@ function PageEditor({ isCover = false }) {
               {bubbles.map((bubble, i) => (
                 <div
                   key={bubble.id}
+                  id={`bubble-card-${bubble.id}`}
                   onClick={() => setSelectedBubbleId(bubble.id)}
                   style={{
                     padding: '0.75rem',
@@ -7733,7 +8111,7 @@ function PageEditor({ isCover = false }) {
                     <span style={{ fontWeight: 'bold' }}>Bubble {i + 1} {bubble.locked ? '(locked)' : ''}</span>
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
                       <button
-                        onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { locked: !bubble.locked }); }}
+                        onClick={(e) => { e.stopPropagation(); const locking = !bubble.locked; updateBubble(bubble.id, { locked: locking }); if (locking) setTimeout(() => savePageRef.current?.(), 150); }}
                         style={{
                           padding: '0.2rem 0.5rem',
                           background: bubble.locked ? '#e67e22' : '#95a5a6',
@@ -8021,7 +8399,7 @@ function PageEditor({ isCover = false }) {
                           </label>
                           <ColorPicker
                             value={bubble.bgColor || '#ffffff'}
-                            onChange={(e) => { updateBubble(bubble.id, { bgColor: e.target.value, bgTransparent: false }); setDefaultBubbleStyle(prev => { const updated = { ...prev, bgColor: e.target.value }; api.put(`/comics/${id}`, { defaultBubbleStyle: updated }).catch(err => console.error('Failed to save defaults:', err)); return updated; }); }}
+                            onChange={(e) => updateBubble(bubble.id, { bgColor: e.target.value, bgTransparent: false })}
                             onClick={(e) => e.stopPropagation()}
                             disabled={bubble.bgTransparent}
                             style={{
@@ -8058,6 +8436,16 @@ function PageEditor({ isCover = false }) {
                             onClick={(e) => e.stopPropagation()}
                           />
                           Hidden (data only)
+                        </label>
+                        <label style={{ fontSize: '0.75rem', color: '#666', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem' }}
+                          title="For bubbles with no drawn background (hidden / transparent): show the reader's soft green wash over the bubble area when it's opened. Default: on for hidden bubbles, off otherwise.">
+                          <input
+                            type="checkbox"
+                            checked={bubble.highlightWash ?? !!bubble.hidden}
+                            onChange={(e) => updateBubble(bubble.id, { highlightWash: e.target.checked })}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          Green highlight in reader
                         </label>
                         {/* Background Image (thought bubbles only) */}
                         {bubble.type === 'thought' && (
@@ -8123,7 +8511,7 @@ function PageEditor({ isCover = false }) {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                             <ColorPicker
                               value={bubble.borderColor || '#000000'}
-                              onChange={(e) => { updateBubble(bubble.id, { borderColor: e.target.value }); setDefaultBubbleStyle(prev => { const updated = { ...prev, borderColor: e.target.value }; api.put(`/comics/${id}`, { defaultBubbleStyle: updated }).catch(err => console.error('Failed to save defaults:', err)); return updated; }); }}
+                              onChange={(e) => updateBubble(bubble.id, { borderColor: e.target.value })}
                               onClick={(e) => e.stopPropagation()}
                               disabled={bubble.noBorder}
                               style={{ width: '32px', height: '24px', border: '1px solid #ccc', borderRadius: '4px' }}
@@ -8148,15 +8536,42 @@ function PageEditor({ isCover = false }) {
                           </label>
                           <ColorPicker
                             value={bubble.textColor || '#000000'}
-                            onChange={(e) => { updateBubble(bubble.id, { textColor: e.target.value }); setDefaultBubbleStyle(prev => { const updated = { ...prev, textColor: e.target.value }; api.put(`/comics/${id}`, { defaultBubbleStyle: updated }).catch(err => console.error('Failed to save defaults:', err)); return updated; }); }}
+                            onChange={(e) => updateBubble(bubble.id, { textColor: e.target.value })}
                             onClick={(e) => e.stopPropagation()}
                             style={{ width: '40px', height: '28px', border: '1px solid #ccc', borderRadius: '4px' }}
                           />
                         </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#888', display: 'block', marginBottom: '0.2rem' }}>
+                            Outline
+                          </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <ColorPicker
+                              value={bubble.textStrokeColor || '#ffffff'}
+                              onChange={(e) => updateBubble(bubble.id, { textStrokeColor: e.target.value, textStrokeWidth: bubble.textStrokeWidth || 1 })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '40px', height: '28px', border: '1px solid #ccc', borderRadius: '4px' }}
+                            />
+                            <input
+                              type="range"
+                              min="0"
+                              max="6"
+                              step="0.5"
+                              value={bubble.textStrokeWidth || 0}
+                              onChange={(e) => updateBubble(bubble.id, { textStrokeWidth: parseFloat(e.target.value) })}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '50px', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: '0.7rem', color: '#888', minWidth: '20px' }}>{bubble.textStrokeWidth || 0}</span>
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Sentences (hidden for image bubbles) */}
-                      {bubble.type !== 'image' && (
+                      {/* Sentences — image bubbles carry them too: the text is
+                          never rendered on the page (the bake shows only the
+                          image), but it powers the popup card, audio and
+                          practice — e.g. a message shown on an in-story screen. */}
+                      {(
                       <div style={{ marginBottom: '0.5rem' }}>
                         <label style={{ fontSize: '0.8rem', color: '#666', display: 'block', marginBottom: '0.25rem' }}>
                           Sentences ({(bubble.sentences || []).length}):
@@ -8235,7 +8650,7 @@ function PageEditor({ isCover = false }) {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[crying]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]'].map(tag => {
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[crying]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]', '[fade out]', '[assertive]', '[pleading]', '[loud]'].map(tag => {
                                 const tagKey = `${sentence.id}-${tag}`;
                                 const isCopied = copiedTag === tagKey;
                                 return (
@@ -8343,7 +8758,7 @@ function PageEditor({ isCover = false }) {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (audioRef.current) audioRef.current.pause();
-                                      const audio = new Audio(`/projects/${id}/audio/${alt.audioUrl}.mp3`);
+                                      const audio = new Audio(`/projects/${id}/audio/${alt.audioUrl}.mp3?t=${Date.now()}`);
                                       audioRef.current = audio;
                                       audio.play();
                                     }}
@@ -8400,7 +8815,7 @@ function PageEditor({ isCover = false }) {
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (audioRef.current) audioRef.current.pause();
-                                        const audio = new Audio(`/projects/${id}/audio/${sentence.audioUrl}.mp3`);
+                                        const audio = new Audio(`/projects/${id}/audio/${sentence.audioUrl}.mp3?t=${Date.now()}`);
                                         audioRef.current = audio;
                                         audio.play();
                                       }}
@@ -8430,7 +8845,7 @@ function PageEditor({ isCover = false }) {
                                 <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
                                   <select
                                     value={selectedVoiceId}
-                                    onChange={(e) => { e.stopPropagation(); setSelectedVoiceId(e.target.value); }}
+                                    onChange={(e) => { e.stopPropagation(); pickVoice(e.target.value); }}
                                     onClick={(e) => e.stopPropagation()}
                                     style={{
                                       flex: 1,
@@ -8529,6 +8944,14 @@ function PageEditor({ isCover = false }) {
                                         />
                                       </div>
                                     ))}
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); saveVoiceSettings(); }}
+                                      disabled={!selectedVoiceId}
+                                      title="Remember these sliders + model for this voice (collection-wide) — auto-applied whenever the voice is picked"
+                                      style={{ marginTop: '0.25rem', padding: '0.2rem 0.5rem', fontSize: '0.65rem', background: selectedVoiceId ? '#2e6bb0' : '#aaa', color: '#fff', border: 'none', borderRadius: '3px', cursor: selectedVoiceId ? 'pointer' : 'default', width: '100%' }}
+                                    >
+                                      Save as this voice's defaults
+                                    </button>
                                   </div>
                                 )}
 
@@ -8625,7 +9048,7 @@ function PageEditor({ isCover = false }) {
                                       const cleanedText = sentence.text ? stripAudioTags(sentence.text) : '';
                                       const normWord = (s) => (s || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\]]/g, '').trim();
                                       const cleanWord = (s) => (s || '').replace(/[.,!?;:"""''¿¡…\[\]]+/g, '').trim();
-                                      const audioTagWords = new Set(['slowly', 'whispering', 'shouting', 'frightened', 'surprised', 'amazed', 'hopeful', 'worried', 'excited', 'pause', 'sighs', 'laughs', 'cries', 'gasps', 'whispers', 'shouts', 'sad', 'angry', 'happy', 'fearful', 'fearfully', 'very']);
+                                      const audioTagWords = new Set(['slowly', 'whispering', 'shouting', 'frightened', 'surprised', 'amazed', 'hopeful', 'worried', 'excited', 'pause', 'sighs', 'laughs', 'cries', 'gasps', 'whispers', 'shouts', 'sad', 'angry', 'happy', 'fearful', 'fearfully', 'very', 'emphasise', 'emphasize', 'emphasised', 'emphasized', 'fade', 'fades', 'fading', 'assertive', 'assertively', 'pleading', 'pleads', 'loud', 'loudly']);
 
                                       // Build fresh words from text, always using current text as-is
                                       const existingWords = sentence.words || [];
@@ -8803,7 +9226,7 @@ function PageEditor({ isCover = false }) {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (audioRef.current) audioRef.current.pause();
-                                      const audio = new Audio(`/projects/${id}/audio/${sentence.translationAudioUrl}.mp3`);
+                                      const audio = new Audio(`/projects/${id}/audio/${sentence.translationAudioUrl}.mp3?t=${Date.now()}`);
                                       audioRef.current = audio;
                                       audio.play();
                                     }}
@@ -9066,7 +9489,7 @@ function PageEditor({ isCover = false }) {
                                       if (audioRef.current) audioRef.current.pause();
                                       const sanitized = word.text.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
                                       if (sanitized) {
-                                        const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3`);
+                                        const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3?t=${Date.now()}`);
                                         audioRef.current = audio;
                                         audio.play().catch(() => {});
                                       }
@@ -9094,7 +9517,7 @@ function PageEditor({ isCover = false }) {
                                         if (audioRef.current) audioRef.current.pause();
                                         const sanitized = word.baseForm.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
                                         if (sanitized) {
-                                          const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3`);
+                                          const audio = new Audio(`/projects/${id}/audio/words/${sanitized}.mp3?t=${Date.now()}`);
                                           audioRef.current = audio;
                                           audio.play().catch(() => {});
                                         }
@@ -9169,7 +9592,7 @@ function PageEditor({ isCover = false }) {
                         </button>
 
                         <button
-                          onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { locked: !bubble.locked }); }}
+                          onClick={(e) => { e.stopPropagation(); const locking = !bubble.locked; updateBubble(bubble.id, { locked: locking }); if (locking) setTimeout(() => savePageRef.current?.(), 150); }}
                           style={{
                             padding: '0.3rem 0.6rem',
                             background: bubble.locked ? '#e67e22' : '#95a5a6',
@@ -9363,6 +9786,21 @@ function PageEditor({ isCover = false }) {
                         </>
                       )}
 
+                      {/* Manual reading-order override */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                        <label style={{ fontSize: '0.75rem', color: '#888' }}>Order</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={bubble.orderIndex ?? ''}
+                          placeholder="auto"
+                          onChange={(e) => updateBubble(bubble.id, { orderIndex: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ width: '58px', padding: '0.2rem 0.3rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.8rem' }}
+                        />
+                        <span style={{ fontSize: '0.68rem', color: '#aaa' }}>within this bubble's panel — blank = automatic</span>
+                      </div>
+
                       {/* Bubble Angle (for thought and narration bubbles) */}
                       {(bubble.type === 'thought' || bubble.type === 'narration') && (
                         <div style={{ marginBottom: '0.5rem' }}>
@@ -9516,6 +9954,110 @@ function PageEditor({ isCover = false }) {
             </div>
           )}
 
+          {/* PAGE LANGUAGE CHECK — review just this page's translations */}
+          {editorMode === 'bubbles' && (
+            <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#eef3fb', borderRadius: '6px', border: '1px solid #a9c4e8' }}>
+              <h3 style={{ margin: '0 0 0.4rem', color: '#1f4e8c', fontSize: '0.9rem' }}>Language Check (this page)</h3>
+              <textarea
+                value={langCheckExtra}
+                onChange={(e) => setLangCheckExtra(e.target.value)}
+                placeholder="Optional extra instructions for the reviewer (e.g. 'Focus on the tú/usted between Mateo and the sheriff')"
+                style={{ width: '100%', minHeight: '48px', padding: '0.4rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.78rem', resize: 'vertical', boxSizing: 'border-box', marginBottom: '0.4rem' }}
+              />
+              <button
+                onClick={async () => {
+                  if (langCheckRunning) return;
+                  const pageImage = (page.masterImage || page.bakedImage || '').split('?')[0];
+                  if (!pageImage) { alert('This page has no image yet.'); return; }
+                  const payloadBubbles = bubbles
+                    .filter(b => b.type !== 'image' && !b.isSoundEffect)
+                    .map(b => ({
+                      type: b.type || 'speech',
+                      sentences: (b.sentences || []).filter(sn => sn.text && sn.translation).map(sn => ({ text: sn.text, translation: sn.translation }))
+                    }))
+                    .filter(b => b.sentences.length > 0);
+                  if (payloadBubbles.length === 0) { alert('No bubbles with text + translation on this page.'); return; }
+                  setLangCheckRunning(true);
+                  setLangCheckResults(null);
+                  setLangCheckImplemented({});
+                  setLangCheckModifiedBubbles([]);
+                  try {
+                    const resp = await api.post('/images/language/review', {
+                      pageImagePath: pageImage,
+                      pageNumber: page.pageNumber,
+                      panels: [{ panelId: 'page-level', panelIndex: 0, bubbles: payloadBubbles }],
+                      language: comic?.language || 'es',
+                      targetLanguage: comic?.targetLanguage || 'en',
+                      provider: 'openai',
+                      extraInstructions: langCheckExtra
+                    }, { timeout: 180000 });
+                    setLangCheckResults(resp.data.issues || []);
+                  } catch (err) {
+                    alert('Language check failed: ' + (err.response?.data?.error || err.message));
+                  } finally {
+                    setLangCheckRunning(false);
+                  }
+                }}
+                disabled={langCheckRunning}
+                style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', background: langCheckRunning ? '#95a5a6' : '#2e6bb0', color: '#fff', border: 'none', borderRadius: '4px', cursor: langCheckRunning ? 'default' : 'pointer' }}
+              >
+                {langCheckRunning ? 'Checking…' : 'Check this page'}
+              </button>
+              {langCheckResults && langCheckResults.length === 0 && (
+                <p style={{ margin: '0.5rem 0 0', color: '#155724', fontSize: '0.8rem' }}>No issues found on this page.</p>
+              )}
+              {langCheckResults && langCheckResults.map((issue, idx) => (
+                <div key={idx} style={{ background: '#fff', border: '1px solid #ddd', borderRadius: '6px', padding: '0.5rem', marginTop: '0.5rem', fontSize: '0.78rem' }}>
+                  <div style={{ fontWeight: 'bold', color: '#c0392b', marginBottom: '0.2rem' }}>
+                    {issue.issueType === 'register_inconsistency' ? 'Register' : issue.issueType === 'missing_wrong_context' ? 'Context' : 'Translation'}
+                  </div>
+                  <div><strong>Text:</strong> {issue.sentenceText}</div>
+                  <div style={{ color: '#666' }}><strong>EN:</strong> {issue.sentenceTranslation}</div>
+                  <div style={{ color: '#c0392b', margin: '0.2rem 0' }}>{issue.description}</div>
+                  {issue.suggestedFix && <div style={{ color: '#27ae60' }}><strong>Fix:</strong> {issue.suggestedFix}</div>}
+                  {issue.suggestedFix && (
+                    <button
+                      onClick={async () => {
+                        if (langCheckImplemented[idx]) return;
+                        setLangCheckImplemented(prev => ({ ...prev, [idx]: 'busy' }));
+                        try {
+                          const resp = await api.post(`/comics/${id}/apply-language-fix`, {
+                            pageId: page.id,
+                            originalText: issue.sentenceText,
+                            correctedText: issue.suggestedFix
+                          }, { timeout: 60000 });
+                          // Mirror the change into the editor state so it's visible immediately.
+                          setBubbles(prev => prev.map(b => ({
+                            ...b,
+                            sentences: (b.sentences || []).map(sn => sn.text === issue.sentenceText
+                              ? { ...sn, text: issue.suggestedFix, translation: resp.data.translation }
+                              : sn)
+                          })));
+                          setLangCheckImplemented(prev => ({ ...prev, [idx]: 'done' }));
+                          setLangCheckModifiedBubbles(prev =>
+                            [...new Set([...prev, ...(resp.data.bubbleNumbers || [])])].sort((a, b) => a - b));
+                        } catch (err) {
+                          setLangCheckImplemented(prev => ({ ...prev, [idx]: null }));
+                          alert('Implement failed: ' + (err.response?.data?.error || err.message));
+                        }
+                      }}
+                      disabled={!!langCheckImplemented[idx]}
+                      style={{ marginTop: '0.3rem', padding: '0.25rem 0.7rem', fontSize: '0.75rem', background: langCheckImplemented[idx] === 'done' ? '#27ae60' : '#2e6bb0', color: '#fff', border: 'none', borderRadius: '4px', cursor: langCheckImplemented[idx] ? 'default' : 'pointer' }}
+                    >
+                      {langCheckImplemented[idx] === 'done' ? '✓ Implemented' : langCheckImplemented[idx] === 'busy' ? '…' : 'Implement'}
+                    </button>
+                  )}
+                </div>
+              ))}
+              {langCheckModifiedBubbles.length > 0 && (
+                <div style={{ background: '#d4edda', border: '1px solid #28a745', borderRadius: '4px', padding: '0.4rem 0.6rem', marginTop: '0.5rem', color: '#155724', fontSize: '0.78rem' }}>
+                  <strong>Modified — regenerate audio (ES + EN) for bubble{langCheckModifiedBubbles.length > 1 ? 's' : ''}:</strong>{' '}
+                  {langCheckModifiedBubbles.join(', ')}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* HOTSPOT LIST — shown in bubbles mode when there are hotspots */}
           {editorMode === 'bubbles' && hotspots.length > 0 && (
             <div style={{ marginTop: '1rem' }}>
@@ -9557,6 +10099,13 @@ function PageEditor({ isCover = false }) {
                   <h4 style={{ margin: 0, color: '#00838f', fontSize: '0.9rem' }}>Hotspot Details</h4>
                   <div style={{ display: 'flex', gap: '0.35rem' }}>
                     <button
+                      onClick={() => updateHotspot(hotspot.id, { locked: !hotspot.locked })}
+                      title={hotspot.locked ? 'Unlock: allow dragging/resizing' : 'Lock in place: disable dragging/resizing'}
+                      style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: hotspot.locked ? '#e67e22' : '#95a5a6', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                    >
+                      {hotspot.locked ? '🔒' : '🔓'}
+                    </button>
+                    <button
                       onClick={() => copyHotspotContent(hotspot)}
                       title="Copy this hotspot's slides & label"
                       style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', background: '#0288d1', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
@@ -9591,6 +10140,56 @@ function PageEditor({ isCover = false }) {
                     placeholder="e.g., Ace of Spades"
                     style={{ width: '100%', padding: '0.35rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.8rem' }}
                   />
+                </div>
+
+                {/* Show as button */}
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#555', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}
+                    title="Render as a real tappable button in the reader (instead of a pulsing area). Tapping opens this hotspot's slides popup.">
+                    <input
+                      type="checkbox"
+                      checked={hotspot.displayStyle === 'button'}
+                      onChange={(e) => updateHotspot(hotspot.id, { displayStyle: e.target.checked ? 'button' : '' })}
+                    />
+                    Show as button
+                  </label>
+                  {hotspot.displayStyle === 'button' && (
+                    <>
+                      <input
+                        type="text"
+                        value={hotspot.buttonLabel || ''}
+                        onChange={(e) => updateHotspot(hotspot.id, { buttonLabel: e.target.value })}
+                        placeholder="Button text (falls back to Label)"
+                        style={{ width: '100%', padding: '0.35rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.8rem', marginTop: '0.3rem' }}
+                      />
+                      <select
+                        value={hotspot.triggerBubbleId || ''}
+                        onChange={(e) => updateHotspot(hotspot.id, { triggerBubbleId: e.target.value })}
+                        title="What the button opens: the hotspot's slides popup, or a bubble's full popup card (words, translation, grammar, audio, practice)"
+                        style={{ width: '100%', padding: '0.35rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.8rem', marginTop: '0.3rem' }}
+                      >
+                        <option value="">Opens: slides popup</option>
+                        {bubbles.map((b, i) => (
+                          <option key={b.id} value={b.id}>
+                            Opens bubble {i + 1}: {((b.sentences || [])[0]?.text || '(no text)').slice(0, 35)}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                </div>
+
+                {/* Advance on close (opt-in) */}
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#555', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}
+                    title="When the reader closes this hotspot's popup, the comic turns to the next page automatically">
+                    <input
+                      type="checkbox"
+                      checked={!!hotspot.advanceOnClose}
+                      onChange={(e) => updateHotspot(hotspot.id, { advanceOnClose: e.target.checked })}
+                    />
+                    Next page on close
+                  </label>
                 </div>
 
                 {/* Frame Color */}
@@ -9674,7 +10273,7 @@ function PageEditor({ isCover = false }) {
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
                       <select
                         value={selectedVoiceId}
-                        onChange={(e) => setSelectedVoiceId(e.target.value)}
+                        onChange={(e) => pickVoice(e.target.value)}
                         style={{ flex: 1, padding: '0.25rem', fontSize: '0.7rem', borderRadius: '3px', border: '1px solid #ccc' }}
                       >
                         <option value="">Select voice...</option>
@@ -9732,12 +10331,52 @@ function PageEditor({ isCover = false }) {
                               Change
                               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadSlideImage(hotspot.id, slide.id, e)} />
                             </label>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const resp = await api.post('/images/crop-region', {
+                                    comicId: id,
+                                    imagePath: (page.bakedImage || page.masterImage || '').split('?')[0],
+                                    rect: { x: hotspot.x, y: hotspot.y, width: hotspot.width, height: hotspot.height }
+                                  });
+                                  updateHotspotSlide(hotspot.id, slide.id, { imageUrl: resp.data.path });
+                                } catch (err) {
+                                  alert('Capture failed: ' + (err.response?.data?.error || err.message));
+                                }
+                              }}
+                              title="Crop this hotspot's area out of the BAKED page (bubbles included) and use it as the slide image"
+                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.65rem', background: '#16a085', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                            >
+                              📷 From page
+                            </button>
                           </div>
                         ) : (
+                          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                           <label style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem', background: '#3498db', color: '#fff', borderRadius: '3px', cursor: 'pointer', display: 'inline-block' }}>
                             Upload Image
                             <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadSlideImage(hotspot.id, slide.id, e)} />
                           </label>
+                          <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const resp = await api.post('/images/crop-region', {
+                                    comicId: id,
+                                    imagePath: (page.bakedImage || page.masterImage || '').split('?')[0],
+                                    rect: { x: hotspot.x, y: hotspot.y, width: hotspot.width, height: hotspot.height }
+                                  });
+                                  updateHotspotSlide(hotspot.id, slide.id, { imageUrl: resp.data.path });
+                                } catch (err) {
+                                  alert('Capture failed: ' + (err.response?.data?.error || err.message));
+                                }
+                              }}
+                              title="Crop this hotspot's area out of the BAKED page (bubbles included) and use it as the slide image"
+                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.65rem', background: '#16a085', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                            >
+                              📷 From page
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -9834,7 +10473,7 @@ function PageEditor({ isCover = false }) {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (audioRef.current) audioRef.current.pause();
-                              const audio = new Audio(`/projects/${id}/audio/${slide.audioUrl}.mp3`);
+                              const audio = new Audio(`/projects/${id}/audio/${slide.audioUrl}.mp3?t=${Date.now()}`);
                               audioRef.current = audio;
                               audio.play();
                             }}
@@ -9854,7 +10493,7 @@ function PageEditor({ isCover = false }) {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (audioRef.current) audioRef.current.pause();
-                                const audio = new Audio(`/projects/${id}/audio/${slide.translationAudioUrl}.mp3`);
+                                const audio = new Audio(`/projects/${id}/audio/${slide.translationAudioUrl}.mp3?t=${Date.now()}`);
                                 audioRef.current = audio;
                                 audio.play();
                               }}
@@ -10429,9 +11068,18 @@ function PageEditor({ isCover = false }) {
                   </p>
                 ) : (
                   panels.map((panel, i) => (
-                    <div key={panel.id} style={{ marginBottom: '1rem', padding: '0.75rem', background: i % 2 === 0 ? '#f0f0f0' : '#fff', borderRadius: '8px', border: '2px solid #bbb' }}>
+                    <div key={panel.id} style={{ marginBottom: '1rem', padding: '0.75rem', background: i % 2 === 0 ? '#f0f0f0' : '#fff', borderRadius: '8px', border: '2px solid #bbb', ...(collapsedPanels[panel.id] ? { maxHeight: '52px', overflow: 'hidden' } : {}) }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                         <label style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>
+                          {!isCover && (
+                            <button
+                              onClick={() => setCollapsedPanels(prev => ({ ...prev, [panel.id]: !prev[panel.id] }))}
+                              title={collapsedPanels[panel.id] ? 'Expand panel' : 'Collapse panel'}
+                              style={{ marginRight: '0.4rem', fontSize: '0.7rem', color: '#999', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            >
+                              {collapsedPanels[panel.id] ? '▶' : '▼'}
+                            </button>
+                          )}
                           {isCover ? 'Cover' : `Panel ${i + 1}`}
                           {!isCover && (
                           <span style={{ fontWeight: 'normal', marginLeft: '0.5rem', color: '#999' }}>
@@ -10531,14 +11179,14 @@ function PageEditor({ isCover = false }) {
                             style={{
                               padding: '0.25rem 0.5rem',
                               fontSize: '0.7rem',
-                              background: (panel.selectedBibleRefs?.length > 0) ? '#e8d5f5' : '#f0f0f0',
-                              color: (panel.selectedBibleRefs?.length > 0) ? '#6c3483' : '#555',
-                              border: `1px solid ${(panel.selectedBibleRefs?.length > 0) ? '#6c3483' : '#ccc'}`,
+                              background: (liveBibleRefIds(panel).length > 0) ? '#e8d5f5' : '#f0f0f0',
+                              color: (liveBibleRefIds(panel).length > 0) ? '#6c3483' : '#555',
+                              border: `1px solid ${(liveBibleRefIds(panel).length > 0) ? '#6c3483' : '#ccc'}`,
                               borderRadius: '4px',
                               cursor: 'pointer'
                             }}
                           >
-                            Refs{panel.selectedBibleRefs?.length > 0 ? ` (${panel.selectedBibleRefs.length})` : ''}
+                            Refs{liveBibleRefIds(panel).length > 0 ? ` (${liveBibleRefIds(panel).length})` : ''}
                           </button>
                         </div>
                       </div>
@@ -10722,8 +11370,8 @@ function PageEditor({ isCover = false }) {
                         }}
                       >
                         {showPanelRefs[panel.id] ? '▾' : '▸'} Ref Images
-                        {(panelImages[panel.id]?.refImages?.length > 0 || panel.selectedBibleRefs?.length > 0)
-                          ? ` (${(panelImages[panel.id]?.refImages?.length || 0) + (panel.selectedBibleRefs?.length || 0)})`
+                        {(panelImages[panel.id]?.refImages?.length > 0 || liveBibleRefIds(panel).length > 0)
+                          ? ` (${(panelImages[panel.id]?.refImages?.length || 0) + liveBibleRefIds(panel).length})`
                           : ''}
                       </button>
                       {showPanelRefs[panel.id] && <div style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
@@ -10809,6 +11457,9 @@ function PageEditor({ isCover = false }) {
                                       }));
                                     }
                                   }}
+                                  onMouseEnter={(e) => setRefChipPreview({ src: panelImages[p.id].path, x: e.clientX, y: e.clientY })}
+                                  onMouseMove={(e) => setRefChipPreview(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev)}
+                                  onMouseLeave={() => setRefChipPreview(null)}
                                   disabled={alreadyLinked}
                                   title={alreadyLinked ? `Panel ${pi + 1} already linked` : `Use Panel ${pi + 1}'s image as reference`}
                                   style={{
@@ -10863,6 +11514,9 @@ function PageEditor({ isCover = false }) {
                                       }));
                                     }
                                   }}
+                                  onMouseEnter={(e) => setRefChipPreview({ src: op.artworkImage, x: e.clientX, y: e.clientY })}
+                                  onMouseMove={(e) => setRefChipPreview(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev)}
+                                  onMouseLeave={() => setRefChipPreview(null)}
                                   disabled={alreadyLinked}
                                   title={alreadyLinked ? `Pg${op.pageNumber}-P${op.panelIndex + 1} already linked` : `Use Page ${op.pageNumber}, Panel ${op.panelIndex + 1} as reference`}
                                   style={{
@@ -10919,6 +11573,9 @@ function PageEditor({ isCover = false }) {
                                       }));
                                     }
                                   }}
+                                  onMouseEnter={(e) => setRefChipPreview({ src: cp.artworkImage, x: e.clientX, y: e.clientY })}
+                                  onMouseMove={(e) => setRefChipPreview(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev)}
+                                  onMouseLeave={() => setRefChipPreview(null)}
                                   disabled={alreadyLinked}
                                   title={alreadyLinked ? `${cp.comicTitle} — ${label} already linked` : `Use ${cp.comicTitle} — ${label} as reference`}
                                   style={{
@@ -11853,6 +12510,31 @@ function PageEditor({ isCover = false }) {
                                   >
                                     Crop
                                   </button>
+                                  {!isCover && (
+                                    <button
+                                      onClick={() => {
+                                        const next = !(panelData?.memory);
+                                        setPanelImages(prev => ({
+                                          ...prev,
+                                          [panel.id]: { ...prev[panel.id], memory: next }
+                                        }));
+                                        savePanelAdjustments(panel.id, { memory: next });
+                                        setTimeout(() => compositePageFromPanels(), 50);
+                                      }}
+                                      title="Flashback/memory panel: wavy border + faded edges"
+                                      style={{
+                                        padding: '0.2rem 0.5rem',
+                                        fontSize: '0.7rem',
+                                        background: panelData?.memory ? '#8e44ad' : '#ddd',
+                                        color: panelData?.memory ? 'white' : '#666',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      Memory
+                                    </button>
+                                  )}
                                   <button
                                     onClick={async () => {
                                       if (!panelData?.path) return;
@@ -12457,7 +13139,10 @@ function PageEditor({ isCover = false }) {
                 </filter>
               </defs>
             </svg>
-            {bubbles.filter(b => !(b.hidden && ref === bakeTargetRef)).map((bubble) => {
+            {/* Hidden (data-only) bubbles are excluded from the BAKE and from
+                the PREVIEW alike — the preview's job is to show the baked
+                result, and hidden text was ghosting over the art in it. */}
+            {bubbles.filter(b => !b.hidden).map((bubble) => {
               const bubbleCenterX = bubble.x + bubble.width / 2;
               const bubbleCenterY = bubble.y + bubble.height / 2;
               const tailEndX = bubbleCenterX + (bubble.tailX || 0);
@@ -12556,6 +13241,7 @@ function PageEditor({ isCover = false }) {
                                 fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                                 fontStyle: bubble.italic ? 'italic' : 'normal',
                                 color: bubble.textColor || '#000000',
+                                textShadow: bubbleTextOutline(bubble),
                                 textAlign: bubble.textAlign || 'center',
                                 width: '100%',
                                 wordBreak: 'break-word',
@@ -12718,6 +13404,7 @@ function PageEditor({ isCover = false }) {
                       fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                       fontStyle: bubble.italic ? 'italic' : 'normal',
                       color: bubble.textColor || '#000000',
+                      textShadow: bubbleTextOutline(bubble),
                       textAlign: bubble.textAlign || 'center',
                       width: '100%',
                       wordBreak: 'break-word',

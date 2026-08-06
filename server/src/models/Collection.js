@@ -19,7 +19,10 @@ const StyleImageSchema = new mongoose.Schema({
 // Voice Schema (same as in Comic)
 const VoiceSchema = new mongoose.Schema({
   name: String,
-  voiceId: String
+  voiceId: String,
+  // Saved ElevenLabs settings for this voice (model, stability, similarity_boost,
+  // style, speed) — auto-applied whenever the voice is picked in this collection.
+  settings: mongoose.Schema.Types.Mixed
 }, { _id: false });
 
 // Collection Schema
@@ -34,6 +37,8 @@ const CollectionSchema = new mongoose.Schema({
   coverContrast: { type: Number, default: 1 },
   coverSaturation: { type: Number, default: 1 },
   voices: [VoiceSchema],
+  // Shared Notes panel text — every comic in the collection reads/writes this.
+  notes: String,
   promptSettings: {
     styleBible: String,
     styleBibleImages: [StyleImageSchema],

@@ -37,10 +37,12 @@ async function cropAndSaveScene(sourceImagePath, outputPath, region, imageWidth,
 }
 
 // Convert a source image to JPEG and save to outputPath.
-// Caps width at maxWidth (default 1024) so exported art matches the reader's
-// display resolution — the raw AI masters are 2048px, which is 4× the pixels a
-// phone ever shows and bloats the download bundle for no visible benefit.
-async function convertToJpeg(sourcePath, outputPath, maxWidth = 1024) {
+// Caps width at maxWidth so exported art doesn't ship the raw 2048px masters.
+// 1536 (was 1024): at 1024 the thin bubble-text strokes lost half their
+// resolution and read as soft GREY on a retina phone instead of crisp black.
+// 1536 restores legibility at ~56% of the full-res bundle weight — affordable
+// now that downloads are served from the dual-region CDN.
+async function convertToJpeg(sourcePath, outputPath, maxWidth = 1536) {
   let pipe = sharp(sourcePath);
   if (maxWidth) pipe = pipe.resize(maxWidth, null, { withoutEnlargement: true });
   await pipe.jpeg({ quality: 85 }).toFile(outputPath);
@@ -126,6 +128,34 @@ const getDefaultPromptTemplates = () => ({
   globalDoNot: '',
   hardNegatives: ''
 });
+
+// Page image files are NAMED by page number (comic-x_p5.png etc.), so any
+// page renumbering MUST also rename the files and rewrite the page's stored
+// paths — otherwise a renumbered page keeps pointing at its old-number file,
+// and the next art generation for that number OVERWRITES it (the cascading
+// duplicate-pages bug when inserting a page mid-comic).
+async function shiftPageNumberTag(comicId, page, fromTag, toTag) {
+  const imagesDir = path.join(PROJECTS_DIR, comicId, 'images');
+  const prefix = `${comicId}${fromTag}`;   // e.g. comic-x_p5
+  let entries = [];
+  try { entries = await fs.readdir(imagesDir); } catch (e) { /* no images dir yet */ }
+  for (const name of entries) {
+    // Boundary check: _p5 must not match _p50 (next char must be . or _)
+    if (name.startsWith(prefix) && /[._]/.test(name[prefix.length] || '')) {
+      const newName = `${comicId}${toTag}` + name.slice(prefix.length);
+      try { await fs.rename(path.join(imagesDir, name), path.join(imagesDir, newName)); } catch (e) {}
+    }
+  }
+  const re = new RegExp(`${comicId}${fromTag}(?=[._])`, 'g');
+  const fix = (v) => (typeof v === 'string' && v) ? v.replace(re, `${comicId}${toTag}`) : v;
+  for (const f of ['masterImage', 'originalMasterImage', 'bakedImage', 'emptyBubblesImage', 'noFloatImage']) {
+    page[f] = fix(page[f]);
+  }
+  for (const panel of page.panels || []) {
+    panel.artworkImage = fix(panel.artworkImage);
+    panel.bakedCropImage = fix(panel.bakedCropImage);
+  }
+}
 
 // Get all comic projects
 router.get('/', async (req, res) => {
@@ -292,12 +322,17 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
     const comicObj = comic.toObject();
-    // If comic belongs to a collection, use collection voices
+    // If comic belongs to a collection, use collection voices and shared notes
     if (comic.collectionId) {
       const Collection = require('../models/Collection');
       const collection = await Collection.findOne({ id: comic.collectionId });
       if (collection?.voices?.length > 0) {
         comicObj.voices = collection.voices;
+      }
+      // Notes are shared across the collection ('' counts as set — emptying the
+      // panel must not resurrect a comic's stale pre-migration notes).
+      if (collection && collection.notes != null) {
+        comicObj.notes = collection.notes;
       }
     }
     res.json(comicObj);
@@ -356,6 +391,32 @@ router.put('/:id', async (req, res) => {
     // could accidentally overwrite the collection's voice config.
     if (updateData.voices && (updateData.pages || updateData.cover)) {
       delete updateData.voices;
+    }
+
+    // Whole-comic saves built from stale client state can carry a cover object
+    // whose bakedImage predates the latest bake (that field is written server-
+    // side at bake time) — never let them blank it while the art is unchanged.
+    if (updateData.cover) {
+      const existing = await Comic.findOne({ id: req.params.id }, { cover: 1 });
+      if (existing?.cover?.bakedImage && !updateData.cover.bakedImage &&
+          (updateData.cover.image || '').split('?')[0] === (existing.cover.image || '').split('?')[0]) {
+        updateData.cover.bakedImage = existing.cover.bakedImage;
+      }
+    }
+
+    // Notes-panel saves ({ notes } as the primary payload) on a collection
+    // comic go to the collection, so all episodes share one notes pad.
+    if (updateData.notes != null && !updateData.pages && !updateData.cover) {
+      const existingComic = await Comic.findOne({ id: req.params.id });
+      if (existingComic?.collectionId) {
+        const Collection = require('../models/Collection');
+        await Collection.findOneAndUpdate(
+          { id: existingComic.collectionId },
+          { $set: { notes: updateData.notes } },
+          { upsert: true }
+        );
+        delete updateData.notes;
+      }
     }
 
     // If updating voices and comic belongs to a collection, save to collection instead
@@ -478,12 +539,16 @@ router.post('/:id/pages', async (req, res) => {
       // Find the insertion array index BEFORE renumbering
       const insertIdx = comic.pages.findIndex(p => p.pageNumber === afterPageNumber + 1);
 
-      // Renumber all pages that come after the insertion point
-      comic.pages.forEach(p => {
-        if (p.pageNumber > afterPageNumber) {
-          p.pageNumber += 1;
-        }
-      });
+      // Renumber all pages after the insertion point — files included.
+      // Highest number first so p9→p10 happens before p8→p9 (no collisions).
+      const shifting = comic.pages
+        .filter(p => p.pageNumber > afterPageNumber)
+        .sort((a, b) => b.pageNumber - a.pageNumber);
+      for (const p of shifting) {
+        await shiftPageNumberTag(req.params.id, p, `_p${p.pageNumber}`, `_p${p.pageNumber + 1}`);
+        p.pageNumber += 1;
+      }
+      comic.markModified('pages');
 
       // Insert at the correct position in the array
       if (insertIdx >= 0) {
@@ -500,6 +565,45 @@ router.post('/:id/pages', async (req, res) => {
     await comic.save();
 
     res.json(page);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reorder pages. Body: { pageIds: [...] } — every page id exactly once, in the
+// desired order. Reassigns pageNumber 1..N to match. Stored image/audio paths
+// live on the page documents, so they follow their page; files baked later
+// simply pick up the new number.
+router.post('/:id/pages/reorder', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) {
+      return res.status(404).json({ error: 'Comic not found' });
+    }
+    const { pageIds } = req.body || {};
+    const byId = new Map(comic.pages.map(p => [p.id, p]));
+    if (!Array.isArray(pageIds) || pageIds.length !== comic.pages.length ||
+        new Set(pageIds).size !== pageIds.length || pageIds.some(pid => !byId.has(pid))) {
+      return res.status(400).json({ error: 'pageIds must list every page id exactly once' });
+    }
+    // Arbitrary permutation: rename via temporary tags so swaps (p2<->p3)
+    // can't collide, then settle on the final numbers.
+    const changes = [];
+    pageIds.forEach((pid, i) => {
+      const p = byId.get(pid);
+      if (p.pageNumber !== i + 1) changes.push({ p, from: p.pageNumber, to: i + 1 });
+    });
+    for (const c of changes) {
+      await shiftPageNumberTag(req.params.id, c.p, `_p${c.from}`, `_ptmp${c.to}`);
+    }
+    for (const c of changes) {
+      await shiftPageNumberTag(req.params.id, c.p, `_ptmp${c.to}`, `_p${c.to}`);
+      c.p.pageNumber = c.to;
+    }
+    comic.pages = pageIds.map(pid => byId.get(pid));
+    comic.markModified('pages');
+    await comic.save();
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -640,7 +744,7 @@ router.patch('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
     }
 
     // Merge provided fields onto the panel
-    const allowedFields = ['artworkImage', 'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation', 'refImages', 'annotations'];
+    const allowedFields = ['artworkImage', 'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation', 'refImages', 'annotations', 'memory'];
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         panel[field] = req.body[field];
@@ -699,18 +803,42 @@ router.put('/:id/cover', async (req, res) => {
 
           const coverFilename = `${sanitizedTitle}_cover.png`;
           const coverImagePath = path.join(imagesDir, coverFilename);
-          await fs.copyFile(sourceImagePath, coverImagePath);
+          // Skip the copy when the incoming path IS already the canonical cover
+          // file: copying a file onto itself only bumps its mtime — which made
+          // the export's "is the baked cover fresh?" heuristic decide the bake
+          // was stale after ANY ordinary cover save, exporting bubble-less covers.
+          // "Did the art actually change?" must compare CONTENT, not paths:
+          // the same cover art legitimately lives under several filenames
+          // (id-based from generation saves, title-based canonical), so a
+          // path-inequality test cleared the bake on every ordinary save that
+          // referenced the other name — the recurring bubble-less cover again.
+          let artChanged = true;
+          if (path.resolve(sourceImagePath) === path.resolve(coverImagePath)) {
+            artChanged = false;
+          } else {
+            try {
+              const [src, dst] = await Promise.all([
+                fs.readFile(sourceImagePath), fs.readFile(coverImagePath)
+              ]);
+              artChanged = !src.equals(dst);
+            } catch (e) { /* canonical missing → genuinely new art */ }
+          }
+          if (artChanged) {
+            await fs.copyFile(sourceImagePath, coverImagePath);
+            // New art → any existing bake is stale. Clear the DB field AND
+            // delete the baked file, so nothing downstream can ever pick an
+            // old title-bubble render over the new art.
+            comic.cover.bakedImage = '';
+            await deleteFileIfExists(path.join(imagesDir, `${req.params.id}_cover_baked.png`));
+          }
           comic.cover.image = `/projects/${req.params.id}/images/${coverFilename}`;
 
           const coverSceneFilename = `${sanitizedTitle}_cover_s1.png`;
           const coverSceneImagePath = path.join(imagesDir, coverSceneFilename);
-          await fs.copyFile(sourceImagePath, coverSceneImagePath);
-          comic.cover.sceneImage = `/projects/${req.params.id}/images/${coverSceneFilename}`;
-
-          // Clear stale baked image when a new upload replaces the cover
-          if (cleanImage.startsWith('/uploads/')) {
-            comic.cover.bakedImage = '';
+          if (path.resolve(sourceImagePath) !== path.resolve(coverSceneImagePath)) {
+            await fs.copyFile(sourceImagePath, coverSceneImagePath);
           }
+          comic.cover.sceneImage = `/projects/${req.params.id}/images/${coverSceneFilename}`;
 
           console.log(`Saved cover images: ${coverFilename}, ${coverSceneFilename}`);
         } catch (err) {
@@ -796,20 +924,28 @@ router.post('/:id/export-full', async (req, res) => {
     const projectAudioDir = path.join(PROJECTS_DIR, req.params.id, 'audio');
 
     if (comicObj.cover?.image) {
-      let coverImage = comicObj.cover.bakedImage || comicObj.cover.image;
-      // The cover's baked file (art + title bubble) is created reliably by the
-      // editor, but the `cover.bakedImage` DB field doesn't always persist (race
-      // with cover re-saves). So prefer the baked file on disk when it's at least
-      // as new as the cover art — this is what reliably includes the title bubble.
-      try {
-        const bakedDiskPath = path.join(PROJECTS_DIR, req.params.id, 'images', `${req.params.id}_cover_baked.png`);
-        const srcDiskPath = path.join(__dirname, '../..', (comicObj.cover.image || '').split('?')[0]);
-        const [bakedStat, srcStat] = await Promise.all([fs.stat(bakedDiskPath), fs.stat(srcDiskPath)]);
-        if (bakedStat.mtimeMs >= srcStat.mtimeMs) {
-          coverImage = `/projects/${req.params.id}/images/${req.params.id}_cover_baked.png`;
-        }
-      } catch (e) {
-        // No baked file (or art missing) — fall back to the chosen coverImage.
+      // The recorded bake is authoritative: cover.bakedImage is written
+      // atomically when the bake file is saved and cleared whenever the art is
+      // replaced — no more mtime guessing (which mis-fired on ordinary saves
+      // and produced the recurring bubble-less cover exports).
+      let coverImage = comicObj.cover.image;
+      if (comicObj.cover.bakedImage) {
+        const cleanBaked = comicObj.cover.bakedImage.split('?')[0];
+        try {
+          await fs.access(path.join(__dirname, '../..', cleanBaked));
+          coverImage = cleanBaked;
+        } catch (e) { /* baked file gone — use the art */ }
+      } else {
+        // Legacy comics baked before the field was recorded reliably: fall back
+        // to the old freshness heuristic once; any new bake records the field.
+        try {
+          const bakedDiskPath = path.join(PROJECTS_DIR, req.params.id, 'images', `${req.params.id}_cover_baked.png`);
+          const srcDiskPath = path.join(__dirname, '../..', (comicObj.cover.image || '').split('?')[0]);
+          const [bakedStat, srcStat] = await Promise.all([fs.stat(bakedDiskPath), fs.stat(srcDiskPath)]);
+          if (bakedStat.mtimeMs >= srcStat.mtimeMs) {
+            coverImage = `/projects/${req.params.id}/images/${req.params.id}_cover_baked.png`;
+          }
+        } catch (e) { /* no baked file — use the art */ }
       }
       const cleanCoverImage = coverImage.split('?')[0];
       const coverSourcePath = path.join(__dirname, '../..', cleanCoverImage);
@@ -1266,9 +1402,17 @@ router.delete('/:id/pages/:pageId', async (req, res) => {
 
     comic.pages.splice(pageIndex, 1);
 
-    comic.pages.forEach((p, idx) => {
-      p.pageNumber = idx + 1;
-    });
+    // Renumber sequentially — renaming each page's files along (lowest first:
+    // p7→p6 before p8→p7, so shifts down never collide).
+    for (let idx = 0; idx < comic.pages.length; idx++) {
+      const p = comic.pages[idx];
+      const to = idx + 1;
+      if (p.pageNumber !== to) {
+        await shiftPageNumberTag(req.params.id, p, `_p${p.pageNumber}`, `_p${to}`);
+        p.pageNumber = to;
+      }
+    }
+    comic.markModified('pages');
 
     await comic.save();
 
@@ -1567,6 +1711,67 @@ router.post('/mirror-bundles', async (req, res) => {
     res.json({ mirrored: results.filter(r => r.ok).length, total: results.length, results });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Language Review "Implement": swap in the corrected source-language text and
+// generate a fresh English translation to match. Updates EVERY sentence on the
+// page with the same original text (chat-style duplicate bubbles stay in sync).
+// Audio regeneration is left to the user.
+router.post('/:id/apply-language-fix', async (req, res) => {
+  try {
+    const { pageId, originalText, correctedText } = req.body || {};
+    if (!pageId || !originalText || !correctedText) {
+      return res.status(400).json({ error: 'pageId, originalText and correctedText are required' });
+    }
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    const page = comic.pages.find(p => p.id === pageId);
+    if (!page) return res.status(404).json({ error: 'Page not found' });
+
+    // Translate the corrected text
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    }
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-5.5',
+      messages: [
+        { role: 'system', content: `You translate ${comic.language === 'es' ? 'Spanish' : comic.language} comic dialogue into natural, conversational English for language learners. Reply with ONLY the translation — no quotes, no commentary.` },
+        { role: 'user', content: correctedText }
+      ],
+      max_completion_tokens: 300
+    });
+    const translation = (completion.choices[0].message.content || '').trim();
+    if (!translation) return res.status(500).json({ error: 'Translation came back empty' });
+
+    let updated = 0;
+    let firstBubbleId = null;
+    const bubbleNumbers = [];   // 1-based positions in the page's bubble list
+    (page.bubbles || []).forEach((bubble, bi) => {
+      let touched = false;
+      for (const sentence of bubble.sentences || []) {
+        if (sentence.text === originalText) {
+          sentence.text = correctedText;
+          sentence.translation = translation;
+          updated++;
+          touched = true;
+        }
+      }
+      if (touched) {
+        if (!firstBubbleId) firstBubbleId = bubble.id;
+        bubbleNumbers.push(bi + 1);
+      }
+    });
+    if (updated === 0) {
+      return res.status(404).json({ error: 'No sentence with that exact text found on the page (was it already edited?)' });
+    }
+    comic.markModified('pages');
+    await comic.save();
+    res.json({ updated, bubbleId: firstBubbleId, bubbleNumbers, translation });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

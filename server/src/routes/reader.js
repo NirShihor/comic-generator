@@ -388,7 +388,9 @@ router.get('/cover-thumbnail/:id', async (req, res) => {
       .toBuffer();
 
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'no-cache');
+    // Cacheable for an hour: covers change rarely (on re-export), and a
+    // cached success means a transient fetch failure can't blank the cover.
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     res.send(thumbnail);
   } catch (error) {
     console.error('Cover thumbnail error:', error);
@@ -425,7 +427,9 @@ router.get('/collection-thumbnail/:collectionId', async (req, res) => {
       .toBuffer();
 
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'no-cache');
+    // Cacheable for an hour: covers change rarely (on re-export), and a
+    // cached success means a transient fetch failure can't blank the cover.
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     res.send(thumbnail);
   } catch (error) {
     console.error('Collection thumbnail error:', error);

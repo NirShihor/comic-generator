@@ -142,6 +142,8 @@ function transformToReaderFormat(comic, comicSlug) {
             type: bubble.type || 'narration',
             ...(bubble.fontSize && { fontSize: bubble.fontSize }),
             ...(bubble.bgTransparent && { bgTransparent: true }),
+              ...(bubble.hidden && { hidden: true }),
+              ...(typeof bubble.highlightWash === 'boolean' && { highlightWash: bubble.highlightWash }),
             position: {
               x: bubble.x,
               y: bubble.y,
@@ -255,6 +257,12 @@ function transformToReaderFormat(comic, comicSlug) {
         ...(hotspot.pulseTint && { pulseTint: hotspot.pulseTint }),
         ...(hotspot.label && { label: hotspot.label }),
         ...(hotspot.borderColor && { borderColor: hotspot.borderColor }),
+        ...(hotspot.displayStyle === 'button' && { displayStyle: 'button' }),
+        ...(hotspot.buttonLabel && { buttonLabel: hotspot.buttonLabel }),
+        ...(hotspot.advanceOnClose && { advanceOnClose: true }),
+        // Temporary: generator bubble id — swapped for the READER bubble id
+        // below, once panel export has assigned reader ids.
+        ...(hotspot.triggerBubbleId && { _triggerGenBubbleId: hotspot.triggerBubbleId }),
         slides: (hotspot.slides || []).map((slide, sIdx) => {
           const slideWords = (slide.words || []).map((word) => {
             const wText = sanitizeWordForFilename(word.text);
@@ -284,6 +292,41 @@ function transformToReaderFormat(comic, comicSlug) {
       };
     });
 
+    // Decide which panel OWNS each bubble — floating panels win, then any
+    // panel containing the bubble's centre, then the NEAREST panel. Previously
+    // a bubble whose centre fell just outside every panel was silently DROPPED
+    // from the export (and the editor numbered it last).
+    const ownerEligible = (page.panels || []).filter(p => !p.skipInReader);
+    const ownerCornersMap = new Map(ownerEligible.map(p => [p, computePanelCorners(p, page.lines)]));
+    const ownerPriority = [...ownerEligible].sort((a, b) => ((b.floating ? 1 : 0) - (a.floating ? 1 : 0)));
+    const bubbleOwner = new Map();   // bubbleKey -> panel
+    for (const bubble of (page.bubbles || [])) {
+      const bx = bubble.x || 0, by = bubble.y || 0, bw = bubble.width || 0, bh = bubble.height || 0;
+      const bcx = bx + bw / 2, bcy = by + bh / 2;
+      const bKey = bubble._id?.toString() || `${bx}-${by}`;
+      const centreIn = (panel) => {
+        const pc = ownerCornersMap.get(panel);
+        if (pc) return pointInPolygon(bcx, bcy, pc);
+        const t = panel.tapZone;
+        return bcx >= t.x && bcx < t.x + t.width && bcy >= t.y && bcy < t.y + t.height;
+      };
+      let owner = ownerPriority.find(p => centreIn(p)
+        && !(!p.floating && pageHasFloating && claimedBubbleIds.has(bKey)));
+      if (!owner) {
+        let bestD = Infinity;
+        for (const p of ownerEligible) {
+          const t = p.tapZone || { x: 0, y: 0, width: 1, height: 1 };
+          const cx = t.x + t.width / 2, cy = t.y + t.height / 2;
+          const d = (bcx - cx) ** 2 + (bcy - cy) ** 2;
+          if (d < bestD) { bestD = d; owner = p; }
+        }
+      }
+      if (owner) bubbleOwner.set(bKey, owner);
+    }
+
+    // generator bubble id -> reader bubble id (for hotspot button triggers)
+    const bubbleIdMap = new Map();
+
     const exportedPage = {
       id: `${comicSlug}-page-${page.pageNumber}`,
       pageNumber: pageNum,
@@ -302,41 +345,27 @@ function transformToReaderFormat(comic, comicSlug) {
         const hasBakedPage = page.bakedImage && page.masterImage && page.bakedImage !== page.masterImage;
         const panelCorners = computePanelCorners(panel, page.lines);
 
-        // Check if bubble center falls inside the panel (using actual corners for diagonal edges)
-        const panelBubbles = (page.bubbles || []).filter(bubble => {
-          const bx = bubble.x || 0;
-          const by = bubble.y || 0;
-          const bw = bubble.width || 0;
-          const bh = bubble.height || 0;
-          const bcx = bx + bw / 2;
-          const bcy = by + bh / 2;
-
-          if (panelCorners) {
-            // Use point-in-polygon test for panels with diagonal edges
-            if (!pointInPolygon(bcx, bcy, panelCorners)) return false;
-          } else {
-            // Rectangular panel — simple bounds check
-            const tx = panel.tapZone.x;
-            const ty = panel.tapZone.y;
-            const tw = panel.tapZone.width;
-            const th = panel.tapZone.height;
-            const contains = bcx >= tx && bcx < tx + tw && bcy >= ty && bcy < ty + th;
-            if (!contains) return false;
-          }
-          // For background panels, skip bubbles already claimed by a floating panel
-          if (!panel.floating && pageHasFloating) {
-            const bubbleKey = bubble._id?.toString() || `${bx}-${by}`;
-            if (claimedBubbleIds.has(bubbleKey)) return false;
-          }
-          return true;
-        }).sort((a, b) => {
-          // Sort by reading order: top-to-bottom, left-to-right as tiebreaker
-          const ay = a.y || 0;
-          const by_ = b.y || 0;
-          const ax = a.x || 0;
-          const bx = b.x || 0;
+        // Bubbles owned by this panel (assignment precomputed above, nearest-
+        // panel fallback included), in reading order. A bubble with a manual
+        // orderIndex takes that position within the panel; the rest keep the
+        // automatic top-to-bottom, left-to-right order.
+        const geoCmp = (a, b) => {
+          const ay = a.y || 0, by_ = b.y || 0, ax = a.x || 0, bx = b.x || 0;
           if (Math.abs(ay - by_) < 0.02) return ax - bx; // Same row: left to right
           return ay - by_; // Top to bottom
+        };
+        const owned = (page.bubbles || []).filter(bubble =>
+          bubbleOwner.get(bubble._id?.toString() || `${bubble.x || 0}-${bubble.y || 0}`) === panel);
+        const geoSorted = [...owned].sort(geoCmp);
+        const autoRank = new Map(geoSorted.map((b, i) => [b, i + 1]));
+        const panelBubbles = geoSorted.slice().sort((a, b) => {
+          const ka = a.orderIndex != null ? a.orderIndex : autoRank.get(a);
+          const kb = b.orderIndex != null ? b.orderIndex : autoRank.get(b);
+          if (ka !== kb) return ka - kb;
+          const ma = a.orderIndex != null ? 0 : 1;   // manual wins a tied number
+          const mb = b.orderIndex != null ? 0 : 1;
+          if (ma !== mb) return ma - mb;
+          return geoCmp(a, b);
         });
 
         // Use a distinct suffix for floating panels to avoid ID collisions
@@ -360,12 +389,15 @@ function transformToReaderFormat(comic, comicSlug) {
           },
           bubbles: panelBubbles.map(bubble => {
             const bubbleId = `${comicSlug}-bubble-${page.pageNumber}-${panelNum}-${bubbleCounter++}`;
+            if (bubble.id) bubbleIdMap.set(bubble.id, bubbleId);
             return {
               id: bubbleId,
               type: bubble.type || 'speech',
               ...(bubble.fontSize && { fontSize: bubble.fontSize }),
               ...(bubble.isSoundEffect && { isSoundEffect: true }),
               ...(bubble.bgTransparent && { bgTransparent: true }),
+              ...(bubble.hidden && { hidden: true }),
+              ...(typeof bubble.highlightWash === 'boolean' && { highlightWash: bubble.highlightWash }),
               ...(bubble.imageUrl && { imageUrl: bubble.imageUrl }),
               ...(bubble.backgroundImageUrl && { backgroundImageUrl: bubble.backgroundImageUrl }),
               position: {
@@ -439,6 +471,15 @@ function transformToReaderFormat(comic, comicSlug) {
         };
       }).filter(p => !p.floating || p.bubbles.length > 0)
     };
+    // Resolve hotspot button triggers now that reader bubble ids exist.
+    for (const h of exportedPage.hotspots || []) {
+      if (h._triggerGenBubbleId) {
+        const mapped = bubbleIdMap.get(h._triggerGenBubbleId);
+        if (mapped) h.triggerBubbleId = mapped;
+        delete h._triggerGenBubbleId;
+      }
+    }
+
     pages.push(exportedPage);
   }
 

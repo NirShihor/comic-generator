@@ -45,6 +45,7 @@ function ComicEditor() {
   const [coverLandscapeZoom, setCoverLandscapeZoom] = useState(1);
   const [coverLandscapeCropX, setCoverLandscapeCropX] = useState(0);
   const [coverLandscapeCropY, setCoverLandscapeCropY] = useState(0);
+  const [coverLandscapeRefinePrompt, setCoverLandscapeRefinePrompt] = useState('');
   const coverLandscapeAdjTimer = useRef(null);
   const [refLightbox, setRefLightbox] = useState(null);  // reference image path to enlarge
   const [settingsTab, setSettingsTab] = useState('style');
@@ -60,6 +61,10 @@ function ComicEditor() {
   const [wordAudioGenerating, setWordAudioGenerating] = useState(false);
   const [wordAudioProgress, setWordAudioProgress] = useState(null);
   const [wordAudioForceRegenerate, setWordAudioForceRegenerate] = useState(false);
+  const [wordFormsForceRegenerate, setWordFormsForceRegenerate] = useState(false);
+  // English-audio audit (missing EN audio per bubble)
+  const [enAudioChecking, setEnAudioChecking] = useState(false);
+  const [enAudioCheck, setEnAudioCheck] = useState(null);
   const [wordFormsGenerating, setWordFormsGenerating] = useState(false);
   const [wordFormsResult, setWordFormsResult] = useState(null);
   const [grammarNotesGenerating, setGrammarNotesGenerating] = useState(false);
@@ -115,6 +120,12 @@ function ComicEditor() {
   const [styleSheetGallery, setStyleSheetGallery] = useState([]);
   const [styleSheetDescribing, setStyleSheetDescribing] = useState([]); // ref paths currently being analyzed
   const styleSheetAbortRef = useRef(null); // cancels an in-flight generation
+  const [styleSheetRefineTexts, setStyleSheetRefineTexts] = useState({}); // item.path -> refine instruction
+  // "From comics" picker: pull a panel/page image from a collection comic as a style ref
+  const [styleSheetPickerOpen, setStyleSheetPickerOpen] = useState(false);
+  const [styleSheetPickerComics, setStyleSheetPickerComics] = useState(null); // null = not fetched yet
+  const [styleSheetPickerComicId, setStyleSheetPickerComicId] = useState(null);
+  const [styleSheetPickerBusy, setStyleSheetPickerBusy] = useState(false);
   // Voice Library (browse ElevenLabs voices, preview, save to Voices)
   const [voiceLib, setVoiceLib] = useState([]);
   const [voiceLibLoaded, setVoiceLibLoaded] = useState(false);
@@ -155,6 +166,7 @@ function ComicEditor() {
 
   // Language tab state
   const [languageResults, setLanguageResults] = useState([]);
+  const [implementedFixes, setImplementedFixes] = useState({});   // idx -> { status: 'busy'|'done'|'error', translation? }
   const [languageScanning, setLanguageScanning] = useState(false);
   const [languageScanProgress, setLanguageScanProgress] = useState({ current: 0, total: 0 });
   const [languageProvider, setLanguageProvider] = useState('openai');
@@ -219,6 +231,16 @@ function ComicEditor() {
     try {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
+
+      // Restore the persisted Language Review scan (results survive reloads).
+      if (response.data.languageReview?.results?.length) {
+        setLanguageResults(response.data.languageReview.results);
+        const impl = {};
+        response.data.languageReview.results.forEach((r, i) => {
+          if (r.implemented) impl[i] = { status: 'done', translation: r.implemented.translation };
+        });
+        setImplementedFixes(impl);
+      }
 
       // Load the per-comic landscape cover (reader detail-view banner)
       setCoverLandscapeImage(response.data.cover?.landscapeImage || '');
@@ -289,6 +311,25 @@ function ComicEditor() {
       console.error('Failed to load comic:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Drag-and-drop page reordering (Pages tab)
+  const [dragPageId, setDragPageId] = useState(null);
+  const [dragOverPageId, setDragOverPageId] = useState(null);
+
+  const reorderPages = async (draggedId, targetId) => {
+    if (!draggedId || !targetId || draggedId === targetId) return;
+    const ordered = [...comic.pages].sort((a, b) => a.pageNumber - b.pageNumber).map(p => p.id);
+    const from = ordered.indexOf(draggedId);
+    const to = ordered.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    ordered.splice(to, 0, ordered.splice(from, 1)[0]);
+    try {
+      await api.post(`/comics/${id}/pages/reorder`, { pageIds: ordered });
+      await loadComic();
+    } catch (error) {
+      alert('Failed to reorder pages: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -814,10 +855,46 @@ function ComicEditor() {
     e.target.value = '';
   };
 
-  // Style Sheet: upload an image to use as a locked style reference. Persists in
-  // promptSettings.styleSheetImages (on the comic or collection, like other refs).
-  // On upload we auto-analyze the image into a reusable ART-STYLE prompt that gets
-  // injected when generating subsequent images in the series.
+  // Style Sheet: add an image (base64) as a locked style reference. Persists in
+  // promptSettings.styleSheetImages (on the comic or collection, like other refs),
+  // then auto-analyzes the image into a reusable ART-STYLE prompt that gets
+  // injected when generating subsequent images in the series. Shared by the
+  // file-upload path and the "From comics" picker.
+  const styleSheetAddBase64 = async (base64) => {
+    const savePayload = { image: base64 };
+    if (settingsSource === 'collection' && settingsCollectionId) {
+      savePayload.collectionId = settingsCollectionId;
+    } else {
+      savePayload.comicId = id;
+    }
+    const resp = await api.post('/images/save-reference', savePayload);
+    const newPath = resp.data.path;
+    setSettings(prev => {
+      const updated = { ...prev, styleSheetImages: [...(prev.styleSheetImages || []), { path: newPath, stylePrompt: '' }] };
+      saveSettings(updated, true);
+      return updated;
+    });
+    // Analyze the art style in the background, then persist the prompt.
+    setStyleSheetDescribing(prev => [...prev, newPath]);
+    try {
+      const styleResp = await api.post('/chat/describe-style', { image: base64 }, { timeout: 120000 });
+      const stylePrompt = styleResp.data.stylePrompt || '';
+      setSettings(prev => {
+        const updated = {
+          ...prev,
+          styleSheetImages: (prev.styleSheetImages || []).map(r =>
+            r.path === newPath ? { ...r, stylePrompt } : r)
+        };
+        saveSettings(updated, true);
+        return updated;
+      });
+    } catch (err) {
+      alert('Style analysis failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setStyleSheetDescribing(prev => prev.filter(p => p !== newPath));
+    }
+  };
+
   const styleSheetUploadRef = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -825,44 +902,54 @@ function ComicEditor() {
     reader.onload = async (event) => {
       const base64 = event.target.result.split(',')[1];
       try {
-        const savePayload = { image: base64 };
-        if (settingsSource === 'collection' && settingsCollectionId) {
-          savePayload.collectionId = settingsCollectionId;
-        } else {
-          savePayload.comicId = id;
-        }
-        const resp = await api.post('/images/save-reference', savePayload);
-        const newPath = resp.data.path;
-        setSettings(prev => {
-          const updated = { ...prev, styleSheetImages: [...(prev.styleSheetImages || []), { path: newPath, stylePrompt: '' }] };
-          saveSettings(updated, true);
-          return updated;
-        });
-        // Analyze the art style in the background, then persist the prompt.
-        setStyleSheetDescribing(prev => [...prev, newPath]);
-        try {
-          const styleResp = await api.post('/chat/describe-style', { image: base64 }, { timeout: 120000 });
-          const stylePrompt = styleResp.data.stylePrompt || '';
-          setSettings(prev => {
-            const updated = {
-              ...prev,
-              styleSheetImages: (prev.styleSheetImages || []).map(r =>
-                r.path === newPath ? { ...r, stylePrompt } : r)
-            };
-            saveSettings(updated, true);
-            return updated;
-          });
-        } catch (err) {
-          alert('Style analysis failed: ' + (err.response?.data?.error || err.message));
-        } finally {
-          setStyleSheetDescribing(prev => prev.filter(p => p !== newPath));
-        }
+        await styleSheetAddBase64(base64);
       } catch (error) {
         alert('Upload failed: ' + (error.response?.data?.error || error.message));
       }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  };
+
+  // "From comics": browse the collection's comics and grab a panel / page image
+  // as a style reference — same pipeline as an upload from disk.
+  const openStyleSheetPicker = async () => {
+    setStyleSheetPickerOpen(true);
+    if (styleSheetPickerComics) return;   // already fetched this session
+    try {
+      const res = await api.get('/comics');
+      let list = res.data || [];
+      if (comic?.collectionId) {
+        const sameCollection = list.filter(c => c.collectionId === comic.collectionId);
+        if (sameCollection.length) list = sameCollection;
+      }
+      list.sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0));
+      setStyleSheetPickerComics(list);
+      // Default to a sibling comic — pulling style from the one being edited is rarer.
+      setStyleSheetPickerComicId((list.find(c => c.id !== id) || list[0])?.id || null);
+    } catch (err) {
+      setStyleSheetPickerOpen(false);
+      alert('Failed to load comics: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const styleSheetPickFromComic = async (imgPath) => {
+    setStyleSheetPickerBusy(true);
+    try {
+      const imgResp = await fetch(`${imgPath}`);
+      const blob = await imgResp.blob();
+      const base64 = await new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result.split(',')[1]);
+        r.readAsDataURL(blob);
+      });
+      setStyleSheetPickerOpen(false);
+      await styleSheetAddBase64(base64);
+    } catch (err) {
+      alert('Failed to add reference: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setStyleSheetPickerBusy(false);
+    }
   };
 
   const styleSheetRemoveRef = (imgPath) => {
@@ -955,6 +1042,7 @@ function ComicEditor() {
         refsLoaded: response.data.refsLoaded,
         mode: styleSheetMode,
         provider: styleSheetProvider,
+        aspect: styleSheetAspect,
         timestamp: Date.now()
       };
       setStyleSheetGallery(prev => [newItem, ...prev]);
@@ -971,6 +1059,45 @@ function ComicEditor() {
 
   const styleSheetStop = () => {
     styleSheetAbortRef.current?.abort();
+  };
+
+  // Refine an existing generated sheet: the sheet itself is the only reference,
+  // and the prompt demands an exact reproduction except for the instruction.
+  const styleSheetRefine = async (item) => {
+    const instruction = (styleSheetRefineTexts[item.path] || '').trim();
+    if (!instruction || styleSheetGenerating) return;
+    const controller = new AbortController();
+    styleSheetAbortRef.current = controller;
+    setStyleSheetGenerating(true);
+    try {
+      const refinePrompt = `REFINEMENT of an existing reference sheet. The attached image IS the current sheet. Reproduce it EXACTLY — same subject, same layout, same panels and poses, same art style, same colours — changing ONLY the following:\n${instruction}\nDo not redesign anything else. Do not change the layout.`;
+      const response = await api.post('/images/generate-stylesheet', {
+        prompt: refinePrompt,
+        provider: styleSheetProvider,
+        aspectRatio: item.aspect || styleSheetAspect,
+        referenceImages: [item.path],
+        openaiQuality: styleSheetQuality
+      }, { timeout: 600000, signal: controller.signal });
+      const newItem = {
+        path: response.data.path,
+        prompt: `[Refine] ${instruction}`,
+        promptSent: response.data.promptSent,
+        refsLoaded: response.data.refsLoaded,
+        mode: item.mode,
+        provider: styleSheetProvider,
+        aspect: item.aspect || styleSheetAspect,
+        timestamp: Date.now()
+      };
+      setStyleSheetGallery(prev => [newItem, ...prev]);
+      setStyleSheetRefineTexts(prev => ({ ...prev, [item.path]: '' }));
+    } catch (error) {
+      if (error.code !== 'ERR_CANCELED' && error.name !== 'CanceledError') {
+        alert('Refine failed: ' + (error.response?.data?.error || error.message));
+      }
+    } finally {
+      styleSheetAbortRef.current = null;
+      setStyleSheetGenerating(false);
+    }
   };
 
   // --- Voice Library ---
@@ -1102,16 +1229,49 @@ function ComicEditor() {
     return resp.data.path;
   };
 
+  // After saving a generated sheet into Prompt Settings, replace the entry's
+  // description (initially the user's GENERATION prompt) with a full
+  // describe-image analysis of the sheet. The generation prompt says what was
+  // ASKED FOR ("a nice looking boy from her school"), not the design that came
+  // out — at panel time it carries no wardrobe/colour detail, so characters
+  // drift. field = 'characters' | 'styleBibleImages'.
+  const styleSheetDescribeAndUpdate = async (savedPath, field, entryId) => {
+    try {
+      const imgResp = await fetch(`${savedPath}`);
+      const blob = await imgResp.blob();
+      const base64 = await new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result.split(',')[1]);
+        r.readAsDataURL(blob);
+      });
+      const descResp = await api.post('/chat/describe-image', { image: base64 }, { timeout: 120000 });
+      const desc = descResp.data.message;
+      if (desc) {
+        setSettings(prev => {
+          const updated = {
+            ...prev,
+            [field]: (prev[field] || []).map(e => e.id === entryId ? { ...e, description: desc } : e)
+          };
+          saveSettings(updated, true);
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.warn('Auto-describe failed (kept the generation prompt):', err.message);
+    }
+  };
+
   const styleSheetSaveAsCharacter = async (item) => {
     const name = prompt('Name for this character:');
     if (!name || !name.trim()) return;
     try {
       const savedPath = await styleSheetCopyToProject(item);
+      const entryId = `char-${Date.now()}`;
       setSettings(prev => {
         const updated = {
           ...prev,
           characters: [...(prev.characters || []), {
-            id: `char-${Date.now()}`,
+            id: entryId,
             name: name.trim(),
             description: item.prompt,
             image: savedPath
@@ -1120,7 +1280,8 @@ function ComicEditor() {
         saveSettings(updated, true);
         return updated;
       });
-      alert('Saved to Characters (Prompt Settings).');
+      alert('Saved to Characters (Prompt Settings). Analyzing the sheet now — a detailed description will replace the generation prompt shortly.');
+      styleSheetDescribeAndUpdate(savedPath, 'characters', entryId);
     } catch (error) {
       alert('Failed to save: ' + (error.response?.data?.error || error.message));
     }
@@ -1131,11 +1292,12 @@ function ComicEditor() {
     if (!name || !name.trim()) return;
     try {
       const savedPath = await styleSheetCopyToProject(item);
+      const entryId = `style-img-${Date.now()}`;
       setSettings(prev => {
         const updated = {
           ...prev,
           styleBibleImages: [...(prev.styleBibleImages || []), {
-            id: `style-img-${Date.now()}`,
+            id: entryId,
             name: name.trim(),
             image: savedPath,
             description: item.prompt
@@ -1144,7 +1306,8 @@ function ComicEditor() {
         saveSettings(updated, true);
         return updated;
       });
-      alert('Added to Style Bible (Prompt Settings).');
+      alert('Added to Style Bible (Prompt Settings). Analyzing the sheet now — a detailed description will replace the generation prompt shortly.');
+      styleSheetDescribeAndUpdate(savedPath, 'styleBibleImages', entryId);
     } catch (error) {
       alert('Failed to save: ' + (error.response?.data?.error || error.message));
     }
@@ -1487,6 +1650,9 @@ function ComicEditor() {
 
     setLanguageResults(allResults);
     setLanguageScanning(false);
+    // Persist the scan on the comic — it is expensive to redo.
+    api.put(`/comics/${id}`, { languageReview: { scannedAt: new Date().toISOString(), results: allResults } })
+      .catch(err => console.error('Failed to persist language review:', err));
   };
 
   return (
@@ -1700,12 +1866,38 @@ function ComicEditor() {
               <p style={{ fontWeight: 'bold', color: '#e94560' }}>Cover</p>
             </div>
 
-            {/* Regular Pages (sorted by pageNumber, with insert buttons between) */}
+            {/* Regular Pages (sorted by pageNumber, with insert buttons between).
+                Drag a page onto another to move it there (drop = insert at that spot). */}
             {[...comic.pages].sort((a, b) => a.pageNumber - b.pageNumber).map((page) => (
               <React.Fragment key={page.id}>
                 <div
                   className="page-thumbnail"
-                  style={{ position: 'relative', cursor: 'pointer' }}
+                  draggable
+                  onDragStart={(e) => {
+                    setDragPageId(page.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOverPageId !== page.id) setDragOverPageId(page.id);
+                  }}
+                  onDragLeave={() => setDragOverPageId(prev => (prev === page.id ? null : prev))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    reorderPages(dragPageId, page.id);
+                    setDragPageId(null);
+                    setDragOverPageId(null);
+                  }}
+                  onDragEnd={() => { setDragPageId(null); setDragOverPageId(null); }}
+                  style={{
+                    position: 'relative',
+                    cursor: 'pointer',
+                    opacity: dragPageId === page.id ? 0.4 : 1,
+                    outline: dragOverPageId === page.id && dragPageId !== page.id ? '3px solid #6c3483' : 'none',
+                    outlineOffset: '2px',
+                    borderRadius: '4px'
+                  }}
                   onClick={() => navigate(`/comic/${id}/page/${page.id}`)}
                 >
                   {page.masterImage ? (
@@ -1900,6 +2092,7 @@ function ComicEditor() {
                 <textarea
                   value={settings.styleBible}
                   onChange={(e) => updateSetting('styleBible', e.target.value)}
+                  onBlur={() => saveSettings(settingsRef.current, true)}
                   style={{
                     width: '100%',
                     minHeight: '400px',
@@ -1949,6 +2142,7 @@ function ComicEditor() {
                                   )
                                 }));
                               }}
+                              onBlur={() => saveSettings(settingsRef.current, true)}
                               placeholder="Name (e.g. landscape, building...)"
                               style={{
                                 background: 'transparent',
@@ -1986,15 +2180,33 @@ function ComicEditor() {
                               Remove
                             </button>
                           </div>
-                          <p style={{
-                            color: '#ddd',
-                            fontSize: '0.85rem',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                            margin: 0
-                          }}>
-                            {item.description}
-                          </p>
+                          <textarea
+                            value={item.description || ''}
+                            onChange={(e) => {
+                              setSettings(prev => ({
+                                ...prev,
+                                styleBibleImages: prev.styleBibleImages.map((img, i) =>
+                                  i === index ? { ...img, description: e.target.value } : img
+                                )
+                              }));
+                            }}
+                            onBlur={() => saveSettings(settingsRef.current, true)}
+                            placeholder="Description of this reference (visual facts only — avoid invented names, places or lore)"
+                            style={{
+                              width: '100%',
+                              minHeight: '120px',
+                              padding: '0.5rem',
+                              borderRadius: '4px',
+                              border: '1px solid #333',
+                              background: 'transparent',
+                              color: '#ddd',
+                              fontSize: '0.85rem',
+                              fontFamily: 'inherit',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              resize: 'vertical'
+                            }}
+                          />
                         </div>
                       </div>
                     ))}
@@ -2012,6 +2224,7 @@ function ComicEditor() {
                 <textarea
                   value={settings.cameraInks}
                   onChange={(e) => updateSetting('cameraInks', e.target.value)}
+                  onBlur={() => saveSettings(settingsRef.current, true)}
                   style={{
                     width: '100%',
                     minHeight: '200px',
@@ -2050,6 +2263,7 @@ function ComicEditor() {
                         type="text"
                         value={char.name}
                         onChange={(e) => updateCharacter(index, 'name', e.target.value)}
+                        onBlur={() => saveSettings(settingsRef.current, true)}
                         placeholder="Character name"
                         style={{
                           padding: '0.5rem',
@@ -2090,6 +2304,7 @@ function ComicEditor() {
                     <textarea
                       value={char.description}
                       onChange={(e) => updateCharacter(index, 'description', e.target.value)}
+                      onBlur={() => saveSettings(settingsRef.current, true)}
                       placeholder="Description (appearance, build, clothing, distinguishing features, materials, colors...)"
                       style={{
                         width: '100%',
@@ -2158,6 +2373,7 @@ function ComicEditor() {
                 <textarea
                   value={settings.globalDoNot}
                   onChange={(e) => updateSetting('globalDoNot', e.target.value)}
+                  onBlur={() => saveSettings(settingsRef.current, true)}
                   style={{
                     width: '100%',
                     minHeight: '180px',
@@ -2177,6 +2393,7 @@ function ComicEditor() {
                 <textarea
                   value={settings.hardNegatives}
                   onChange={(e) => updateSetting('hardNegatives', e.target.value)}
+                  onBlur={() => saveSettings(settingsRef.current, true)}
                   style={{
                     width: '100%',
                     minHeight: '150px',
@@ -3022,6 +3239,70 @@ function ComicEditor() {
                   />
                 </label>
 
+                {/* Refine the existing landscape cover: current image is the edit
+                    target, refinement instructions describe the change. */}
+                {coverLandscapeImage && (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.75rem' }}>
+                    <input
+                      type="text"
+                      value={coverLandscapeRefinePrompt}
+                      onChange={(e) => setCoverLandscapeRefinePrompt(e.target.value)}
+                      placeholder="Refinement instructions (e.g. make the sky stormy, remove the second rider...)"
+                      style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.85rem', border: '1px solid #444', borderRadius: '4px', background: 'rgba(255,255,255,0.04)', color: '#ccc' }}
+                    />
+                    <button
+                      className="btn btn-secondary"
+                      disabled={coverLandscapeGenerating || !coverLandscapeRefinePrompt.trim()}
+                      onClick={async () => {
+                        setCoverLandscapeGenerating(true);
+                        try {
+                          let fullPrompt = '';
+                          if (settings.styleBible) fullPrompt += `ART STYLE GUIDE:\n${settings.styleBible}\n\n`;
+                          fullPrompt += `REFINEMENT of the attached landscape banner image. Apply ONLY these changes:\n${coverLandscapeRefinePrompt}\n\n`
+                            + `Keep everything else in the image exactly the same — same composition, characters, colors and art style. `
+                            + `Landscape orientation, full bleed edge to edge, no borders or margins.`;
+
+                          const response = await api.post('/images/generate-panel', {
+                            prompt: fullPrompt,
+                            panelId: `comic-cover-landscape-${id}`,
+                            aspectRatio: 'landscape',
+                            referenceImages: [...coverLandscapeRefs],
+                            linkedPanelImages: [coverLandscapeImage],
+                            isRefinement: true,
+                            provider: 'openai',
+                            openaiQuality: 'high',
+                            hasMasterStyleImage: !!(settings.masterStyleImage && coverLandscapeRefs.includes(settings.masterStyleImage))
+                          }, { timeout: 600000 });
+
+                          const genData = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+                          if (genData.error) throw new Error(genData.error);
+                          if (!genData.path) throw new Error('Image generation did not return a file path');
+
+                          const saveRes = await api.post('/images/save-to-project', {
+                            comicId: id,
+                            filename: genData.path.split('/').pop(),
+                            imageType: 'cover-landscape'
+                          });
+                          const finalPath = `${saveRes.data.path}`;
+                          setCoverLandscapeImage(finalPath);
+                          const updatedCover = { ...(comic.cover || {}), landscapeImage: finalPath };
+                          await api.put(`/comics/${id}`, { cover: updatedCover });
+                          setComic(prev => ({ ...prev, cover: updatedCover }));
+                          setCoverLandscapeRefinePrompt('');
+                        } catch (err) {
+                          console.error('Landscape cover refinement failed:', err);
+                          alert('Failed to refine landscape cover: ' + (err.response?.data?.error || err.message));
+                        } finally {
+                          setCoverLandscapeGenerating(false);
+                        }
+                      }}
+                      style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+                    >
+                      {coverLandscapeGenerating ? 'Working…' : 'Refine'}
+                    </button>
+                  </div>
+                )}
+
                 <div style={{ marginTop: '0.75rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#555' }}>
                     Title position on banner (in the Reader)
@@ -3849,6 +4130,90 @@ function ComicEditor() {
             </ol>
           </div>
 
+          {/* English audio audit */}
+          <div style={{
+            background: '#eef3fb',
+            border: '1px solid #a9c4e8',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            marginTop: '1.5rem'
+          }}>
+            <h3 style={{ marginBottom: '0.5rem', color: '#1f4e8c' }}>English Audio Check</h3>
+            <p style={{ color: '#666', marginBottom: '1rem', fontSize: '0.9rem' }}>
+              Scan every bubble in this comic (cover included) and list the ones missing English audio —
+              no translation text, no generated EN audio, or an audio file that has gone missing on disk.
+            </p>
+            <button
+              onClick={async () => {
+                setEnAudioChecking(true);
+                setEnAudioCheck(null);
+                try {
+                  const res = await api.get(`/audio/english-audio-check/${id}`, { timeout: 120000 });
+                  setEnAudioCheck(res.data);
+                } catch (err) {
+                  alert('Check failed: ' + (err.response?.data?.error || err.message));
+                } finally {
+                  setEnAudioChecking(false);
+                }
+              }}
+              disabled={enAudioChecking}
+              style={{
+                padding: '0.5rem 1.2rem',
+                background: enAudioChecking ? '#95a5a6' : '#2e6bb0',
+                color: '#fff', border: 'none', borderRadius: '4px',
+                cursor: enAudioChecking ? 'default' : 'pointer', fontSize: '0.95rem'
+              }}
+            >
+              {enAudioChecking ? 'Checking…' : 'Check English Audio'}
+            </button>
+            <button
+              onClick={async () => {
+                if (!window.confirm('Strip all [intonation tags] from the English translations of this comic? Do this only once you are happy with the EN audio — regenerating audio afterwards loses the intonation.')) return;
+                try {
+                  const res = await api.post(`/audio/clean-english-tags/${id}`, {}, { timeout: 60000 });
+                  alert(res.data.cleaned > 0
+                    ? `Cleaned [tags] from ${res.data.cleaned} English translation(s).`
+                    : 'No [tags] found in any English translation — nothing to clean.');
+                } catch (err) {
+                  alert('Clean failed: ' + (err.response?.data?.error || err.message));
+                }
+              }}
+              style={{
+                padding: '0.5rem 1.2rem', marginLeft: '0.6rem',
+                background: '#8e44ad', color: '#fff', border: 'none', borderRadius: '4px',
+                cursor: 'pointer', fontSize: '0.95rem'
+              }}
+              title="Remove ElevenLabs [tags] from all English translations — run once the EN audio is final"
+            >
+              Clean [tags] from English
+            </button>
+            {enAudioCheck && enAudioCheck.missingCount === 0 && (
+              <div style={{ background: '#d4edda', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                <p style={{ margin: 0, color: '#155724' }}>
+                  All good — {enAudioCheck.checked} sentences checked, every one has English audio.
+                </p>
+              </div>
+            )}
+            {enAudioCheck && enAudioCheck.missingCount > 0 && (
+              <div style={{ background: '#fff3cd', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
+                <p style={{ margin: '0 0 0.5rem 0', color: '#856404', fontWeight: 'bold' }}>
+                  {enAudioCheck.missingCount} of {enAudioCheck.checked} sentences missing English audio:
+                </p>
+                <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    {enAudioCheck.missing.map((m, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid #eadfa8' }}>
+                        <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', whiteSpace: 'nowrap', color: '#856404', fontWeight: 'bold', verticalAlign: 'top' }}>{m.page}</td>
+                        <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', color: '#555', verticalAlign: 'top' }}>“{m.text}”</td>
+                        <td style={{ padding: '0.3rem 0', whiteSpace: 'nowrap', color: '#b23b3b', verticalAlign: 'top' }}>{m.issue}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {/* Word Audio Generation */}
           <div style={{
             background: '#f0f7ee',
@@ -4012,7 +4377,9 @@ function ComicEditor() {
                     const response = await fetch('/api/chat/generate-word-forms', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ comicId: id, forceRegenerate: true })
+                      // Only words WITHOUT forms by default — force was hard-coded
+                      // true for a while, redoing every word on every click.
+                      body: JSON.stringify({ comicId: id, forceRegenerate: wordFormsForceRegenerate })
                     });
                     if (!response.ok) {
                       const err = await response.json();
@@ -4070,6 +4437,14 @@ function ComicEditor() {
               >
                 {wordFormsGenerating ? 'Generating Forms...' : 'Generate Word Forms'}
               </button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#666', marginTop: '0.5rem' }}>
+                <input
+                  type="checkbox"
+                  checked={wordFormsForceRegenerate}
+                  onChange={(e) => setWordFormsForceRegenerate(e.target.checked)}
+                />
+                Force regenerate all (redo words that already have forms)
+              </label>
               {wordFormsResult && wordFormsResult.inProgress && (
                 <div style={{ background: '#fff3cd', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
                   <p style={{ margin: 0, color: '#856404' }}>
@@ -4331,13 +4706,23 @@ function ComicEditor() {
                 </div>
               );
             })}
-            <button
-              onClick={() => styleSheetFileInputRef.current?.click()}
-              className="btn btn-secondary"
-              style={{ minHeight: '60px', border: '2px dashed #aaa', borderRadius: '8px', fontSize: '0.85rem' }}
-            >
-              + Upload style reference
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => styleSheetFileInputRef.current?.click()}
+                className="btn btn-secondary"
+                style={{ flex: 1, minHeight: '60px', border: '2px dashed #aaa', borderRadius: '8px', fontSize: '0.85rem' }}
+              >
+                + Upload style reference
+              </button>
+              <button
+                onClick={openStyleSheetPicker}
+                className="btn btn-secondary"
+                title="Pick a panel or page from a comic in this collection"
+                style={{ flex: 1, minHeight: '60px', border: '2px dashed #aaa', borderRadius: '8px', fontSize: '0.85rem' }}
+              >
+                + From comics
+              </button>
+            </div>
             <input type="file" ref={styleSheetFileInputRef} onChange={styleSheetUploadRef} accept="image/*" style={{ display: 'none' }} />
           </div>
 
@@ -4447,6 +4832,23 @@ function ComicEditor() {
                           className="btn btn-secondary btn-sm"
                           style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', color: '#e74c3c' }}
                         >Delete</button>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem' }}>
+                        <input
+                          type="text"
+                          value={styleSheetRefineTexts[item.path] || ''}
+                          onChange={(e) => setStyleSheetRefineTexts(prev => ({ ...prev, [item.path]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') styleSheetRefine(item); }}
+                          placeholder="Refine this sheet: e.g. 'make the hair shorter, keep everything else'"
+                          disabled={styleSheetGenerating}
+                          style={{ flex: 1, padding: '0.35rem 0.5rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.78rem' }}
+                        />
+                        <button
+                          onClick={() => styleSheetRefine(item)}
+                          disabled={styleSheetGenerating || !(styleSheetRefineTexts[item.path] || '').trim()}
+                          className="btn btn-primary btn-sm"
+                          style={{ padding: '0.25rem 0.7rem', fontSize: '0.75rem' }}
+                        >{styleSheetGenerating ? '…' : 'Refine'}</button>
                       </div>
                       {item.promptSent && (
                         <details style={{ marginTop: '0.4rem' }}>
@@ -5065,10 +5467,73 @@ function ComicEditor() {
                       <strong>Suggested fix:</strong> {issue.suggestedFix}
                     </div>
                   )}
+                  {issue.suggestedFix && (
+                    <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <button
+                        onClick={async () => {
+                          if (implementedFixes[idx]?.status === 'busy' || implementedFixes[idx]?.status === 'done') return;
+                          setImplementedFixes(prev => ({ ...prev, [idx]: { status: 'busy' } }));
+                          try {
+                            const resp = await api.post(`/comics/${id}/apply-language-fix`, {
+                              pageId: issue.pageId,
+                              originalText: issue.sentenceText,
+                              correctedText: issue.suggestedFix
+                            }, { timeout: 60000 });
+                            setImplementedFixes(prev => ({ ...prev, [idx]: { status: 'done', translation: resp.data.translation } }));
+                            // Persist the implemented status with the review, so
+                            // ✓ Implemented survives reloads too.
+                            setLanguageResults(prev => {
+                              const updated = prev.map((r, i) => i === idx ? { ...r, implemented: { translation: resp.data.translation, bubbleNumbers: resp.data.bubbleNumbers || [] } } : r);
+                              api.put(`/comics/${id}`, { languageReview: { scannedAt: new Date().toISOString(), results: updated } })
+                                .catch(err => console.error('Failed to persist implement status:', err));
+                              return updated;
+                            });
+                            // Open the corrected bubble in a NEW tab so the review list survives.
+                            window.open(`/comic/${id}/page/${issue.pageId}?focusBubble=${resp.data.bubbleId}`, '_blank');
+                          } catch (err) {
+                            setImplementedFixes(prev => ({ ...prev, [idx]: { status: 'error' } }));
+                            alert('Implement failed: ' + (err.response?.data?.error || err.message));
+                          }
+                        }}
+                        disabled={implementedFixes[idx]?.status === 'busy' || implementedFixes[idx]?.status === 'done'}
+                        style={{
+                          padding: '0.35rem 0.9rem', fontSize: '0.8rem', border: 'none', borderRadius: '4px',
+                          background: implementedFixes[idx]?.status === 'done' ? '#27ae60' : implementedFixes[idx]?.status === 'busy' ? '#95a5a6' : '#2e6bb0',
+                          color: '#fff', cursor: implementedFixes[idx]?.status ? 'default' : 'pointer'
+                        }}
+                      >
+                        {implementedFixes[idx]?.status === 'done' ? '✓ Implemented' : implementedFixes[idx]?.status === 'busy' ? 'Implementing…' : 'Implement'}
+                      </button>
+                      {implementedFixes[idx]?.status === 'done' && (
+                        <span style={{ fontSize: '0.78rem', color: '#27ae60' }}>
+                          New English: “{implementedFixes[idx].translation}” — regenerate both audios in the page editor.
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
+
+          {/* Which bubbles were modified by Implement — the audio regen list */}
+          {(() => {
+            const mods = {};
+            (languageResults || []).forEach(r => {
+              if (r.implemented?.bubbleNumbers?.length) {
+                if (!mods[r.pageNumber]) mods[r.pageNumber] = new Set();
+                r.implemented.bubbleNumbers.forEach(n => mods[r.pageNumber].add(n));
+              }
+            });
+            const pagesList = Object.keys(mods).map(Number).sort((a, b) => a - b);
+            if (pagesList.length === 0) return null;
+            return (
+              <div style={{ background: '#d4edda', border: '1px solid #28a745', borderRadius: '6px', padding: '0.75rem', marginBottom: '1rem', color: '#155724', fontSize: '0.88rem' }}>
+                <strong>Modified bubbles — regenerate audio (ES + EN) for:</strong>{' '}
+                {pagesList.map(pn => `Page ${pn}: bubble${mods[pn].size > 1 ? 's' : ''} ${[...mods[pn]].sort((a, b) => a - b).join(', ')}`).join('  ·  ')}
+              </div>
+            );
+          })()}
 
           {/* Scan complete message */}
           {!languageScanning && languageScanProgress.total > 0 && (
@@ -5329,6 +5794,97 @@ function ComicEditor() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Style Sheet "From comics" picker */}
+      {styleSheetPickerOpen && (
+        <div
+          onClick={() => !styleSheetPickerBusy && setStyleSheetPickerOpen(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.85)', zIndex: 10000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#1a1a2e', borderRadius: '10px', padding: '1rem',
+              width: 'min(1000px, 92vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', color: '#eee' }}>Pick a style reference from a comic</h3>
+              <button
+                onClick={() => setStyleSheetPickerOpen(false)}
+                disabled={styleSheetPickerBusy}
+                style={{
+                  background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '50%',
+                  width: '26px', height: '26px', fontSize: '1rem', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >&times;</button>
+            </div>
+
+            {!styleSheetPickerComics ? (
+              <p style={{ color: '#aaa' }}>Loading comics…</p>
+            ) : (
+              <>
+                {/* Comic tabs */}
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                  {styleSheetPickerComics.map(c => (
+                    <button
+                      key={c.id}
+                      className={`btn btn-sm ${styleSheetPickerComicId === c.id ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setStyleSheetPickerComicId(c.id)}
+                      style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}
+                    >
+                      {c.title}{c.id === id ? ' (this comic)' : ''}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Image grid: panels per page; page master as fallback */}
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {(() => {
+                    const sel = styleSheetPickerComics.find(c => c.id === styleSheetPickerComicId);
+                    if (!sel) return <p style={{ color: '#aaa' }}>No comic selected.</p>;
+                    const pages = [...(sel.pages || [])].sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
+                    return pages.map(p => {
+                      const panelImgs = (p.panels || [])
+                        .slice().sort((a, b) => (a.panelOrder || 0) - (b.panelOrder || 0))
+                        .map(pan => pan.artworkImage).filter(Boolean);
+                      const imgs = panelImgs.length ? panelImgs : (p.masterImage ? [p.masterImage] : []);
+                      if (!imgs.length) return null;
+                      return (
+                        <div key={p.pageNumber} style={{ marginBottom: '0.75rem' }}>
+                          <small style={{ color: '#888' }}>Page {p.pageNumber}</small>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                            {imgs.map((img, i) => (
+                              <img
+                                key={`${img}-${i}`}
+                                src={`${img}`}
+                                alt={`Page ${p.pageNumber} panel ${i + 1}`}
+                                onClick={() => !styleSheetPickerBusy && styleSheetPickFromComic(img)}
+                                style={{
+                                  height: '120px', borderRadius: '6px', cursor: styleSheetPickerBusy ? 'wait' : 'pointer',
+                                  border: '2px solid #2a2a3e', opacity: styleSheetPickerBusy ? 0.5 : 1
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+                {styleSheetPickerBusy && (
+                  <p style={{ color: '#F0BB29', margin: '0.5rem 0 0' }}>Adding reference…</p>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

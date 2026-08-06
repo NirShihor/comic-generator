@@ -79,11 +79,20 @@ const BubbleSchema = new mongoose.Schema({
   fontId: String,
   fontSize: Number,
   textColor: String,
+  // Text outline (narration titles etc): colour + width in px; width 0/absent = off.
+  textStrokeColor: String,
+  textStrokeWidth: Number,
+  // Manual reading-order override within the bubble's panel (1-based). Absent =
+  // automatic (top-to-bottom, left-to-right).
+  orderIndex: Number,
   textAlign: { type: String, enum: ['left', 'center', 'right'], default: 'center' },
   italic: Boolean,
   uppercase: Boolean,
   cornerRadius: Number,
   hidden: Boolean, // Hidden bubble: invisible when baked, but text data still exported to reader
+  // Author override for the reader's green selection wash on bubbles with no
+  // drawn background (hidden / transparent). Absent = default (hidden → wash).
+  highlightWash: Boolean,
   // Image bubble fields
   imageUrl: String,
   imagePrompt: String,
@@ -119,6 +128,8 @@ const PanelSchema = new mongoose.Schema({
   cropX: { type: Number, default: 0 },
   cropY: { type: Number, default: 0 },
   zoom: { type: Number, default: 1 },
+  // Memory/flashback panel: baked with a wavy border + feathered white edges.
+  memory: { type: Boolean, default: false },
   brightness: { type: Number, default: 1 },
   contrast: { type: Number, default: 1 },
   saturation: { type: Number, default: 1 },
@@ -184,6 +195,19 @@ const HotspotSchema = new mongoose.Schema({
   pulseBrightness: Number,
   // Optional glow tint (hex) washed over the cut-out at the pulse peak.
   pulseTint: String,
+  // 'button': the reader renders this hotspot as a REAL tappable button
+  // (rounded, labelled) instead of a pulsing area. Tapping opens the same
+  // slides popup — e.g. a message appearing on an in-story phone screen.
+  displayStyle: String,
+  buttonLabel: String,
+  // Locked in place: drag/resize disabled in the editor (like bubble.locked).
+  locked: Boolean,
+  // Opt-in: closing this hotspot's popup in the reader turns to the next page.
+  advanceOnClose: Boolean,
+  // Generator bubble id: the button opens THAT bubble's popup card (full
+  // bubble behaviour — words, translation, grammar, audio, practice) instead
+  // of the hotspot slides. Mapped to the reader's bubble id at export.
+  triggerBubbleId: String,
   slides: [HotspotSlideSchema]
 }, { _id: false });
 
@@ -226,7 +250,10 @@ const StyleImageSchema = new mongoose.Schema({
 // Voice Schema (for ElevenLabs voices)
 const VoiceSchema = new mongoose.Schema({
   name: String,
-  voiceId: String
+  voiceId: String,
+  // Saved ElevenLabs settings for this voice (model, stability, similarity_boost,
+  // style, speed) — auto-applied whenever the voice is picked in this collection.
+  settings: mongoose.Schema.Types.Mixed
 }, { _id: false });
 
 // Main Comic Schema
@@ -318,6 +345,12 @@ const ComicSchema = new mongoose.Schema({
     }
   },
   notes: String,
+  // Persisted Language Review scan (results + per-issue implemented status) —
+  // scans are expensive, so they must survive reloads.
+  languageReview: {
+    scannedAt: Date,
+    results: [mongoose.Schema.Types.Mixed]
+  },
   collectionId: String,
   collectionTitle: String,
   episodeNumber: Number,

@@ -96,7 +96,9 @@ async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-image',
+      // Flash image model — back from Nano Banana Pro at Nir's request (2026-07-19,
+      // trying whether the lite tier adheres to character refs better here).
+      model: 'gemini-3.1-flash-image-preview',
       contents: parts,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
@@ -702,8 +704,12 @@ router.post('/generate-panel', (req, res) => {
         const sourceStreams = await loadReferenceImages([angleSourceImage]);
         allRefStreams = [...sourceStreams];
       } else {
+        // Linked refs go SHARP for new generations too (they used to be heavily
+        // blurred as an anti-cloning measure, which destroyed exactly what page
+        // refs are attached FOR — character faces/clothing continuity). The
+        // anti-cloning job moved into the reference instructions instead.
         const linkedRefStreams = linkedRefs.length > 0
-          ? (isRefinement ? await loadReferenceImages(linkedRefs, annotationsMap) : await loadBlurredReferenceImages(linkedRefs))
+          ? await loadReferenceImages(linkedRefs, annotationsMap)
           : [];
         const styleRefStreams = styleRefs.length > 0
           ? await loadReferenceImages(styleRefs)
@@ -726,8 +732,10 @@ The ONLY thing that changes is the camera position/angle. Everything else must b
 Other attached images are style/character references ONLY — do NOT add characters from reference images into the scene.\n\n`;
         } else if (linkedRefs.length > 0) {
           refInstructions = `REFERENCE IMAGE INSTRUCTIONS:
-Some attached images are SCENE REFERENCES — use them to match the setting, environment, color palette, lighting, and art style.
-Maintain visual consistency with the reference scene while following the prompt below for the specific action and composition.
+Some attached images are SCENE/CONTINUITY REFERENCES from other panels of this comic.
+Any character who appears in BOTH a reference image and the prompt below must look EXACTLY the same as in the reference — same face, same hair, same clothing, same build.
+Also match the setting, environment, color palette, lighting, and art style of the references.
+Do NOT copy a reference's composition or layout — compose the NEW scene described in the prompt below.
 Other attached images are style/character references — use them for art style and character appearance consistency only.\n\n`;
         } else if (hasMasterStyleImage) {
           const otherRefs = styleRefs.length - 1;
@@ -746,8 +754,23 @@ Other attached images are style/character references — use them for art style 
         const safeLimit = 30000;
         const maxPromptLen = safeLimit - refInstructions.length;
         if (finalPrompt.length > maxPromptLen) {
-          console.log(`Panel prompt too long (${refInstructions.length + finalPrompt.length} chars total), truncating to fit ${safeLimit} limit`);
-          finalPrompt = finalPrompt.substring(0, maxPromptLen);
+          // NEVER truncate the tail: the panel content (the actual scene to draw)
+          // comes AFTER the style/character bibles, so blind head-keeping used to
+          // silently discard the instructions — the model painted lore-only
+          // establishing shots and ignored every panel edit. Preserve everything
+          // from the panel-content marker on; trim the reference text before it.
+          const marker = 'SINGLE PANEL IMAGE';
+          const idx = finalPrompt.lastIndexOf(marker);
+          if (idx !== -1 && finalPrompt.length - idx < maxPromptLen) {
+            const tail = finalPrompt.slice(idx);
+            const notice = '\n\n[reference text trimmed to fit the prompt limit]\n\n';
+            const headBudget = Math.max(0, maxPromptLen - tail.length - notice.length);
+            console.log(`Panel prompt too long (${refInstructions.length + finalPrompt.length} chars), trimming reference sections to ${headBudget} chars; panel content (${tail.length} chars) preserved`);
+            finalPrompt = finalPrompt.slice(0, headBudget) + notice + tail;
+          } else {
+            console.log(`Panel prompt too long (${refInstructions.length + finalPrompt.length} chars total), truncating to fit ${safeLimit} limit`);
+            finalPrompt = finalPrompt.substring(0, maxPromptLen);
+          }
         }
 
         console.log(`[DEBUG] images.edit: model=gpt-image-2, refs=${allRefStreams.length}, size=${size}, prompt len=${(refInstructions + finalPrompt).length}`);
@@ -1105,7 +1128,7 @@ router.post('/inpaint-region', (req, res) => {
       const maxRetries = 3;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const response = await ai.models.generateContent({
-          model: 'gemini-3-pro-image-preview',   // inpainting stays on Nano Banana Pro (better fidelity)
+          model: 'gemini-3.1-flash-image-preview',   // flash tier (matches generation; was Nano Banana Pro)
           contents: parts,
           config: { responseModalities: ['TEXT', 'IMAGE'] }
         });
@@ -1221,7 +1244,10 @@ router.post('/inpaint-region', (req, res) => {
         mask: maskFile,
         prompt: inpaintPrompt,
         n: 1,
-        size: size
+        size: size,
+        // 'low'/'medium' are dramatically faster than 'high' — for small
+        // inpaint regions the difference is usually invisible.
+        quality: openaiQuality
       });
 
       const imageData = response.data[0];
@@ -1309,6 +1335,18 @@ router.post('/save-to-project', async (req, res) => {
     const destPath = path.join(destDir, newFilename);
 
     await fs.copyFile(sourcePath, destPath);
+
+    // Cover bake: record it in the DB HERE, atomically with the file write.
+    // The client used to persist it via a follow-up whole-comic PUT, which
+    // raced with other cover saves — the field kept vanishing and the export
+    // fell back to mtime guessing (the recurring bubble-less cover).
+    if (imageType === 'cover-baked') {
+      const Comic = require('../models/Comic');
+      await Comic.updateOne(
+        { id: comicId },
+        { $set: { 'cover.bakedImage': `/projects/${comicId}/images/${newFilename}` } }
+      );
+    }
 
     res.json({
       filename: newFilename,
@@ -1763,10 +1801,40 @@ The bounding box values should be decimals from 0 to 1 representing percentages 
   }
 });
 
+// Crop a normalized region out of a project image (e.g. the BAKED page) and
+// save it as a new project image — hotspot slides' "From page" capture, so an
+// in-world message baked onto the art becomes the slide image with one click.
+router.post('/crop-region', async (req, res) => {
+  try {
+    const { comicId, imagePath, rect, pad = 0.015 } = req.body;
+    if (!comicId || !imagePath || !rect) {
+      return res.status(400).json({ error: 'comicId, imagePath and rect are required' });
+    }
+    const clean = imagePath.split('?')[0];
+    const src = path.join(__dirname, '../..', clean);
+    const meta = await sharp(src).metadata();
+    const W = meta.width || 1, H = meta.height || 1;
+    const x0 = Math.max(0, rect.x - pad) * W;
+    const y0 = Math.max(0, rect.y - pad) * H;
+    const x1 = Math.min(1, rect.x + rect.width + pad) * W;
+    const y1 = Math.min(1, rect.y + rect.height + pad) * H;
+    const left = Math.round(x0), top = Math.round(y0);
+    const width = Math.max(1, Math.round(x1 - x0));
+    const height = Math.max(1, Math.round(y1 - y0));
+    const destDir = path.join(__dirname, '../../projects', comicId, 'images');
+    await fs.mkdir(destDir, { recursive: true });
+    const filename = `hotspot-crop-${uuidv4()}.png`;
+    await sharp(src).extract({ left, top, width, height }).toFile(path.join(destDir, filename));
+    res.json({ path: `/projects/${comicId}/images/${filename}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /language/review — review translations for contextual accuracy using page image
 router.post('/language/review', async (req, res) => {
   try {
-    const { pageImagePath, pageNumber, panels, language = 'es', targetLanguage = 'en', provider = 'openai' } = req.body;
+    const { pageImagePath, pageNumber, panels, language = 'es', targetLanguage = 'en', provider = 'openai', extraInstructions = '' } = req.body;
     console.log(`Language review (${provider}): page ${pageNumber}`);
 
     if (!pageImagePath || !panels || panels.length === 0) {
@@ -1801,6 +1869,11 @@ router.post('/language/review', async (req, res) => {
       }
     }
 
+    // Editor-supplied focus for this run (page-level check's custom prompt box).
+    const extraNote = extraInstructions && extraInstructions.trim()
+      ? `ADDITIONAL REVIEWER INSTRUCTIONS from the editor — follow them as authoritative for this review:\n${extraInstructions.trim()}\n\n`
+      : '';
+
     const promptText = `You are a bilingual language reviewer for a comic book language-learning app.
 You review ${sourceLang} dialogue against ${targetLang} translations in the context of comic panel artwork.
 
@@ -1822,7 +1895,7 @@ Do NOT flag:
 
 IMPORTANT: Before flagging an issue, LOCATE the speech bubble containing that text IN THE IMAGE. Verify which panel it is in and what is happening visually AROUND THAT SPECIFIC BUBBLE. Do not confuse text from one panel with the scene of another panel.
 
-${dialogueInventory}
+${extraNote}${dialogueInventory}
 
 Respond with ONLY a JSON object (no markdown, no extra text):
 {"issues": [{"sentenceText": "the problematic ${sourceLang} text", "sentenceTranslation": "the ${targetLang} translation", "bubbleType": "speech", "issueType": "contextual_translation_error | register_inconsistency | missing_wrong_context", "description": "Clear explanation of what is wrong and which part of the image you are referring to", "suggestedFix": "The corrected ${sourceLang} text"}]}

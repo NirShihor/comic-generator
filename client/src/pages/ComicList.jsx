@@ -227,7 +227,10 @@ function ComicList() {
   );
 
   return (
-    <div>
+    // Explicit width: the Vite-starter body{display:flex} makes an unsized page
+    // shrink-wrap to ~950px however wide the window is (ComicEditor forces its
+    // own width for the same reason).
+    <div style={{ width: 'calc(100vw - 4rem)', maxWidth: 'none' }}>
       <div>
         <h1>My Comics</h1>
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
