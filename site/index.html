@@ -111,27 +111,31 @@
   .bubble h1 { margin: 0; font-size: clamp(2rem, 5.2vw, 3.4rem); }
   .bubble h1 .row { display: block; }
 
-  .word {
-    position: relative; cursor: pointer; border-radius: 8px; padding: 0 4px;
-    transition: background-color 0.18s ease;
-    -webkit-tap-highlight-color: transparent;
+  /* Headline crossfade: Spanish holds 4s, fades, English holds 4s, repeats.
+     Both languages occupy the same grid cell so the bubble sizes to the
+     taller of the two and nothing jumps during the swap. */
+  .bubble h1 { display: grid; }
+  .bubble h1 .lang { grid-area: 1 / 1; }
+  .lang-es { animation: heroEs 9.2s linear infinite; }
+  .lang-en { opacity: 0; animation: heroEn 9.2s linear infinite; }
+  @keyframes heroEs {
+    0%, 43% { opacity: 1; }
+    50%, 93% { opacity: 0; }
+    100% { opacity: 1; }
   }
-  .word:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-  .word:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  .word.lit { background: var(--accent); color: #FFFFFF; }
-  .word .gloss {
-    display: none; position: absolute; left: 50%; top: -12px;
-    transform: translate(-50%, -100%);
-    background: var(--deep); color: #FFFFFF; border: 2px solid #16182E;
-    border-radius: 999px; padding: 3px 12px; white-space: nowrap;
-    font-family: system-ui, sans-serif; font-size: 0.85rem; font-weight: 700;
-    text-transform: none; letter-spacing: 0; z-index: 5;
+  @keyframes heroEn {
+    0%, 43% { opacity: 0; }
+    50%, 93% { opacity: 1; }
+    100% { opacity: 0; }
   }
-  .word.lit .gloss { display: block; }
+  @media (prefers-reduced-motion: reduce) {
+    .lang-es, .lang-en { animation: none; }
+    .lang-es { opacity: 1; }
+    .lang-en { opacity: 0; }
+  }
 
   .hero-copy { max-width: 58ch; margin: 26px 4px 0; font-size: 1.06rem; }
   .hero-copy strong { color: var(--ink); }
-  .tap-hint { margin: 10px 4px 0; color: var(--muted); font-size: 0.9rem; font-style: italic; }
 
   .cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 28px; }
   .cta {
@@ -269,11 +273,16 @@
   <div>
     <div class="bubble">
       <h1 class="display">
-        <span class="row"><span class="word" tabindex="0"><span class="gloss">you aren't</span>No estás</span> <span class="word" tabindex="0"><span class="gloss">studying</span>estudiando.</span></span>
-        <span class="row"><span class="word" tabindex="0"><span class="gloss">you are</span>Estás</span> <span class="word" tabindex="0"><span class="gloss">reading</span>leyendo.</span></span>
+        <span class="lang lang-es">
+          <span class="row">No estás estudiando.</span>
+          <span class="row">Estás leyendo.</span>
+        </span>
+        <span class="lang lang-en" aria-hidden="true">
+          <span class="row">You're not studying.</span>
+          <span class="row">You're reading.</span>
+        </span>
       </h1>
     </div>
-    <p class="tap-hint">Tap any word — that's the whole idea.</p>
     <p class="hero-copy">
       Comigo is a library of <strong>original Spanish comics</strong> — westerns, mysteries,
       time travel, an alien at the breakfast table. Every bubble is read aloud,
@@ -446,19 +455,6 @@
   </div>
 </footer>
 
-<script>
-  document.querySelectorAll('.word').forEach(function (w) {
-    function toggle() {
-      var wasLit = w.classList.contains('lit');
-      document.querySelectorAll('.word.lit').forEach(function (o) { o.classList.remove('lit'); });
-      if (!wasLit) w.classList.add('lit');
-    }
-    w.addEventListener('click', toggle);
-    w.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-    });
-  });
-</script>
 
 </body>
 </html>
