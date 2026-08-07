@@ -144,18 +144,22 @@
   .cta:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--shadow); }
   .cta-note { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); max-width: 24ch; line-height: 1.4; }
 
-  /* fanned covers */
-  .fan { position: relative; height: 420px; margin: 0 auto; width: 100%; max-width: 400px; }
+  /* fanned covers — a 7-card hand, one per collection */
+  .fan { position: relative; height: 400px; margin: 0 auto; width: 100%; max-width: 440px; }
   .fan img {
-    position: absolute; width: 218px; border: 3px solid var(--line);
-    border-radius: 10px; box-shadow: 7px 7px 0 var(--shadow);
+    position: absolute; width: 140px; border: 3px solid var(--line);
+    border-radius: 9px; box-shadow: 5px 5px 0 var(--shadow);
     transition: transform 0.25s ease;
   }
-  .fan img:nth-child(1) { top: 6%;  left: 0;   transform: rotate(-7deg); z-index: 1; }
-  .fan img:nth-child(2) { top: 0;   left: 26%; transform: rotate(2deg);  z-index: 2; }
-  .fan img:nth-child(3) { top: 12%; left: 46%; transform: rotate(9deg);  z-index: 3; }
-  .fan img:hover { transform: rotate(0deg) translateY(-8px); z-index: 6; }
-  @media (max-width: 800px) { .fan { height: 360px; max-width: 340px; } .fan img { width: 180px; } }
+  .fan img:nth-child(1) { top: 26%; left: 0%;  transform: rotate(-14deg); z-index: 1; }
+  .fan img:nth-child(2) { top: 17%; left: 11%; transform: rotate(-9deg);  z-index: 2; }
+  .fan img:nth-child(3) { top: 11%; left: 22%; transform: rotate(-4deg);  z-index: 3; }
+  .fan img:nth-child(4) { top: 9%;  left: 33%; transform: rotate(0deg);   z-index: 4; }
+  .fan img:nth-child(5) { top: 11%; left: 44%; transform: rotate(4deg);   z-index: 5; }
+  .fan img:nth-child(6) { top: 17%; left: 55%; transform: rotate(9deg);   z-index: 6; }
+  .fan img:nth-child(7) { top: 26%; left: 66%; transform: rotate(14deg);  z-index: 7; }
+  .fan img:hover { transform: rotate(0deg) translateY(-10px) scale(1.35); z-index: 10; }
+  @media (max-width: 800px) { .fan { height: 330px; max-width: 350px; } .fan img { width: 112px; } }
 
   /* ---------- panel strip ---------- */
   .strip-head { padding: 34px 0 6px; }
@@ -289,9 +293,13 @@
     </div>
   </div>
   <div class="fan" aria-hidden="true">
-    <img src="{{IMG_ollie}}" alt="">
-    <img src="{{IMG_carta}}" alt="">
-    <img src="{{IMG_cuervos}}" alt="">
+    <img src="{{IMG_col-el_rey_negro}}" alt="">
+    <img src="{{IMG_col-ollie_dice}}" alt="">
+    <img src="{{IMG_col-el_visitante}}" alt="">
+    <img src="{{IMG_col-el_restaurante}}" alt="">
+    <img src="{{IMG_col-los_ninos_es_las_sombras}}" alt="">
+    <img src="{{IMG_col-la_mensajera}}" alt="">
+    <img src="{{IMG_col-los_vientos_del_tiempo}}" alt="">
   </div>
 </section>
 
