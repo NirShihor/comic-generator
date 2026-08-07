@@ -25,7 +25,9 @@ if [ -z "${AUTH_PASSWORD:-}" ]; then
   # resolve against the script's own absolute directory instead.
   ENV_FILE="$(cd "$(dirname "$PROJECTS_DIR")/.." && pwd)/.env"
   if [ -f "$ENV_FILE" ]; then
-    AUTH_PASSWORD=$(grep '^AUTH_PASSWORD=' "$ENV_FILE" | head -1 | cut -d= -f2- | tr -d "'\"")
+    # SYNC_AUTH_PASSWORD, not AUTH_PASSWORD: the server treats a set
+    # AUTH_PASSWORD as "enable the login gate", which must stay off locally.
+    AUTH_PASSWORD=$(grep '^SYNC_AUTH_PASSWORD=' "$ENV_FILE" | head -1 | cut -d= -f2- | tr -d "'\"")
   fi
 fi
 if [ -z "${AUTH_PASSWORD:-}" ]; then
