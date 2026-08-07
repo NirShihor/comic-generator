@@ -19,9 +19,18 @@ PROJECTS_DIR="$(cd "$(dirname "$0")/projects" && pwd)"
 cd "$PROJECTS_DIR"
 
 # Auth cookie = sha256(AUTH_PASSWORD), matching the server's generateToken().
+# Not set in the environment? Fall back to the repo-root .env.
 if [ -z "${AUTH_PASSWORD:-}" ]; then
-  echo "Warning: AUTH_PASSWORD is not set — uploads will fail if the server has a login password." >&2
-  echo "         Run:  export AUTH_PASSWORD='<your app password>'" >&2
+  # $0 is relative to the original cwd, but we've already cd'd into projects/ —
+  # resolve against the script's own absolute directory instead.
+  ENV_FILE="$(cd "$(dirname "$PROJECTS_DIR")/.." && pwd)/.env"
+  if [ -f "$ENV_FILE" ]; then
+    AUTH_PASSWORD=$(grep '^AUTH_PASSWORD=' "$ENV_FILE" | head -1 | cut -d= -f2- | tr -d "'\"")
+  fi
+fi
+if [ -z "${AUTH_PASSWORD:-}" ]; then
+  echo "Warning: AUTH_PASSWORD is not set (env or .env) — uploads will fail if the server has a login password." >&2
+  echo "         Run:  export AUTH_PASSWORD='<your app password>'  or add AUTH_PASSWORD=... to .env" >&2
 fi
 token=$(printf %s "${AUTH_PASSWORD:-}" | shasum -a 256 | awk '{print $1}')
 
