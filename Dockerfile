@@ -26,6 +26,9 @@ COPY server/src/ ./server/src/
 # Copy built client from stage 1
 COPY --from=client-build /app/client/dist ./client/dist
 
+# Marketing site (served on comigo.net via host-based routing)
+COPY site/index.html site/privacy.html ./site/
+
 # Copy entrypoint script
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh

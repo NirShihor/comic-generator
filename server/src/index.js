@@ -25,6 +25,21 @@ connectDB();
 // Daily EJSON dump of the whole DB (volume-backed on Fly, Time-Machine'd locally)
 require('./services/dbBackup').startDailyBackups();
 
+// Marketing site: requests arriving via comigo.net get the static landing
+// page (and privacy policy) and nothing else — no auth gate, no app routes.
+// The generator app remains exactly as-is on its own hostnames.
+const SITE_DIR = path.join(__dirname, '../../site');
+app.use((req, res, next) => {
+  const host = (req.headers.host || '').toLowerCase().split(':')[0];
+  if (host === 'comigo.net' || host === 'www.comigo.net') {
+    if (req.path === '/privacy' || req.path === '/privacy.html') {
+      return res.sendFile(path.join(SITE_DIR, 'privacy.html'));
+    }
+    return res.sendFile(path.join(SITE_DIR, 'index.html'));
+  }
+  next();
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));

@@ -145,23 +145,25 @@
   .cta-note { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); max-width: 24ch; line-height: 1.4; }
 
   /* fanned covers — a 7-card hand, one per collection */
-  .fan { position: relative; height: 400px; margin: 0 auto; width: 100%; max-width: 440px; }
+  .fan { position: relative; height: 480px; margin: 0 auto; width: 100%; max-width: 660px; }
   .fan img {
-    position: absolute; width: 140px; border: 3px solid var(--line);
+    position: absolute; width: 182px; border: 3px solid var(--line);
     border-radius: 9px; box-shadow: 5px 5px 0 var(--shadow);
     transition: transform 0.25s ease;
   }
   /* Leftmost card sits ON TOP (fully visible); each card to the right tucks
      under the one before it. */
-  .fan img:nth-child(1) { top: 26%; left: 0%;  transform: rotate(-14deg); z-index: 7; }
-  .fan img:nth-child(2) { top: 17%; left: 11%; transform: rotate(-9deg);  z-index: 6; }
-  .fan img:nth-child(3) { top: 11%; left: 22%; transform: rotate(-4deg);  z-index: 5; }
-  .fan img:nth-child(4) { top: 9%;  left: 33%; transform: rotate(0deg);   z-index: 4; }
-  .fan img:nth-child(5) { top: 11%; left: 44%; transform: rotate(4deg);   z-index: 3; }
-  .fan img:nth-child(6) { top: 17%; left: 55%; transform: rotate(9deg);   z-index: 2; }
-  .fan img:nth-child(7) { top: 26%; left: 66%; transform: rotate(14deg);  z-index: 1; }
+  .fan img:nth-child(1) { top: 26%; left: 0%;    transform: rotate(-14deg);   z-index: 9; }
+  .fan img:nth-child(2) { top: 19%; left: 8.5%;  transform: rotate(-10.5deg); z-index: 8; }
+  .fan img:nth-child(3) { top: 13%; left: 17%;   transform: rotate(-7deg);    z-index: 7; }
+  .fan img:nth-child(4) { top: 10%; left: 25.5%; transform: rotate(-3.5deg);  z-index: 6; }
+  .fan img:nth-child(5) { top: 8%;  left: 34%;   transform: rotate(0deg);     z-index: 5; }
+  .fan img:nth-child(6) { top: 10%; left: 42.5%; transform: rotate(3.5deg);   z-index: 4; }
+  .fan img:nth-child(7) { top: 13%; left: 51%;   transform: rotate(7deg);     z-index: 3; }
+  .fan img:nth-child(8) { top: 19%; left: 59.5%; transform: rotate(10.5deg);  z-index: 2; }
+  .fan img:nth-child(9) { top: 26%; left: 68%;   transform: rotate(14deg);    z-index: 1; }
   .fan img:hover { transform: rotate(0deg) translateY(-10px) scale(1.35); z-index: 10; }
-  @media (max-width: 800px) { .fan { height: 330px; max-width: 350px; } .fan img { width: 112px; } }
+  @media (max-width: 800px) { .fan { height: 380px; max-width: 400px; } .fan img { width: 130px; } }
 
   /* ---------- panel strip ---------- */
   .strip-head { padding: 34px 0 6px; }
@@ -206,7 +208,7 @@
   .shelf-head p { margin: 0; color: var(--muted); font-style: italic; }
   .shelf-scroll { overflow-x: auto; padding: 22px 4px 30px; }
   .shelf { display: flex; gap: 20px; width: max-content; }
-  .book { width: 168px; flex: none; display: flex; flex-direction: column; }
+  .book { width: 210px; flex: none; display: flex; flex-direction: column; }
   .book img {
     width: 100%; border: 3px solid var(--line); border-radius: 8px;
     box-shadow: 5px 5px 0 var(--shadow); display: block;
@@ -299,6 +301,8 @@
     <img src="{{IMG_ollie}}" alt="">
     <img src="{{IMG_llegada}}" alt="">
     <img src="{{IMG_restaurante}}" alt="">
+    <img src="{{IMG_superviviente}}" alt="">
+    <img src="{{IMG_batalla}}" alt="">
     <img src="{{IMG_biblioteca}}" alt="">
     <img src="{{IMG_oferta}}" alt="">
     <img src="{{IMG_maquina}}" alt="">
@@ -364,40 +368,44 @@
 <div class="wrap shelf-scroll">
   <div class="shelf">
     <div class="book">
-      <img src="{{IMG_col-el_rey_negro}}" alt="Cover of El Rey Negro: a gunslinger western">
-      <div class="meta"><div class="t">EL REY NEGRO</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+      <img src="{{IMG_page-carta1}}" alt="A page from La Carta Negra">
+      <div class="meta"><div class="t">LA CARTA NEGRA</div><div class="c">El Rey Negro</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_col-ollie_dice}}" alt="Cover of Ollie Dice: a girl and her wise little dog">
-      <div class="meta"><div class="t">OLLIE DICE</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span> <span class="lvl intermediate">Intermediate</span></div></div>
+      <img src="{{IMG_page-biblioteca3}}" alt="A page from La Biblioteca">
+      <div class="meta"><div class="t">LA BIBLIOTECA</div><div class="c">Los Niños en las Sombras</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_col-el_visitante}}" alt="Cover of El Visitante: an alien houseguest">
-      <div class="meta"><div class="t">EL VISITANTE</div><div class="c">4 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+      <img src="{{IMG_page-colina4}}" alt="A page from La Casa en la Colina">
+      <div class="meta"><div class="t">LA CASA EN LA COLINA</div><div class="c">El Superviviente</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_col-los_vientos_del_tiempo}}" alt="Cover of Los Vientos del Tiempo: a time-travel adventure">
-      <div class="meta"><div class="t">LOS VIENTOS DEL TIEMPO</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+      <img src="{{IMG_page-descubrimiento10}}" alt="A page from El Descubrimiento">
+      <div class="meta"><div class="t">EL DESCUBRIMIENTO</div><div class="c">Ollie Dice</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_col-el_superviviente}}" alt="Cover of El Superviviente: a survival story">
-      <div class="meta"><div class="t">EL SUPERVIVIENTE</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span> <span class="lvl intermediate">Intermediate</span></div></div>
+      <img src="{{IMG_page-casa4}}" alt="A page from La Casa">
+      <div class="meta"><div class="t">LA CASA</div><div class="c">La Batalla Después de la Guerra</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_col-la_batalla_despues_de_la}}" alt="Cover of La Batalla Después de la Guerra">
-      <div class="meta"><div class="t">LA BATALLA DESPUÉS DE LA GUERRA</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span> <span class="lvl intermediate">Intermediate</span></div></div>
+      <img src="{{IMG_page-primer4}}" alt="A page from Primer Turno">
+      <div class="meta"><div class="t">PRIMER TURNO</div><div class="c">El Restaurante</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_col-los_ninos_es_las_sombras}}" alt="Cover of Los Niños en las Sombras">
-      <div class="meta"><div class="t">LOS NIÑOS EN LAS SOMBRAS</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+      <img src="{{IMG_page-oferta9}}" alt="A page from La Oferta">
+      <div class="meta"><div class="t">LA OFERTA</div><div class="c">La Mensajera</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_col-el_restaurante}}" alt="Cover of El Restaurante">
-      <div class="meta"><div class="t">EL RESTAURANTE</div><div class="c">3 episodes</div><div class="lvls"><span class="lvl beginner">Beginner</span></div></div>
+      <img src="{{IMG_page-llegada4}}" alt="A page from La Llegada">
+      <div class="meta"><div class="t">LA LLEGADA</div><div class="c">El Visitante</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_col-la_mensajera}}" alt="Cover of La Mensajera">
-      <div class="meta"><div class="t">LA MENSAJERA</div><div class="c">2 episodes</div><div class="lvls"><span class="lvl intermediate">Intermediate</span></div></div>
+      <img src="{{IMG_page-maquina8}}" alt="A page from La Máquina">
+      <div class="meta"><div class="t">LA MÁQUINA</div><div class="c">Los Vientos del Tiempo</div></div>
+    </div>
+    <div class="book">
+      <img src="{{IMG_page-cuervos2}}" alt="A page from Los Cuervos de Pino Negro">
+      <div class="meta"><div class="t">LOS CUERVOS DE PINO NEGRO</div><div class="c">Crónicas de Pino Negro</div></div>
     </div>
   </div>
 </div>
@@ -445,7 +453,7 @@
   <div class="wrap">
     <div>© 2026 Comigo</div>
     <div class="links">
-      <a href="mailto:nirshihor@gmail.com">Support</a>
+      <a href="mailto:nir@comigo.net">Support</a>
       <a href="privacy.html">Privacy Policy</a>
     </div>
   </div>
