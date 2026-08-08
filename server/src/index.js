@@ -35,6 +35,9 @@ app.use((req, res, next) => {
     if (req.path === '/privacy' || req.path === '/privacy.html') {
       return res.sendFile(path.join(SITE_DIR, 'privacy.html'));
     }
+    if (req.path === '/favicon.png' || req.path === '/favicon.ico' || req.path === '/apple-touch-icon.png') {
+      return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
+    }
     return res.sendFile(path.join(SITE_DIR, 'index.html'));
   }
   next();
