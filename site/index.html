@@ -155,13 +155,15 @@
     border-radius: 9px; box-shadow: 5px 5px 0 var(--shadow);
     transition: transform 0.25s ease;
   }
-  .fan img:nth-child(1) { top: 26%; left: 0%;  transform: rotate(-14deg); z-index: 1; }
-  .fan img:nth-child(2) { top: 17%; left: 11%; transform: rotate(-9deg);  z-index: 2; }
-  .fan img:nth-child(3) { top: 11%; left: 22%; transform: rotate(-4deg);  z-index: 3; }
+  /* Leftmost card sits ON TOP (fully visible); each card to the right tucks
+     under the one before it. */
+  .fan img:nth-child(1) { top: 26%; left: 0%;  transform: rotate(-14deg); z-index: 7; }
+  .fan img:nth-child(2) { top: 17%; left: 11%; transform: rotate(-9deg);  z-index: 6; }
+  .fan img:nth-child(3) { top: 11%; left: 22%; transform: rotate(-4deg);  z-index: 5; }
   .fan img:nth-child(4) { top: 9%;  left: 33%; transform: rotate(0deg);   z-index: 4; }
-  .fan img:nth-child(5) { top: 11%; left: 44%; transform: rotate(4deg);   z-index: 5; }
-  .fan img:nth-child(6) { top: 17%; left: 55%; transform: rotate(9deg);   z-index: 6; }
-  .fan img:nth-child(7) { top: 26%; left: 66%; transform: rotate(14deg);  z-index: 7; }
+  .fan img:nth-child(5) { top: 11%; left: 44%; transform: rotate(4deg);   z-index: 3; }
+  .fan img:nth-child(6) { top: 17%; left: 55%; transform: rotate(9deg);   z-index: 2; }
+  .fan img:nth-child(7) { top: 26%; left: 66%; transform: rotate(14deg);  z-index: 1; }
   .fan img:hover { transform: rotate(0deg) translateY(-10px) scale(1.35); z-index: 10; }
   @media (max-width: 800px) { .fan { height: 330px; max-width: 350px; } .fan img { width: 112px; } }
 
