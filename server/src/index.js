@@ -33,11 +33,15 @@ app.use((req, res, next) => {
   const host = (req.headers.host || '').toLowerCase().split(':')[0];
   if (host === 'comigo.net' || host === 'www.comigo.net') {
     if (req.path === '/privacy' || req.path === '/privacy.html') {
+      res.set('Cache-Control', 'no-store');
       return res.sendFile(path.join(SITE_DIR, 'privacy.html'));
     }
     if (req.path === '/favicon.png' || req.path === '/favicon.ico' || req.path === '/apple-touch-icon.png') {
       return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
     }
+    // no-store: mobile Safari clung to multi-MB cached copies through
+    // deploys, making site updates invisible on phones.
+    res.set('Cache-Control', 'no-store');
     return res.sendFile(path.join(SITE_DIR, 'index.html'));
   }
   next();
