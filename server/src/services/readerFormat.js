@@ -328,6 +328,10 @@ function transformToReaderFormat(comic, comicSlug) {
     // generator bubble id -> reader bubble id (for hotspot button triggers)
     const bubbleIdMap = new Map();
 
+    // Every exported bubble paired with its source, so a PAGE-WIDE reading
+    // order can be stamped after all panels are built.
+    const exportedBubblePairs = [];
+
     const exportedPage = {
       id: `${comicSlug}-page-${page.pageNumber}`,
       pageNumber: pageNum,
@@ -363,9 +367,18 @@ function transformToReaderFormat(comic, comicSlug) {
           const ka = a.orderIndex != null ? a.orderIndex : autoRank.get(a);
           const kb = b.orderIndex != null ? b.orderIndex : autoRank.get(b);
           if (ka !== kb) return ka - kb;
-          const ma = a.orderIndex != null ? 0 : 1;   // manual wins a tied number
-          const mb = b.orderIndex != null ? 0 : 1;
-          if (ma !== mb) return ma - mb;
+          // Tied number, one side manual: manual wins only when moving UP
+          // from its geometric spot; moving DOWN it yields (otherwise
+          // "Order 2" on the naturally-first bubble is a no-op). Mirrors
+          // the editor's readingOrderMap.
+          const aManual = a.orderIndex != null;
+          const bManual = b.orderIndex != null;
+          if (aManual !== bManual) {
+            const m = aManual ? a : b;
+            const movedUp = autoRank.get(m) > m.orderIndex;
+            if (aManual) return movedUp ? -1 : 1;
+            return movedUp ? 1 : -1;
+          }
           return geoCmp(a, b);
         });
 
@@ -391,7 +404,7 @@ function transformToReaderFormat(comic, comicSlug) {
           bubbles: panelBubbles.map(bubble => {
             const bubbleId = `${comicSlug}-bubble-${page.pageNumber}-${panelNum}-${bubbleCounter++}`;
             if (bubble.id) bubbleIdMap.set(bubble.id, bubbleId);
-            return {
+            const exported = {
               id: bubbleId,
               type: bubble.type || 'speech',
               ...(bubble.fontSize && { fontSize: bubble.fontSize }),
@@ -469,10 +482,35 @@ function transformToReaderFormat(comic, comicSlug) {
                 };
               })
             };
+            exportedBubblePairs.push({
+              src: bubble, exp: exported,
+              panelOrder: panelNum, floating: panel.floating ? 1 : 0,
+              idx: exportedBubblePairs.length,
+            });
+            return exported;
           })
         };
       }).filter(p => !p.floating || p.bubbles.length > 0)
     };
+
+    // PAGE-WIDE reading order, mirroring the editor's badge numbering:
+    // automatic sequence = panels by panelOrder (floating last on a tie),
+    // bubbles in panel order; a manual orderIndex lifts its bubble out and
+    // re-inserts it at that page-wide position. Stamped on every bubble —
+    // the reader sorts by it.
+    {
+      const base = [...exportedBubblePairs].sort((a, b) =>
+        (a.panelOrder - b.panelOrder) || (a.floating - b.floating) || (a.idx - b.idx));
+      const autos = base.filter(p => p.src.orderIndex == null);
+      const manuals = base.filter(p => p.src.orderIndex != null)
+        .sort((a, b) => (a.src.orderIndex - b.src.orderIndex) || (a.idx - b.idx));
+      const seq = [...autos];
+      for (const m of manuals) {
+        seq.splice(Math.min(Math.max(m.src.orderIndex - 1, 0), seq.length), 0, m);
+      }
+      seq.forEach((p, i) => { p.exp.readingOrder = i + 1; });
+    }
+
     // Resolve hotspot button triggers now that reader bubble ids exist.
     for (const h of exportedPage.hotspots || []) {
       if (h._triggerGenBubbleId) {

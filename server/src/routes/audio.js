@@ -8,6 +8,8 @@ const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 
 const Comic = require('../models/Comic');
+const multer = require('multer');
+const wordRecordingUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
@@ -661,6 +663,391 @@ router.post('/word-audio-count', async (req, res) => {
     });
   } catch (error) {
     console.error('Word audio count error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ---------- Word-audio audit & repair ----------
+
+// Transcribe an audio buffer via OpenAI (same model the reader uses).
+async function transcribeWordBufferOnce(buffer, name, model) {
+  const form = new FormData();
+  form.append('model', model);
+  form.append('language', 'es');
+  if (model === 'whisper-1') form.append('prompt', 'Una sola palabra en español.');
+  form.append('file', new Blob([buffer]), name);
+  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: form,
+  });
+  if (!r.ok) throw new Error(`transcribe ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  return ((await r.json()).text || '').trim();
+}
+
+// gpt-4o-transcribe glitches on ultra-short clips (Cyrillic output, wrong
+// language). When the result looks like a glitch, retry with whisper-1,
+// which is steadier on single words.
+async function transcribeWordBuffer(buffer, name = 'word.mp3') {
+  const first = await transcribeWordBufferOnce(buffer, name, 'gpt-4o-transcribe');
+  const looksGlitched = !first || first.length > 40 || /[^ -ɏḀ-ỿ]/.test(first);
+  if (!looksGlitched) return first;
+  try {
+    const second = await transcribeWordBufferOnce(buffer, name, 'whisper-1');
+    return second || first;
+  } catch (e) {
+    return first;
+  }
+}
+
+const SPANISH_NUMS = {
+  0: 'cero', 1: 'uno', 2: 'dos', 3: 'tres', 4: 'cuatro', 5: 'cinco', 6: 'seis',
+  7: 'siete', 8: 'ocho', 9: 'nueve', 10: 'diez', 11: 'once', 12: 'doce',
+  13: 'trece', 14: 'catorce', 15: 'quince', 16: 'dieciseis', 17: 'diecisiete',
+  18: 'dieciocho', 19: 'diecinueve', 20: 'veinte', 21: 'veintiuno',
+  30: 'treinta', 40: 'cuarenta', 50: 'cincuenta', 60: 'sesenta', 70: 'setenta',
+  80: 'ochenta', 90: 'noventa', 100: 'cien', 1000: 'mil',
+};
+
+function normalizeSpokenWord(s) {
+  let t = (s || '').toLowerCase().trim();
+  // Digits the transcriber may emit for number words.
+  t = t.replace(/\d+/g, (d) => SPANISH_NUMS[parseInt(d, 10)] || d);
+  return t.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zn]/g, '');
+}
+
+// Homophone-tolerant comparison: silent h, b/v, ll/y all sound identical in
+// Spanish, so the transcriber's spelling choice must not count as a failure.
+function spokenWordMatches(expected, heard) {
+  const ne = normalizeSpokenWord(expected);
+  const nh = normalizeSpokenWord(heard);
+  if (!ne || !nh) return false;
+  if (ne === nh) return true;
+  // Phonetic folds for Spanish homophone spellings the transcriber may pick:
+  // silent h, b/v, ll/y, k/c ("con"->"Kon"), qu/k ("que"->"ke"),
+  // ce,ci/se,si (seseo), z/s, ge,gi/je,ji.
+  const loose = (x) => x
+    .replace(/h/g, '')
+    .replace(/b/g, 'v')
+    .replace(/ll/g, 'y')
+    .replace(/qu/g, 'k')
+    .replace(/c(?=[ei])/g, 's')
+    .replace(/z/g, 's')
+    .replace(/g(?=[ei])/g, 'j')
+    .replace(/k/g, 'c');
+  return loose(ne) === loose(nh);
+}
+
+// Detect speech segments in a word file via ffmpeg silencedetect. A clean
+// single-word take is ONE utterance; extra bits before/after the word show
+// up as additional segments separated by silence.
+async function speechSegments(filePath) {
+  let stderr = '';
+  try {
+    const out = await execFileAsync('ffmpeg', [
+      '-i', filePath, '-af', 'silencedetect=noise=-32dB:d=0.22', '-f', 'null', '-',
+    ]);
+    stderr = out.stderr || '';
+  } catch (e) {
+    stderr = e.stderr || '';
+  }
+  const durMatch = stderr.match(/Duration: (\d+):(\d+):([\d.]+)/);
+  const duration = durMatch
+    ? (+durMatch[1]) * 3600 + (+durMatch[2]) * 60 + (+durMatch[3])
+    : null;
+  if (duration == null) return null;
+  const starts = [...stderr.matchAll(/silence_start: ([\d.]+)/g)].map(m => +m[1]);
+  const ends = [...stderr.matchAll(/silence_end: ([\d.]+)/g)].map(m => +m[1]);
+  // Build speech segments from the silence intervals.
+  const segs = [];
+  let cursor = 0;
+  for (let i = 0; i < starts.length; i++) {
+    if (starts[i] - cursor > 0.05) segs.push({ start: cursor, end: starts[i] });
+    cursor = ends[i] != null ? ends[i] : duration;
+  }
+  if (duration - cursor > 0.05) segs.push({ start: cursor, end: duration });
+  return { duration, segs };
+}
+
+// If the file contains more than one utterance, cut it down to the LONGEST
+// one (the word), then verify the trim still says the word before replacing.
+// Returns 'clean' | 'trimmed' | 'trim-failed' | 'skipped'.
+async function trimExtraUtterances(filePath, expectedWord) {
+  if (/\s/.test((expectedWord || '').trim())) return 'skipped';  // multi-word entries legitimately pause
+  const info = await speechSegments(filePath);
+  if (!info || info.segs.length <= 1) return 'clean';
+  const main = info.segs.reduce((a, b) => (b.end - b.start > a.end - a.start ? b : a));
+  const from = Math.max(0, main.start - 0.06);
+  const to = Math.min(info.duration, main.end + 0.09);
+  const tmpOut = filePath.replace(/\.mp3$/, `.trim-${Date.now()}.mp3`);
+  try {
+    await execFileAsync('ffmpeg', [
+      '-i', filePath, '-ss', from.toFixed(3), '-to', to.toFixed(3),
+      '-c:a', 'libmp3lame', '-b:a', '128k', '-y', tmpOut,
+    ]);
+    const heard = await transcribeWordBuffer(await fs.readFile(tmpOut), path.basename(filePath));
+    if (spokenWordMatches(expectedWord, heard)) {
+      await fs.rename(tmpOut, filePath);
+      return 'trimmed';
+    }
+    await fs.unlink(tmpOut).catch(() => {});
+    return 'trim-failed';
+  } catch (e) {
+    await fs.unlink(tmpOut).catch(() => {});
+    return 'trim-failed';
+  }
+}
+
+// POST /api/audio/audit-word-audio — transcribe every word file, flag files
+// whose audio doesn't say the word (clipped onsets etc.), and (repair=true)
+// regenerate failures with a verify loop. Streams NDJSON progress.
+router.post('/audit-word-audio', async (req, res) => {
+  try {
+    const {
+      comicId, voiceId, modelId = 'eleven_v3', repair = true,
+      stability = 0.5, similarityBoost = 0.75, speed = 1.0, languageCode,
+    } = req.body;
+    if (!comicId) return res.status(400).json({ error: 'comicId is required' });
+    if (repair && !voiceId) return res.status(400).json({ error: 'voiceId is required to repair' });
+    if (!process.env.OPENAI_API_KEY) return res.status(400).json({ error: 'OpenAI API key not configured.' });
+
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+
+    const wordMap = collectUniqueWords(comic.toObject());
+    const wordsDir = path.join(PROJECTS_DIR, comicId, 'audio', 'words');
+    let files = [];
+    try {
+      files = (await fs.readdir(wordsDir)).filter(f => f.endsWith('.mp3'));
+    } catch (e) {
+      return res.status(404).json({ error: 'No word audio directory for this comic yet.' });
+    }
+
+    const audited = files.filter(f => wordMap.has(f.replace('.mp3', '')));
+    const orphans = files.length - audited.length;
+
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const generateWordBuffer = async (text, attempt) => {
+      // Attempt 2+ leads with an ellipsis: a silent beat that stops the model
+      // clipping soft onsets (silent h / vowel starts — the "hiciste" bug).
+      const trimmed = (text || '').trim();
+      const punct = /[.!?…,;:]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+      const ttsText = attempt >= 1 ? `… ${punct}` : punct;
+      const body = {
+        text: ttsText, model_id: modelId,
+        voice_settings: { stability, similarity_boost: similarityBoost, speed },
+      };
+      if (languageCode) body.language_code = languageCode;
+      const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: 'POST',
+        headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
+      return Buffer.from(await r.arrayBuffer());
+    };
+
+    let checked = 0, ok = 0, repaired = 0, errors = 0, trimmed = 0;
+    const unresolved = [];
+    const total = audited.length;
+    console.log(`Word audit: ${total} files (${orphans} orphans skipped)${repair ? ', repair on' : ''}`);
+
+    let numericSkipped = 0;
+    for (const file of audited) {
+      const fileKey = file.replace('.mp3', '');
+      const expected = wordMap.get(fileKey);
+      const filePath = path.join(wordsDir, file);
+      checked++;
+      // Pure-number "words" (years etc.) can't be verified — the transcriber
+      // writes them out in words and our matcher can't map arbitrary numbers.
+      if (/^\d+$/.test((expected || '').trim())) {
+        numericSkipped++;
+        ok++;
+        continue;
+      }
+      try {
+        const heard = await transcribeWordBuffer(await fs.readFile(filePath), file);
+        if (spokenWordMatches(expected, heard)) {
+          // Text matches — but the file may still carry a stray extra bit
+          // before/after the word that the transcriber silently ignored.
+          // Energy analysis catches that; trim to the main utterance.
+          const t = await trimExtraUtterances(filePath, expected);
+          if (t === 'trimmed') { trimmed++; }
+          else if (t === 'trim-failed') { unresolved.push({ word: expected, fileKey, heard: 'extra audio detected — trim failed, listen manually' }); }
+          ok++;
+        } else if (!repair) {
+          unresolved.push({ word: expected, fileKey, heard });
+        } else {
+          let fixed = false;
+          let lastHeard = heard;
+          for (let attempt = 0; attempt < 3 && !fixed; attempt++) {
+            const buf = await generateWordBuffer(expected, attempt);
+            const heardNew = await transcribeWordBuffer(buf, file);
+            if (spokenWordMatches(expected, heardNew)) {
+              await fs.writeFile(filePath, buf);
+              // Fresh takes can carry stray extras too.
+              const t = await trimExtraUtterances(filePath, expected);
+              if (t === 'trimmed') trimmed++;
+              repaired++;
+              fixed = true;
+            } else {
+              lastHeard = heardNew;
+            }
+            await new Promise(r2 => setTimeout(r2, 250));
+          }
+          if (!fixed) unresolved.push({ word: expected, fileKey, heard: lastHeard });
+          console.log(`  audit: "${expected}" heard "${heard}" -> ${fixed ? 'repaired' : 'UNRESOLVED'}`);
+        }
+      } catch (err) {
+        errors++;
+        unresolved.push({ word: expected, fileKey, heard: `ERROR: ${err.message.slice(0, 80)}` });
+      }
+      if (checked % 5 === 0 || checked === total) {
+        res.write(JSON.stringify({ type: 'progress', checked, ok, repaired, trimmed, bad: unresolved.length, total, current: expected }) + '\n');
+      }
+      await new Promise(r2 => setTimeout(r2, 120));
+    }
+
+    res.write(JSON.stringify({ type: 'done', checked, ok, repaired, trimmed, errors, orphans, numericSkipped, unresolved: unresolved.slice(0, 50) }) + '\n');
+    res.end();
+    console.log(`Word audit done: ${ok} ok, ${repaired} repaired, ${unresolved.length} unresolved`);
+  } catch (error) {
+    console.error('Word audit error:', error);
+    if (!res.headersSent) res.status(500).json({ error: error.message });
+    else { res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n'); res.end(); }
+  }
+});
+
+// POST /api/audio/regenerate-single-word — regenerate ONE word's audio file
+// with the verify loop (generate -> transcribe -> keep only if it says the
+// word; up to 3 attempts, later ones lead with a silent beat). If no attempt
+// verifies, the last take is saved anyway and verified:false is returned.
+router.post('/regenerate-single-word', async (req, res) => {
+  try {
+    const {
+      comicId, voiceId, modelId = 'eleven_v3', word, ttsText,
+      stability = 0.5, similarityBoost = 0.75, speed = 1.0, languageCode,
+    } = req.body;
+    if (!comicId || !voiceId || !word) {
+      return res.status(400).json({ error: 'comicId, voiceId and word are required' });
+    }
+    const fileKey = sanitizeWordForFilename(word);
+    if (!fileKey) return res.status(400).json({ error: 'word sanitizes to nothing' });
+    const wordsDir = path.join(PROJECTS_DIR, comicId, 'audio', 'words');
+    await fs.mkdir(wordsDir, { recursive: true });
+    const filePath = path.join(wordsDir, `${fileKey}.mp3`);
+
+    // ttsText lets the author shape delivery with ElevenLabs tags
+    // ("[slowly] con") — the FILE is still named/verified by the word itself.
+    const trimmed = ((ttsText || word) + '').trim();
+    const punct = /[.!?…,;:]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+    let lastBuf = null, lastHeard = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const body = {
+        text: attempt >= 1 ? `… ${punct}` : punct,
+        model_id: modelId,
+        voice_settings: { stability, similarity_boost: similarityBoost, speed },
+      };
+      if (languageCode) body.language_code = languageCode;
+      const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: 'POST',
+        headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
+      lastBuf = Buffer.from(await r.arrayBuffer());
+      try {
+        lastHeard = await transcribeWordBuffer(lastBuf, `${fileKey}.mp3`);
+        if (spokenWordMatches(word, lastHeard)) {
+          await fs.writeFile(filePath, lastBuf);
+          return res.json({ success: true, verified: true, heard: lastHeard, attempts: attempt + 1 });
+        }
+      } catch (e) {
+        lastHeard = `ERROR: ${e.message.slice(0, 80)}`;
+      }
+    }
+    await fs.writeFile(filePath, lastBuf);
+    res.json({ success: true, verified: false, heard: lastHeard, attempts: 3 });
+  } catch (error) {
+    console.error('Single word regen error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/audio/word-audio-preview — generate a one-off ElevenLabs take
+// (editable text, same voice setup as word generation) WITHOUT saving; the
+// audio streams back for preview. Saving goes through word-audio-upload.
+router.post('/word-audio-preview', async (req, res) => {
+  try {
+    const {
+      voiceId, modelId = 'eleven_v3', text,
+      stability = 0.5, similarityBoost = 0.75, speed = 1.0, languageCode,
+    } = req.body;
+    if (!voiceId || !text) return res.status(400).json({ error: 'voiceId and text are required' });
+    const body = {
+      text, model_id: modelId,
+      voice_settings: { stability, similarity_boost: similarityBoost, speed },
+    };
+    if (languageCode) body.language_code = languageCode;
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) return res.status(502).json({ error: `ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}` });
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.send(Buffer.from(await r.arrayBuffer()));
+  } catch (error) {
+    console.error('Word audio preview error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/audio/word-audio-upload — replace a word's audio with a manual
+// recording from the browser (webm/mp4/whatever MediaRecorder produced);
+// ffmpeg converts it to the mp3 the reader expects. Returns what the
+// transcriber hears in the new take as a sanity check (informational only).
+router.post('/word-audio-upload', wordRecordingUpload.single('audio'), async (req, res) => {
+  try {
+    const { comicId, fileKey, word } = req.body;
+    if (!comicId || !fileKey || !req.file) {
+      return res.status(400).json({ error: 'comicId, fileKey and audio file are required' });
+    }
+    if (fileKey.includes('/') || fileKey.includes('\\') || fileKey.includes('..')) {
+      return res.status(400).json({ error: 'invalid fileKey' });
+    }
+    const wordsDir = path.join(PROJECTS_DIR, comicId, 'audio', 'words');
+    await fs.mkdir(wordsDir, { recursive: true });
+
+    const tmpIn = path.join(UPLOADS_DIR, `word-rec-${uuidv4()}`);
+    const outPath = path.join(wordsDir, `${fileKey}.mp3`);
+    await fs.writeFile(tmpIn, req.file.buffer);
+    try {
+      // Normalize loudness a touch and trim leading/trailing silence so a
+      // hand recording sits comfortably next to the TTS words.
+      await execFileAsync('ffmpeg', [
+        '-i', tmpIn,
+        '-af', 'silenceremove=start_periods=1:start_threshold=-45dB:stop_periods=1:stop_threshold=-45dB,loudnorm=I=-18:TP=-2',
+        '-ar', '44100', '-b:a', '128k',
+        '-y', outPath,
+      ]);
+    } finally {
+      await fs.unlink(tmpIn).catch(() => {});
+    }
+
+    // Sanity check: what does the transcriber hear?
+    let heard = null, matches = null;
+    try {
+      heard = await transcribeWordBuffer(await fs.readFile(outPath), `${fileKey}.mp3`);
+      if (word) matches = spokenWordMatches(word, heard);
+    } catch (e) { /* informational only */ }
+
+    res.json({ success: true, heard, matches });
+  } catch (error) {
+    console.error('Word audio upload error:', error);
     res.status(500).json({ error: error.message });
   }
 });

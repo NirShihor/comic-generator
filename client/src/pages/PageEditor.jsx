@@ -735,6 +735,41 @@ function PageEditor({ isCover = false }) {
     }
   }, [isCover, panelImages['cover-panel-1']?.path]);
 
+  // Regenerate a SINGLE word's audio file (words/<word>.mp3) with the
+  // verify loop server-side; plays the new take when it lands.
+  const [wordRegenBusy, setWordRegenBusy] = useState({});
+  const [wordRegenPrompt, setWordRegenPrompt] = useState(null);   // { rowId, word, text }
+  const regenerateSingleWord = async (text, ttsText) => {
+    if (!text) return;
+    if (!selectedVoiceId) { alert('Select a voice first'); return; }
+    const key = text.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
+    if (!key) return;
+    setWordRegenBusy(prev => ({ ...prev, [key]: true }));
+    try {
+      const r = await api.post('/audio/regenerate-single-word', {
+        comicId: id,
+        voiceId: selectedVoiceId,
+        modelId: audioModel,
+        word: text,
+        ttsText: (ttsText || '').trim() || undefined,
+        stability: audioSettings.stability,
+        similarityBoost: audioSettings.similarity_boost,
+        speed: audioSettings.speed,
+      });
+      if (audioRef.current) audioRef.current.pause();
+      const audio = new Audio(`/projects/${id}/audio/words/${key}.mp3?t=${Date.now()}`);
+      audioRef.current = audio;
+      audio.play().catch(() => {});
+      if (r.data.verified === false) {
+        alert(`Saved, but the transcriber hears "${r.data.heard}" — listen and regenerate again if needed.`);
+      }
+    } catch (error) {
+      alert('Word regeneration failed: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setWordRegenBusy(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
   // Audio generation functions (voices come from comic.voices configured in ComicEditor)
   const generateAudio = async (bubbleId, sentenceId, text) => {
     if (!text || !selectedVoiceId) {
@@ -1970,30 +2005,27 @@ function PageEditor({ isCover = false }) {
       }
       if (best) { members.get(best)?.push(b); assigned.add(b.id); }
     }
-    // Within a panel: geometric reading order, except a manual orderIndex
-    // takes that position (manual wins a tied number).
-    const orderAware = (list) => {
-      const geo = [...list].sort(sortReading);
-      const rank = new Map(geo.map((b, i) => [b.id, i + 1]));
-      return geo.slice().sort((a, b) => {
-        const ka = a.orderIndex != null ? a.orderIndex : rank.get(a.id);
-        const kb = b.orderIndex != null ? b.orderIndex : rank.get(b.id);
-        if (ka !== kb) return ka - kb;
-        const ma = a.orderIndex != null ? 0 : 1;
-        const mb = b.orderIndex != null ? 0 : 1;
-        if (ma !== mb) return ma - mb;
-        return sortReading(a, b);
-      });
-    };
-    // Numbering order: panels in panelOrder (floating last on a tie), then any
-    // bubbles that somehow still fell outside (no panels at all).
+    // PAGE-WIDE numbering: panels in panelOrder (floating last on a tie),
+    // bubbles geometrically within each panel — that's the automatic
+    // sequence. A manual orderIndex then lifts its bubble out and re-inserts
+    // it at that PAGE-WIDE position, matching the badge numbers (which run
+    // across the whole page, not per panel).
     const forNumber = [...panelList].sort((a, b) =>
       ((a.panelOrder || 0) - (b.panelOrder || 0)) || ((a.floating ? 1 : 0) - (b.floating ? 1 : 0)));
-    let n = 0;
+    const base = [];
     for (const panel of forNumber) {
-      orderAware(members.get(panel) || []).forEach(b => { map[b.id] = ++n; });
+      base.push(...[...(members.get(panel) || [])].sort(sortReading));
     }
-    bubbles.filter(b => !assigned.has(b.id)).sort(sortReading).forEach(b => { map[b.id] = ++n; });
+    base.push(...bubbles.filter(b => !assigned.has(b.id)).sort(sortReading));
+    const baseRank = new Map(base.map((b, i) => [b.id, i]));
+    const autos = base.filter(b => b.orderIndex == null);
+    const manuals = base.filter(b => b.orderIndex != null)
+      .sort((a, b) => (a.orderIndex - b.orderIndex) || (baseRank.get(a.id) - baseRank.get(b.id)));
+    const seq = [...autos];
+    for (const m of manuals) {
+      seq.splice(Math.min(Math.max(m.orderIndex - 1, 0), seq.length), 0, m);
+    }
+    seq.forEach((b, i) => { map[b.id] = i + 1; });
     return map;
   }, [bubbles, panels]);
 
@@ -9431,7 +9463,8 @@ function PageEditor({ isCover = false }) {
                                 </div>
                               )}
                               {(sentence.words || []).map((word, wIdx) => (
-                                <div key={word.id} style={{
+                                <React.Fragment key={word.id}>
+                                <div style={{
                                   display: 'flex',
                                   gap: '0.25rem',
                                   marginBottom: '0.25rem',
@@ -9510,6 +9543,25 @@ function PageEditor({ isCover = false }) {
                                   >
                                     ▶
                                   </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setWordRegenPrompt({ rowId: `${word.id}:w`, word: word.text, text: word.text }); }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    disabled={!word.text || wordRegenBusy[word.text?.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_')]}
+                                    style={{
+                                      padding: '0.15rem 0.25rem',
+                                      background: 'transparent',
+                                      border: '1px solid #3498db',
+                                      borderRadius: '2px',
+                                      color: '#3498db',
+                                      cursor: word.text ? 'pointer' : 'default',
+                                      fontSize: '0.6rem',
+                                      flexShrink: 0,
+                                      opacity: word.text ? 1 : 0.3
+                                    }}
+                                    title="Regenerate this word's audio (verified take)"
+                                  >
+                                    ↻
+                                  </button>
                                   {word.baseForm && word.baseForm.toLowerCase() !== word.text.toLowerCase() && (
                                     <button
                                       onClick={(e) => {
@@ -9535,6 +9587,26 @@ function PageEditor({ isCover = false }) {
                                       title="Play base form audio"
                                     >
                                       ▶B
+                                    </button>
+                                  )}
+                                  {word.baseForm && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setWordRegenPrompt({ rowId: `${word.id}:b`, word: word.baseForm, text: word.baseForm }); }}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      disabled={wordRegenBusy[word.baseForm?.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_')]}
+                                      style={{
+                                        padding: '0.15rem 0.25rem',
+                                        background: 'transparent',
+                                        border: '1px solid #9b59b6',
+                                        borderRadius: '2px',
+                                        color: '#9b59b6',
+                                        cursor: 'pointer',
+                                        fontSize: '0.6rem',
+                                        flexShrink: 0
+                                      }}
+                                      title="Regenerate base form audio (verified take)"
+                                    >
+                                      ↻B
                                     </button>
                                   )}
                                   <label
@@ -9570,6 +9642,38 @@ function PageEditor({ isCover = false }) {
                                     ×
                                   </button>
                                 </div>
+                                {wordRegenPrompt && (wordRegenPrompt.rowId === `${word.id}:w` || wordRegenPrompt.rowId === `${word.id}:b`) && (
+                                  <div onClick={(e) => e.stopPropagation()} style={{ background: '#f4f0fb', border: '1px solid #d5c8ee', borderRadius: '4px', padding: '0.4rem', marginBottom: '0.4rem' }}>
+                                    <div style={{ fontSize: '0.7rem', color: '#666', marginBottom: '0.25rem' }}>
+                                      Regenerate audio for <strong>{wordRegenPrompt.word}</strong> — edit the prompt, add tags:
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
+                                      {['[slowly]', '[whispering]', '[shouting]', '[sad]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[emphasise]', '[assertive]', '[pleading]', '[loud]', '[pause]'].map(tag => (
+                                        <button key={tag}
+                                          onClick={() => setWordRegenPrompt(prev => ({ ...prev, text: `${tag} ${prev.text}` }))}
+                                          style={{ padding: '0.1rem 0.35rem', fontSize: '0.65rem', background: '#f0f0f0', color: '#666', border: '1px solid #ddd', borderRadius: '3px', cursor: 'pointer', fontFamily: 'monospace' }}
+                                          title={`Prepend ${tag} to the prompt`}
+                                        >{tag}</button>
+                                      ))}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                      <input
+                                        value={wordRegenPrompt.text}
+                                        onChange={(e) => setWordRegenPrompt(prev => ({ ...prev, text: e.target.value }))}
+                                        style={{ flex: 1, minWidth: 0, padding: '0.25rem', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.78rem', fontFamily: 'monospace' }}
+                                      />
+                                      <button
+                                        onClick={() => { regenerateSingleWord(wordRegenPrompt.word, wordRegenPrompt.text); setWordRegenPrompt(null); }}
+                                        style={{ padding: '0.25rem 0.7rem', background: '#8e44ad', border: 'none', borderRadius: '3px', color: '#fff', cursor: 'pointer', fontSize: '0.75rem' }}
+                                      >Generate</button>
+                                      <button
+                                        onClick={() => setWordRegenPrompt(null)}
+                                        style={{ padding: '0.25rem 0.5rem', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '3px', color: '#666', cursor: 'pointer', fontSize: '0.75rem' }}
+                                      >Cancel</button>
+                                    </div>
+                                  </div>
+                                )}
+                                </React.Fragment>
                               ))}
                             </div>
                           </div>
@@ -9798,7 +9902,7 @@ function PageEditor({ isCover = false }) {
                           onClick={(e) => e.stopPropagation()}
                           style={{ width: '58px', padding: '0.2rem 0.3rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.8rem' }}
                         />
-                        <span style={{ fontSize: '0.68rem', color: '#aaa' }}>within this bubble's panel — blank = automatic</span>
+                        <span style={{ fontSize: '0.68rem', color: '#aaa' }}>page-wide position (as the badges) — blank = automatic</span>
                       </div>
 
                       {/* Bubble Angle (for thought and narration bubbles) */}

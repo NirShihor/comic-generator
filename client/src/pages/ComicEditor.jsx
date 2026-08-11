@@ -13,6 +13,103 @@ const DEFAULT_SETTINGS = {
   styleSheetImages: []
 };
 
+// One row in the word-audit "unresolved" list: listen to the current file,
+// then generate a replacement manually via ElevenLabs (same voice setup as
+// the word generation above) — the TTS text is editable so pronunciation can
+// be coaxed ("con" -> "con." / "… con."), preview the take, save it.
+function UnresolvedWordRow({ comicId, item, voiceId, modelId, onSaved }) {
+  const [ttsText, setTtsText] = useState(item.word);
+  const [generating, setGenerating] = useState(false);
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(null);   // { heard, matches }
+  const blobRef = useRef(null);
+
+  const generate = async () => {
+    if (!voiceId) { alert('Select a voice above first'); return; }
+    setGenerating(true);
+    setSaved(null);
+    try {
+      const r = await fetch('/api/audio/word-audio-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voiceId, modelId, text: ttsText }),
+      });
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.error || 'generation failed');
+      }
+      const blob = await r.blob();
+      blobRef.current = blob;
+      setBlobUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      alert('Generation failed: ' + e.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const save = async () => {
+    if (!blobRef.current) return;
+    setSaving(true);
+    try {
+      const form = new FormData();
+      form.append('comicId', comicId);
+      form.append('fileKey', item.fileKey);
+      form.append('word', item.word);
+      form.append('audio', blobRef.current, 'take.mp3');
+      const r = await fetch('/api/audio/word-audio-upload', { method: 'POST', body: form });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'upload failed');
+      setSaved(data);
+      onSaved?.(data);
+    } catch (e) {
+      alert('Save failed: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <li style={{ marginBottom: '0.4rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <span><strong>{item.word}</strong> — heard: “{item.heard}”</span>
+        {item.fileKey && (
+          <audio controls preload="none" style={{ height: '26px' }}
+                 src={`/projects/${comicId}/audio/words/${item.fileKey}.mp3?ts=${saved ? Date.now() : 'orig'}`} />
+        )}
+        <input
+          value={ttsText}
+          onChange={(e) => setTtsText(e.target.value)}
+          style={{ width: '130px', padding: '0.15rem 0.4rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.85rem' }}
+          title="Text sent to ElevenLabs — tweak to coax pronunciation"
+        />
+        <button onClick={generate} disabled={generating}
+                style={{ padding: '0.15rem 0.6rem', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                         background: generating ? '#95a5a6' : '#2980b9', color: '#fff', fontSize: '0.8rem' }}>
+          {generating ? 'Generating…' : 'Generate'}
+        </button>
+        {blobUrl && <audio controls src={blobUrl} style={{ height: '26px' }} />}
+        {blobUrl && (
+          <button onClick={save} disabled={saving}
+                  style={{ padding: '0.15rem 0.6rem', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                           background: saving ? '#95a5a6' : '#27ae60', color: '#fff', fontSize: '0.8rem' }}>
+            {saving ? 'Saving…' : 'Save as word audio'}
+          </button>
+        )}
+        {(saved || item.savedHeard != null) && (() => {
+          const info = saved || { heard: item.savedHeard, matches: item.savedMatches };
+          return (
+            <span style={{ fontSize: '0.8rem', color: info.matches === false ? '#e67e22' : '#27ae60' }}>
+              Saved ✓{info.heard ? ` — transcriber hears: “${info.heard}”` : ''}
+            </span>
+          );
+        })()}
+      </div>
+    </li>
+  );
+}
+
 function ComicEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -61,6 +158,21 @@ function ComicEditor() {
   const [wordAudioGenerating, setWordAudioGenerating] = useState(false);
   const [wordAudioProgress, setWordAudioProgress] = useState(null);
   const [wordAudioForceRegenerate, setWordAudioForceRegenerate] = useState(false);
+  const [wordAuditRunning, setWordAuditRunning] = useState(false);
+  const [wordAuditProgress, setWordAuditProgress] = useState(null);
+
+  // Audit results survive page refreshes (per comic) until explicitly cleared.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`wordAuditResult:${id}`);
+      if (stored) setWordAuditProgress(JSON.parse(stored));
+    } catch (e) { /* corrupt storage — ignore */ }
+  }, [id]);
+  useEffect(() => {
+    if (wordAuditProgress?.done) {
+      try { localStorage.setItem(`wordAuditResult:${id}`, JSON.stringify(wordAuditProgress)); } catch (e) {}
+    }
+  }, [wordAuditProgress, id]);
   const [wordFormsForceRegenerate, setWordFormsForceRegenerate] = useState(false);
   // English-audio audit (missing EN audio per bubble)
   const [enAudioChecking, setEnAudioChecking] = useState(false);
@@ -3980,7 +4092,7 @@ function ComicEditor() {
       )}
 
       {activeTab === 'voices' && (
-        <div style={{ maxWidth: '800px' }}>
+        <div style={{ maxWidth: '1200px' }}>
           <h2 style={{ marginBottom: '1rem' }}>Voice Configuration</h2>
           <p style={{ color: '#666', marginBottom: '1.5rem' }}>
             Configure character voices using ElevenLabs voice IDs. These will be available when generating audio for sentences.
@@ -4333,6 +4445,121 @@ function ComicEditor() {
               />
               Force regenerate all (overwrite existing files)
             </label>
+
+            {/* Audit & repair: transcribe every word file, regenerate any whose
+                audio doesn't actually say the word (clipped onsets etc.). */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={async () => {
+                  if (!wordAudioVoiceId) { alert('Please select a voice (used to regenerate bad words)'); return; }
+                  setWordAuditRunning(true);
+                  setWordAuditProgress({ checked: 0, ok: 0, repaired: 0, bad: 0, total: 0, done: false });
+                  try {
+                    const response = await fetch('/api/audio/audit-word-audio', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ comicId: id, voiceId: wordAudioVoiceId, modelId: wordAudioModel, repair: true })
+                    });
+                    if (!response.ok) {
+                      const err = await response.json();
+                      throw new Error(err.error || 'Audit failed');
+                    }
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      buffer += decoder.decode(value, { stream: true });
+                      const lines = buffer.split('\n');
+                      buffer = lines.pop();
+                      for (const line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                          const msg = JSON.parse(line);
+                          if (msg.type === 'progress') {
+                            setWordAuditProgress(prev => ({ ...prev, ...msg }));
+                          } else if (msg.type === 'done') {
+                            setWordAuditProgress(prev => ({ ...prev, ...msg, done: true }));
+                          } else if (msg.type === 'error') {
+                            throw new Error(msg.error);
+                          }
+                        } catch (parseErr) {
+                          console.warn('Failed to parse audit line:', line);
+                        }
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Word audio audit failed:', error);
+                    alert('Word audio audit failed: ' + error.message);
+                  } finally {
+                    setWordAuditRunning(false);
+                  }
+                }}
+                disabled={wordAuditRunning || wordAudioGenerating || !wordAudioVoiceId}
+                style={{
+                  padding: '0.5rem 1.2rem',
+                  background: (wordAuditRunning || !wordAudioVoiceId) ? '#95a5a6' : '#8e44ad',
+                  color: '#fff', border: 'none', borderRadius: '4px',
+                  cursor: (wordAuditRunning || !wordAudioVoiceId) ? 'default' : 'pointer',
+                  fontSize: '0.95rem', whiteSpace: 'nowrap'
+                }}
+              >
+                {wordAuditRunning ? 'Auditing…' : 'Audit & Repair Word Audio'}
+              </button>
+              <span style={{ fontSize: '0.8rem', color: '#888' }}>
+                Listens to every word file and regenerates any that don't say the word.
+              </span>
+            </div>
+
+            {wordAuditProgress && (
+              <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: '4px', padding: '1rem', marginBottom: '0.5rem' }}>
+                <p style={{ margin: '0 0 0.3rem 0', fontSize: '0.9rem' }}>
+                  <strong>Audited:</strong> {wordAuditProgress.checked}/{wordAuditProgress.total}
+                  {' · '}<strong>OK:</strong> {wordAuditProgress.ok}
+                  {' · '}<strong>Repaired:</strong> {wordAuditProgress.repaired}
+                  {wordAuditProgress.trimmed > 0 && <>{' · '}<strong>Trimmed:</strong> {wordAuditProgress.trimmed}</>}
+                  {' · '}<strong>Unresolved:</strong> {wordAuditProgress.bad ?? (wordAuditProgress.unresolved || []).length}
+                  {wordAuditProgress.done ? ' · done ✓' : (wordAuditProgress.current ? ` · checking: ${wordAuditProgress.current}` : '')}
+                  {wordAuditProgress.done && (
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem(`wordAuditResult:${id}`);
+                        setWordAuditProgress(null);
+                      }}
+                      style={{ marginLeft: '0.8rem', padding: '0.1rem 0.6rem', borderRadius: '4px',
+                               border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: '0.78rem' }}
+                    >
+                      Clear results
+                    </button>
+                  )}
+                </p>
+                {wordAuditProgress.done && (wordAuditProgress.unresolved || []).length > 0 && (
+                  <div style={{ fontSize: '0.85rem', color: '#c0392b' }}>
+                    <strong>Still wrong after 3 attempts</strong> — listen, or record them yourself:
+                    <ul style={{ margin: '0.3rem 0 0 1.2rem', listStyle: 'none', padding: 0 }}>
+                      {wordAuditProgress.unresolved.map((u, i) => (
+                        <UnresolvedWordRow
+                          key={i} comicId={id} item={u}
+                          voiceId={wordAudioVoiceId} modelId={wordAudioModel}
+                          onSaved={(data) => setWordAuditProgress(prev => {
+                            if (!prev) return prev;
+                            const unresolved = prev.unresolved.map((x, xi) =>
+                              xi === i ? { ...x, savedHeard: data.heard || '', savedMatches: data.matches } : x);
+                            return { ...prev, unresolved };
+                          })}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {wordAuditProgress.done && wordAuditProgress.orphans > 0 && (
+                  <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.8rem', color: '#888' }}>
+                    {wordAuditProgress.orphans} orphan file(s) skipped (words no longer in the comic).
+                  </p>
+                )}
+              </div>
+            )}
 
             {wordAudioProgress && (
               <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: '4px', padding: '1rem' }}>
@@ -5555,7 +5782,9 @@ function ComicEditor() {
 
       </div>{/* End left column */}
 
-      {/* Right column: Chat Sidebar */}
+      {/* Right column: Chat Sidebar — hidden on the Voices tab so its
+          audio tooling can use the full page width. */}
+      {activeTab !== 'voices' && (
       <div style={{
         flex: '0 0 20%',
         maxWidth: '20%',
@@ -5709,6 +5938,7 @@ function ComicEditor() {
             >Upload</button>
           </div>
       </div>
+      )}
       </div>{/* End flex row */}
 
       {/* Delete Page Confirmation Modal */}
