@@ -670,11 +670,11 @@ router.post('/word-audio-count', async (req, res) => {
 // ---------- Word-audio audit & repair ----------
 
 // Transcribe an audio buffer via OpenAI (same model the reader uses).
-async function transcribeWordBufferOnce(buffer, name, model) {
+async function transcribeWordBufferOnce(buffer, name, model, lang = 'es') {
   const form = new FormData();
   form.append('model', model);
-  form.append('language', 'es');
-  if (model === 'whisper-1') form.append('prompt', 'Una sola palabra en español.');
+  form.append('language', lang);
+  if (model === 'whisper-1' && lang === 'es') form.append('prompt', 'Una sola palabra en español.');
   form.append('file', new Blob([buffer]), name);
   const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
@@ -796,6 +796,26 @@ async function trimExtraUtterances(filePath, expectedWord) {
     await fs.unlink(tmpOut).catch(() => {});
     return 'trim-failed';
   }
+}
+
+// Fresh ES->EN translation for the English-check report, so the author can
+// compare what the Spanish MEANS against what the English audio SAYS.
+async function translateSpanishToEnglish(text) {
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Translate the Spanish sentence to natural English. Reply with the translation only.' },
+        { role: 'user', content: text },
+      ],
+      max_completion_tokens: 120,
+    }),
+  });
+  if (!r.ok) throw new Error(`translate ${r.status}`);
+  const d = await r.json();
+  return (d.choices?.[0]?.message?.content || '').trim();
 }
 
 // POST /api/audio/audit-word-audio — transcribe every word file, flag files
@@ -1212,9 +1232,45 @@ router.get('/english-audio-check/:comicId', async (req, res) => {
     if (!comic) return res.status(404).json({ error: 'Comic not found' });
     const audioDir = path.join(PROJECTS_DIR, req.params.comicId, 'audio');
 
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    // Fuzzy sentence comparison: [tags] aren't spoken; punctuation,
+    // apostrophes and case are transcription noise; small wording drift
+    // (contractions, number spelling) shouldn't flag a match failure.
+    const normEn = (t) => (t || '')
+      .replace(/\[[^\]]+\]/g, ' ')
+      .toLowerCase()
+      .replace(/['\u2019]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+    const lev = (a, b) => {
+      const m = a.length, n = b.length;
+      if (!m) return n; if (!n) return m;
+      let prev = Array.from({ length: n + 1 }, (_, i) => i);
+      for (let i = 1; i <= m; i++) {
+        const cur = [i];
+        for (let j = 1; j <= n; j++) {
+          cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        }
+        prev = cur;
+      }
+      return prev[n];
+    };
+    const matches = (expected, heard) => {
+      const e = normEn(expected), h = normEn(heard);
+      if (!e || !h) return false;
+      if (e === h || e.includes(h) || h.includes(e)) return true;
+      const d = lev(e, h);
+      return 1 - d / Math.max(e.length, h.length) >= 0.82;
+    };
+
     const missing = [];
     let checked = 0;
-    const checkBubbles = async (bubbles, pageLabel) => {
+    const emit = () => res.write(JSON.stringify({ type: 'progress', checked, issues: missing.length }) + '\n');
+
+    const checkBubbles = async (bubbles, pageLabel, pageId) => {
       for (const b of bubbles || []) {
         // Image bubbles CAN carry (invisible) sentences — check those too.
         if (b.isSoundEffect) continue;
@@ -1222,32 +1278,65 @@ router.get('/english-audio-check/:comicId', async (req, res) => {
           if (!sentence.text || !sentence.text.trim()) continue;
           checked++;
           const snippet = sentence.text.slice(0, 60);
+          const entry = { page: pageLabel, pageId, bubbleId: b.id, text: snippet };
+          const flag = async (extra) => {
+            try { extra.spanishSays = await translateSpanishToEnglish(sentence.text); } catch (e) {}
+            missing.push({ ...entry, ...extra });
+          };
           if (!sentence.translation || !sentence.translation.trim()) {
-            missing.push({ page: pageLabel, text: snippet, issue: 'no English translation text' });
-            continue;
+            await flag({ issue: 'no English translation text' });
+          } else if (!sentence.translationAudioUrl) {
+            await flag({ issue: 'no English audio' });
+          } else {
+            const fname = path.basename(sentence.translationAudioUrl);
+            // The stored URL is often extensionless — OpenAI infers the format
+            // from the uploaded FILENAME, so it must carry .mp3.
+            const mp3Name = fname.endsWith('.mp3') ? fname : `${fname}.mp3`;
+            const filePath = path.join(audioDir, mp3Name);
+            try {
+              await fs.access(filePath);
+              // File exists — does it actually SAY the translation?
+              try {
+                const buf = await fs.readFile(filePath);
+                let heard = await transcribeWordBufferOnce(buf, mp3Name, 'gpt-4o-transcribe', 'en');
+                if (!matches(sentence.translation, heard)) {
+                  // Second opinion: short clips glitch gpt-4o-transcribe into
+                  // gibberish/wrong languages. Only flag when whisper-1 also
+                  // fails to match (and show its usually-cleaner transcript).
+                  try {
+                    const heard2 = await transcribeWordBufferOnce(buf, mp3Name, 'whisper-1', 'en');
+                    if (matches(sentence.translation, heard2)) {
+                      heard = null;   // false alarm — audio is fine
+                    } else {
+                      heard = heard2 || heard;
+                    }
+                  } catch (e2) { /* keep first transcript */ }
+                  if (heard != null) {
+                    await flag({ issue: "audio doesn't match translation", englishSays: (heard || '').slice(0, 140) });
+                  }
+                }
+              } catch (e) {
+                await flag({ issue: `transcription failed (${e.message.slice(0, 60)}) — re-run to retry` });
+              }
+            } catch {
+              await flag({ issue: 'English audio file missing on disk' });
+            }
           }
-          if (!sentence.translationAudioUrl) {
-            missing.push({ page: pageLabel, text: snippet, issue: 'no English audio' });
-            continue;
-          }
-          const fname = path.basename(sentence.translationAudioUrl);
-          try {
-            await fs.access(path.join(audioDir, fname.endsWith('.mp3') ? fname : `${fname}.mp3`));
-          } catch {
-            missing.push({ page: pageLabel, text: snippet, issue: 'English audio file missing on disk' });
-          }
+          if (checked % 5 === 0) emit();
         }
       }
     };
 
-    await checkBubbles(comic.cover?.bubbles, 'Cover');
+    await checkBubbles(comic.cover?.bubbles, 'Cover', null);
     for (const page of [...(comic.pages || [])].sort((a, b) => a.pageNumber - b.pageNumber)) {
-      await checkBubbles(page.bubbles, `Page ${page.pageNumber}`);
+      await checkBubbles(page.bubbles, `Page ${page.pageNumber}`, page.id);
     }
 
-    res.json({ checked, missingCount: missing.length, missing });
+    res.write(JSON.stringify({ type: 'done', checked, missingCount: missing.length, missing }) + '\n');
+    res.end();
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    if (!res.headersSent) res.status(500).json({ error: error.message });
+    else { res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n'); res.end(); }
   }
 });
 

@@ -4252,18 +4252,42 @@ function ComicEditor() {
           }}>
             <h3 style={{ marginBottom: '0.5rem', color: '#1f4e8c' }}>English Audio Check</h3>
             <p style={{ color: '#666', marginBottom: '1rem', fontSize: '0.9rem' }}>
-              Scan every bubble in this comic (cover included) and list the ones missing English audio —
-              no translation text, no generated EN audio, or an audio file that has gone missing on disk.
+              Scan every bubble (cover included) for English problems: missing translation text, missing
+              EN audio, files gone from disk — and audio that doesn't actually SAY the translation
+              (each file is transcribed and compared). Issues link straight to their bubble.
             </p>
             <button
               onClick={async () => {
                 setEnAudioChecking(true);
-                setEnAudioCheck(null);
+                setEnAudioCheck({ checked: 0, issues: 0, running: true });
                 try {
-                  const res = await api.get(`/audio/english-audio-check/${id}`, { timeout: 120000 });
-                  setEnAudioCheck(res.data);
+                  const response = await fetch(`/api/audio/english-audio-check/${id}`);
+                  if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Check failed');
+                  }
+                  const reader = response.body.getReader();
+                  const decoder = new TextDecoder();
+                  let buffer = '';
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    for (const line of lines) {
+                      if (!line.trim()) continue;
+                      try {
+                        const msg = JSON.parse(line);
+                        if (msg.type === 'progress') setEnAudioCheck(prev => ({ ...prev, ...msg, running: true }));
+                        else if (msg.type === 'done') setEnAudioCheck({ ...msg, running: false });
+                        else if (msg.type === 'error') throw new Error(msg.error);
+                      } catch (e) { console.warn('en-check line', line); }
+                    }
+                  }
                 } catch (err) {
                   alert('Check failed: ' + (err.response?.data?.error || err.message));
+                  setEnAudioCheck(null);
                 } finally {
                   setEnAudioChecking(false);
                 }
@@ -4299,25 +4323,52 @@ function ComicEditor() {
             >
               Clean [tags] from English
             </button>
-            {enAudioCheck && enAudioCheck.missingCount === 0 && (
+            {enAudioCheck && enAudioCheck.running && (
+              <p style={{ margin: '0.75rem 0 0 0', color: '#1f4e8c', fontSize: '0.88rem' }}>
+                Checking… {enAudioCheck.checked} sentences scanned, {enAudioCheck.issues || 0} issue(s) so far.
+                Transcribing each EN file — this takes a few minutes on a full comic.
+              </p>
+            )}
+            {enAudioCheck && !enAudioCheck.running && enAudioCheck.missingCount === 0 && (
               <div style={{ background: '#d4edda', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
                 <p style={{ margin: 0, color: '#155724' }}>
-                  All good — {enAudioCheck.checked} sentences checked, every one has English audio.
+                  All good — {enAudioCheck.checked} sentences checked: every one has English audio that matches its translation.
                 </p>
               </div>
             )}
-            {enAudioCheck && enAudioCheck.missingCount > 0 && (
+            {enAudioCheck && !enAudioCheck.running && enAudioCheck.missingCount > 0 && (
               <div style={{ background: '#fff3cd', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
                 <p style={{ margin: '0 0 0.5rem 0', color: '#856404', fontWeight: 'bold' }}>
-                  {enAudioCheck.missingCount} of {enAudioCheck.checked} sentences missing English audio:
+                  {enAudioCheck.missingCount} of {enAudioCheck.checked} sentences have English audio issues (click the page to open the bubble):
                 </p>
                 <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
                   <tbody>
                     {enAudioCheck.missing.map((m, i) => (
                       <tr key={i} style={{ borderTop: '1px solid #eadfa8' }}>
-                        <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', whiteSpace: 'nowrap', color: '#856404', fontWeight: 'bold', verticalAlign: 'top' }}>{m.page}</td>
+                        <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                          <a
+                            href={m.pageId
+                              ? `/comic/${id}/page/${m.pageId}${m.bubbleId ? `?focusBubble=${m.bubbleId}` : ''}`
+                              : `/comic/${id}/cover`}
+                            target="_blank" rel="noreferrer"
+                            style={{ color: '#1f4e8c', fontWeight: 'bold', textDecoration: 'underline' }}
+                            title="Open this bubble in the page editor"
+                          >{m.page}</a>
+                        </td>
                         <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', color: '#555', verticalAlign: 'top' }}>“{m.text}”</td>
-                        <td style={{ padding: '0.3rem 0', whiteSpace: 'nowrap', color: '#b23b3b', verticalAlign: 'top' }}>{m.issue}</td>
+                        <td style={{ padding: '0.3rem 0', color: '#b23b3b', verticalAlign: 'top' }}>
+                          {m.issue}
+                          {m.englishSays && (
+                            <div style={{ color: '#555', fontStyle: 'italic', marginTop: '0.15rem' }}>
+                              English says: “{m.englishSays}”
+                            </div>
+                          )}
+                          {m.spanishSays && (
+                            <div style={{ color: '#2d6a2e', fontStyle: 'italic', marginTop: '0.15rem' }}>
+                              Spanish says: “{m.spanishSays}”
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
