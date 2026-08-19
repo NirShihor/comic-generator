@@ -119,6 +119,44 @@ function ComicEditor() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [settingsSource, setSettingsSource] = useState('comic'); // 'comic' or 'collection'
   const [settingsCollectionId, setSettingsCollectionId] = useState(null);
+  // Collection identity editor (name/description) — saves via /collections/:id/identity,
+  // which also propagates the Spanish title to every episode in the collection.
+  const [collEditOpen, setCollEditOpen] = useState(false);
+  const [collEdit, setCollEdit] = useState({ title: '', titleEn: '', description: '' });
+  const [collSaving, setCollSaving] = useState(false);
+
+  const openCollectionEditor = async () => {
+    const cid = settingsCollectionId || comic?.collectionId;
+    if (!cid) return;
+    try {
+      const res = await api.get(`/collections/${cid}`);
+      setCollEdit({
+        title: res.data?.title || comic?.collectionTitle || '',
+        titleEn: res.data?.titleEn || comic?.collectionTitleEn || '',
+        description: res.data?.description || ''
+      });
+    } catch {
+      setCollEdit({ title: comic?.collectionTitle || '', titleEn: comic?.collectionTitleEn || '', description: '' });
+    }
+    setCollEditOpen(true);
+  };
+
+  const saveCollectionIdentity = async () => {
+    const cid = settingsCollectionId || comic?.collectionId;
+    if (!cid) return;
+    setCollSaving(true);
+    try {
+      const res = await api.put(`/collections/${cid}/identity`, collEdit);
+      setComic(prev => ({ ...prev, collectionTitle: collEdit.title, collectionTitleEn: collEdit.titleEn }));
+      setCollEditOpen(false);
+      alert(`Collection updated — name applied to ${res.data?.comicsUpdated ?? 'all'} episode(s).\n\nThe store catalog updates immediately. Re-export + sync the episodes to update downloaded bundles.`);
+    } catch (error) {
+      console.error('Failed to save collection identity:', error);
+      alert('Failed to save collection name/description');
+    } finally {
+      setCollSaving(false);
+    }
+  };
   const [collectionDescription, setCollectionDescription] = useState('');
   const [collectionCoverImage, setCollectionCoverImage] = useState('');
   const [collectionCoverPrompt, setCollectionCoverPrompt] = useState('');
@@ -1926,6 +1964,57 @@ function ComicEditor() {
                 ? `Editing shared collection settings for "${comic.collectionTitle || settingsCollectionId}". Changes apply to all episodes.`
                 : `This comic belongs to collection "${comic.collectionTitle || comic.collectionId}". Saving will create shared collection settings.`
               }
+              {!collEditOpen && (
+                <button
+                  onClick={openCollectionEditor}
+                  style={{ marginLeft: '0.75rem', background: 'none', border: 'none', color: '#a78bfa',
+                           cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline', padding: 0 }}
+                >
+                  Edit name & description
+                </button>
+              )}
+              {collEditOpen && (
+                <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.78rem' }}>
+                    Collection name (Spanish) — applied to every episode
+                    <input
+                      value={collEdit.title}
+                      onChange={e => setCollEdit(p => ({ ...p, title: e.target.value }))}
+                      style={{ width: '100%', marginTop: '0.2rem', padding: '0.4rem 0.6rem', borderRadius: '6px',
+                               border: '1px solid #7c3aed', background: '#1a1332', color: '#e9e4ff' }}
+                    />
+                  </label>
+                  <label style={{ fontSize: '0.78rem' }}>
+                    English title
+                    <input
+                      value={collEdit.titleEn}
+                      onChange={e => setCollEdit(p => ({ ...p, titleEn: e.target.value }))}
+                      style={{ width: '100%', marginTop: '0.2rem', padding: '0.4rem 0.6rem', borderRadius: '6px',
+                               border: '1px solid #7c3aed', background: '#1a1332', color: '#e9e4ff' }}
+                    />
+                  </label>
+                  <label style={{ fontSize: '0.78rem' }}>
+                    Description (shown in the reader's store and collection pages)
+                    <textarea
+                      value={collEdit.description}
+                      onChange={e => setCollEdit(p => ({ ...p, description: e.target.value }))}
+                      rows={3}
+                      style={{ width: '100%', marginTop: '0.2rem', padding: '0.4rem 0.6rem', borderRadius: '6px',
+                               border: '1px solid #7c3aed', background: '#1a1332', color: '#e9e4ff', resize: 'vertical' }}
+                    />
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="btn btn-primary" disabled={collSaving || !collEdit.title.trim()}
+                            onClick={saveCollectionIdentity} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>
+                      {collSaving ? 'Saving…' : 'Save collection'}
+                    </button>
+                    <button className="btn btn-secondary" disabled={collSaving}
+                            onClick={() => setCollEditOpen(false)} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', maxWidth: '700px' }}>

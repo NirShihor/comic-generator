@@ -50,4 +50,35 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// Update collection identity (name / English title / description) and
+// propagate the Spanish title to every comic in the collection — the reader
+// groups episodes by each comic's own collectionTitle copy, so a rename that
+// touches only the Collection doc (or one comic) splits the collection.
+router.put('/:id/identity', async (req, res) => {
+  try {
+    const { title, titleEn, description } = req.body;
+    const set = {};
+    if (title !== undefined) set.title = title;
+    if (titleEn !== undefined) set.titleEn = titleEn;
+    if (description !== undefined) set.description = description;
+    const collection = await Collection.findOneAndUpdate(
+      { id: req.params.id },
+      { $set: set },
+      { new: true, upsert: true }
+    );
+    let comicsUpdated = 0;
+    if (title !== undefined) {
+      const Comic = require('../models/Comic');
+      const r = await Comic.updateMany(
+        { collectionId: req.params.id },
+        { $set: { collectionTitle: title } }
+      );
+      comicsUpdated = r.modifiedCount || 0;
+    }
+    res.json({ collection, comicsUpdated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
