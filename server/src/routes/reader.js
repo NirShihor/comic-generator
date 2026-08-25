@@ -208,6 +208,10 @@ router.get('/catalog', async (req, res) => {
         language: comic.language || 'es',
         fileSizeMB: sizeMB,
         version: '1.0',
+        // Content hash of the current bundle (set when it's mirrored to object
+        // storage on sync). The reader compares it against the version it
+        // downloaded to flag "Update available".
+        ...(comic.bundleVersion && { bundleVersion: comic.bundleVersion }),
         downloadUrl: `/api/reader/comics/${comic.id}`,
         order: comic.order || 0,
         // Include collection info for grouping
