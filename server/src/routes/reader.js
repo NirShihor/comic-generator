@@ -61,26 +61,42 @@ router.post('/transcribe', rateLimit('stt', 240, 10 * 60 * 1000), sttUpload.sing
       return res.status(500).json({ error: 'Transcription not configured' });
     }
     if (!req.file) return res.status(400).json({ error: 'file is required' });
-    const form = new FormData();
-    form.append('model', 'gpt-4o-transcribe');
-    const { language, prompt } = req.body || {};
-    if (language) form.append('language', language);
-    if (prompt) form.append('prompt', prompt);
-    form.append('file', new Blob([req.file.buffer], { type: req.file.mimetype || 'audio/wav' }),
-      req.file.originalname || 'audio.wav');
-    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: form
-    });
-    if (!r.ok) {
-      const t = await r.text();
-      console.error('Transcribe upstream error:', r.status, t.slice(0, 300));
-      return res.status(502).json({ error: `Transcription failed (${r.status})` });
-    }
-    const json = await r.json();
-    res.json({ text: json.text || '' });
+    const { language, prompt, detect } = req.body || {};
+    const upstream = async ({ language, prompt }) => {
+      const form = new FormData();
+      form.append('model', 'gpt-4o-transcribe');
+      if (language) form.append('language', language);
+      if (prompt) form.append('prompt', prompt);
+      form.append('file', new Blob([req.file.buffer], { type: req.file.mimetype || 'audio/wav' }),
+        req.file.originalname || 'audio.wav');
+      const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: form
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        const err = new Error(`Transcription failed (${r.status})`);
+        err.status = r.status; err.detail = t.slice(0, 300);
+        throw err;
+      }
+      return (await r.json()).text || '';
+    };
+    // detect=1: ALSO transcribe with no language/prompt steering, in parallel.
+    // Forcing Spanish decoding makes the model occasionally TRANSLATE English
+    // speech into fluent Spanish; the unsteered pass reveals what was really
+    // said so the reader can reject "answered in English" honestly.
+    const wantFree = detect === '1' || detect === 'true';
+    const [text, freeText] = await Promise.all([
+      upstream({ language, prompt }),
+      wantFree ? upstream({}).catch(() => null) : Promise.resolve(null)
+    ]);
+    res.json(freeText === null ? { text } : { text, freeText });
   } catch (error) {
+    if (error.status) {
+      console.error('Transcribe upstream error:', error.status, error.detail);
+      return res.status(502).json({ error: error.message });
+    }
     console.error('Transcribe error:', error.message);
     res.status(500).json({ error: error.message });
   }
