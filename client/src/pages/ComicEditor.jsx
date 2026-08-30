@@ -220,6 +220,8 @@ function ComicEditor() {
   const [grammarNotesGenerating, setGrammarNotesGenerating] = useState(false);
   const [grammarNotesResult, setGrammarNotesResult] = useState(null);
   const [fillMeaningsRunning, setFillMeaningsRunning] = useState(false);
+  const [fillBaseRunning, setFillBaseRunning] = useState(false);
+  const [fillBaseResult, setFillBaseResult] = useState(null);
   const [fillMeaningsResult, setFillMeaningsResult] = useState(null);
 
   // Reference builder state
@@ -4917,6 +4919,61 @@ function ComicEditor() {
                 <div style={{ background: '#d1ecf1', padding: '0.75rem', borderRadius: '4px', marginTop: '0.75rem' }}>
                   <p style={{ margin: 0, color: '#0c5460' }}>{grammarNotesResult.message}</p>
                 </div>
+              )}
+            </div>
+
+            {/* Fill Base-Form Meanings Section */}
+            <div style={{ background: '#eef7ee', padding: '1rem', borderRadius: '6px', border: '1px solid #b7dfb9', marginBottom: '1rem' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', color: '#2e7d32' }}>Fill Base-Form Meanings</h4>
+              <p style={{ color: '#888', fontSize: '0.85rem', margin: '0 0 0.75rem 0' }}>
+                Adds the dictionary meaning of each word's base form ("ir" → "to go") so the reader shows it beside the base form, and the in-sentence meaning ("I will go") beside the word as used. Only fills words that don't have one yet.
+              </p>
+              <button
+                onClick={async () => {
+                  setFillBaseRunning(true);
+                  setFillBaseResult(null);
+                  try {
+                    const response = await fetch('/api/chat/fill-base-meanings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ comicId: id })
+                    });
+                    if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Failed'); }
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      buffer += decoder.decode(value, { stream: true });
+                      const lines = buffer.split('\n');
+                      buffer = lines.pop();
+                      for (const line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                          const msg = JSON.parse(line);
+                          if (msg.type === 'progress') setFillBaseResult({ current: msg.current, total: msg.total, filled: msg.filled, inProgress: true });
+                          else if (msg.type === 'done') setFillBaseResult({ filled: msg.filled, bases: msg.bases, inProgress: false, message: msg.message });
+                          else if (msg.type === 'error') throw new Error(msg.error);
+                        } catch (e) { console.warn('stream line', line); }
+                      }
+                    }
+                  } catch (error) {
+                    alert('Fill base meanings failed: ' + error.message);
+                  } finally {
+                    setFillBaseRunning(false);
+                  }
+                }}
+                disabled={fillBaseRunning}
+                style={{ padding: '0.5rem 1.2rem', background: fillBaseRunning ? '#95a5a6' : '#2e7d32', color: '#fff', border: 'none', borderRadius: '4px', cursor: fillBaseRunning ? 'default' : 'pointer', fontSize: '0.95rem' }}
+              >
+                {fillBaseRunning ? 'Filling…' : 'Fill Base-Form Meanings'}
+              </button>
+              {fillBaseResult && fillBaseResult.inProgress && (
+                <p style={{ margin: '0.75rem 0 0', color: '#856404' }}>Base forms {fillBaseResult.current} / {fillBaseResult.total} · {fillBaseResult.filled} words filled…</p>
+              )}
+              {fillBaseResult && !fillBaseResult.inProgress && (
+                <p style={{ margin: '0.75rem 0 0', color: '#155724' }}>{fillBaseResult.message || `Done — ${fillBaseResult.filled} words across ${fillBaseResult.bases} base forms. Re-export to ship it.`}</p>
               )}
             </div>
 

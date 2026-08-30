@@ -10,8 +10,9 @@ const WordFormSchema = new mongoose.Schema({
 const WordSchema = new mongoose.Schema({
   id: String,
   text: String,
-  meaning: String,
-  baseForm: String,
+  meaning: String,        // meaning IN THIS SENTENCE ("I will go")
+  baseForm: String,       // dictionary form ("ir")
+  baseMeaning: String,    // dictionary meaning of the base form ("to go")
   startTimeMs: Number,
   endTimeMs: Number,
   vocabQuiz: Boolean,

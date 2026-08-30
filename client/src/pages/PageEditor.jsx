@@ -1151,7 +1151,7 @@ function PageEditor({ isCover = false }) {
               const idx = wordsNeedingLookup.findIndex(wn => wn.id === w.id);
               if (idx >= 0 && lookupResults[idx]) {
                 if (lookupResults[idx].isName) return w; // Keep proper nouns, skip dictionary fill
-                return { ...w, meaning: lookupResults[idx].meaning || '', baseForm: lookupResults[idx].baseForm || '' };
+                return { ...w, meaning: lookupResults[idx].meaning || '', baseForm: lookupResults[idx].baseForm || '', baseMeaning: lookupResults[idx].baseMeaning || '' };
               }
               return w;
             });
@@ -2162,7 +2162,8 @@ function PageEditor({ isCover = false }) {
                 id: `word-${Date.now()}`,
                 text: (response.data.text || selectedText || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim(),
                 meaning: response.data.meaning || '',
-                baseForm: (response.data.baseForm || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim()
+                baseForm: (response.data.baseForm || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim(),
+                baseMeaning: response.data.baseMeaning || ''
               }]
             };
           })
@@ -9093,6 +9094,7 @@ function PageEditor({ isCover = false }) {
                                           text: cleanWord(w).toLowerCase(),
                                           meaning: existing?.meaning || '',
                                           baseForm: existing?.baseForm || '',
+                                          baseMeaning: existing?.baseMeaning || '',
                                           startTimeMs: existing?.startTimeMs,
                                           endTimeMs: existing?.endTimeMs,
                                           vocabQuiz: existing?.vocabQuiz || false
@@ -10662,7 +10664,7 @@ function PageEditor({ isCover = false }) {
                                           if (w.meaning) return w;
                                           const idx = wordsNeedingLookup.findIndex(wn => wn.id === w.id);
                                           if (idx >= 0 && lookupResults[idx] && !lookupResults[idx].isName) {
-                                            return { ...w, meaning: lookupResults[idx].meaning || '', baseForm: lookupResults[idx].baseForm || '' };
+                                            return { ...w, meaning: lookupResults[idx].meaning || '', baseForm: lookupResults[idx].baseForm || '', baseMeaning: lookupResults[idx].baseMeaning || '' };
                                           }
                                           return w;
                                         })
@@ -10691,6 +10693,7 @@ function PageEditor({ isCover = false }) {
                                     text: cleanWord(w).toLowerCase(),
                                     meaning: existing?.meaning || '',
                                     baseForm: existing?.baseForm || '',
+                                    baseMeaning: existing?.baseMeaning || '',
                                     vocabQuiz: existing?.vocabQuiz || false
                                   };
                                 });
