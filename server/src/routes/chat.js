@@ -256,6 +256,7 @@ Return a JSON object with:
 - "text": the ${sourceLang} word/phrase exactly as it appears in the sentence (with any punctuation)
 - "meaning": the ${targetLang} meaning of this word/phrase in this context
 - "baseForm": the dictionary/base form of the ${sourceLang} word (lowercase, no punctuation). For verbs use the infinitive, for nouns use the singular, for adjectives use the masculine singular.
+- "baseMeaning": the short ${targetLang} dictionary meaning of that base form, NOT of the inflected word (verbs as "to ...", e.g. "ir" → "to go"; nouns singular; adjectives masculine singular)
 
 Return ONLY the JSON object, no other text.`;
     } else {
@@ -270,6 +271,7 @@ Return a JSON object with:
 - "text": the corresponding ${sourceLang} word/phrase as it appears in the sentence (with any punctuation)
 - "meaning": the ${targetLang} meaning (which should include or relate to "${selectedText}")
 - "baseForm": the dictionary/base form of the ${sourceLang} word (lowercase, no punctuation). For verbs use the infinitive, for nouns use the singular, for adjectives use the masculine singular.
+- "baseMeaning": the short ${targetLang} dictionary meaning of that base form, NOT of the inflected word (verbs as "to ...", e.g. "ir" → "to go"; nouns singular; adjectives masculine singular)
 
 Return ONLY the JSON object, no other text.`;
     }
@@ -323,11 +325,11 @@ router.post('/batch-word-lookup', async (req, res) => {
     const prompt = `Given this ${sourceLang} sentence: "${sentenceText}"
 Translation: "${sentenceTranslation || ''}"
 
-For each word below, provide the ${targetLang} meaning in this context, its dictionary base form (infinitive for verbs, singular for nouns, masculine singular for adjectives), and whether it is a proper noun (name of a person, place, pet, or any other proper name).
+For each word below, provide the ${targetLang} meaning in this context, its dictionary base form (infinitive for verbs, singular for nouns, masculine singular for adjectives), the short ${targetLang} dictionary meaning of that BASE FORM (verbs as "to ...", e.g. "iré" → base "ir" → baseMeaning "to go"), and whether it is a proper noun (name of a person, place, pet, or any other proper name).
 
 Words: ${words.join(', ')}
 
-Return a JSON array with one entry per word in the same order: [{ "text": "word", "meaning": "english meaning", "baseForm": "base form", "isName": false }, ...]
+Return a JSON array with one entry per word in the same order: [{ "text": "word", "meaning": "english meaning", "baseForm": "base form", "baseMeaning": "base form meaning", "isName": false }, ...]
 Set "isName": true for any proper nouns (people, places, pets, brands, etc.).
 Return ONLY the JSON array, no other text.`;
 
@@ -462,7 +464,7 @@ router.post('/fill-missing-meanings', async (req, res) => {
     function collectSentences(bubbles, location) {
       for (const bubble of bubbles || []) {
         for (const sentence of bubble.sentences || []) {
-          const wordsNeedingMeaning = (sentence.words || []).filter(w => w.text && (!w.meaning || !w.baseForm));
+          const wordsNeedingMeaning = (sentence.words || []).filter(w => w.text && (!w.meaning || !w.baseForm || !w.baseMeaning));
           if (wordsNeedingMeaning.length > 0) {
             sentencesToFix.push({ sentence, bubble, location, wordsToFix: wordsNeedingMeaning });
           }
@@ -493,11 +495,11 @@ router.post('/fill-missing-meanings', async (req, res) => {
         const prompt = `Given this ${sourceLang} sentence: "${sentence.text}"
 Translation: "${sentence.translation || ''}"
 
-For each word below, provide the ${targetLang} meaning in this context, its dictionary base form (infinitive for verbs, singular for nouns, masculine singular for adjectives), and whether it is a proper noun (name of a person, place, pet, or any other proper name).
+For each word below, provide the ${targetLang} meaning in this context, its dictionary base form (infinitive for verbs, singular for nouns, masculine singular for adjectives), the short ${targetLang} dictionary meaning of that BASE FORM (verbs as "to ...", e.g. "iré" → base "ir" → baseMeaning "to go"), and whether it is a proper noun (name of a person, place, pet, or any other proper name).
 
 Words: ${wordTexts.join(', ')}
 
-Return a JSON array with one entry per word in the same order: [{ "text": "word", "meaning": "english meaning", "baseForm": "base form", "isName": false }, ...]
+Return a JSON array with one entry per word in the same order: [{ "text": "word", "meaning": "english meaning", "baseForm": "base form", "baseMeaning": "base form meaning", "isName": false }, ...]
 Set "isName": true for any proper nouns (people, places, pets, brands, etc.).
 Return ONLY the JSON array, no other text.`;
 
@@ -519,6 +521,7 @@ Return ONLY the JSON array, no other text.`;
             if (target) {
               if (wd.meaning) target.meaning = wd.meaning;
               if (wd.baseForm) target.baseForm = wd.baseForm;
+              if (wd.baseMeaning) target.baseMeaning = wd.baseMeaning;
               totalFixed++;
             }
           }
@@ -551,6 +554,112 @@ Return ONLY the JSON array, no other text.`;
       res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n');
       res.end();
     }
+  }
+});
+
+// Fill the dictionary meaning of every word's BASE FORM ("ir" → "to go") across a
+// comic. Words only carried their in-context meaning ("I will go"), which the
+// reader then wrongly displayed beside the base form. Batched by unique base
+// form (one LLM call per ~40 bases), written back to every word sharing it.
+router.post('/fill-base-meanings', async (req, res) => {
+  try {
+    const { comicId, forceRegenerate = false } = req.body;
+    if (!process.env.OPENAI_API_KEY) return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    if (!comicId) return res.status(400).json({ error: 'comicId is required' });
+
+    const Comic = require('../models/Comic');
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+
+    const languageNames = { en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', pt: 'Portuguese' };
+    const sourceLang = languageNames[comic.language || 'es'] || comic.language;
+    const targetLang = languageNames[comic.targetLanguage || 'en'] || comic.targetLanguage;
+
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const comicObj = comic.toObject();
+
+    // All words, grouped by base form
+    const byBase = new Map();   // base -> { sample: { text, meaning }, words: [wordObj] }
+    const visit = (bubbles) => {
+      for (const bubble of bubbles || []) {
+        for (const sentence of bubble.sentences || []) {
+          for (const w of sentence.words || []) {
+            if (!w.text) continue;
+            if (!forceRegenerate && w.baseMeaning) continue;
+            const base = (w.baseForm || w.text).toLowerCase().trim();
+            if (!base) continue;
+            if (!byBase.has(base)) byBase.set(base, { sample: { text: w.text, meaning: w.meaning || '' }, words: [] });
+            byBase.get(base).words.push(w);
+          }
+        }
+      }
+    };
+    visit(comicObj.cover?.bubbles);
+    for (const page of comicObj.pages || []) {
+      visit(page.bubbles);
+      for (const panel of page.panels || []) visit(panel.bubbles);
+    }
+
+    const bases = [...byBase.entries()];
+    if (bases.length === 0) {
+      res.write(JSON.stringify({ type: 'done', filled: 0, bases: 0, message: 'All words already have base meanings' }) + '\n');
+      return res.end();
+    }
+
+    const CHUNK = 40;
+    let filled = 0, done = 0;
+    for (let i = 0; i < bases.length; i += CHUNK) {
+      const chunk = bases.slice(i, i + CHUNK);
+      const list = chunk.map(([base, info]) => `${base}  (seen as "${info.sample.text}" meaning "${info.sample.meaning}")`).join('\n');
+      const prompt = `For each ${sourceLang} dictionary base form below, give its short ${targetLang} DICTIONARY meaning — the meaning of the base form itself, not of the inflected example.
+Rules: verbs as "to ..." (e.g. ir → "to go", quedar → "to stay"); nouns as the singular noun (casa → "house"); adjectives as the masculine singular (alto → "tall"); other words as their usual gloss. Keep each to a few words; give the most common sense, informed by the example.
+
+${list}
+
+Return ONLY a JSON object mapping each base form (exactly as written, lowercase) to its meaning, e.g. { "ir": "to go", "casa": "house" }.`;
+      try {
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'You are a precise bilingual dictionary. Always respond with valid JSON only.' },
+            { role: 'user', content: prompt }
+          ],
+          max_completion_tokens: 2500
+        });
+        const text = completion.choices[0].message.content.trim();
+        const m = text.match(/\{[\s\S]*\}/);
+        if (m) {
+          const map = JSON.parse(m[0]);
+          for (const [base, info] of chunk) {
+            const gloss = map[base] || map[base.normalize('NFC')];
+            if (typeof gloss === 'string' && gloss.trim()) {
+              for (const w of info.words) w.baseMeaning = gloss.trim();
+              filled += info.words.length;
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Fill base meanings chunk error (${comicId}):`, err.message);
+      }
+      done += chunk.length;
+      res.write(JSON.stringify({ type: 'progress', current: done, total: bases.length, filled }) + '\n');
+    }
+
+    await Comic.updateOne(
+      { id: comicId },
+      { $set: { pages: comicObj.pages, ...(comicObj.cover && { cover: comicObj.cover }) } }
+    );
+    console.log(`Fill base meanings (${comicId}): ${filled} words across ${bases.length} base forms`);
+    res.write(JSON.stringify({ type: 'done', filled, bases: bases.length }) + '\n');
+    res.end();
+  } catch (error) {
+    console.error('Fill base meanings error:', error.message);
+    if (!res.headersSent) res.status(500).json({ error: error.message });
+    else { res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n'); res.end(); }
   }
 });
 
