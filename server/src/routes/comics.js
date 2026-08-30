@@ -1658,6 +1658,10 @@ router.post('/:id/upload-bundle', bundleUpload.single('bundle'), async (req, res
           await Comic.updateOne({ id }, { $set: { bundleVersion: version } });
           mirrored = true;
           console.log(`[upload-bundle] ${id}: mirrored ${zipFile} to object storage (v=${version})`);
+          // The reader downloads from Tigris now; the local copy only ate the
+          // volume (every re-sync re-added ~100MB until it filled up, twice).
+          await fs.unlink(zipPath).catch(() => {});
+          console.log(`[upload-bundle] ${id}: local zip removed after mirror`);
           // Pre-warm the CDN edge so the first real reader isn't the one paying the
           // cold origin-fetch cost. Fire-and-forget — don't delay the response.
           warmBundle(id, version)

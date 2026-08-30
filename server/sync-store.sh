@@ -76,7 +76,20 @@ for dir in $dirs; do
   echo "--- $id"
   # COPYFILE_DISABLE stops macOS tar from adding ._ AppleDouble sidecar files,
   # which otherwise pollute the export dir on the volume.
-  COPYFILE_DISABLE=1 tar -cf "$tarfile" "$dir"
+  # Only the CURRENT export (newest slug folder) plus its zip. A renamed comic
+  # leaves its old slug folder + zip behind, and shipping those too doubled
+  # each comic's footprint on the fly volume.
+  sub=$(ls -td "$dir"/*/ 2>/dev/null | head -1); sub=${sub%/}
+  if [ -n "$sub" ]; then
+    zip="$dir/$(basename "$sub").zip"
+    if [ -f "$zip" ]; then
+      COPYFILE_DISABLE=1 tar -cf "$tarfile" "$sub" "$zip"
+    else
+      COPYFILE_DISABLE=1 tar -cf "$tarfile" "$sub"
+    fi
+  else
+    COPYFILE_DISABLE=1 tar -cf "$tarfile" "$dir"
+  fi
   echo "  uploading $(du -h "$tarfile" | cut -f1 | tr -d ' ') over HTTPS..."
   retry curl -sS --fail-with-body --max-time 1800 \
     -H "Cookie: auth_token=$token" \
