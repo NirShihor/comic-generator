@@ -274,20 +274,25 @@ function Reels() {
     finally { setLineBusy(''); }
   };
 
+  // House English narrator — every English take uses this voice regardless of
+  // the cast selection (which picks the SPANISH voice).
+  const ENGLISH_VOICE_ID = 'GP1bgf0sjoFuuHkyrg8E';
+
   const generateLines = async () => {
     const v = cast.find(c => c.voiceId === lineVoice);
     if (!v) return;
     setLineBusy('gen');
     try {
       const make = async (text, languageCode, flag) => {
+        const english = languageCode === 'en';
         const r = await api.post('/marketing/reel-line-audio', {
-          comicId, voiceId: v.voiceId, text, languageCode,
+          comicId, voiceId: english ? ENGLISH_VOICE_ID : v.voiceId, text, languageCode,
           stability: v.settings?.stability ?? 0.5,
           similarityBoost: v.settings?.similarity_boost ?? v.settings?.similarityBoost ?? 0.75,
           speed: v.settings?.speed ?? 1.0,
           ...(v.settings?.model ? { modelId: v.settings.model } : {}),
         });
-        return { file: r.data.file, label: `${flag} ${v.name}: ${r.data.label}` };
+        return { file: r.data.file, label: `${flag} ${english ? 'English' : v.name}: ${r.data.label}` };
       };
       const items = [];
       if (lineOrder !== 'es-only' && lineEn) items.push(await make(lineEn, 'en', '🇬🇧'));
@@ -390,7 +395,7 @@ function Reels() {
             </select>
             {cast.length > 0 && (
               <div style={{ border: '1px solid #444', borderRadius: 8, padding: 10, marginTop: 10 }}>
-                <div style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: 6 }}>🎤 Speak a line — the comic's cast, your words</div>
+                <div style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: 6 }}>🎤 Speak a line — pick the Spanish voice; English always uses the house English voice</div>
                 <select value={lineVoice} onChange={e => setLineVoice(e.target.value)} style={{ ...input, marginBottom: 6 }}>
                   {cast.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
                 </select>
