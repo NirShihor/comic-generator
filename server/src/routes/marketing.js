@@ -55,6 +55,8 @@ router.get('/:comicId/images', async (req, res) => {
 router.post('/poster', async (req, res) => {
   try {
     const { comicId, imageFile, line1 = '', line2 = '' } = req.body;
+    const brightness = Math.min(2, Math.max(0.5, Number(req.body.brightness) || 1));
+    const saturation = Math.min(2, Math.max(0.3, Number(req.body.saturation) || 1));
     if (!comicId || !imageFile) return res.status(400).json({ error: 'comicId and imageFile are required' });
     if (!/^[\w.\-áéíóúñü]+$/i.test(imageFile)) return res.status(400).json({ error: 'Bad image filename' });
     const { dir } = await exportImagesDir(comicId);
@@ -63,7 +65,9 @@ router.post('/poster', async (req, res) => {
     const W = 1080, H = 1350, artH = 900;
     const meta = await sharp(src).metadata();
     const artW = Math.round(artH * meta.width / meta.height);
-    const art = await sharp(src).resize(artW, artH)
+    let artPipe = sharp(src).resize(artW, artH);
+    if (brightness !== 1 || saturation !== 1) artPipe = artPipe.modulate({ brightness, saturation });
+    const art = await artPipe
       .extend({ top: 6, bottom: 6, left: 6, right: 6, background: '#FFFFFF' })
       .png().toBuffer();
     const shadow = Buffer.from(
@@ -74,12 +78,17 @@ router.post('/poster', async (req, res) => {
     const logoMeta = await sharp(logo).metadata();
 
     const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Long lines must never clip: shrink the font until the line fits inside
+    // the canvas with margins (0.56 ≈ avg glyph width / font size for bold
+    // Helvetica — conservative, verified against the overflowing case).
+    const fit = (t, base) => Math.min(base, Math.floor((W - 90) / (0.56 * Math.max(1, String(t).length))));
+    const f1 = fit(line1, 56), f2 = fit(line2, 76);
     // NOTE: Helvetica resolves on macOS (where the generator runs); on Linux
     // sharp falls back to the system sans — acceptable, but posters are
     // expected to be rendered locally.
     const text = Buffer.from(`<svg width="${W}" height="${H}">
-      <text x="${W / 2}" y="104" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="56" font-weight="800" fill="#FFFFFF">${esc(line1)}</text>
-      <text x="${W / 2}" y="204" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="76" font-weight="800" fill="#FFD23F">${esc(line2)}</text>
+      <text x="${W / 2}" y="104" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${f1}" font-weight="800" fill="#FFFFFF">${esc(line1)}</text>
+      <text x="${W / 2}" y="204" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${f2}" font-weight="800" fill="#FFD23F">${esc(line2)}</text>
       <text x="${W / 2}" y="${H - 72}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="31" font-weight="700" fill="#FFFFFF" opacity="0.92">Interactive Spanish stories</text>
       <text x="${W / 2}" y="${H - 32}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="600" fill="#FFFFFF" opacity="0.7">comigo.net</text>
     </svg>`);

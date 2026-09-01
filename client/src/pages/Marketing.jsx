@@ -46,6 +46,8 @@ function Posters() {
   const [images, setImages] = useState([]);
   const [imageFile, setImageFile] = useState('');
   const [line1, setLine1] = useState('');
+  const [brightness, setBrightness] = useState(1);
+  const [saturation, setSaturation] = useState(1);
   const [line2, setLine2] = useState('');
   const [hooks, setHooks] = useState([]);
   const [busy, setBusy] = useState('');
@@ -81,7 +83,7 @@ function Posters() {
     setBusy('poster');
     setPoster(null);
     try {
-      const r = await api.post('/marketing/poster', { comicId, imageFile, line1, line2 });
+      const r = await api.post('/marketing/poster', { comicId, imageFile, line1, line2, brightness, saturation });
       setPoster(r.data.url);
     } catch (e) { alert(e.response?.data?.error || e.message); }
     finally { setBusy(''); }
@@ -121,6 +123,30 @@ function Posters() {
                      style={{ width: '100%', borderRadius: 4, cursor: 'pointer',
                               outline: imageFile === img.file ? '3px solid #8e6bf0' : '1px solid #444' }} />
               ))}
+            </div>
+          </>
+        )}
+
+        {/* 2b. art adjustments — CSS preview mirrors what sharp will do */}
+        {imageFile && (
+          <>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>
+              Adjust art &mdash; brightness {brightness.toFixed(2)} &middot; colour {saturation.toFixed(2)}
+            </label>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              <img src={images.find(i => i.file === imageFile)?.url} alt="preview"
+                   style={{ width: 130, borderRadius: 6, border: '1px solid #555',
+                            filter: `brightness(${brightness}) saturate(${saturation})` }} />
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ fontSize: '0.78rem', color: '#888' }}>Brightness</div>
+                <input type="range" min="0.7" max="1.7" step="0.05" value={brightness}
+                       onChange={e => setBrightness(Number(e.target.value))} style={{ width: '100%' }} />
+                <div style={{ fontSize: '0.78rem', color: '#888', marginTop: 6 }}>Colour</div>
+                <input type="range" min="0.5" max="1.6" step="0.05" value={saturation}
+                       onChange={e => setSaturation(Number(e.target.value))} style={{ width: '100%' }} />
+                <button className="btn btn-secondary" onClick={() => { setBrightness(1); setSaturation(1); }}
+                        style={{ padding: '0.25rem 0.7rem', fontSize: '0.78rem', marginTop: 6 }}>Reset</button>
+              </div>
             </div>
           </>
         )}
