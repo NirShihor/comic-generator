@@ -211,6 +211,7 @@
   .lvls { padding-top: 9px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
   .book .t { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.85rem; line-height: 1.25; min-height: 2.15rem; }
   .book .c { font-family: system-ui, sans-serif; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .book .g { font-family: Charter, Georgia, serif; font-style: italic; font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
   .lvl {
     display: inline-block; font-family: system-ui, sans-serif;
     font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
@@ -236,6 +237,16 @@
   }
   .feat h4 { margin: 0 0 3px; font-family: system-ui, sans-serif; font-size: 1rem; }
   .feat p { margin: 0; font-size: 0.94rem; color: var(--muted); }
+
+  /* ---------- demo ---------- */
+  .demo-head { padding: 40px 0 4px; text-align: center; }
+  .demo-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
+  .demo-head p { margin: 8px auto 0; color: var(--muted); max-width: 52ch; }
+  .demo-stage { display: flex; justify-content: center; padding: 24px 0 14px; }
+  .demo-stage video {
+    width: min(320px, 82vw); border: 3px solid var(--line); border-radius: 18px;
+    box-shadow: 7px 7px 0 var(--shadow); display: block; background: var(--deep);
+  }
 
   /* ---------- footer ---------- */
   footer { border-top: 3px solid var(--line); }
@@ -301,20 +312,17 @@
       </h1>
     </div>
     <p class="hero-copy">
-      We learn best when it matters to us. Wanting to understand a story, relate to
-      a character, or discover what happens next motivates us to explore vocabulary
-      and expressions we haven&rsquo;t yet learned. This is the basic concept behind
-      Comigo: using our natural curiosity to learn a language.
+      <strong>Original Spanish comics</strong> you read, hear and speak. Every bubble is
+      voiced, every word explains itself when you tap it &mdash; and you keep going
+      because you want to know what happens next.
     </p>
     <p class="hero-copy">
-      Comigo is a library of <strong>original Spanish comics</strong> — westerns, mysteries,
-      time travel, apocalyptic worlds, aliens, WW1 soldiers, WW2 spies and more.
-      Every bubble has audio and translation, and every word explains itself when
-      you tap it. The exercises can be done while reading or hands-free, with
-      user audio input or without. It&rsquo;s fun, natural, memorable, and it builds real Spanish.
+      That&rsquo;s the whole idea: you learn Spanish because you want to
+      <strong>continue the story</strong>.
     </p>
     <div class="cta-row">
-      <span class="cta-note">Presently for beginners and intermediate learners. Advanced will be arriving soon.</span>
+      <a class="cta" href="#demo">&#9654;&#xFE0E;&nbsp; Watch the demo</a>
+      <span class="cta-note">For beginner and intermediate learners. Advanced is on the way.</span>
     </div>
   </div>
   <div class="fan" aria-hidden="true">
@@ -330,31 +338,39 @@
   </div>
 </section>
 
+<section class="wrap demo-head" id="demo">
+  <h2 class="display">See it in 25 seconds</h2>
+  <p>A page opens, a bubble is tapped, a word explains itself. Sound on.</p>
+</section>
+<section class="wrap demo-stage">
+  <video src="/demo.mp4" controls playsinline preload="metadata"></video>
+</section>
+
 <section class="wrap strip-head">
-  <h2 class="display">How a page works</h2>
+  <h2 class="display">How one story teaches Spanish</h2>
 </section>
 <section class="wrap strip">
   <div class="panel">
     <span class="glyph">🔊</span>
     <h3 class="display">Read &amp; listen</h3>
-    <p>Follow the story bubble by bubble with native Spanish audio. Show or hide the English translation whenever you want — or never look at it at all.</p>
+    <p>Follow the story bubble by bubble, every line spoken with tone and character. English is there when you want the safety net &mdash; and gone when you don&rsquo;t.</p>
   </div>
   <div class="panel">
     <span class="glyph">👆</span>
-    <h3 class="display">Tap to understand</h3>
-    <p>Any word, tapped, explains itself — meaning, grammar, the form used in that exact sentence — and saves to your notebook for later.</p>
+    <h3 class="display">Never get stuck</h3>
+    <p>Tap any word and it explains itself &mdash; meaning, grammar, the exact form in that sentence &mdash; then keeps reading with you.</p>
   </div>
   <div class="panel">
     <span class="glyph">🎙️</span>
     <h3 class="display">Say it back</h3>
-    <p>Speak the dialogue and Comigo listens and grades you. Hands-free with AirPods, so practice fits a walk, a commute, a queue.</p>
+    <p>Speak the dialogue and Comigo listens and tells you how you did. Hands-free with headphones, so practice fits a walk, a commute, a queue.</p>
   </div>
 </section>
 
 <section class="wrap modes-head">
-  <h2 class="display">Finish the episode. Keep the Spanish.</h2>
-  <p>Every episode ends with its own practice suite, built from the story you just read.
-     The off-screen modes are fully hands-free — AirPods in, phone in your pocket.</p>
+  <h2 class="display">One story. Five ways to learn.</h2>
+  <p>Finish an episode and it becomes your practice &mdash; every exercise is built from
+     the sentences you just read. Off-screen modes are fully hands-free: headphones in, phone in your pocket.</p>
 </section>
 <section class="wrap modes">
   <div class="mode">
@@ -387,39 +403,39 @@
   <div class="shelf">
     <div class="book">
       <img src="{{IMG_page-carta1}}" alt="A page from La Carta Negra">
-      <div class="meta"><div class="t">LA CARTA NEGRA</div><div class="c">El Rey Negro</div></div>
+      <div class="meta"><div class="t">LA CARTA NEGRA</div><div class="c">El Rey Negro</div><div class="g">A revenge western.</div></div>
     </div>
     <div class="book">
       <img src="{{IMG_page-biblioteca3}}" alt="A page from La Biblioteca">
-      <div class="meta"><div class="t">LA BIBLIOTECA</div><div class="c">Los Niños en las Sombras</div></div>
+      <div class="meta"><div class="t">LA BIBLIOTECA</div><div class="c">Los Niños en las Sombras</div><div class="g">A childless dystopia hides the truth.</div></div>
     </div>
     <div class="book">
       <img src="{{IMG_page-colina4}}" alt="A page from La Casa en la Colina">
-      <div class="meta"><div class="t">LA CASA EN LA COLINA</div><div class="c">El Superviviente</div></div>
+      <div class="meta"><div class="t">LA CASA EN LA COLINA</div><div class="c">El Superviviente</div><div class="g">Survival among the infected.</div></div>
     </div>
     <div class="book">
       <img src="{{IMG_page-descubrimiento10}}" alt="A page from El Descubrimiento">
-      <div class="meta"><div class="t">EL DESCUBRIMIENTO</div><div class="c">Ollie Dice</div></div>
+      <div class="meta"><div class="t">EL DESCUBRIMIENTO</div><div class="c">Ollie Dice</div><div class="g">A small dog&rsquo;s simple wisdom.</div></div>
     </div>
     <div class="book">
       <img src="{{IMG_page-llegada4}}" alt="A page from La Llegada">
-      <div class="meta"><div class="t">LA LLEGADA</div><div class="c">El Visitante</div></div>
+      <div class="meta"><div class="t">LA LLEGADA</div><div class="c">El Visitante</div><div class="g">An alien houseguest.</div></div>
     </div>
     <div class="book">
       <img src="{{IMG_page-primer4}}" alt="A page from Primer Turno">
-      <div class="meta"><div class="t">PRIMER TURNO</div><div class="c">El Restaurante</div></div>
+      <div class="meta"><div class="t">PRIMER TURNO</div><div class="c">El Restaurante</div><div class="g">First job, bigger trouble.</div></div>
     </div>
     <div class="book">
       <img src="{{IMG_page-maquina8}}" alt="A page from La Máquina">
-      <div class="meta"><div class="t">LA MÁQUINA</div><div class="c">Los Vientos del Tiempo</div></div>
+      <div class="meta"><div class="t">LA MÁQUINA</div><div class="c">Los Vientos del Tiempo</div><div class="g">A time-travel adventure.</div></div>
     </div>
     <div class="book">
       <img src="{{IMG_page-casa4}}" alt="A page from La Casa">
-      <div class="meta"><div class="t">LA CASA</div><div class="c">La Batalla Después de la Guerra</div></div>
+      <div class="meta"><div class="t">LA CASA</div><div class="c">La Batalla Después de la Guerra</div><div class="g">A WW1 soldier&rsquo;s second battle.</div></div>
     </div>
     <div class="book">
       <img src="{{IMG_page-oferta9}}" alt="A page from La Oferta">
-      <div class="meta"><div class="t">LA OFERTA</div><div class="c">La Mensajera</div></div>
+      <div class="meta"><div class="t">LA OFERTA</div><div class="c">La Mensajera</div><div class="g">A WW2 spy thriller.</div></div>
     </div>
     </div>
   </div>
@@ -427,20 +443,24 @@
 
 <section class="band">
   <div class="wrap">
-    <h2 class="display">Not another language app.</h2>
+    <h2 class="display">Another chapter. Not another lesson.</h2>
     <p>
-      Comigo is a <span class="accent">comic-reading experience</span> that happens to leave
-      Spanish behind. No streaks, no boring drills. Just stories you actually want
-      to finish — made for adults and older teenagers who dropped every flashcard
-      app they ever tried.
+      Most language apps ask you to complete one more lesson. Comigo gives you
+      <span class="accent">one more chapter</span>. You don&rsquo;t learn Spanish so that one day
+      you can enjoy stories &mdash; you enjoy stories, and the Spanish follows. No streaks,
+      no drills for their own sake. Made for adults and older teenagers who dropped
+      every flashcard app they ever tried.
     </p>
   </div>
 </section>
 
+<section class="wrap strip-head">
+  <h2 class="display">Designed to keep you curious</h2>
+</section>
 <section class="wrap features">
   <div class="feat"><span class="dot"></span><div>
-    <h4>Native-voice audio, per bubble</h4>
-    <p>Every line performed with tone and character — not text-to-speech monotone.</p>
+    <h4>Voices with character</h4>
+    <p>Every bubble performed with tone and personality &mdash; heroes, villains, narrators.</p>
   </div></div>
   <div class="feat"><span class="dot"></span><div>
     <h4>Reveal or hide translations</h4>
@@ -451,22 +471,22 @@
     <p>Hear the line, say the line, get graded — Spanish→Spanish or English→Spanish.</p>
   </div></div>
   <div class="feat"><span class="dot"></span><div>
-    <h4>A notebook that fills itself</h4>
-    <p>Words you tap and lists you find in the story are saved for self-testing.</p>
+    <h4>A notebook you build as you read</h4>
+    <p>Save the words you tap and the lists you discover, then test yourself on them.</p>
   </div></div>
   <div class="feat"><span class="dot"></span><div>
-    <h4>Interactive story pages</h4>
-    <p>Buttons, screens and clues hidden in the artwork open into the language.</p>
+    <h4>Pages that hide secrets</h4>
+    <p>Buttons, screens and clues in the artwork open into extra language to explore.</p>
   </div></div>
   <div class="feat"><span class="dot"></span><div>
-    <h4>Beginner and intermediate levels</h4>
-    <p>Series are levelled, so the next episode is always within reach.</p>
+    <h4>Always within reach</h4>
+    <p>Series are levelled for beginners and intermediate learners &mdash; the next episode never feels like a wall.</p>
   </div></div>
 </section>
 
 <footer>
   <div class="wrap">
-    <div>© 2026 Comigo <span style="opacity:0.4">· v9a</span></div>
+    <div>© 2026 Comigo <span style="opacity:0.4">· v10</span></div>
     <div class="links">
       <a href="mailto:nir@comigo.net">Support</a>
       <a href="privacy.html">Privacy Policy</a>
