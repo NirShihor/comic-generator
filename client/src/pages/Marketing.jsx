@@ -230,6 +230,12 @@ function Reels() {
   const [audios, setAudios] = useState([]);
   const [question, setQuestion] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
+  const [cast, setCast] = useState([]);
+  const [lineVoice, setLineVoice] = useState('');
+  const [lineEn, setLineEn] = useState('');
+  const [lineEs, setLineEs] = useState('');
+  const [lineOrder, setLineOrder] = useState('en-es');
+  const [lineBusy, setLineBusy] = useState('');
   const [endCard, setEndCard] = useState(true);
   const [voices, setVoices] = useState([]);      // [{file, label}]
   const [ambient, setAmbient] = useState('duck');
@@ -242,6 +248,7 @@ function Reels() {
     if (!comicId) return;
     api.get(`/marketing/${comicId}/images`).then(r => setImages(r.data.images)).catch(e => alert(e.response?.data?.error || e.message));
     api.get(`/marketing/${comicId}/audios`).then(r => setAudios(r.data.audios)).catch(() => setAudios([]));
+    api.get(`/marketing/${comicId}/voices`).then(r => { setCast(r.data.voices); if (r.data.voices[0]) setLineVoice(r.data.voices[0].voiceId); }).catch(() => setCast([]));
   }, [comicId]);
 
   // One option per language per sentence, labelled with its text.
@@ -257,6 +264,38 @@ function Reels() {
   const moveVoice = (i, d) => {
     const j = i + d; if (j < 0 || j >= voices.length) return;
     const next = [...voices]; [next[i], next[j]] = [next[j], next[i]]; setVoices(next);
+  };
+
+  const translateLine = async () => {
+    if (!lineEn) return;
+    setLineBusy('translate');
+    try { const r = await api.post('/marketing/translate-line', { text: lineEn }); setLineEs(r.data.spanish); }
+    catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setLineBusy(''); }
+  };
+
+  const generateLines = async () => {
+    const v = cast.find(c => c.voiceId === lineVoice);
+    if (!v) return;
+    setLineBusy('gen');
+    try {
+      const make = async (text, languageCode, flag) => {
+        const r = await api.post('/marketing/reel-line-audio', {
+          comicId, voiceId: v.voiceId, text, languageCode,
+          stability: v.settings?.stability ?? 0.5,
+          similarityBoost: v.settings?.similarity_boost ?? v.settings?.similarityBoost ?? 0.75,
+          speed: v.settings?.speed ?? 1.0,
+          ...(v.settings?.model ? { modelId: v.settings.model } : {}),
+        });
+        return { file: r.data.file, label: `${flag} ${v.name}: ${r.data.label}` };
+      };
+      const items = [];
+      if (lineOrder !== 'es-only' && lineEn) items.push(await make(lineEn, 'en', '🇬🇧'));
+      if (lineOrder !== 'en-only' && lineEs) items.push(await make(lineEs, 'es', '🇪🇸'));
+      if (lineOrder === 'es-en') items.reverse();
+      setVoices(vs => [...vs, ...items]);
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setLineBusy(''); }
   };
 
   const remix = async () => {
@@ -349,8 +388,34 @@ function Reels() {
               <option value="">Add a line…</option>
               {voiceOptions.map((o, i) => <option key={i} value={o.file}>{o.label}</option>)}
             </select>
+            {cast.length > 0 && (
+              <div style={{ border: '1px solid #444', borderRadius: 8, padding: 10, marginTop: 10 }}>
+                <div style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: 6 }}>🎤 Speak a line — the comic's cast, your words</div>
+                <select value={lineVoice} onChange={e => setLineVoice(e.target.value)} style={{ ...input, marginBottom: 6 }}>
+                  {cast.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
+                </select>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input style={input} placeholder="English line" value={lineEn} onChange={e => setLineEn(e.target.value)} />
+                  <button className="btn btn-secondary" disabled={lineBusy !== '' || !lineEn} onClick={translateLine} style={{ padding: '0.3rem 0.8rem', whiteSpace: 'nowrap' }}>
+                    {lineBusy === 'translate' ? '…' : '→ ES'}
+                  </button>
+                </div>
+                <input style={{ ...input, marginTop: 6 }} placeholder="Spanish line (edit freely)" value={lineEs} onChange={e => setLineEs(e.target.value)} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select value={lineOrder} onChange={e => setLineOrder(e.target.value)} style={{ ...input, width: 200 }}>
+                    <option value="en-es">English then Spanish</option>
+                    <option value="es-en">Spanish then English</option>
+                    <option value="es-only">Spanish only</option>
+                    <option value="en-only">English only</option>
+                  </select>
+                  <button className="btn btn-primary" disabled={lineBusy !== '' || (!lineEn && !lineEs)} onClick={generateLines} style={{ padding: '0.35rem 1rem' }}>
+                    {lineBusy === 'gen' ? 'Generating…' : 'Generate & add'}
+                  </button>
+                </div>
+              </div>
+            )}
             <label className="btn btn-secondary" style={{ display: 'inline-block', padding: '0.35rem 0.9rem', marginTop: 8, cursor: 'pointer', fontSize: '0.85rem' }}>
-              🎵 Upload your own audio
+              🎵 Or upload audio
               <input type="file" accept=".mp3,.m4a,.wav,.aac,.ogg" style={{ display: 'none' }}
                 onChange={async e => {
                   const f = e.target.files?.[0]; if (!f) return;

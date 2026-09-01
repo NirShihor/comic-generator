@@ -352,6 +352,70 @@ router.post('/upload-audio', audioUpload.single('audio'), async (req, res) => {
   }
 });
 
+// GET /api/marketing/:comicId/voices — the ElevenLabs cast attached to this
+// comic (falling back to its collection's voices).
+router.get('/:comicId/voices', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.comicId }, { voices: 1, collectionId: 1 }).lean();
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    let voices = comic.voices || [];
+    if (voices.length === 0 && comic.collectionId) {
+      const Collection = require('../models/Collection');
+      const col = await Collection.findOne({ id: comic.collectionId }, { voices: 1 }).lean();
+      voices = col?.voices || [];
+    }
+    res.json({ voices: voices.map(v => ({ name: v.name, voiceId: v.voiceId, settings: v.settings || {} })) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/marketing/translate-line — English → Spanish for a reel line.
+router.post('/translate-line', async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) return res.status(400).json({ error: 'OpenAI API key not configured' });
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'text is required' });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: `Translate to natural Castilian Spanish for a comic voice-over. Return ONLY the Spanish text, nothing else.\n\n${text}` }],
+      max_completion_tokens: 200
+    });
+    res.json({ spanish: completion.choices[0].message.content.trim() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/marketing/reel-line-audio — generate a spoken line with one of the
+// comic's ElevenLabs voices (same call shape as the panel generator) and save
+// it as a reel-audio upload. Body: { comicId, voiceId, text, languageCode?,
+// modelId?, stability?, similarityBoost?, speed? }
+router.post('/reel-line-audio', async (req, res) => {
+  try {
+    if (!process.env.ELEVENLABS_API_KEY) return res.status(400).json({ error: 'ELEVENLABS_API_KEY not configured' });
+    const { comicId, voiceId, text, languageCode,
+            modelId = 'eleven_v3', stability = 0.5, similarityBoost = 0.75, speed = 1.0 } = req.body;
+    if (!comicId || !voiceId || !text) return res.status(400).json({ error: 'comicId, voiceId and text are required' });
+    const body = { text, model_id: modelId, voice_settings: { stability, similarity_boost: similarityBoost, speed } };
+    if (languageCode) body.language_code = languageCode;
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) return res.status(502).json({ error: `ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}` });
+    const upDir = path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads');
+    await fs.mkdir(upDir, { recursive: true });
+    const name = `line-${Date.now()}.mp3`;
+    await fs.writeFile(path.join(upDir, name), Buffer.from(await r.arrayBuffer()));
+    res.json({ file: `upload:${name}`, label: text.slice(0, 60) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Lay the comic's real ElevenLabs lines over a clip, with the clip's own
 // audio kept, ducked under the voices, or muted. Voices play sequentially
 // from 0.5s with short gaps; video stream is copied untouched.
