@@ -62,9 +62,17 @@ router.post('/poster', async (req, res) => {
     const { dir } = await exportImagesDir(comicId);
     const src = path.join(dir, imageFile);
 
-    const W = 1080, H = 1350, artH = 900;
+    // Art as large as the card allows: tighter headline block and footer than
+    // v1 (artH 900 → 990). Wide/landscape art is width-capped so it can never
+    // run off the canvas; height then follows the aspect ratio.
+    const W = 1080, H = 1350;
+    let artH = 990;
     const meta = await sharp(src).metadata();
-    const artW = Math.round(artH * meta.width / meta.height);
+    let artW = Math.round(artH * meta.width / meta.height);
+    if (artW > W - 90) {
+      artW = W - 90;
+      artH = Math.round(artW * meta.height / meta.width);
+    }
     let artPipe = sharp(src).resize(artW, artH);
     if (brightness !== 1 || saturation !== 1) artPipe = artPipe.modulate({ brightness, saturation });
     const art = await artPipe
@@ -72,7 +80,7 @@ router.post('/poster', async (req, res) => {
       .png().toBuffer();
     const shadow = Buffer.from(
       `<svg width="${artW + 26}" height="${artH + 26}"><rect x="14" y="14" width="${artW + 12}" height="${artH + 12}" rx="6" fill="rgba(0,0,0,0.55)"/></svg>`);
-    const artX = Math.round((W - artW - 12) / 2), artY = 268;
+    const artX = Math.round((W - artW - 12) / 2), artY = 226;
 
     const logo = await sharp(LOGO_PATH).resize({ width: 140 }).png().toBuffer();
     const logoMeta = await sharp(logo).metadata();
@@ -87,10 +95,10 @@ router.post('/poster', async (req, res) => {
     // sharp falls back to the system sans — acceptable, but posters are
     // expected to be rendered locally.
     const text = Buffer.from(`<svg width="${W}" height="${H}">
-      <text x="${W / 2}" y="104" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${f1}" font-weight="800" fill="#FFFFFF">${esc(line1)}</text>
-      <text x="${W / 2}" y="204" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${f2}" font-weight="800" fill="#FFD23F">${esc(line2)}</text>
-      <text x="${W / 2}" y="${H - 72}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="31" font-weight="700" fill="#FFFFFF" opacity="0.92">Interactive Spanish stories</text>
-      <text x="${W / 2}" y="${H - 32}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="600" fill="#FFFFFF" opacity="0.7">comigo.net</text>
+      <text x="${W / 2}" y="90" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${f1}" font-weight="800" fill="#FFFFFF">${esc(line1)}</text>
+      <text x="${W / 2}" y="182" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${f2}" font-weight="800" fill="#FFD23F">${esc(line2)}</text>
+      <text x="${W / 2}" y="${H - 60}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#FFFFFF" opacity="0.92">Interactive Spanish stories</text>
+      <text x="${W / 2}" y="${H - 24}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="26" font-weight="600" fill="#FFFFFF" opacity="0.7">comigo.net</text>
     </svg>`);
 
     const outDir = path.join(PROJECTS_DIR, comicId, 'marketing');
@@ -100,7 +108,7 @@ router.post('/poster', async (req, res) => {
       .composite([
         { input: shadow, left: artX - 7, top: artY - 7 },
         { input: art, left: artX, top: artY },
-        { input: logo, left: Math.round((W - logoMeta.width) / 2), top: H - 108 - logoMeta.height },
+        { input: logo, left: Math.round((W - logoMeta.width) / 2), top: H - 92 - logoMeta.height },
         { input: text, left: 0, top: 0 },
       ])
       .flatten({ background: VIOLET })
