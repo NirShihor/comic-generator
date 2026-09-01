@@ -567,18 +567,34 @@ router.post('/veo-clip', async (req, res) => {
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const request = { model: tier, prompt, config: { aspectRatio, numberOfVideos: 1 } };
-    if (req.body.negativePrompt) request.config.negativePrompt = String(req.body.negativePrompt);
+    const negative = req.body.negativePrompt ? String(req.body.negativePrompt) : '';
+    if (negative) request.config.negativePrompt = negative;
     if (refs.length) request.config.referenceImages = refs;
 
     let op;
+    const attempt = r => ai.models.generateVideos(r);
     try {
-      op = await ai.models.generateVideos(request);
+      op = await attempt(request);
     } catch (e) {
-      // Some tiers reject referenceImages — retry with the first image as the
-      // starting frame instead, which every tier supports.
-      if (refs.length && /reference/i.test(e.message)) {
+      // Veo 3.1 rejects negativePrompt in some modes ("not supported in your
+      // use case") — fold the avoid-list into the prose prompt and retry.
+      if (negative && /negative prompt/i.test(e.message)) {
+        console.warn('[veo] negativePrompt rejected, folding into prompt');
+        delete request.config.negativePrompt;
+        request.prompt = `${prompt}\n\nStrictly avoid, do not include under any circumstances: ${negative}.`;
+        try {
+          op = await attempt(request);
+        } catch (e2) {
+          if (refs.length && /reference/i.test(e2.message)) {
+            console.warn('[veo] referenceImages also rejected, retrying as first-frame:', e2.message);
+            op = await attempt({ model: tier, prompt: request.prompt, image: refs[0].image, config: { aspectRatio, numberOfVideos: 1 } });
+          } else throw e2;
+        }
+      } else if (refs.length && /reference/i.test(e.message)) {
+        // Some tiers reject referenceImages — retry with the first image as
+        // the starting frame instead, which every tier supports.
         console.warn('[veo] referenceImages rejected, retrying as first-frame:', e.message);
-        op = await ai.models.generateVideos({ model: tier, prompt, image: refs[0].image, config: { aspectRatio, numberOfVideos: 1 } });
+        op = await attempt({ model: tier, prompt, image: refs[0].image, config: { aspectRatio, numberOfVideos: 1 } });
       } else throw e;
     }
     const started = Date.now();
