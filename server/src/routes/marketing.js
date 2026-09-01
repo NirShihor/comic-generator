@@ -198,4 +198,196 @@ Return the caption as plain text only.`;
   }
 });
 
+// GET /api/marketing/:comicId/audios — every sentence with its audio file,
+// in reading order, for building reel segments.
+router.get('/:comicId/audios', async (req, res) => {
+  try {
+    const { slug } = await exportImagesDir(req.params.comicId);
+    const jsonPath = path.join(PROJECTS_DIR, req.params.comicId, 'export', slug, 'comic.json');
+    const comic = JSON.parse(await fs.readFile(jsonPath, 'utf-8'));
+    const out = [];
+    for (const page of comic.pages || []) {
+      const walk = bubbles => {
+        for (const b of bubbles || [])
+          for (const sent of b.sentences || [])
+            if (sent.text && sent.audioUrl) out.push({
+              page: page.pageNumber, text: sent.text,
+              translation: sent.translation || '',
+              file: `${sent.audioUrl}.mp3`
+            });
+      };
+      walk(page.bubbles);
+      for (const panel of page.panels || []) walk(panel.bubbles);
+    }
+    res.json({ audios: out });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/marketing/reel — render a 9:16 Reel from panel/audio segments.
+// Body: { comicId, segments: [{ imageFile, audioFile? , seconds? }],
+//         question, brightness?, saturation? }
+// Each art segment slow-zooms while its real Spanish audio plays, then a
+// violet question card, then the logo end card. No music — the voices are
+// the soundtrack (add an Instagram track at post time if wanted).
+router.post('/reel', async (req, res) => {
+  const { execFile } = require('child_process');
+  const os = require('os');
+  const run = (cmd, args) => new Promise((resolve, reject) =>
+    execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
+      err ? reject(new Error(se || err.message)) : resolve(so)));
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'reel-'));
+  try {
+    const { comicId, segments = [], question = '' } = req.body;
+    const brightness = Math.min(2, Math.max(0.5, Number(req.body.brightness) || 1));
+    const saturation = Math.min(2, Math.max(0.3, Number(req.body.saturation) || 1));
+    if (!comicId || segments.length === 0) return res.status(400).json({ error: 'comicId and segments are required' });
+    if (segments.length > 6) return res.status(400).json({ error: 'Max 6 segments' });
+    const { slug, dir } = await exportImagesDir(comicId);
+    const audioDir = path.join(PROJECTS_DIR, comicId, 'export', slug, 'audio');
+    const W = 1080, H = 1920, FPS = 25;
+
+    const parts = [];
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (!/^[\w.\-áéíóúñü]+$/i.test(seg.imageFile || '')) throw new Error('Bad image filename');
+      // Pre-process the art: brightness/colour, cover-crop to 9:16 at 2x.
+      let pipe = sharp(path.join(dir, seg.imageFile)).resize(W * 2, H * 2, { fit: 'cover' });
+      if (brightness !== 1 || saturation !== 1) pipe = pipe.modulate({ brightness, saturation });
+      const still = path.join(tmp, `art${i}.png`);
+      await pipe.png().toFile(still);
+
+      let dur = Math.min(8, Math.max(1.2, Number(seg.seconds) || 2.5));
+      let audioArgs = ['-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=r=44100:cl=stereo'];
+      if (seg.audioFile) {
+        if (!/^[\w.\-áéíóúñü]+$/i.test(seg.audioFile)) throw new Error('Bad audio filename');
+        const ap = path.join(audioDir, seg.audioFile);
+        const probe = await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ap]);
+        dur = Math.min(10, parseFloat(probe) + 0.45);
+        audioArgs = ['-i', ap];
+      }
+      const out = path.join(tmp, `seg${i}.mp4`);
+      // Slow push-in: upscaled still through zoompan (zoom step per frame).
+      await run('ffmpeg', ['-y', '-loop', '1', '-framerate', String(FPS), '-t', String(dur), '-i', still,
+        ...audioArgs,
+        '-filter_complex',
+        `[0:v]zoompan=z='min(zoom+0.0009,1.18)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:fps=${FPS}:s=${W}x${H}[v];[1:a]apad[a]`,
+        '-map', '[v]', '-map', '[a]', '-t', String(dur),
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-ar', '44100', out]);
+      parts.push(out);
+    }
+
+    // Question card (2s) and end card (1.8s), sharp-rendered like the posters.
+    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const fitQ = Math.min(88, Math.floor((W - 100) / (0.56 * Math.max(1, String(question).length))));
+    const qCard = path.join(tmp, 'qcard.png');
+    await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
+      .composite([{ input: Buffer.from(`<svg width="${W}" height="${H}">
+          <text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitQ}" font-weight="800" fill="#FFD23F">${esc(question)}</text>
+        </svg>`), left: 0, top: 0 }])
+      .flatten({ background: VIOLET }).png().toFile(qCard);
+    const logo = await sharp(LOGO_PATH).resize({ width: 300 }).png().toBuffer();
+    const logoMeta = await sharp(logo).metadata();
+    const eCard = path.join(tmp, 'ecard.png');
+    await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
+      .composite([
+        { input: logo, left: Math.round((W - logoMeta.width) / 2), top: Math.round(H / 2 - logoMeta.height) },
+        { input: Buffer.from(`<svg width="${W}" height="${H}">
+            <text x="${W / 2}" y="${H / 2 + 90}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text>
+            <text x="${W / 2}" y="${H / 2 + 150}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="36" font-weight="600" fill="#FFFFFF" opacity="0.75">comigo.net</text>
+          </svg>`), left: 0, top: 0 }
+      ])
+      .flatten({ background: VIOLET }).png().toFile(eCard);
+    for (const [img, dur, name] of [[qCard, question ? 2.0 : 0, 'qseg'], [eCard, 1.8, 'eseg']]) {
+      if (dur === 0) continue;
+      const out = path.join(tmp, `${name}.mp4`);
+      await run('ffmpeg', ['-y', '-loop', '1', '-framerate', String(FPS), '-t', String(dur), '-i', img,
+        '-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=r=44100:cl=stereo',
+        '-vf', `scale=${W}:${H}`, '-t', String(dur),
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-ar', '44100', out]);
+      parts.push(out);
+    }
+
+    // Concat everything.
+    const inputs = parts.flatMap(f => ['-i', f]);
+    const n = parts.length;
+    const filter = parts.map((_, i) => `[${i}:v][${i}:a]`).join('') + `concat=n=${n}:v=1:a=1[v][a]`;
+    const outDir = path.join(PROJECTS_DIR, comicId, 'marketing');
+    await fs.mkdir(outDir, { recursive: true });
+    const name = `reel-${Date.now()}.mp4`;
+    await run('ffmpeg', ['-y', ...inputs, '-filter_complex', filter, '-map', '[v]', '-map', '[a]',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', path.join(outDir, name)]);
+    res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name });
+  } catch (error) {
+    console.error('Reel render error:', error.message);
+    res.status(500).json({ error: error.message });
+  } finally {
+    fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+// POST /api/marketing/veo-clip — generate a video clip with Veo (Gemini API),
+// guided by up to 3 directional images from the comic's export and a text
+// brief. Same SDK + key as comic image generation.
+// Body: { comicId, prompt, imageFiles?: [..up to 3], model?: 'fast'|'quality'|'lite',
+//         aspectRatio?: '9:16'|'16:9' }
+router.post('/veo-clip', async (req, res) => {
+  try {
+    const { GoogleGenAI } = require('@google/genai');
+    if (!process.env.GEMINI_API_KEY) return res.status(400).json({ error: 'GEMINI_API_KEY not configured' });
+    const { comicId, prompt, imageFiles = [], aspectRatio = '9:16' } = req.body;
+    const tier = { fast: 'veo-3.1-fast-generate-preview', quality: 'veo-3.1-generate-preview', lite: 'veo-3.1-lite-generate-preview' }[req.body.model || 'fast'];
+    if (!comicId || !prompt) return res.status(400).json({ error: 'comicId and prompt are required' });
+    if (imageFiles.length > 3) return res.status(400).json({ error: 'Max 3 directional images' });
+    const { dir } = await exportImagesDir(comicId);
+
+    const refs = [];
+    for (const f of imageFiles) {
+      if (!/^[\w.\-áéíóúñü]+$/i.test(f)) return res.status(400).json({ error: 'Bad image filename' });
+      // Veo refs don't need full-res: cap at 1024px to keep the request light.
+      const buf = await sharp(path.join(dir, f)).resize({ width: 1024, withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+      refs.push({ image: { imageBytes: buf.toString('base64'), mimeType: 'image/jpeg' } });
+    }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const request = { model: tier, prompt, config: { aspectRatio, numberOfVideos: 1 } };
+    if (refs.length) request.config.referenceImages = refs;
+
+    let op;
+    try {
+      op = await ai.models.generateVideos(request);
+    } catch (e) {
+      // Some tiers reject referenceImages — retry with the first image as the
+      // starting frame instead, which every tier supports.
+      if (refs.length && /reference/i.test(e.message)) {
+        console.warn('[veo] referenceImages rejected, retrying as first-frame:', e.message);
+        op = await ai.models.generateVideos({ model: tier, prompt, image: refs[0].image, config: { aspectRatio, numberOfVideos: 1 } });
+      } else throw e;
+    }
+    const started = Date.now();
+    while (!op.done) {
+      if (Date.now() - started > 8 * 60 * 1000) throw new Error('Veo generation timed out');
+      await new Promise(r => setTimeout(r, 8000));
+      op = await ai.operations.getVideosOperation({ operation: op });
+    }
+    const vids = op.response?.generatedVideos || [];
+    if (!vids.length) {
+      const why = op.response?.raiMediaFilteredReasons?.join('; ') || op.error?.message || 'no video returned (possibly filtered)';
+      return res.status(502).json({ error: `Veo returned nothing: ${why}` });
+    }
+    const outDir = path.join(PROJECTS_DIR, comicId, 'marketing');
+    await fs.mkdir(outDir, { recursive: true });
+    const name = `veo-${Date.now()}.mp4`;
+    await ai.files.download({ file: vids[0].video, downloadPath: path.join(outDir, name) });
+    res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name, model: tier });
+  } catch (error) {
+    console.error('Veo clip error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
