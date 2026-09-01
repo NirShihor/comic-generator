@@ -251,6 +251,14 @@ function ComicList() {
           </button>
           <button
             className="btn btn-secondary"
+            onClick={() => navigate('/marketing')}
+            style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+            title="Posters, captions and other marketing content"
+          >
+            🎬 Marketing
+          </button>
+          <button
+            className="btn btn-secondary"
             onClick={() => navigate('/notebook')}
             style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
             title="Edit the global grammar notebook shown in the reader app"

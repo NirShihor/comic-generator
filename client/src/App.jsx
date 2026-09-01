@@ -6,6 +6,7 @@ import PageEditor from './pages/PageEditor';
 import ReorderComics from './pages/ReorderComics';
 import NotebookAdmin from './pages/NotebookAdmin';
 import Backgrounds from './pages/Backgrounds';
+import Marketing from './pages/Marketing';
 import './App.css';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
             <Route path="/order" element={<ReorderComics />} />
             <Route path="/notebook" element={<NotebookAdmin />} />
             <Route path="/backgrounds" element={<Backgrounds />} />
+            <Route path="/marketing" element={<Marketing />} />
             <Route path="/comic/:id" element={<ComicEditor />} />
             <Route path="/comic/:id/settings" element={<ComicSettings />} />
             <Route path="/comic/:id/page/:pageId" element={<PageEditor />} />

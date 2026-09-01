@@ -80,6 +80,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/reader', readerRoutes);
 app.use('/api/notebook', notebookRoutes);
 app.use('/api/backgrounds', backgroundRoutes);
+app.use('/api/marketing', require('./routes/marketing'));
 
 // Health check
 app.get('/api/health', (req, res) => {
