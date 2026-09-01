@@ -228,6 +228,8 @@ function Reels() {
   const [clipFile, setClipFile] = useState(null);
   const [error, setError] = useState('');
   const [audios, setAudios] = useState([]);
+  const [question, setQuestion] = useState('');
+  const [endCard, setEndCard] = useState(true);
   const [voices, setVoices] = useState([]);      // [{file, label}]
   const [ambient, setAmbient] = useState('duck');
 
@@ -259,7 +261,7 @@ function Reels() {
   const remix = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => v.file), ambient });
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => v.file), ambient, question, endCard });
       setClip(r.data.url);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -274,7 +276,7 @@ function Reels() {
     setBusy(true); setClip(null); setError('');
     try {
       const r = await api.post('/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, aspectRatio: '9:16',
-        voiceAudio: voices.map(v => v.file), ambient });
+        voiceAudio: voices.map(v => v.file), ambient, question, endCard });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -356,6 +358,14 @@ function Reels() {
                 ))}
               </div>
             )}
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>
+              5 · Finish — question card + Comigo sign-off
+            </label>
+            <input style={input} placeholder="Question card (yellow, 2s) — leave empty to skip" value={question} onChange={e => setQuestion(e.target.value)} />
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 8 }}>
+              <input type="checkbox" checked={endCard} onChange={e => setEndCard(e.target.checked)} />
+              End with the Comigo logo card (1.8s)
+            </label>
             <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ fontSize: '0.8rem', color: '#888' }}>Veo's own audio:</label>
               <select value={ambient} onChange={e => setAmbient(e.target.value)} style={{ ...input, width: 220 }}>

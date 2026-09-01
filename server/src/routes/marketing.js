@@ -363,6 +363,65 @@ async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath) {
     '-movflags', '+faststart', outPath]);
 }
 
+// Append the branded finish to a clip: optional violet question card (2s)
+// then the logo end card (1.8s) — turns a raw generation into a Reel that
+// signs off as Comigo. Re-encodes to a uniform 1080x1920/25fps for concat.
+async function finishClip(comicId, videoPath, question, outPath) {
+  const { execFile } = require('child_process');
+  const os = require('os');
+  const run = (cmd, args) => new Promise((resolve, reject) =>
+    execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
+      err ? reject(new Error(se || err.message)) : resolve(so)));
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'finish-'));
+  try {
+    const W = 1080, H = 1920, FPS = 25;
+    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const cards = [];
+    if (question) {
+      const fitQ = Math.min(88, Math.floor((W - 100) / (0.56 * String(question).length)));
+      const qp = path.join(tmp, 'q.png');
+      await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
+        .composite([{ input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitQ}" font-weight="800" fill="#FFD23F">${esc(question)}</text></svg>`), left: 0, top: 0 }])
+        .flatten({ background: VIOLET }).png().toFile(qp);
+      cards.push([qp, 2.0]);
+    }
+    const logo = await sharp(LOGO_PATH).resize({ width: 300 }).png().toBuffer();
+    const lm = await sharp(logo).metadata();
+    const ep = path.join(tmp, 'e.png');
+    await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
+      .composite([
+        { input: logo, left: Math.round((W - lm.width) / 2), top: Math.round(H / 2 - lm.height) },
+        { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 90}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text><text x="${W / 2}" y="${H / 2 + 150}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="36" font-weight="600" fill="#FFFFFF" opacity="0.75">comigo.net</text></svg>`), left: 0, top: 0 }
+      ]).flatten({ background: VIOLET }).png().toFile(ep);
+    cards.push([ep, 1.8]);
+
+    const parts = [];
+    const main = path.join(tmp, 'main.mp4');
+    await run('ffmpeg', ['-y', '-i', videoPath,
+      '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS}`,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-ar', '44100', '-ac', '2', main]);
+    parts.push(main);
+    for (let i = 0; i < cards.length; i++) {
+      const [png, dur] = cards[i];
+      const seg = path.join(tmp, `card${i}.mp4`);
+      await run('ffmpeg', ['-y', '-loop', '1', '-framerate', String(FPS), '-t', String(dur), '-i', png,
+        '-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=r=44100:cl=stereo',
+        '-vf', `scale=${W}:${H}`, '-t', String(dur),
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-ar', '44100', '-ac', '2', seg]);
+      parts.push(seg);
+    }
+    const inputs = parts.flatMap(f => ['-i', f]);
+    const filter = parts.map((_, i) => `[${i}:v][${i}:a]`).join('') + `concat=n=${parts.length}:v=1:a=1[v][a]`;
+    await run('ffmpeg', ['-y', ...inputs, '-filter_complex', filter, '-map', '[v]', '-map', '[a]',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outPath]);
+  } finally {
+    fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
 // paying for a new generation. Body: { comicId, file, voiceAudio: [..], ambient }
 router.post('/veo-remix', async (req, res) => {
@@ -372,8 +431,16 @@ router.post('/veo-remix', async (req, res) => {
     const src = path.join(PROJECTS_DIR, comicId, 'marketing', file);
     const name = `${file.replace(/\.mp4$/, '')}-mix-${Date.now()}.mp4`;
     const out = path.join(PROJECTS_DIR, comicId, 'marketing', name);
-    if (voiceAudio.length === 0 && ambient === 'keep') return res.status(400).json({ error: 'Nothing to change' });
-    await mixVoicesOnto(comicId, src, voiceAudio, ambient, out);
+    const { question = '', endCard = false } = req.body;
+    if (voiceAudio.length === 0 && ambient === 'keep' && !question && !endCard) return res.status(400).json({ error: 'Nothing to change' });
+    let cur = src;
+    if (voiceAudio.length > 0 || ambient !== 'keep') { await mixVoicesOnto(comicId, src, voiceAudio, ambient, out); cur = out; }
+    if (question || endCard) {
+      const fin = out.replace(/\.mp4$/, '-fin.mp4');
+      await finishClip(comicId, cur, question, fin);
+      const finName = path.basename(fin);
+      return res.json({ url: `/projects/${comicId}/marketing/${finName}`, file: finName });
+    }
     res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name });
   } catch (error) {
     console.error('Veo remix error:', error.message);
@@ -441,6 +508,12 @@ router.post('/veo-clip', async (req, res) => {
       const mixed = name.replace(/\.mp4$/, '-mix.mp4');
       await mixVoicesOnto(comicId, path.join(outDir, name), voiceAudio, ambient, path.join(outDir, mixed));
       name = mixed;
+    }
+    const { question: finQ = '', endCard = false } = req.body;
+    if (finQ || endCard) {
+      const fin = name.replace(/\.mp4$/, '-fin.mp4');
+      await finishClip(comicId, path.join(outDir, name), finQ, path.join(outDir, fin));
+      name = fin;
     }
     res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name, model: tier });
   } catch (error) {
