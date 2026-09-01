@@ -229,6 +229,7 @@ function Reels() {
   const [error, setError] = useState('');
   const [audios, setAudios] = useState([]);
   const [question, setQuestion] = useState('');
+  const [negativePrompt, setNegativePrompt] = useState('');
   const [endCard, setEndCard] = useState(true);
   const [voices, setVoices] = useState([]);      // [{file, label}]
   const [ambient, setAmbient] = useState('duck');
@@ -276,7 +277,7 @@ function Reels() {
     setBusy(true); setClip(null); setError('');
     try {
       const r = await api.post('/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, aspectRatio: '9:16',
-        voiceAudio: voices.map(v => v.file), ambient, question, endCard });
+        voiceAudio: voices.map(v => v.file), ambient, question, endCard, negativePrompt });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -300,7 +301,8 @@ function Reels() {
         {images.length > 0 && (
           <>
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>
-              2 · Directional images ({refs.length}/3) — click to select, click again to remove
+              2 · Directional images ({refs.length}/3) — click to select, click again to remove.
+              For a clip WITHOUT speech bubbles, pick the "no_text" versions (hover shows filenames).
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, maxHeight: 280, overflowY: 'auto', padding: 4, border: '1px solid #333', borderRadius: 8 }}>
               {images.map(img => {
@@ -325,6 +327,8 @@ function Reels() {
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>3 · Describe the clip</label>
             <textarea style={{ ...input, resize: 'vertical' }} rows={5} value={prompt} onChange={e => setPrompt(e.target.value)}
               placeholder="e.g. Slow cinematic push-in on the lone rider approaching the town of Santa Roja at dusk, hand-drawn western comic style matching the reference art, dust drifting, tense and quiet, no text on screen" />
+            <input style={{ ...input, marginTop: 8 }} value={negativePrompt} onChange={e => setNegativePrompt(e.target.value)}
+                   placeholder="Avoid (negative prompt) — e.g. speech bubbles, text, lettering, captions" />
             <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <select value={model} onChange={e => setModel(e.target.value)} style={{ ...input, width: 220 }}>
                 <option value="fast">Veo 3.1 Fast (default)</option>
@@ -345,6 +349,19 @@ function Reels() {
               <option value="">Add a line…</option>
               {voiceOptions.map((o, i) => <option key={i} value={o.file}>{o.label}</option>)}
             </select>
+            <label className="btn btn-secondary" style={{ display: 'inline-block', padding: '0.35rem 0.9rem', marginTop: 8, cursor: 'pointer', fontSize: '0.85rem' }}>
+              🎵 Upload your own audio
+              <input type="file" accept=".mp3,.m4a,.wav,.aac,.ogg" style={{ display: 'none' }}
+                onChange={async e => {
+                  const f = e.target.files?.[0]; if (!f) return;
+                  const fd = new FormData(); fd.append('comicId', comicId); fd.append('audio', f);
+                  try {
+                    const r = await api.post('/marketing/upload-audio', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                    setVoices(vs => [...vs, { file: r.data.file, label: `🎵 ${r.data.label}` }]);
+                  } catch (err) { alert(err.response?.data?.error || err.message); }
+                  e.target.value = '';
+                }} />
+            </label>
             {voices.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
                 {voices.map((v, i) => (

@@ -331,6 +331,27 @@ router.post('/reel', async (req, res) => {
   }
 });
 
+// POST /api/marketing/upload-audio — user's own audio (music, VO) for reels.
+// Saved under projects/<id>/marketing/uploads/; referenced as "upload:<name>".
+const audioUpload = require('multer')({
+  storage: require('multer').memoryStorage(),
+  limits: { fileSize: 30 * 1024 * 1024 }
+});
+router.post('/upload-audio', audioUpload.single('audio'), async (req, res) => {
+  try {
+    const { comicId } = req.body;
+    if (!comicId || !req.file) return res.status(400).json({ error: 'comicId and audio file are required' });
+    if (!/\.(mp3|m4a|wav|aac|ogg)$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Audio files only (mp3/m4a/wav/aac/ogg)' });
+    const upDir = path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads');
+    await fs.mkdir(upDir, { recursive: true });
+    const name = `${Date.now()}-${req.file.originalname.replace(/[^\w.\-]/g, '_')}`;
+    await fs.writeFile(path.join(upDir, name), req.file.buffer);
+    res.json({ file: `upload:${name}`, label: req.file.originalname });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Lay the comic's real ElevenLabs lines over a clip, with the clip's own
 // audio kept, ducked under the voices, or muted. Voices play sequentially
 // from 0.5s with short gaps; video stream is copied untouched.
@@ -346,8 +367,17 @@ async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath) {
   let at = 0.5;
   for (let i = 0; i < voiceFiles.length; i++) {
     const f = voiceFiles[i];
-    if (!/^[\w.\-áéíóúñü]+$/i.test(f)) throw new Error('Bad audio filename');
-    const ap = path.join(audioDir, f);
+    // "upload:<name>" = user's own audio from marketing/uploads; otherwise a
+    // comic export audio file.
+    let ap;
+    if (f.startsWith('upload:')) {
+      const n = f.slice(7);
+      if (!/^[\w.\-]+$/i.test(n)) throw new Error('Bad upload filename');
+      ap = path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads', n);
+    } else {
+      if (!/^[\w.\-áéíóúñü]+$/i.test(f)) throw new Error('Bad audio filename');
+      ap = path.join(audioDir, f);
+    }
     const dur = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ap]));
     inputs.push('-i', ap);
     const ms = Math.round(at * 1000);
@@ -473,6 +503,7 @@ router.post('/veo-clip', async (req, res) => {
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const request = { model: tier, prompt, config: { aspectRatio, numberOfVideos: 1 } };
+    if (req.body.negativePrompt) request.config.negativePrompt = String(req.body.negativePrompt);
     if (refs.length) request.config.referenceImages = refs;
 
     let op;
