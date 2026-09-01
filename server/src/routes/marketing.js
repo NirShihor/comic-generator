@@ -213,7 +213,8 @@ router.get('/:comicId/audios', async (req, res) => {
             if (sent.text && sent.audioUrl) out.push({
               page: page.pageNumber, text: sent.text,
               translation: sent.translation || '',
-              file: `${sent.audioUrl}.mp3`
+              file: `${sent.audioUrl}.mp3`,
+              ...(sent.translationAudioUrl && { translationFile: `${sent.translationAudioUrl}.mp3` })
             });
       };
       walk(page.bubbles);
@@ -330,6 +331,56 @@ router.post('/reel', async (req, res) => {
   }
 });
 
+// Lay the comic's real ElevenLabs lines over a clip, with the clip's own
+// audio kept, ducked under the voices, or muted. Voices play sequentially
+// from 0.5s with short gaps; video stream is copied untouched.
+async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath) {
+  const { execFile } = require('child_process');
+  const run = (cmd, args) => new Promise((resolve, reject) =>
+    execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
+      err ? reject(new Error(se || err.message)) : resolve(so)));
+  const { slug } = await exportImagesDir(comicId);
+  const audioDir = path.join(PROJECTS_DIR, comicId, 'export', slug, 'audio');
+  const inputs = ['-i', videoPath];
+  const parts = [];
+  let at = 0.5;
+  for (let i = 0; i < voiceFiles.length; i++) {
+    const f = voiceFiles[i];
+    if (!/^[\w.\-áéíóúñü]+$/i.test(f)) throw new Error('Bad audio filename');
+    const ap = path.join(audioDir, f);
+    const dur = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ap]));
+    inputs.push('-i', ap);
+    const ms = Math.round(at * 1000);
+    parts.push(`[${i + 1}:a]adelay=${ms}|${ms}[v${i}]`);
+    at += dur + 0.35;
+  }
+  const ambVol = ambient === 'mute' ? 0 : ambient === 'duck' ? 0.25 : 1;
+  const chains = [`[0:a]volume=${ambVol}[amb]`, ...parts];
+  const mixIn = ['[amb]', ...voiceFiles.map((_, i) => `[v${i}]`)].join('');
+  chains.push(`${mixIn}amix=inputs=${voiceFiles.length + 1}:duration=first:normalize=0[a]`);
+  await run('ffmpeg', ['-y', ...inputs, '-filter_complex', chains.join(';'),
+    '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+    '-movflags', '+faststart', outPath]);
+}
+
+// POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
+// paying for a new generation. Body: { comicId, file, voiceAudio: [..], ambient }
+router.post('/veo-remix', async (req, res) => {
+  try {
+    const { comicId, file, voiceAudio = [], ambient = 'duck' } = req.body;
+    if (!comicId || !file || !/^[\w.\-]+\.mp4$/.test(file)) return res.status(400).json({ error: 'comicId and a valid file are required' });
+    const src = path.join(PROJECTS_DIR, comicId, 'marketing', file);
+    const name = `${file.replace(/\.mp4$/, '')}-mix-${Date.now()}.mp4`;
+    const out = path.join(PROJECTS_DIR, comicId, 'marketing', name);
+    if (voiceAudio.length === 0 && ambient === 'keep') return res.status(400).json({ error: 'Nothing to change' });
+    await mixVoicesOnto(comicId, src, voiceAudio, ambient, out);
+    res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name });
+  } catch (error) {
+    console.error('Veo remix error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/marketing/veo-clip — generate a video clip with Veo (Gemini API),
 // guided by up to 3 directional images from the comic's export and a text
 // brief. Same SDK + key as comic image generation.
@@ -381,8 +432,16 @@ router.post('/veo-clip', async (req, res) => {
     }
     const outDir = path.join(PROJECTS_DIR, comicId, 'marketing');
     await fs.mkdir(outDir, { recursive: true });
-    const name = `veo-${Date.now()}.mp4`;
+    let name = `veo-${Date.now()}.mp4`;
     await ai.files.download({ file: vids[0].video, downloadPath: path.join(outDir, name) });
+    // Optional voice overlay straight after generation.
+    const voiceAudio = req.body.voiceAudio || [];
+    const ambient = req.body.ambient || 'keep';
+    if (voiceAudio.length > 0 || ambient !== 'keep') {
+      const mixed = name.replace(/\.mp4$/, '-mix.mp4');
+      await mixVoicesOnto(comicId, path.join(outDir, name), voiceAudio, ambient, path.join(outDir, mixed));
+      name = mixed;
+    }
     res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name, model: tier });
   } catch (error) {
     console.error('Veo clip error:', error.message);

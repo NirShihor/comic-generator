@@ -225,16 +225,45 @@ function Reels() {
   const [model, setModel] = useState('fast');
   const [busy, setBusy] = useState(false);
   const [clip, setClip] = useState(null);
+  const [clipFile, setClipFile] = useState(null);
   const [error, setError] = useState('');
+  const [audios, setAudios] = useState([]);
+  const [voices, setVoices] = useState([]);      // [{file, label}]
+  const [ambient, setAmbient] = useState('duck');
 
   useEffect(() => {
     api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
   }, []);
   useEffect(() => {
-    setImages([]); setRefs([]); setClip(null); setError('');
+    setImages([]); setRefs([]); setClip(null); setClipFile(null); setError(''); setAudios([]); setVoices([]);
     if (!comicId) return;
     api.get(`/marketing/${comicId}/images`).then(r => setImages(r.data.images)).catch(e => alert(e.response?.data?.error || e.message));
+    api.get(`/marketing/${comicId}/audios`).then(r => setAudios(r.data.audios)).catch(() => setAudios([]));
   }, [comicId]);
+
+  // One option per language per sentence, labelled with its text.
+  const voiceOptions = audios.flatMap(a => [
+    { file: a.file, label: `🇪🇸 p${a.page} · ${a.text}` },
+    ...(a.translationFile ? [{ file: a.translationFile, label: `🇬🇧 p${a.page} · ${a.translation || a.text}` }] : []),
+  ]);
+  const addVoice = file => {
+    const opt = voiceOptions.find(o => o.file === file);
+    if (opt) setVoices([...voices, opt]);
+  };
+  const removeVoice = i => setVoices(voices.filter((_, j) => j !== i));
+  const moveVoice = (i, d) => {
+    const j = i + d; if (j < 0 || j >= voices.length) return;
+    const next = [...voices]; [next[i], next[j]] = [next[j], next[i]]; setVoices(next);
+  };
+
+  const remix = async () => {
+    setBusy(true); setError('');
+    try {
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => v.file), ambient });
+      setClip(r.data.url);
+    } catch (e) { setError(e.response?.data?.error || e.message); }
+    finally { setBusy(false); }
+  };
 
   const toggleRef = file => {
     if (refs.includes(file)) setRefs(refs.filter(f => f !== file));
@@ -244,8 +273,9 @@ function Reels() {
   const generate = async () => {
     setBusy(true); setClip(null); setError('');
     try {
-      const r = await api.post('/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, aspectRatio: '9:16' });
-      setClip(r.data.url);
+      const r = await api.post('/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, aspectRatio: '9:16',
+        voiceAudio: voices.map(v => v.file), ambient });
+      setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
   };
@@ -305,6 +335,41 @@ function Reels() {
               </button>
             </div>
             {error && <p style={{ color: '#f88', fontSize: '0.85rem' }}>{error}</p>}
+
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1.2rem 0 4px' }}>
+              4 · Voice lines (optional) — the comic's own ElevenLabs audio, in order
+            </label>
+            <select value="" onChange={e => e.target.value && addVoice(e.target.value)} style={input}>
+              <option value="">Add a line…</option>
+              {voiceOptions.map((o, i) => <option key={i} value={o.file}>{o.label}</option>)}
+            </select>
+            {voices.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                {voices.map((v, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1px solid #444', borderRadius: 8, padding: '4px 8px', fontSize: '0.85rem' }}>
+                    <span style={{ color: '#888', width: 16 }}>{i + 1}</span>
+                    <span style={{ flex: 1 }}>{v.label}</span>
+                    <button className="btn btn-secondary" onClick={() => moveVoice(i, -1)} style={{ padding: '0.15rem 0.45rem' }}>↑</button>
+                    <button className="btn btn-secondary" onClick={() => moveVoice(i, 1)} style={{ padding: '0.15rem 0.45rem' }}>↓</button>
+                    <button className="btn btn-secondary" onClick={() => removeVoice(i)} style={{ padding: '0.15rem 0.45rem', color: '#f88' }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: '0.8rem', color: '#888' }}>Veo's own audio:</label>
+              <select value={ambient} onChange={e => setAmbient(e.target.value)} style={{ ...input, width: 220 }}>
+                <option value="keep">Keep as generated</option>
+                <option value="duck">Duck under the voices</option>
+                <option value="mute">Mute — voices only</option>
+              </select>
+              {clipFile && (
+                <button className="btn btn-secondary" disabled={busy} onClick={remix} style={{ padding: '0.45rem 1rem' }}
+                        title="Re-apply audio to the last generated clip without paying for a new generation">
+                  {busy ? 'Mixing…' : '🔁 Apply audio to last clip'}
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>
