@@ -569,7 +569,17 @@ router.post('/veo-clip', async (req, res) => {
     const request = { model: tier, prompt, config: { aspectRatio, numberOfVideos: 1 } };
     const negative = req.body.negativePrompt ? String(req.body.negativePrompt) : '';
     if (negative) request.config.negativePrompt = negative;
-    if (refs.length) request.config.referenceImages = refs;
+    // 'refs' = style references (Veo repaints); 'frames' = exact start/end:
+    // image is the first frame, config.lastFrame the last — Veo animates
+    // between them, so _no_text frames guarantee bubble-free endpoints.
+    const mode = req.body.mode === 'frames' ? 'frames' : 'refs';
+    if (mode === 'frames') {
+      if (refs.length < 1) return res.status(400).json({ error: 'frames mode needs 1-2 images (start[, end])' });
+      request.image = refs[0].image;
+      if (refs[1]) request.config.lastFrame = refs[1].image;
+    } else if (refs.length) {
+      request.config.referenceImages = refs;
+    }
 
     let op;
     const attempt = r => ai.models.generateVideos(r);

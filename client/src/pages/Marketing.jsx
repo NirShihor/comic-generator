@@ -223,6 +223,7 @@ function Reels() {
   const [refs, setRefs] = useState([]);          // up to 3 directional images
   const [prompt, setPrompt] = useState('');
   const [model, setModel] = useState('fast');
+  const [mode, setMode] = useState('refs');
   const [busy, setBusy] = useState(false);
   const [clip, setClip] = useState(null);
   const [clipFile, setClipFile] = useState(null);
@@ -320,7 +321,7 @@ function Reels() {
   const generate = async () => {
     setBusy(true); setClip(null); setError('');
     try {
-      const r = await api.post('/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, aspectRatio: '9:16',
+      const r = await api.post('/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, mode, aspectRatio: '9:16',
         voiceAudio: voices.map(v => v.file), ambient, question, endCard, negativePrompt });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
@@ -345,9 +346,19 @@ function Reels() {
         {images.length > 0 && (
           <>
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>
-              2 · Directional images ({refs.length}/3) — click to select, click again to remove.
+              2 · Images ({refs.length}/{mode === 'frames' ? 2 : 3}) — click to select, click again to remove.
               For a clip WITHOUT speech bubbles, pick the "no_text" versions (hover shows filenames).
             </label>
+            <div style={{ display: 'flex', gap: 14, margin: '2px 0 8px', fontSize: '0.85rem', color: '#ccc', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="radio" checked={mode === 'refs'} onChange={() => setMode('refs')} />
+                Style references — Veo repaints the world (up to 3)
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="radio" checked={mode === 'frames'} onChange={() => setMode('frames')} />
+                Exact frames — image 1 = start, image 2 = end; Veo animates between
+              </label>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, maxHeight: 280, overflowY: 'auto', padding: 4, border: '1px solid #333', borderRadius: 8 }}>
               {images.map(img => {
                 const idx = refs.indexOf(img.file);
