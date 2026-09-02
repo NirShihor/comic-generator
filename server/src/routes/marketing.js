@@ -522,7 +522,7 @@ async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath, s
 // then the logo end card (1.8s) — turns a raw generation into a Reel that
 // signs off as Comigo. Re-encodes to a uniform 1080x1920/25fps for concat.
 async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
-  const { questionSec = 2.0, endSec = 1.8, endCaption = '' } = secs;
+  const { questionSec = 2.0, endSec = 1.8, endCaption = '', midCaption = '' } = secs;
   const { execFile } = require('child_process');
   const os = require('os');
   const run = (cmd, args) => new Promise((resolve, reject) =>
@@ -547,7 +547,7 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
     await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
       .composite([
         { input: logo, left: Math.round((W - lm.width) / 2), top: Math.round(H / 2 - lm.height) },
-        { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text><text x="${W / 2}" y="${H / 2 + 330}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="110" font-weight="800" fill="#FFFFFF">comigo.net</text></svg>`), left: 0, top: 0 }
+        { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text>${midCaption ? `<text x="${W / 2}" y="${H / 2 + 213}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${Math.min(52, Math.floor((W - 120) / (0.56 * midCaption.length)))}" font-weight="700" fill="#FFD23F">${esc(midCaption)}</text>` : ''}<text x="${W / 2}" y="${H / 2 + 330}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="110" font-weight="800" fill="#FFFFFF">comigo.net</text></svg>`), left: 0, top: 0 }
       ]).flatten({ background: VIOLET }).png().toFile(ep);
     // Optional caption under comigo.net, overlaid only during the last 2s of
     // the logo card (rendered as its own PNG, gated with enable=gte(t,...)).
@@ -611,6 +611,7 @@ const cardSecs = body => ({
   questionSec: Math.min(10, Math.max(0.5, Number(body.questionSeconds) || 2)),
   endSec: Math.min(30, Math.max(0.5, Number(body.endCardSeconds) || 1.8)),
   endCaption: String(body.endCardCaption || '').trim().slice(0, 200),
+  midCaption: String(body.endCardMidCaption || '').trim().slice(0, 120),
 });
 
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
