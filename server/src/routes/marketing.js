@@ -915,7 +915,11 @@ router.post('/carousel', async (req, res) => {
         let artH = zoneBottom - zoneTop - 20;
         let artW = Math.round(artH * meta.width / meta.height);
         if (artW > W - 90) { artW = W - 90; artH = Math.round(artW * meta.height / meta.width); }
-        const art = await sharp(src).resize(artW, artH)
+        const bright = Math.min(2, Math.max(0.5, Number(s.brightness) || 1));
+        const sat = Math.min(2, Math.max(0.3, Number(s.saturation) || 1));
+        let artPipe = sharp(src).resize(artW, artH);
+        if (bright !== 1 || sat !== 1) artPipe = artPipe.modulate({ brightness: bright, saturation: sat });
+        const art = await artPipe
           .extend({ top: 6, bottom: 6, left: 6, right: 6, background: '#FFFFFF' }).png().toBuffer();
         const artX = Math.round((W - artW - 12) / 2);
         const artY = Math.round(zoneTop + ((zoneBottom - zoneTop) - artH - 12) / 2);

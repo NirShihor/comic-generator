@@ -58,7 +58,7 @@ function Carousel() {
   const [comics, setComics] = useState([]);
   const [comicId, setComicId] = useState('');
   const [images, setImages] = useState([]);
-  const [slides, setSlides] = useState([{ imageFile: '', title: '', es: '', en: '', artPrompt: '' }]);
+  const [slides, setSlides] = useState([{ imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1 }]);
   const [active, setActive] = useState(0);
   const [logoOn, setLogoOn] = useState(true);
   const [logoLine1, setLogoLine1] = useState('Spanish.');
@@ -70,13 +70,13 @@ function Carousel() {
     api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
   }, []);
   useEffect(() => {
-    setImages([]); setOut([]); setSlides([{ imageFile: '', title: '', es: '', en: '', artPrompt: '' }]); setActive(0);
+    setImages([]); setOut([]); setSlides([{ imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1 }]); setActive(0);
     if (!comicId) return;
     api.get(`/marketing/${comicId}/images`).then(r => setImages(r.data.images)).catch(e => alert(e.response?.data?.error || e.message));
   }, [comicId]);
 
   const upd = (i, k, v) => setSlides(ss => ss.map((s, j) => (j === i ? { ...s, [k]: v } : s)));
-  const addSlide = () => { setSlides(ss => [...ss, { imageFile: '', title: '', es: '', en: '', artPrompt: '' }]); setActive(slides.length); };
+  const addSlide = () => { setSlides(ss => [...ss, { imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1 }]); setActive(slides.length); };
   const removeSlide = i => {
     if (slides.length === 1) return;
     setSlides(ss => ss.filter((_, j) => j !== i));
@@ -195,7 +195,8 @@ function Carousel() {
                   {(genUrls[s.imageFile] || images.find(im => im.file === s.imageFile)) && (
                     <img src={genUrls[s.imageFile] || images.find(im => im.file === s.imageFile)?.url} alt="" title="Click to view large"
                          onClick={e => { e.stopPropagation(); setViewer(genUrls[s.imageFile] || images.find(im => im.file === s.imageFile)?.url); }}
-                         style={{ width: 46, height: 58, objectFit: 'cover', borderRadius: 4, border: '1px solid #555', flex: 'none', cursor: 'zoom-in' }} />
+                         style={{ width: 46, height: 58, objectFit: 'cover', borderRadius: 4, border: '1px solid #555', flex: 'none', cursor: 'zoom-in',
+                                  filter: `brightness(${s.brightness ?? 1}) saturate(${s.saturation ?? 1})` }} />
                   )}
                   <input style={input} value={s.artPrompt || ''} onChange={e => upd(i, 'artPrompt', e.target.value)}
                          placeholder="Or describe NEW art for this slide — the assigned image becomes the style/scene reference" />
@@ -206,6 +207,18 @@ function Carousel() {
                     {genBusy === i ? 'Painting…' : '🎨 Generate art'}
                   </button>
                 </div>
+                {s.imageFile && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', fontSize: '0.8rem', color: '#888' }}>
+                    <span title="Brightness">☀</span>
+                    <input type="range" min={0.5} max={1.8} step={0.05} value={s.brightness ?? 1}
+                           onChange={e => upd(i, 'brightness', Number(e.target.value))} style={{ flex: 1 }} />
+                    <span style={{ width: 36 }}>{(s.brightness ?? 1).toFixed(2)}</span>
+                    <span title="Colour saturation">🎨</span>
+                    <input type="range" min={0.3} max={1.8} step={0.05} value={s.saturation ?? 1}
+                           onChange={e => upd(i, 'saturation', Number(e.target.value))} style={{ flex: 1 }} />
+                    <span style={{ width: 36 }}>{(s.saturation ?? 1).toFixed(2)}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
