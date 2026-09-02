@@ -117,6 +117,7 @@ function Carousel() {
 
   const [genUrls, setGenUrls] = useState({});
   const [genBusy, setGenBusy] = useState(-1);
+  const [viewer, setViewer] = useState(null); // url shown large in the popup
   // The clips principle, for stills: the slide's assigned image is the
   // reference, your prompt describes the shot, gpt-image-2 paints a NEW image
   // in the comic's style and it lands straight on the slide.
@@ -192,8 +193,9 @@ function Carousel() {
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
                   {(genUrls[s.imageFile] || images.find(im => im.file === s.imageFile)) && (
-                    <img src={genUrls[s.imageFile] || images.find(im => im.file === s.imageFile)?.url} alt=""
-                         style={{ width: 46, height: 58, objectFit: 'cover', borderRadius: 4, border: '1px solid #555', flex: 'none' }} />
+                    <img src={genUrls[s.imageFile] || images.find(im => im.file === s.imageFile)?.url} alt="" title="Click to view large"
+                         onClick={e => { e.stopPropagation(); setViewer(genUrls[s.imageFile] || images.find(im => im.file === s.imageFile)?.url); }}
+                         style={{ width: 46, height: 58, objectFit: 'cover', borderRadius: 4, border: '1px solid #555', flex: 'none', cursor: 'zoom-in' }} />
                   )}
                   <input style={input} value={s.artPrompt || ''} onChange={e => upd(i, 'artPrompt', e.target.value)}
                          placeholder="Or describe NEW art for this slide — the assigned image becomes the style/scene reference" />
@@ -242,7 +244,8 @@ function Carousel() {
               <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: 4 }}>
                 {out.map((u, i) => (
                   <div key={u} style={{ flex: '0 0 180px', textAlign: 'center' }}>
-                    <img src={u} alt={`slide ${i + 1}`} style={{ width: '100%', borderRadius: 8, border: '1px solid #444' }} />
+                    <img src={u} alt={`slide ${i + 1}`} title="Click to view large" onClick={() => setViewer(u)}
+                         style={{ width: '100%', borderRadius: 8, border: '1px solid #444', cursor: 'zoom-in' }} />
                     <a className="btn btn-secondary" href={u} download style={{ display: 'inline-block', padding: '0.25rem 0.8rem', marginTop: 6, fontSize: '0.8rem', textDecoration: 'none' }}>
                       ⬇ Slide {i + 1}
                     </a>
@@ -252,6 +255,13 @@ function Carousel() {
             </>
           )}
         </>
+      )}
+      {viewer && (
+        <div onClick={() => setViewer(null)}
+             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}>
+          <img src={viewer} alt="" style={{ maxWidth: '92vw', maxHeight: '92vh', borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,0.8)' }} />
+        </div>
       )}
     </div>
   );
