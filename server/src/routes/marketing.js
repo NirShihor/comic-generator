@@ -954,7 +954,7 @@ router.post('/carousel', async (req, res) => {
       await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
         .composite([
           { input: lg, left: Math.round((W - lm.width) / 2), top: Math.round(H / 2 - lm.height - 60) },
-          { input: Buffer.from(`<svg width="${W}" height="${H}">${l1 ? `<text x="${W / 2}" y="${H / 2 + 120}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitL(l1, 78)}" font-weight="800" fill="#FFFFFF">${esc(l1)}</text>` : ''}${l2 ? `<text x="${W / 2}" y="${H / 2 + 230}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitL(l2, 64)}" font-weight="700" fill="#FFD23F">${esc(l2)}</text>` : ''}<text x="${W / 2}" y="${H - 70}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="40" font-weight="700" fill="#FFFFFF" opacity="0.85">comigo.net</text></svg>`), left: 0, top: 0 },
+          { input: Buffer.from(`<svg width="${W}" height="${H}">${l1 ? `<text x="${W / 2}" y="${H / 2 + 120}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitL(l1, 78)}" font-weight="800" fill="#FFFFFF">${esc(l1)}</text>` : ''}${l2 ? `<text x="${W / 2}" y="${H / 2 + 230}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitL(l2, 64)}" font-weight="700" fill="#FFD23F">${esc(l2)}</text>` : ''}<text x="${W / 2}" y="${H - 90}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="100" font-weight="800" fill="#FFFFFF">comigo.net</text></svg>`), left: 0, top: 0 },
         ]).flatten({ background: VIOLET }).png().toFile(path.join(outDir, name));
       urls.push(`/projects/${comicId}/marketing/${path.basename(outDir)}/${name}`);
     }
