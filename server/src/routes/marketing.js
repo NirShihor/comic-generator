@@ -744,6 +744,66 @@ router.post('/veo-clip', async (req, res) => {
   }
 });
 
+// POST /api/marketing/carousel-suggest — GPT drafts the carousel's text from
+// the ref images the user selected (it SEES them, poster-style grounding in
+// the comic's real dialogue). Body: { comicId, slides: [{imageFile?}] } →
+// { slides: [{title, es, en}] } matching the input order, every field
+// optional/empty where the story grammar calls for silence.
+router.post('/carousel-suggest', async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) return res.status(400).json({ error: 'OpenAI API key not configured' });
+    const { comicId, slides = [] } = req.body;
+    if (!comicId || !Array.isArray(slides) || slides.length < 1) return res.status(400).json({ error: 'comicId and slides are required' });
+    if (slides.length > 9) return res.status(400).json({ error: 'Max 9 slides' });
+    const ctx = await comicContext(comicId);
+    const { dir } = await exportImagesDir(comicId);
+    const content = [{
+      type: 'text',
+      text: `You write "Story Hook" carousel text for Comigo — original Spanish comics for language learners. A carousel is a tiny story the viewer swipes through: a 15-second comic trailer.
+Comic: "${ctx.title}" (series: ${ctx.collection}). About: ${ctx.description}
+Real dialogue from the comic (Spanish, in order): ${ctx.dialogue}
+
+I will show you ${slides.length} slide images in posting order. For EACH slide return an object { "title": "...", "es": "...", "en": "..." }:
+- Slide 1: "title" only — an English hook that sets the scene and asks an implicit question (max 60 chars, no full stop needed). Leave es/en empty.
+- Middle slides: "es" = ONE short Spanish line, strongly preferred VERBATIM from the real dialogue above, matching what the image shows; "en" = its short natural English translation. Leave title empty.
+- The last slide you are given (if more than 2): pure atmosphere — "es" only (a name, a place, or a 2-4 word beat; can come from the dialogue), NO "en", no title.
+- A slide marked [no image] is a text beat: give it a single dramatic English "title" (max 30 chars, e.g. "Why?"). Leave es/en empty.
+Rules: intrigue without spoiling; never mention learning Spanish, apps, or downloading; no exclamation marks; no emojis.
+Return ONLY a JSON array of ${slides.length} objects in slide order.`,
+    }];
+    for (let i = 0; i < slides.length; i++) {
+      const f = slides[i]?.imageFile;
+      if (f && /^[\w.\-áéíóúñü]+$/i.test(f)) {
+        const buf = await sharp(path.join(dir, f)).resize({ width: 512, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
+        content.push({ type: 'text', text: `Slide ${i + 1}:` });
+        content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${buf.toString('base64')}`, detail: 'low' } });
+      } else {
+        content.push({ type: 'text', text: `Slide ${i + 1}: [no image]` });
+      }
+    }
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a precise copywriter. Always respond with valid JSON only.' },
+        { role: 'user', content },
+      ],
+      max_completion_tokens: 600,
+    });
+    const m = completion.choices[0].message.content.match(/\[[\s\S]*\]/);
+    if (!m) return res.status(500).json({ error: 'Could not parse suggestions' });
+    const parsed = JSON.parse(m[0]);
+    res.json({ slides: slides.map((_, i) => ({
+      title: String(parsed[i]?.title || '').trim(),
+      es: String(parsed[i]?.es || '').trim(),
+      en: String(parsed[i]?.en || '').trim(),
+    })) });
+  } catch (error) {
+    console.error('Carousel suggest error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/marketing/carousel — a swipeable tiny story: 1080x1350 slides in
 // the poster's visual language. Each slide: optional art (white frame + shadow
 // on violet), optional hook title (white, top), optional Spanish line (yellow)

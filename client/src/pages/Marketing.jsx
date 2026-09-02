@@ -100,6 +100,21 @@ function Carousel() {
     finally { setBusy(false); }
   };
 
+  const [suggesting, setSuggesting] = useState(false);
+  // GPT drafts the whole story from the selected ref images (it sees them) +
+  // the comic's real dialogue. Fills the text fields; everything stays editable.
+  const suggest = async () => {
+    setSuggesting(true);
+    try {
+      const r = await api.post('/marketing/carousel-suggest', {
+        comicId, slides: slides.map(s => ({ imageFile: s.imageFile })),
+      });
+      const sug = r.data.slides || [];
+      setSlides(ss => ss.map((s, i) => ({ ...s, title: sug[i]?.title ?? s.title, es: sug[i]?.es ?? s.es, en: sug[i]?.en ?? s.en })));
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setSuggesting(false); }
+  };
+
   const input = { width: '100%', padding: '0.5rem 0.7rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.95rem' };
 
   return (
@@ -160,9 +175,15 @@ function Carousel() {
               </div>
             ))}
           </div>
-          <button className="btn btn-secondary" onClick={addSlide} disabled={slides.length >= 9} style={{ padding: '0.35rem 1rem', marginTop: 8 }}>
-            ＋ Add slide
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" onClick={addSlide} disabled={slides.length >= 9} style={{ padding: '0.35rem 1rem' }}>
+              ＋ Add slide
+            </button>
+            <button className="btn btn-secondary" onClick={suggest} disabled={suggesting || !slides.some(s => s.imageFile)} style={{ padding: '0.35rem 1rem' }}
+                    title="GPT looks at your selected images and the comic's real dialogue, then drafts every slide's text — all editable">
+              {suggesting ? 'Thinking…' : '✨ Suggest text from images (GPT)'}
+            </button>
+          </div>
 
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 14 }}>
             <input type="checkbox" checked={logoOn} onChange={e => setLogoOn(e.target.checked)} />
