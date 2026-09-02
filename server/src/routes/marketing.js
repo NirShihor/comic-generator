@@ -581,7 +581,7 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
 // User-dictated card lengths (seconds, clamped 0.5–10).
 const cardSecs = body => ({
   questionSec: Math.min(10, Math.max(0.5, Number(body.questionSeconds) || 2)),
-  endSec: Math.min(10, Math.max(0.5, Number(body.endCardSeconds) || 1.8)),
+  endSec: Math.min(30, Math.max(0.5, Number(body.endCardSeconds) || 1.8)),
 });
 
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without

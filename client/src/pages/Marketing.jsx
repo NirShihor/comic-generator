@@ -482,7 +482,7 @@ function Reels() {
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 8 }}>
               <input type="checkbox" checked={endCard} onChange={e => setEndCard(e.target.checked)} />
               End with the Comigo logo card, shown for
-              <input type="number" min={0.5} max={10} step={0.1} value={endSec} title="How long the logo card shows"
+              <input type="number" min={0.5} max={30} step={0.1} value={endSec} title="How long the logo card shows"
                      onChange={e => setEndSec(Number(e.target.value) || 1.8)} style={{ ...input, width: 80 }} disabled={!endCard} />
               <span style={{ color: '#888', fontSize: '0.8rem' }}>s</span>
             </label>
