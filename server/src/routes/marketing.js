@@ -547,13 +547,13 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
     await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
       .composite([
         { input: logo, left: Math.round((W - lm.width) / 2), top: Math.round(H / 2 - lm.height - 80) },
-        { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text>${midCaption ? `<text x="${W / 2}" y="${H / 2 + 300}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${Math.min(52, Math.floor((W - 120) / (0.56 * midCaption.length)))}" font-weight="700" fill="#FFD23F">${esc(midCaption)}</text>` : ''}<text x="${W / 2}" y="${H / 2 + 500}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="110" font-weight="800" fill="#FFFFFF">comigo.net</text></svg>`), left: 0, top: 0 }
+        { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text>${midCaption ? `<text x="${W / 2}" y="${H / 2 + 300}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${Math.min(64, Math.floor((W - 120) / (0.56 * midCaption.length)))}" font-weight="700" fill="#FFD23F">${esc(midCaption)}</text>` : ''}<text x="${W / 2}" y="${H / 2 + 500}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="110" font-weight="800" fill="#FFFFFF">comigo.net</text></svg>`), left: 0, top: 0 }
       ]).flatten({ background: VIOLET }).png().toFile(ep);
     // Optional caption under comigo.net, overlaid only during the last 2s of
     // the logo card (rendered as its own PNG, gated with enable=gte(t,...)).
     let capPng = null;
     if (endCaption) {
-      const fsC = 56, lineHC = Math.round(fsC * 1.3);
+      const fsC = 68, lineHC = Math.round(fsC * 1.3);
       const maxC = Math.floor((W - 160) / (0.52 * fsC));
       const words = endCaption.replace(/\s+/g, ' ').trim().split(' ');
       const lines = [];
