@@ -352,6 +352,27 @@ router.post('/upload-audio', audioUpload.single('audio'), async (req, res) => {
   }
 });
 
+// POST /api/marketing/upload-image — user's own image for a carousel slide.
+// Saved under projects/<id>/marketing/uploads/; referenced as "upload:<name>".
+const imageUpload = require('multer')({
+  storage: require('multer').memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
+router.post('/upload-image', imageUpload.single('image'), async (req, res) => {
+  try {
+    const { comicId } = req.body;
+    if (!comicId || !req.file) return res.status(400).json({ error: 'comicId and image file are required' });
+    if (!/\.(jpg|jpeg|png|webp)$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Image files only (jpg/png/webp)' });
+    const upDir = path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads');
+    await fs.mkdir(upDir, { recursive: true });
+    const name = `${Date.now()}-${req.file.originalname.replace(/[^\w.\-]/g, '_')}`;
+    await fs.writeFile(path.join(upDir, name), req.file.buffer);
+    res.json({ file: `upload:${name}`, url: `/projects/${comicId}/marketing/uploads/${name}`, label: req.file.originalname });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/marketing/:comicId/voices — the ElevenLabs cast attached to this
 // comic (falling back to its collection's voices).
 router.get('/:comicId/voices', async (req, res) => {
@@ -752,6 +773,11 @@ function resolveSlideImage(comicId, exportDir, f) {
     const n = s.slice(4);
     if (!/^[\w.\-]+$/i.test(n)) throw new Error('Bad generated image name');
     return path.join(PROJECTS_DIR, comicId, 'marketing', n);
+  }
+  if (s.startsWith('upload:')) {
+    const n = s.slice(7);
+    if (!/^[\w.\-]+$/i.test(n)) throw new Error('Bad uploaded image name');
+    return path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads', n);
   }
   if (!/^[\w.\-áéíóúñü]+$/i.test(s)) throw new Error('Bad image filename');
   return path.join(exportDir, s);

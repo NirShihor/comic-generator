@@ -206,6 +206,22 @@ function Carousel() {
                           title="Generates a new still with the comic image model (gpt-image-2), guided by the assigned reference image + this prompt">
                     {genBusy === i ? 'Painting…' : '🎨 Generate art'}
                   </button>
+                  <label className="btn btn-secondary" onClick={e => e.stopPropagation()}
+                         title="Upload your own image for this slide"
+                         style={{ padding: '0.3rem 0.7rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    🖼 Upload
+                    <input type="file" accept=".jpg,.jpeg,.png,.webp" style={{ display: 'none' }}
+                      onChange={async e => {
+                        const f = e.target.files?.[0]; if (!f) return;
+                        const fd = new FormData(); fd.append('comicId', comicId); fd.append('image', f);
+                        try {
+                          const r = await api.post('/marketing/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                          setGenUrls(m => ({ ...m, [r.data.file]: r.data.url }));
+                          upd(i, 'imageFile', r.data.file);
+                        } catch (err) { alert(err.response?.data?.error || err.message); }
+                        e.target.value = '';
+                      }} />
+                  </label>
                 </div>
                 {s.imageFile && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', fontSize: '0.8rem', color: '#888' }}>
