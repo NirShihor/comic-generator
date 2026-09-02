@@ -241,6 +241,9 @@ function Reels() {
   const [voices, setVoices] = useState([]);      // [{file, label, es, en, lang}]
   const [ambient, setAmbient] = useState('duck');
   const [subtitles, setSubtitles] = useState('none'); // 'none' | 'es' | 'en' | 'match'
+  const [durationSeconds, setDurationSeconds] = useState(8); // Veo: 4 | 6 | 8
+  const [questionSec, setQuestionSec] = useState(2);
+  const [endSec, setEndSec] = useState(1.8);
 
   useEffect(() => {
     api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
@@ -308,7 +311,7 @@ function Reels() {
   const remix = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard });
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec });
       setClip(r.data.url);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -323,7 +326,8 @@ function Reels() {
     setBusy(true); setClip(null); setError('');
     try {
       const r = await api.post('/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, mode, aspectRatio: '9:16',
-        voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, negativePrompt });
+        voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, negativePrompt,
+        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -391,7 +395,16 @@ function Reels() {
                 <option value="quality">Veo 3.1 Quality (slower, dearer)</option>
                 <option value="lite">Veo 3.1 Lite (cheapest)</option>
               </select>
-              <span style={{ color: '#888', fontSize: '0.8rem' }}>9:16 · ~8s · costs real money per run</span>
+              <label style={{ fontSize: '0.8rem', color: '#888' }}>Length:</label>
+              <select value={durationSeconds} onChange={e => setDurationSeconds(Number(e.target.value))} style={{ ...input, width: 90 }}>
+                <option value={4}>4s</option>
+                <option value={6}>6s</option>
+                <option value={8}>8s</option>
+              </select>
+              <span style={{ color: '#888', fontSize: '0.8rem' }}>
+                9:16 · total ≈ {(durationSeconds + (question ? questionSec : 0) + (endCard ? endSec : 0)).toFixed(1)}s
+                {' '}({durationSeconds}s clip{question ? ` + ${questionSec}s question` : ''}{endCard ? ` + ${endSec}s logo` : ''}) · costs real money per run
+              </span>
               <button className="btn btn-primary" disabled={busy || !prompt} onClick={generate} style={{ padding: '0.55rem 1.4rem' }}>
                 {busy ? 'Generating… (1–4 min)' : '🎞 Generate clip'}
               </button>
@@ -460,10 +473,18 @@ function Reels() {
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>
               5 · Finish — question card + Comigo sign-off
             </label>
-            <input style={input} placeholder="Question card (yellow, 2s) — leave empty to skip" value={question} onChange={e => setQuestion(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input style={input} placeholder="Question card (yellow) — leave empty to skip" value={question} onChange={e => setQuestion(e.target.value)} />
+              <input type="number" min={0.5} max={10} step={0.5} value={questionSec} title="How long the question card shows"
+                     onChange={e => setQuestionSec(Number(e.target.value) || 2)} style={{ ...input, width: 80 }} disabled={!question} />
+              <span style={{ color: '#888', fontSize: '0.8rem' }}>s</span>
+            </div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 8 }}>
               <input type="checkbox" checked={endCard} onChange={e => setEndCard(e.target.checked)} />
-              End with the Comigo logo card (1.8s)
+              End with the Comigo logo card, shown for
+              <input type="number" min={0.5} max={10} step={0.1} value={endSec} title="How long the logo card shows"
+                     onChange={e => setEndSec(Number(e.target.value) || 1.8)} style={{ ...input, width: 80 }} disabled={!endCard} />
+              <span style={{ color: '#888', fontSize: '0.8rem' }}>s</span>
             </label>
             <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ fontSize: '0.8rem', color: '#888' }}>Veo's own audio:</label>

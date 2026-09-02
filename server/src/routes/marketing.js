@@ -521,7 +521,8 @@ async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath, s
 // Append the branded finish to a clip: optional violet question card (2s)
 // then the logo end card (1.8s) — turns a raw generation into a Reel that
 // signs off as Comigo. Re-encodes to a uniform 1080x1920/25fps for concat.
-async function finishClip(comicId, videoPath, question, outPath) {
+async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
+  const { questionSec = 2.0, endSec = 1.8 } = secs;
   const { execFile } = require('child_process');
   const os = require('os');
   const run = (cmd, args) => new Promise((resolve, reject) =>
@@ -538,7 +539,7 @@ async function finishClip(comicId, videoPath, question, outPath) {
       await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
         .composite([{ input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitQ}" font-weight="800" fill="#FFD23F">${esc(question)}</text></svg>`), left: 0, top: 0 }])
         .flatten({ background: VIOLET }).png().toFile(qp);
-      cards.push([qp, 2.0]);
+      cards.push([qp, questionSec]);
     }
     const logo = await sharp(LOGO_PATH).resize({ width: 640 }).png().toBuffer();
     const lm = await sharp(logo).metadata();
@@ -548,7 +549,7 @@ async function finishClip(comicId, videoPath, question, outPath) {
         { input: logo, left: Math.round((W - lm.width) / 2), top: Math.round(H / 2 - lm.height) },
         { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text><text x="${W / 2}" y="${H / 2 + 330}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="110" font-weight="800" fill="#FFFFFF">comigo.net</text></svg>`), left: 0, top: 0 }
       ]).flatten({ background: VIOLET }).png().toFile(ep);
-    cards.push([ep, 1.8]);
+    cards.push([ep, endSec]);
 
     const parts = [];
     const main = path.join(tmp, 'main.mp4');
@@ -577,6 +578,12 @@ async function finishClip(comicId, videoPath, question, outPath) {
   }
 }
 
+// User-dictated card lengths (seconds, clamped 0.5–10).
+const cardSecs = body => ({
+  questionSec: Math.min(10, Math.max(0.5, Number(body.questionSeconds) || 2)),
+  endSec: Math.min(10, Math.max(0.5, Number(body.endCardSeconds) || 1.8)),
+});
+
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
 // paying for a new generation. Body: { comicId, file, voiceAudio: [..], ambient }
 router.post('/veo-remix', async (req, res) => {
@@ -592,7 +599,7 @@ router.post('/veo-remix', async (req, res) => {
     if (voiceAudio.length > 0 || ambient !== 'keep') { await mixVoicesOnto(comicId, src, voiceAudio, ambient, out, req.body.subtitles || 'none'); cur = out; }
     if (question || endCard) {
       const fin = out.replace(/\.mp4$/, '-fin.mp4');
-      await finishClip(comicId, cur, question, fin);
+      await finishClip(comicId, cur, question, fin, cardSecs(req.body));
       const finName = path.basename(fin);
       return res.json({ url: `/projects/${comicId}/marketing/${finName}`, file: finName });
     }
@@ -627,7 +634,10 @@ router.post('/veo-clip', async (req, res) => {
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const request = { model: tier, prompt, config: { aspectRatio, numberOfVideos: 1 } };
+    // Veo 3.1 accepts 4, 6 or 8 second generations.
+    const durationSeconds = [4, 6, 8].includes(Number(req.body.durationSeconds)) ? Number(req.body.durationSeconds) : null;
+    const baseConfig = () => ({ aspectRatio, numberOfVideos: 1, ...(durationSeconds ? { durationSeconds } : {}) });
+    const request = { model: tier, prompt, config: baseConfig() };
     const negative = req.body.negativePrompt ? String(req.body.negativePrompt) : '';
     if (negative) request.config.negativePrompt = negative;
     // 'refs' = style references (Veo repaints); 'frames' = exact start/end:
@@ -658,14 +668,14 @@ router.post('/veo-clip', async (req, res) => {
         } catch (e2) {
           if (refs.length && /reference/i.test(e2.message)) {
             console.warn('[veo] referenceImages also rejected, retrying as first-frame:', e2.message);
-            op = await attempt({ model: tier, prompt: request.prompt, image: refs[0].image, config: { aspectRatio, numberOfVideos: 1 } });
+            op = await attempt({ model: tier, prompt: request.prompt, image: refs[0].image, config: baseConfig() });
           } else throw e2;
         }
       } else if (refs.length && /reference/i.test(e.message)) {
         // Some tiers reject referenceImages — retry with the first image as
         // the starting frame instead, which every tier supports.
         console.warn('[veo] referenceImages rejected, retrying as first-frame:', e.message);
-        op = await attempt({ model: tier, prompt, image: refs[0].image, config: { aspectRatio, numberOfVideos: 1 } });
+        op = await attempt({ model: tier, prompt, image: refs[0].image, config: baseConfig() });
       } else throw e;
     }
     const started = Date.now();
@@ -694,7 +704,7 @@ router.post('/veo-clip', async (req, res) => {
     const { question: finQ = '', endCard = false } = req.body;
     if (finQ || endCard) {
       const fin = name.replace(/\.mp4$/, '-fin.mp4');
-      await finishClip(comicId, path.join(outDir, name), finQ, path.join(outDir, fin));
+      await finishClip(comicId, path.join(outDir, name), finQ, path.join(outDir, fin), cardSecs(req.body));
       name = fin;
     }
     res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name, model: tier });
