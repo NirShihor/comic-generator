@@ -30,6 +30,10 @@ export default function Marketing() {
                 onClick={() => setTab('clips')} style={{ padding: '0.5rem 1.1rem' }}>
           🎞 Reels
         </button>
+        <button className={`btn ${tab === 'carousel' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setTab('carousel')} style={{ padding: '0.5rem 1.1rem' }}>
+          🎠 Carousels
+        </button>
         {['🗂 Word cards', '🗓 Calendar'].map(label => (
           <button key={label} className="btn btn-secondary" disabled
                   title="Coming with the next content-generator phase"
@@ -41,6 +45,161 @@ export default function Marketing() {
 
       {tab === 'posters' && <Posters />}
       {tab === 'clips' && <Reels />}
+      {tab === 'carousel' && <Carousel />}
+    </div>
+  );
+}
+
+// Carousel: a tiny story the viewer swipes through — a 15-second comic
+// trailer. Story Hook shape: big opening panel + hook, zoomed bubbles with
+// Spanish and a small English echo, an atmosphere beat with no translation,
+// then the Comigo sign-off (in-world, never an advert).
+function Carousel() {
+  const [comics, setComics] = useState([]);
+  const [comicId, setComicId] = useState('');
+  const [images, setImages] = useState([]);
+  const [slides, setSlides] = useState([{ imageFile: '', title: '', es: '', en: '' }]);
+  const [active, setActive] = useState(0);
+  const [logoOn, setLogoOn] = useState(true);
+  const [logoLine1, setLogoLine1] = useState('Spanish.');
+  const [logoLine2, setLogoLine2] = useState('One comic at a time.');
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState([]);
+
+  useEffect(() => {
+    api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
+  }, []);
+  useEffect(() => {
+    setImages([]); setOut([]); setSlides([{ imageFile: '', title: '', es: '', en: '' }]); setActive(0);
+    if (!comicId) return;
+    api.get(`/marketing/${comicId}/images`).then(r => setImages(r.data.images)).catch(e => alert(e.response?.data?.error || e.message));
+  }, [comicId]);
+
+  const upd = (i, k, v) => setSlides(ss => ss.map((s, j) => (j === i ? { ...s, [k]: v } : s)));
+  const addSlide = () => { setSlides(ss => [...ss, { imageFile: '', title: '', es: '', en: '' }]); setActive(slides.length); };
+  const removeSlide = i => {
+    if (slides.length === 1) return;
+    setSlides(ss => ss.filter((_, j) => j !== i));
+    setActive(a => Math.max(0, a - (i <= a ? 1 : 0)));
+  };
+  const move = (i, d) => {
+    const j = i + d; if (j < 0 || j >= slides.length) return;
+    setSlides(ss => { const n = [...ss]; [n[i], n[j]] = [n[j], n[i]]; return n; });
+    setActive(j);
+  };
+  const assignImage = file => upd(active, 'imageFile', slides[active]?.imageFile === file ? '' : file);
+
+  const generate = async () => {
+    setBusy(true); setOut([]);
+    try {
+      const r = await api.post('/marketing/carousel', {
+        comicId, slides, logo: { enabled: logoOn, line1: logoLine1, line2: logoLine2 },
+      });
+      setOut(r.data.urls || []);
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setBusy(false); }
+  };
+
+  const input = { width: '100%', padding: '0.5rem 0.7rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.95rem' };
+
+  return (
+    <div>
+      <p style={{ color: '#888', fontSize: '0.88rem', marginTop: 0 }}>
+        A carousel is not five random images — it's a tiny story the viewer controls by swiping.
+        Big opening panel + hook, zoomed bubbles with the Spanish (small English underneath),
+        an atmosphere beat with no translation, then the Comigo sign-off. Every field is optional per slide.
+      </p>
+      <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', marginBottom: 4 }}>1 · Comic</label>
+      <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, maxWidth: 420 }}>
+        <option value="">Choose a comic…</option>
+        {comics.map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
+      </select>
+
+      {images.length > 0 && (
+        <>
+          <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>
+            2 · Click an image to put it on the highlighted slide (click again to clear). "no_text" versions work well for zoomed beats.
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, maxHeight: 260, overflowY: 'auto', padding: 4, border: '1px solid #333', borderRadius: 8 }}>
+            {images.map(img => {
+              const used = slides.map((s, i) => (s.imageFile === img.file ? i + 1 : 0)).filter(Boolean);
+              return (
+                <div key={img.file} style={{ position: 'relative' }}>
+                  <img src={img.url} alt={img.file} title={img.file}
+                       onClick={() => assignImage(img.file)}
+                       style={{ width: '100%', borderRadius: 4, cursor: 'pointer',
+                                outline: slides[active]?.imageFile === img.file ? '3px solid #8e6bf0' : used.length ? '2px solid #5a4a99' : '1px solid #444' }} />
+                  {used.length > 0 && <span style={{ position: 'absolute', top: 4, left: 4, background: '#8e6bf0', color: '#fff',
+                      borderRadius: 10, padding: '1px 7px', fontSize: 12 }}>{used.join(',')}</span>}
+                </div>
+              );
+            })}
+          </div>
+
+          <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>
+            3 · Slides — click a card to make it the target for image clicks
+          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {slides.map((s, i) => (
+              <div key={i} onClick={() => setActive(i)}
+                   style={{ border: active === i ? '2px solid #8e6bf0' : '1px solid #444', borderRadius: 10, padding: 10, cursor: 'pointer' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: '0.85rem' }}>
+                  <strong style={{ color: '#c9bfff' }}>Slide {i + 1}</strong>
+                  <span style={{ color: '#888', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {s.imageFile || 'no image — text beat'}
+                  </span>
+                  <button className="btn btn-secondary" onClick={e => { e.stopPropagation(); move(i, -1); }} style={{ padding: '0.15rem 0.45rem' }}>↑</button>
+                  <button className="btn btn-secondary" onClick={e => { e.stopPropagation(); move(i, 1); }} style={{ padding: '0.15rem 0.45rem' }}>↓</button>
+                  <button className="btn btn-secondary" onClick={e => { e.stopPropagation(); removeSlide(i); }} style={{ padding: '0.15rem 0.45rem', color: '#f88' }}>✕</button>
+                </div>
+                <input style={input} placeholder="Hook / title (white, top) — optional" value={s.title} onChange={e => upd(i, 'title', e.target.value)} />
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  <input style={input} placeholder="Spanish line (yellow) — optional" value={s.es} onChange={e => upd(i, 'es', e.target.value)} />
+                  <input style={input} placeholder="English echo (small, under) — optional" value={s.en} onChange={e => upd(i, 'en', e.target.value)} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <button className="btn btn-secondary" onClick={addSlide} disabled={slides.length >= 9} style={{ padding: '0.35rem 1rem', marginTop: 8 }}>
+            ＋ Add slide
+          </button>
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 14 }}>
+            <input type="checkbox" checked={logoOn} onChange={e => setLogoOn(e.target.checked)} />
+            End with the Comigo sign-off slide — keep it in-world, never "download now"
+          </label>
+          {logoOn && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 6, maxWidth: 640 }}>
+              <input style={input} value={logoLine1} onChange={e => setLogoLine1(e.target.value)} placeholder="Line 1 (white)" />
+              <input style={input} value={logoLine2} onChange={e => setLogoLine2(e.target.value)} placeholder="Line 2 (yellow)" />
+            </div>
+          )}
+
+          <div style={{ marginTop: 14 }}>
+            <button className="btn btn-primary" disabled={busy} onClick={generate} style={{ padding: '0.55rem 1.4rem' }}>
+              {busy ? 'Rendering…' : '🎠 Render carousel'}
+            </button>
+          </div>
+
+          {out.length > 0 && (
+            <>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1.2rem 0 4px' }}>
+                Rendered slides — post in this order
+              </label>
+              <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: 4 }}>
+                {out.map((u, i) => (
+                  <div key={u} style={{ flex: '0 0 180px', textAlign: 'center' }}>
+                    <img src={u} alt={`slide ${i + 1}`} style={{ width: '100%', borderRadius: 8, border: '1px solid #444' }} />
+                    <a className="btn btn-secondary" href={u} download style={{ display: 'inline-block', padding: '0.25rem 0.8rem', marginTop: 6, fontSize: '0.8rem', textDecoration: 'none' }}>
+                      ⬇ Slide {i + 1}
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

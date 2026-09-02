@@ -744,4 +744,110 @@ router.post('/veo-clip', async (req, res) => {
   }
 });
 
+// POST /api/marketing/carousel — a swipeable tiny story: 1080x1350 slides in
+// the poster's visual language. Each slide: optional art (white frame + shadow
+// on violet), optional hook title (white, top), optional Spanish line (yellow)
+// with a small English echo underneath; a slide with no image centers its text
+// as a beat ("Why?"). Closing slide = Comigo sign-off (logo + two editable
+// lines) — in-world, never an advert. Body:
+// { comicId, slides: [{imageFile?, title?, es?, en?}], logo: {enabled?, line1?, line2?} }
+router.post('/carousel', async (req, res) => {
+  try {
+    const { comicId, slides = [], logo = {} } = req.body;
+    if (!comicId || !Array.isArray(slides) || slides.length < 1) return res.status(400).json({ error: 'comicId and at least one slide are required' });
+    if (slides.length > 9) return res.status(400).json({ error: 'Max 9 story slides (Instagram caps carousels at 10 incl. the sign-off)' });
+    const { dir } = await exportImagesDir(comicId);
+    const W = 1080, H = 1350;
+    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const wrap = (t, maxChars) => {
+      const words = String(t).replace(/\s+/g, ' ').trim().split(' ');
+      const lines = [];
+      let cur = '';
+      for (const w of words) {
+        if (cur && (cur + ' ' + w).length > maxChars) { lines.push(cur); cur = w; }
+        else cur = cur ? `${cur} ${w}` : w;
+      }
+      if (cur) lines.push(cur);
+      return lines;
+    };
+    const textBlock = (lines, yStart, lineH, size, weight, fill, opacity = 1) =>
+      lines.map((l, k) => `<text x="${W / 2}" y="${yStart + k * lineH}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${size}" font-weight="${weight}" fill="${fill}"${opacity !== 1 ? ` opacity="${opacity}"` : ''}>${esc(l)}</text>`).join('');
+
+    const outDir = path.join(PROJECTS_DIR, comicId, 'marketing', `carousel-${Date.now()}`);
+    await fs.mkdir(outDir, { recursive: true });
+    const urls = [];
+    let n = 0;
+
+    for (const s of slides) {
+      n++;
+      const title = String(s.title || '').trim().slice(0, 140);
+      const es = String(s.es || '').trim().slice(0, 200);
+      const en = String(s.en || '').trim().slice(0, 200);
+      const titleLines = title ? wrap(title, 34) : [];
+      const esLines = es ? wrap(es, 30) : [];
+      const enLines = en ? wrap(en, 46) : [];
+      const svgParts = [];
+      const composites = [];
+      const topH = titleLines.length ? 60 + titleLines.length * 74 + 26 : 0;
+      const bandH = (esLines.length ? esLines.length * 78 + 18 : 0) + (enLines.length ? enLines.length * 54 : 0);
+      const botH = bandH ? bandH + 70 : 0;
+      if (s.imageFile) {
+        if (!/^[\w.\-áéíóúñü]+$/i.test(s.imageFile)) return res.status(400).json({ error: `Bad image filename on slide ${n}` });
+        const src = path.join(dir, s.imageFile);
+        const meta = await sharp(src).metadata();
+        const zoneTop = topH || 70, zoneBottom = H - (botH || 70);
+        let artH = zoneBottom - zoneTop - 20;
+        let artW = Math.round(artH * meta.width / meta.height);
+        if (artW > W - 90) { artW = W - 90; artH = Math.round(artW * meta.height / meta.width); }
+        const art = await sharp(src).resize(artW, artH)
+          .extend({ top: 6, bottom: 6, left: 6, right: 6, background: '#FFFFFF' }).png().toBuffer();
+        const artX = Math.round((W - artW - 12) / 2);
+        const artY = Math.round(zoneTop + ((zoneBottom - zoneTop) - artH - 12) / 2);
+        composites.push({ input: Buffer.from(`<svg width="${artW + 26}" height="${artH + 26}"><rect x="14" y="14" width="${artW + 12}" height="${artH + 12}" rx="6" fill="rgba(0,0,0,0.55)"/></svg>`), left: artX - 7, top: artY - 7 });
+        composites.push({ input: art, left: artX, top: artY });
+        if (titleLines.length) svgParts.push(textBlock(titleLines, 118, 74, 58, 800, '#FFFFFF'));
+        if (esLines.length || enLines.length) {
+          let y = H - botH + 62;
+          if (esLines.length) { svgParts.push(textBlock(esLines, y, 78, 62, 800, '#FFD23F')); y += esLines.length * 78 + 14; }
+          if (enLines.length) svgParts.push(textBlock(enLines, y, 54, 40, 600, '#FFFFFF', 0.85));
+        }
+      } else {
+        // Text-only beat: stack everything centered.
+        const totalH = titleLines.length * 84 + (titleLines.length && (esLines.length || enLines.length) ? 40 : 0)
+          + esLines.length * 92 + (esLines.length && enLines.length ? 16 : 0) + enLines.length * 58;
+        let y = Math.round((H - totalH) / 2) + 60;
+        if (titleLines.length) { svgParts.push(textBlock(titleLines, y, 84, 64, 800, '#FFFFFF')); y += titleLines.length * 84 + 40; }
+        if (esLines.length) { svgParts.push(textBlock(esLines, y, 92, 72, 800, '#FFD23F')); y += esLines.length * 92 + 16; }
+        if (enLines.length) svgParts.push(textBlock(enLines, y, 58, 42, 600, '#FFFFFF', 0.85));
+      }
+      const name = `slide-${String(n).padStart(2, '0')}.png`;
+      await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
+        .composite([...composites, { input: Buffer.from(`<svg width="${W}" height="${H}">${svgParts.join('')}</svg>`), left: 0, top: 0 }])
+        .flatten({ background: VIOLET }).png().toFile(path.join(outDir, name));
+      urls.push(`/projects/${comicId}/marketing/${path.basename(outDir)}/${name}`);
+    }
+
+    if (logo.enabled !== false) {
+      n++;
+      const l1 = String(logo.line1 ?? 'Spanish.').trim().slice(0, 80);
+      const l2 = String(logo.line2 ?? 'One comic at a time.').trim().slice(0, 80);
+      const lg = await sharp(LOGO_PATH).resize({ width: 560 }).png().toBuffer();
+      const lm = await sharp(lg).metadata();
+      const fitL = (t, base) => Math.min(base, Math.floor((W - 120) / (0.56 * Math.max(1, t.length))));
+      const name = `slide-${String(n).padStart(2, '0')}.png`;
+      await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
+        .composite([
+          { input: lg, left: Math.round((W - lm.width) / 2), top: Math.round(H / 2 - lm.height - 60) },
+          { input: Buffer.from(`<svg width="${W}" height="${H}">${l1 ? `<text x="${W / 2}" y="${H / 2 + 120}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitL(l1, 78)}" font-weight="800" fill="#FFFFFF">${esc(l1)}</text>` : ''}${l2 ? `<text x="${W / 2}" y="${H / 2 + 230}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitL(l2, 64)}" font-weight="700" fill="#FFD23F">${esc(l2)}</text>` : ''}<text x="${W / 2}" y="${H - 70}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="40" font-weight="700" fill="#FFFFFF" opacity="0.85">comigo.net</text></svg>`), left: 0, top: 0 },
+        ]).flatten({ background: VIOLET }).png().toFile(path.join(outDir, name));
+      urls.push(`/projects/${comicId}/marketing/${path.basename(outDir)}/${name}`);
+    }
+
+    res.json({ urls, count: n });
+  } catch (error) {
+    console.error('Carousel render error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
