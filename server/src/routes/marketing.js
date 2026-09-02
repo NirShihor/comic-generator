@@ -297,7 +297,7 @@ router.post('/reel', async (req, res) => {
         { input: logo, left: Math.round((W - logoMeta.width) / 2), top: Math.round(H / 2 - logoMeta.height) },
         { input: Buffer.from(`<svg width="${W}" height="${H}">
             <text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text>
-            <text x="${W / 2}" y="${H / 2 + 240}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="52" font-weight="600" fill="#FFFFFF" opacity="0.75">comigo.net</text>
+            <text x="${W / 2}" y="${H / 2 + 330}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="110" font-weight="800" fill="#FFFFFF">comigo.net</text>
           </svg>`), left: 0, top: 0 }
       ])
       .flatten({ background: VIOLET }).png().toFile(eCard);
@@ -546,7 +546,7 @@ async function finishClip(comicId, videoPath, question, outPath) {
     await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
       .composite([
         { input: logo, left: Math.round((W - lm.width) / 2), top: Math.round(H / 2 - lm.height) },
-        { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text><text x="${W / 2}" y="${H / 2 + 240}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="52" font-weight="600" fill="#FFFFFF" opacity="0.75">comigo.net</text></svg>`), left: 0, top: 0 }
+        { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text><text x="${W / 2}" y="${H / 2 + 330}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="110" font-weight="800" fill="#FFFFFF">comigo.net</text></svg>`), left: 0, top: 0 }
       ]).flatten({ background: VIOLET }).png().toFile(ep);
     cards.push([ep, 1.8]);
 
