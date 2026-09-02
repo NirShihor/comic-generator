@@ -58,7 +58,7 @@ function Carousel() {
   const [comics, setComics] = useState([]);
   const [comicId, setComicId] = useState('');
   const [images, setImages] = useState([]);
-  const [slides, setSlides] = useState([{ imageFile: '', title: '', es: '', en: '' }]);
+  const [slides, setSlides] = useState([{ imageFile: '', title: '', es: '', en: '', artPrompt: '' }]);
   const [active, setActive] = useState(0);
   const [logoOn, setLogoOn] = useState(true);
   const [logoLine1, setLogoLine1] = useState('Spanish.');
@@ -70,13 +70,13 @@ function Carousel() {
     api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
   }, []);
   useEffect(() => {
-    setImages([]); setOut([]); setSlides([{ imageFile: '', title: '', es: '', en: '' }]); setActive(0);
+    setImages([]); setOut([]); setSlides([{ imageFile: '', title: '', es: '', en: '', artPrompt: '' }]); setActive(0);
     if (!comicId) return;
     api.get(`/marketing/${comicId}/images`).then(r => setImages(r.data.images)).catch(e => alert(e.response?.data?.error || e.message));
   }, [comicId]);
 
   const upd = (i, k, v) => setSlides(ss => ss.map((s, j) => (j === i ? { ...s, [k]: v } : s)));
-  const addSlide = () => { setSlides(ss => [...ss, { imageFile: '', title: '', es: '', en: '' }]); setActive(slides.length); };
+  const addSlide = () => { setSlides(ss => [...ss, { imageFile: '', title: '', es: '', en: '', artPrompt: '' }]); setActive(slides.length); };
   const removeSlide = i => {
     if (slides.length === 1) return;
     setSlides(ss => ss.filter((_, j) => j !== i));
@@ -113,6 +113,24 @@ function Carousel() {
       setSlides(ss => ss.map((s, i) => ({ ...s, title: sug[i]?.title ?? s.title, es: sug[i]?.es ?? s.es, en: sug[i]?.en ?? s.en })));
     } catch (e) { alert(e.response?.data?.error || e.message); }
     finally { setSuggesting(false); }
+  };
+
+  const [genUrls, setGenUrls] = useState({});
+  const [genBusy, setGenBusy] = useState(-1);
+  // The clips principle, for stills: the slide's assigned image is the
+  // reference, your prompt describes the shot, gpt-image-2 paints a NEW image
+  // in the comic's style and it lands straight on the slide.
+  const genArt = async i => {
+    setGenBusy(i);
+    try {
+      const s = slides[i];
+      const r = await api.post('/marketing/carousel-image', {
+        comicId, prompt: s.artPrompt, refImageFiles: s.imageFile ? [s.imageFile] : [],
+      });
+      setGenUrls(m => ({ ...m, [r.data.file]: r.data.url }));
+      upd(i, 'imageFile', r.data.file);
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setGenBusy(-1); }
   };
 
   const input = { width: '100%', padding: '0.5rem 0.7rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.95rem' };
@@ -171,6 +189,20 @@ function Carousel() {
                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                   <input style={input} placeholder="Spanish line (yellow) — optional" value={s.es} onChange={e => upd(i, 'es', e.target.value)} />
                   <input style={input} placeholder="English echo (small, under) — optional" value={s.en} onChange={e => upd(i, 'en', e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                  {(genUrls[s.imageFile] || images.find(im => im.file === s.imageFile)) && (
+                    <img src={genUrls[s.imageFile] || images.find(im => im.file === s.imageFile)?.url} alt=""
+                         style={{ width: 46, height: 58, objectFit: 'cover', borderRadius: 4, border: '1px solid #555', flex: 'none' }} />
+                  )}
+                  <input style={input} value={s.artPrompt || ''} onChange={e => upd(i, 'artPrompt', e.target.value)}
+                         placeholder="Or describe NEW art for this slide — the assigned image becomes the style/scene reference" />
+                  <button className="btn btn-secondary" disabled={genBusy !== -1 || !s.artPrompt}
+                          onClick={e => { e.stopPropagation(); genArt(i); }}
+                          style={{ padding: '0.3rem 0.8rem', whiteSpace: 'nowrap' }}
+                          title="Generates a new still with the comic image model (gpt-image-2), guided by the assigned reference image + this prompt">
+                    {genBusy === i ? 'Painting…' : '🎨 Generate art'}
+                  </button>
                 </div>
               </div>
             ))}

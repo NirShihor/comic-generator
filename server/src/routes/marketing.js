@@ -744,6 +744,59 @@ router.post('/veo-clip', async (req, res) => {
   }
 });
 
+// Resolve a slide image token: plain name = comic export image; "gen:<name>"
+// = an AI-generated still in the comic's marketing folder.
+function resolveSlideImage(comicId, exportDir, f) {
+  const s = String(f || '');
+  if (s.startsWith('gen:')) {
+    const n = s.slice(4);
+    if (!/^[\w.\-]+$/i.test(n)) throw new Error('Bad generated image name');
+    return path.join(PROJECTS_DIR, comicId, 'marketing', n);
+  }
+  if (!/^[\w.\-áéíóúñü]+$/i.test(s)) throw new Error('Bad image filename');
+  return path.join(exportDir, s);
+}
+
+// POST /api/marketing/carousel-image — generate a NEW still for a carousel
+// slide with the comic image model (gpt-image-2): reference image(s) from the
+// comic + the user's prompt — the clips principle, for stills.
+// Body: { comicId, prompt, refImageFiles?: [..max 3], size? }
+router.post('/carousel-image', async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) return res.status(400).json({ error: 'OpenAI API key not configured' });
+    const { comicId, prompt, refImageFiles = [] } = req.body;
+    const size = ['1024x1024', '1024x1536', '1536x1024'].includes(req.body.size) ? req.body.size : '1024x1536';
+    if (!comicId || !prompt) return res.status(400).json({ error: 'comicId and prompt are required' });
+    if (refImageFiles.length > 3) return res.status(400).json({ error: 'Max 3 reference images' });
+    const { dir } = await exportImagesDir(comicId);
+    const { toFile } = require('openai');
+    const mimeOf = p => (/\.png$/i.test(p) ? 'image/png' : /\.webp$/i.test(p) ? 'image/webp' : 'image/jpeg');
+    const streams = await Promise.all(refImageFiles.map(async f => {
+      const p = resolveSlideImage(comicId, dir, f);
+      return toFile(require('fs').createReadStream(p), path.basename(p), { type: mimeOf(p) });
+    }));
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const guard = 'Do not include any speech bubbles, captions, panel borders, or text unless the prompt explicitly asks for them. ';
+    let response;
+    if (streams.length) {
+      const refInstructions = `IMPORTANT: The attached image(s) are STYLE, CHARACTER and SCENE REFERENCES from this comic. Match their art style, characters and world exactly, but compose the NEW image described below — do not copy a reference's layout. ${guard}\n\n`;
+      response = await openai.images.edit({ model: 'gpt-image-2', image: streams, prompt: refInstructions + String(prompt), n: 1, size });
+    } else {
+      response = await openai.images.generate({ model: 'gpt-image-2', prompt: guard + String(prompt), n: 1, size, quality: 'high' });
+    }
+    const d = response.data[0];
+    const buffer = d.b64_json ? Buffer.from(d.b64_json, 'base64') : Buffer.from(await (await fetch(d.url)).arrayBuffer());
+    const outDir = path.join(PROJECTS_DIR, comicId, 'marketing');
+    await fs.mkdir(outDir, { recursive: true });
+    const name = `gen-${Date.now()}.png`;
+    await fs.writeFile(path.join(outDir, name), buffer);
+    res.json({ file: `gen:${name}`, url: `/projects/${comicId}/marketing/${name}` });
+  } catch (error) {
+    console.error('Carousel image error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/marketing/carousel-suggest — GPT drafts the carousel's text from
 // the ref images the user selected (it SEES them, poster-style grounding in
 // the comic's real dialogue). Body: { comicId, slides: [{imageFile?}] } →
@@ -773,8 +826,10 @@ Return ONLY a JSON array of ${slides.length} objects in slide order.`,
     }];
     for (let i = 0; i < slides.length; i++) {
       const f = slides[i]?.imageFile;
-      if (f && /^[\w.\-áéíóúñü]+$/i.test(f)) {
-        const buf = await sharp(path.join(dir, f)).resize({ width: 512, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
+      let refPath = null;
+      try { if (f) refPath = resolveSlideImage(comicId, dir, f); } catch { refPath = null; }
+      if (refPath) {
+        const buf = await sharp(refPath).resize({ width: 512, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
         content.push({ type: 'text', text: `Slide ${i + 1}:` });
         content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${buf.toString('base64')}`, detail: 'low' } });
       } else {
@@ -852,8 +907,7 @@ router.post('/carousel', async (req, res) => {
       const bandH = (esLines.length ? esLines.length * 78 + 18 : 0) + (enLines.length ? enLines.length * 54 : 0);
       const botH = bandH ? bandH + 70 : 0;
       if (s.imageFile) {
-        if (!/^[\w.\-áéíóúñü]+$/i.test(s.imageFile)) return res.status(400).json({ error: `Bad image filename on slide ${n}` });
-        const src = path.join(dir, s.imageFile);
+        const src = resolveSlideImage(comicId, dir, s.imageFile);
         const meta = await sharp(src).metadata();
         const zoneTop = topH || 70, zoneBottom = H - (botH || 70);
         let artH = zoneBottom - zoneTop - 20;
