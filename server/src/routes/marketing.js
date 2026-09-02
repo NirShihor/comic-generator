@@ -289,15 +289,15 @@ router.post('/reel', async (req, res) => {
           <text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitQ}" font-weight="800" fill="#FFD23F">${esc(question)}</text>
         </svg>`), left: 0, top: 0 }])
       .flatten({ background: VIOLET }).png().toFile(qCard);
-    const logo = await sharp(LOGO_PATH).resize({ width: 300 }).png().toBuffer();
+    const logo = await sharp(LOGO_PATH).resize({ width: 640 }).png().toBuffer();
     const logoMeta = await sharp(logo).metadata();
     const eCard = path.join(tmp, 'ecard.png');
     await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
       .composite([
         { input: logo, left: Math.round((W - logoMeta.width) / 2), top: Math.round(H / 2 - logoMeta.height) },
         { input: Buffer.from(`<svg width="${W}" height="${H}">
-            <text x="${W / 2}" y="${H / 2 + 90}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text>
-            <text x="${W / 2}" y="${H / 2 + 150}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="36" font-weight="600" fill="#FFFFFF" opacity="0.75">comigo.net</text>
+            <text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text>
+            <text x="${W / 2}" y="${H / 2 + 240}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="52" font-weight="600" fill="#FFFFFF" opacity="0.75">comigo.net</text>
           </svg>`), left: 0, top: 0 }
       ])
       .flatten({ background: VIOLET }).png().toFile(eCard);
@@ -479,13 +479,13 @@ async function finishClip(comicId, videoPath, question, outPath) {
         .flatten({ background: VIOLET }).png().toFile(qp);
       cards.push([qp, 2.0]);
     }
-    const logo = await sharp(LOGO_PATH).resize({ width: 300 }).png().toBuffer();
+    const logo = await sharp(LOGO_PATH).resize({ width: 640 }).png().toBuffer();
     const lm = await sharp(logo).metadata();
     const ep = path.join(tmp, 'e.png');
     await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
       .composite([
         { input: logo, left: Math.round((W - lm.width) / 2), top: Math.round(H / 2 - lm.height) },
-        { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 90}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text><text x="${W / 2}" y="${H / 2 + 150}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="36" font-weight="600" fill="#FFFFFF" opacity="0.75">comigo.net</text></svg>`), left: 0, top: 0 }
+        { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text><text x="${W / 2}" y="${H / 2 + 240}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="52" font-weight="600" fill="#FFFFFF" opacity="0.75">comigo.net</text></svg>`), left: 0, top: 0 }
       ]).flatten({ background: VIOLET }).png().toFile(ep);
     cards.push([ep, 1.8]);
 
