@@ -776,11 +776,12 @@ router.post('/carousel-image', async (req, res) => {
       return toFile(require('fs').createReadStream(p), path.basename(p), { type: mimeOf(p) });
     }));
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const guard = 'Do not include any speech bubbles, captions, panel borders, or text unless the prompt explicitly asks for them. ';
+    const guard = 'Do not include any speech bubbles, captions, panel borders, or text unless the prompt explicitly asks for them. '
+      + 'Render with clean, smooth, coherent painted shading: NO stipple, NO speckle, NO crackle or mottled noise texture, NO film grain, NO heavy uniform cross-hatching over surfaces. Surfaces should read flat and painterly, with texture only where the scene truly calls for it. ';
     let response;
     if (streams.length) {
       const refInstructions = `IMPORTANT: The attached image(s) are STYLE, CHARACTER and SCENE REFERENCES from this comic. Match their art style, characters and world exactly, but compose the NEW image described below — do not copy a reference's layout. ${guard}\n\n`;
-      response = await openai.images.edit({ model: 'gpt-image-2', image: streams, prompt: refInstructions + String(prompt), n: 1, size });
+      response = await openai.images.edit({ model: 'gpt-image-2', image: streams, prompt: refInstructions + String(prompt), n: 1, size, quality: 'high' });
     } else {
       response = await openai.images.generate({ model: 'gpt-image-2', prompt: guard + String(prompt), n: 1, size, quality: 'high' });
     }
