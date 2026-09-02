@@ -777,7 +777,8 @@ router.post('/carousel-image', async (req, res) => {
     }));
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const guard = 'Do not include any speech bubbles, captions, panel borders, or text unless the prompt explicitly asks for them. '
-      + 'Render with clean, smooth, coherent painted shading: NO stipple, NO speckle, NO crackle or mottled noise texture, NO film grain, NO heavy uniform cross-hatching over surfaces. Surfaces should read flat and painterly, with texture only where the scene truly calls for it. ';
+      + 'Render with clean, smooth, coherent painted shading: NO stipple, NO speckle, NO crackle or mottled noise texture, NO film grain, NO heavy uniform cross-hatching over surfaces. Surfaces should read flat and painterly, with texture only where the scene truly calls for it. '
+      + 'Ration the detail: fine detail belongs only on the main subject and foreground; backgrounds and distant elements stay loose, soft and atmospheric — hazy silhouettes rather than micro-detail, no fields of tiny windows or repeated micro-patterns. ';
     let response;
     if (streams.length) {
       const refInstructions = `IMPORTANT: The attached image(s) are STYLE, CHARACTER and SCENE REFERENCES from this comic. Match their art style, characters and world exactly, but compose the NEW image described below — do not copy a reference's layout. ${guard}\n\n`;
