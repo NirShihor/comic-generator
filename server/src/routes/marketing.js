@@ -522,7 +522,7 @@ async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath, s
 // then the logo end card (1.8s) — turns a raw generation into a Reel that
 // signs off as Comigo. Re-encodes to a uniform 1080x1920/25fps for concat.
 async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
-  const { questionSec = 2.0, endSec = 1.8 } = secs;
+  const { questionSec = 2.0, endSec = 1.8, endCaption = '' } = secs;
   const { execFile } = require('child_process');
   const os = require('os');
   const run = (cmd, args) => new Promise((resolve, reject) =>
@@ -549,7 +549,26 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
         { input: logo, left: Math.round((W - lm.width) / 2), top: Math.round(H / 2 - lm.height) },
         { input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2 + 130}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF">Interactive Spanish stories</text><text x="${W / 2}" y="${H / 2 + 330}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="110" font-weight="800" fill="#FFFFFF">comigo.net</text></svg>`), left: 0, top: 0 }
       ]).flatten({ background: VIOLET }).png().toFile(ep);
-    cards.push([ep, endSec]);
+    // Optional caption under comigo.net, overlaid only during the last 2s of
+    // the logo card (rendered as its own PNG, gated with enable=gte(t,...)).
+    let capPng = null;
+    if (endCaption) {
+      const fsC = 56, lineHC = Math.round(fsC * 1.3);
+      const maxC = Math.floor((W - 160) / (0.52 * fsC));
+      const words = endCaption.replace(/\s+/g, ' ').trim().split(' ');
+      const lines = [];
+      let cur = '';
+      for (const w of words) {
+        if (cur && (cur + ' ' + w).length > maxC) { lines.push(cur); cur = w; }
+        else cur = cur ? `${cur} ${w}` : w;
+      }
+      if (cur) lines.push(cur);
+      capPng = path.join(tmp, 'cap.png');
+      await sharp(Buffer.from(`<svg width="${W}" height="${lines.length * lineHC + 20}" xmlns="http://www.w3.org/2000/svg">${lines.map((l, k) =>
+        `<text x="${W / 2}" y="${Math.round((k + 0.85) * lineHC)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fsC}" font-weight="700" fill="#FFD23F">${esc(l)}</text>`).join('')}</svg>`))
+        .png().toFile(capPng);
+    }
+    cards.push([ep, endSec, capPng]);
 
     const parts = [];
     const main = path.join(tmp, 'main.mp4');
@@ -559,13 +578,22 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
       '-c:a', 'aac', '-ar', '44100', '-ac', '2', main]);
     parts.push(main);
     for (let i = 0; i < cards.length; i++) {
-      const [png, dur] = cards[i];
+      const [png, dur, cap] = cards[i];
       const seg = path.join(tmp, `card${i}.mp4`);
-      await run('ffmpeg', ['-y', '-loop', '1', '-framerate', String(FPS), '-t', String(dur), '-i', png,
-        '-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=r=44100:cl=stereo',
-        '-vf', `scale=${W}:${H}`, '-t', String(dur),
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac', '-ar', '44100', '-ac', '2', seg]);
+      const args = ['-y', '-loop', '1', '-framerate', String(FPS), '-t', String(dur), '-i', png];
+      if (cap) args.push('-loop', '1', '-framerate', String(FPS), '-t', String(dur), '-i', cap);
+      args.push('-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=r=44100:cl=stereo');
+      if (cap) {
+        const showAt = Math.max(0, dur - 2).toFixed(2);
+        args.push('-filter_complex',
+          `[0:v]scale=${W}:${H}[b];[b][1:v]overlay=(main_w-overlay_w)/2:${Math.round(H / 2 + 400)}:enable='gte(t,${showAt})'[v]`,
+          '-map', '[v]', '-map', '2:a');
+      } else {
+        args.push('-vf', `scale=${W}:${H}`);
+      }
+      args.push('-t', String(dur), '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-ar', '44100', '-ac', '2', seg);
+      await run('ffmpeg', args);
       parts.push(seg);
     }
     const inputs = parts.flatMap(f => ['-i', f]);
@@ -582,6 +610,7 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
 const cardSecs = body => ({
   questionSec: Math.min(10, Math.max(0.5, Number(body.questionSeconds) || 2)),
   endSec: Math.min(30, Math.max(0.5, Number(body.endCardSeconds) || 1.8)),
+  endCaption: String(body.endCardCaption || '').trim().slice(0, 200),
 });
 
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
