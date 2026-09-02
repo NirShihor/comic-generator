@@ -418,19 +418,25 @@ router.post('/reel-line-audio', async (req, res) => {
 
 // Lay the comic's real ElevenLabs lines over a clip, with the clip's own
 // audio kept, ducked under the voices, or muted. Voices play sequentially
-// from 0.5s with short gaps; video stream is copied untouched.
-async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath) {
+// from 0.5s with short gaps. Each item may be a bare file token (legacy) or
+// { file, es, en, lang } — with `subtitles` set ('es' | 'en' | 'match'),
+// the matching text is burned in as a subtitle over each line's exact play
+// window (same timeline as the audio delays, so sync is free). Without
+// subtitles the video stream is copied untouched.
+async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath, subtitles = 'none') {
   const { execFile } = require('child_process');
   const run = (cmd, args) => new Promise((resolve, reject) =>
     execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
       err ? reject(new Error(se || err.message)) : resolve(so)));
   const { slug } = await exportImagesDir(comicId);
   const audioDir = path.join(PROJECTS_DIR, comicId, 'export', slug, 'audio');
+  const items = voiceFiles.map(v => (typeof v === 'string' ? { file: v } : v));
   const inputs = ['-i', videoPath];
   const parts = [];
+  const events = [];
   let at = 0.5;
-  for (let i = 0; i < voiceFiles.length; i++) {
-    const f = voiceFiles[i];
+  for (let i = 0; i < items.length; i++) {
+    const f = String(items[i].file || '');
     // "upload:<name>" = user's own audio from marketing/uploads; otherwise a
     // comic export audio file.
     let ap;
@@ -446,15 +452,70 @@ async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath) {
     inputs.push('-i', ap);
     const ms = Math.round(at * 1000);
     parts.push(`[${i + 1}:a]adelay=${ms}|${ms}[v${i}]`);
+    if (subtitles && subtitles !== 'none') {
+      const it = items[i];
+      const text = subtitles === 'es' ? it.es
+        : subtitles === 'en' ? it.en
+        : (it.lang === 'en' ? it.en : it.es); // 'match' — the audio's own language
+      if (text) events.push({ start: at, end: at + dur + 0.3, text: String(text) });
+    }
     at += dur + 0.35;
   }
   const ambVol = ambient === 'mute' ? 0 : ambient === 'duck' ? 0.25 : 1;
   const chains = [`[0:a]volume=${ambVol}[amb]`, ...parts];
-  const mixIn = ['[amb]', ...voiceFiles.map((_, i) => `[v${i}]`)].join('');
-  chains.push(`${mixIn}amix=inputs=${voiceFiles.length + 1}:duration=first:normalize=0[a]`);
-  await run('ffmpeg', ['-y', ...inputs, '-filter_complex', chains.join(';'),
-    '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
-    '-movflags', '+faststart', outPath]);
+  const mixIn = ['[amb]', ...items.map((_, i) => `[v${i}]`)].join('');
+  chains.push(`${mixIn}amix=inputs=${items.length + 1}:duration=first:normalize=0[a]`);
+  // Subtitles are rendered as sharp/SVG PNGs (same engine as the posters, so
+  // no libass/fontconfig dependency) and overlaid with timed enable=between()
+  // — bold white with a black outline, sitting well above the bottom so
+  // Reels/TikTok UI never covers them.
+  const subPngs = [];
+  let vChain = '';
+  if (events.length) {
+    const probe = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height', '-of', 'csv=p=0', videoPath]);
+    const [Wv, Hv] = probe.trim().split(',').map(Number);
+    const fs2 = Math.max(28, Math.round(64 * Wv / 1080));
+    const lineH = Math.round(fs2 * 1.3);
+    const maxChars = Math.max(10, Math.floor((Wv - Math.round(Wv * 0.08)) / (0.52 * fs2)));
+    const escXml = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const wrap = t => {
+      const words = String(t).replace(/\s+/g, ' ').trim().split(' ');
+      const lines = [];
+      let cur = '';
+      for (const w of words) {
+        if (cur && (cur + ' ' + w).length > maxChars) { lines.push(cur); cur = w; }
+        else cur = cur ? `${cur} ${w}` : w;
+      }
+      if (cur) lines.push(cur);
+      return lines;
+    };
+    for (let j = 0; j < events.length; j++) {
+      const lines = wrap(events[j].text);
+      const ph = lines.length * lineH + Math.round(fs2 * 0.5);
+      const svg = `<svg width="${Wv}" height="${ph}" xmlns="http://www.w3.org/2000/svg">${lines.map((l, k) =>
+        `<text x="${Wv / 2}" y="${Math.round((k + 0.85) * lineH)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fs2}" font-weight="800" fill="#FFFFFF" stroke="#000000" stroke-width="${Math.max(4, Math.round(fs2 / 9))}" paint-order="stroke" stroke-linejoin="round">${escXml(l)}</text>`).join('')}</svg>`;
+      const png = `${outPath}.sub${j}.png`;
+      await sharp(Buffer.from(svg)).png().toFile(png);
+      subPngs.push(png);
+      inputs.push('-i', png);
+    }
+    const bottom = Math.round(380 * Hv / 1920);
+    let prev = '[0:v]';
+    for (let j = 0; j < events.length; j++) {
+      const outLbl = j === events.length - 1 ? '[vout]' : `[sv${j}]`;
+      chains.push(`${prev}[${items.length + 1 + j}:v]overlay=(main_w-overlay_w)/2:main_h-overlay_h-${bottom}:enable='between(t,${events[j].start.toFixed(2)},${events[j].end.toFixed(2)})'${outLbl}`);
+      prev = outLbl;
+    }
+    vChain = '[vout]';
+  }
+  const args = ['-y', ...inputs, '-filter_complex', chains.join(';'),
+    '-map', vChain || '0:v', '-map', '[a]'];
+  if (vChain) args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p');
+  else args.push('-c:v', 'copy');
+  args.push('-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outPath);
+  try { await run('ffmpeg', args); }
+  finally { for (const p of subPngs) fs.unlink(p).catch(() => {}); }
 }
 
 // Append the branded finish to a clip: optional violet question card (2s)
@@ -528,7 +589,7 @@ router.post('/veo-remix', async (req, res) => {
     const { question = '', endCard = false } = req.body;
     if (voiceAudio.length === 0 && ambient === 'keep' && !question && !endCard) return res.status(400).json({ error: 'Nothing to change' });
     let cur = src;
-    if (voiceAudio.length > 0 || ambient !== 'keep') { await mixVoicesOnto(comicId, src, voiceAudio, ambient, out); cur = out; }
+    if (voiceAudio.length > 0 || ambient !== 'keep') { await mixVoicesOnto(comicId, src, voiceAudio, ambient, out, req.body.subtitles || 'none'); cur = out; }
     if (question || endCard) {
       const fin = out.replace(/\.mp4$/, '-fin.mp4');
       await finishClip(comicId, cur, question, fin);
@@ -627,7 +688,7 @@ router.post('/veo-clip', async (req, res) => {
     const ambient = req.body.ambient || 'keep';
     if (voiceAudio.length > 0 || ambient !== 'keep') {
       const mixed = name.replace(/\.mp4$/, '-mix.mp4');
-      await mixVoicesOnto(comicId, path.join(outDir, name), voiceAudio, ambient, path.join(outDir, mixed));
+      await mixVoicesOnto(comicId, path.join(outDir, name), voiceAudio, ambient, path.join(outDir, mixed), req.body.subtitles || 'none');
       name = mixed;
     }
     const { question: finQ = '', endCard = false } = req.body;

@@ -238,8 +238,9 @@ function Reels() {
   const [lineOrder, setLineOrder] = useState('en-es');
   const [lineBusy, setLineBusy] = useState('');
   const [endCard, setEndCard] = useState(true);
-  const [voices, setVoices] = useState([]);      // [{file, label}]
+  const [voices, setVoices] = useState([]);      // [{file, label, es, en, lang}]
   const [ambient, setAmbient] = useState('duck');
+  const [subtitles, setSubtitles] = useState('none'); // 'none' | 'es' | 'en' | 'match'
 
   useEffect(() => {
     api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
@@ -254,8 +255,8 @@ function Reels() {
 
   // One option per language per sentence, labelled with its text.
   const voiceOptions = audios.flatMap(a => [
-    { file: a.file, label: `🇪🇸 p${a.page} · ${a.text}` },
-    ...(a.translationFile ? [{ file: a.translationFile, label: `🇬🇧 p${a.page} · ${a.translation || a.text}` }] : []),
+    { file: a.file, lang: 'es', es: a.text, en: a.translation || '', label: `🇪🇸 p${a.page} · ${a.text}` },
+    ...(a.translationFile ? [{ file: a.translationFile, lang: 'en', es: a.text, en: a.translation || a.text, label: `🇬🇧 p${a.page} · ${a.translation || a.text}` }] : []),
   ]);
   const addVoice = file => {
     const opt = voiceOptions.find(o => o.file === file);
@@ -293,7 +294,7 @@ function Reels() {
           speed: v.settings?.speed ?? 1.0,
           ...(v.settings?.model ? { modelId: v.settings.model } : {}),
         });
-        return { file: r.data.file, label: `${flag} ${english ? 'English' : v.name}: ${r.data.label}` };
+        return { file: r.data.file, lang: languageCode, es: lineEs, en: lineEn, label: `${flag} ${english ? 'English' : v.name}: ${r.data.label}` };
       };
       const items = [];
       if (lineOrder !== 'es-only' && lineEn) items.push(await make(lineEn, 'en', '🇬🇧'));
@@ -307,7 +308,7 @@ function Reels() {
   const remix = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => v.file), ambient, question, endCard });
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard });
       setClip(r.data.url);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -322,7 +323,7 @@ function Reels() {
     setBusy(true); setClip(null); setError('');
     try {
       const r = await api.post('/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, mode, aspectRatio: '9:16',
-        voiceAudio: voices.map(v => v.file), ambient, question, endCard, negativePrompt });
+        voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, negativePrompt });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -470,6 +471,14 @@ function Reels() {
                 <option value="keep">Keep as generated</option>
                 <option value="duck">Duck under the voices</option>
                 <option value="mute">Mute — voices only</option>
+              </select>
+              <label style={{ fontSize: '0.8rem', color: '#888' }}>Subtitles:</label>
+              <select value={subtitles} onChange={e => setSubtitles(e.target.value)} style={{ ...input, width: 220 }}
+                      title="Burned-in text synced to each voice line — e.g. English audio with Spanish subtitles, or the other way around">
+                <option value="none">None</option>
+                <option value="es">🇪🇸 Spanish</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="match">Match the audio</option>
               </select>
               {clipFile && (
                 <button className="btn btn-secondary" disabled={busy} onClick={remix} style={{ padding: '0.45rem 1rem' }}
