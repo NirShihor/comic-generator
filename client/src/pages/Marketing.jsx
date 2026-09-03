@@ -58,7 +58,7 @@ function Carousel() {
   const [comics, setComics] = useState([]);
   const [comicId, setComicId] = useState('');
   const [images, setImages] = useState([]);
-  const [slides, setSlides] = useState([{ imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1 }]);
+  const [slides, setSlides] = useState([{ imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1, history: [] }]);
   const [active, setActive] = useState(0);
   const [logoOn, setLogoOn] = useState(true);
   const [logoLine1, setLogoLine1] = useState('Spanish.');
@@ -70,13 +70,13 @@ function Carousel() {
     api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
   }, []);
   useEffect(() => {
-    setImages([]); setOut([]); setSlides([{ imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1 }]); setActive(0);
+    setImages([]); setOut([]); setSlides([{ imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1, history: [] }]); setActive(0);
     if (!comicId) return;
     api.get(`/marketing/${comicId}/images`).then(r => setImages(r.data.images)).catch(e => alert(e.response?.data?.error || e.message));
   }, [comicId]);
 
   const upd = (i, k, v) => setSlides(ss => ss.map((s, j) => (j === i ? { ...s, [k]: v } : s)));
-  const addSlide = () => { setSlides(ss => [...ss, { imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1 }]); setActive(slides.length); };
+  const addSlide = () => { setSlides(ss => [...ss, { imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1, history: [] }]); setActive(slides.length); };
   const removeSlide = i => {
     if (slides.length === 1) return;
     setSlides(ss => ss.filter((_, j) => j !== i));
@@ -87,7 +87,18 @@ function Carousel() {
     setSlides(ss => { const n = [...ss]; [n[i], n[j]] = [n[j], n[i]]; return n; });
     setActive(j);
   };
-  const assignImage = file => upd(active, 'imageFile', slides[active]?.imageFile === file ? '' : file);
+  // Image changes go through setImage so the old image lands on the slide's
+  // history stack — the ↩ Revert button walks back through it.
+  const setImage = (i, file) => setSlides(ss => ss.map((s, j) => j === i
+    ? { ...s, imageFile: file, history: s.imageFile && s.imageFile !== file ? [...(s.history || []), s.imageFile] : (s.history || []) }
+    : s));
+  const revertImage = i => setSlides(ss => ss.map((s, j) => {
+    if (j !== i) return s;
+    const h = [...(s.history || [])];
+    if (!h.length) return s;
+    return { ...s, imageFile: h.pop(), history: h };
+  }));
+  const assignImage = file => setImage(active, slides[active]?.imageFile === file ? '' : file);
 
   const generate = async () => {
     setBusy(true); setOut([]);
@@ -129,7 +140,7 @@ function Carousel() {
         comicId, prompt: s.artPrompt, refImageFiles: s.imageFile ? [s.imageFile] : [],
       });
       setGenUrls(m => ({ ...m, [r.data.file]: r.data.url }));
-      upd(i, 'imageFile', r.data.file);
+      setImage(i, r.data.file);
     } catch (e) { alert(e.response?.data?.error || e.message); }
     finally { setGenBusy(-1); }
   };
@@ -217,11 +228,18 @@ function Carousel() {
                         try {
                           const r = await api.post('/marketing/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
                           setGenUrls(m => ({ ...m, [r.data.file]: r.data.url }));
-                          upd(i, 'imageFile', r.data.file);
+                          setImage(i, r.data.file);
                         } catch (err) { alert(err.response?.data?.error || err.message); }
                         e.target.value = '';
                       }} />
                   </label>
+                  {(s.history || []).length > 0 && (
+                    <button className="btn btn-secondary" onClick={e => { e.stopPropagation(); revertImage(i); }}
+                            title={`Back to the previous image (${(s.history || []).length} step${(s.history || []).length > 1 ? 's' : ''} available)`}
+                            style={{ padding: '0.3rem 0.7rem', whiteSpace: 'nowrap' }}>
+                      ↩ Revert
+                    </button>
+                  )}
                 </div>
                 {s.imageFile && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', fontSize: '0.8rem', color: '#888' }}>
