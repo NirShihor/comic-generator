@@ -70,7 +70,7 @@ function Carousel() {
     api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
   }, []);
   useEffect(() => {
-    setImages([]); setOut([]); setSlides([{ imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1, history: [] }]); setActive(0);
+    setImages([]); setOut([]); setCaption(''); setSlides([{ imageFile: '', title: '', es: '', en: '', artPrompt: '', brightness: 1, saturation: 1, history: [] }]); setActive(0);
     if (!comicId) return;
     api.get(`/marketing/${comicId}/images`).then(r => setImages(r.data.images)).catch(e => alert(e.response?.data?.error || e.message));
   }, [comicId]);
@@ -143,6 +143,22 @@ function Carousel() {
       setImage(i, r.data.file);
     } catch (e) { alert(e.response?.data?.error || e.message); }
     finally { setGenBusy(-1); }
+  };
+
+  const [caption, setCaption] = useState('');
+  const [captionBusy, setCaptionBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  // Caption from the slides' own text — the swipe is the entertainment, the
+  // caption carries the comic's name and the hashtags.
+  const genCaption = async () => {
+    setCaptionBusy(true);
+    try {
+      const r = await api.post('/marketing/carousel-caption', {
+        comicId, slides: slides.map(s => ({ title: s.title, es: s.es, en: s.en })),
+      });
+      setCaption(r.data.caption || '');
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setCaptionBusy(false); }
   };
 
   const input = { width: '100%', padding: '0.5rem 0.7rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.95rem' };
@@ -299,6 +315,22 @@ function Carousel() {
                   </div>
                 ))}
               </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button className="btn btn-secondary" disabled={captionBusy} onClick={genCaption} style={{ padding: '0.45rem 1.1rem' }}
+                        title="GPT writes the Instagram caption from the slides' text — comic name, house lines, hashtags">
+                  {captionBusy ? 'Writing…' : '📝 Caption'}
+                </button>
+                {caption && (
+                  <button className="btn btn-secondary" style={{ padding: '0.45rem 1rem' }}
+                          onClick={() => { navigator.clipboard.writeText(caption); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
+                    {copied ? 'Copied ✓' : 'Copy caption'}
+                  </button>
+                )}
+              </div>
+              {caption && (
+                <textarea value={caption} onChange={e => setCaption(e.target.value)} rows={9}
+                          style={{ ...input, marginTop: 8, maxWidth: 640, resize: 'vertical', fontFamily: 'inherit' }} />
+              )}
             </>
           )}
         </>

@@ -887,6 +887,43 @@ Return ONLY a JSON array of ${slides.length} objects in slide order.`,
   }
 });
 
+// POST /api/marketing/carousel-caption — Instagram caption for a rendered
+// carousel: continues the story the slides tell (hook + Spanish lines), names
+// the comic, then the house lines and hashtags. Same voice as the poster
+// caption; the swipe itself is the entertainment. Body: { comicId, slides: [{title?, es?, en?}] }
+router.post('/carousel-caption', async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) return res.status(400).json({ error: 'OpenAI API key not configured' });
+    const { comicId, slides = [] } = req.body;
+    if (!comicId || !Array.isArray(slides) || slides.length < 1) return res.status(400).json({ error: 'comicId and slides are required' });
+    const ctx = await comicContext(comicId);
+    const story = slides.slice(0, 9).map((s, i) => {
+      const bits = [];
+      if (s.title) bits.push(`hook: "${String(s.title).slice(0, 140)}"`);
+      if (s.es) bits.push(`ES: "${String(s.es).slice(0, 200)}"`);
+      if (s.en) bits.push(`EN: "${String(s.en).slice(0, 200)}"`);
+      return `Slide ${i + 1}: ${bits.join(' · ') || '(art only)'}`;
+    }).join('\n');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const prompt = `Write an Instagram caption for a Comigo carousel post (a swipeable tiny story from a comic).
+Comic: "${ctx.title}" (series: ${ctx.collection}). About: ${ctx.description}
+The slides, in swipe order:
+${story}
+
+Style (match exactly): first line invites the swipe and continues the slides' intrigue (one emoji max), then 1–2 short lines that pick up ONE Spanish phrase from the slides and glance at what it means, then a line naming the comic and series with one phrase about what it is, then "Every bubble is voiced. Every word explains itself when you tap it.", then "📖 comigo.net", then ONE line of 6–8 hashtags mixing English and Spanish learning tags. Never say "download", never oversell, no spoilers beyond what the slides show.
+Return the caption as plain text only.`;
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      max_completion_tokens: 380
+    });
+    res.json({ caption: completion.choices[0].message.content.trim() });
+  } catch (error) {
+    console.error('Carousel caption error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/marketing/carousel — a swipeable tiny story: 1080x1350 slides in
 // the poster's visual language. Each slide: optional art (white frame + shadow
 // on violet), optional hook title (white, top), optional Spanish line (yellow)
