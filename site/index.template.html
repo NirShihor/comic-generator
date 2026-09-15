@@ -132,6 +132,9 @@
   .cta-note { font-family: system-ui, sans-serif; font-size: 0.9rem; color: var(--muted); line-height: 1.4; }
   .cta-link { font-family: system-ui, sans-serif; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
   .cta-link:hover { opacity: 0.75; }
+  /* Desktop-only hint: the App Store link can't install an iOS-only app from a computer. */
+  .cta-desktop { display: none; font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); line-height: 1.4; flex-basis: 100%; }
+  @media (min-width: 900px) and (hover: hover) and (pointer: fine) { .cta-desktop { display: block; } }
 
   /* fanned covers — a 7-card hand, one per collection */
   .fan { position: relative; height: 545px; margin: 0 auto; width: 100%; max-width: 760px; }
@@ -325,7 +328,8 @@
     <div class="cta-row">
       <a class="cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Download on the App Store</a>
       <a class="cta-link" href="#demo">&#9654;&#xFE0E;&nbsp; Watch the demo</a>
-      <span class="cta-note">Free to start. For beginner and intermediate learners. Advanced is on the way.</span>
+      <span class="cta-note">For iPhone and iPad. Free to start. Beginner and intermediate learners &mdash; advanced is on the way.</span>
+      <span class="cta-desktop">On a computer? Open comigo.net on your iPhone or iPad, or search for <strong>Comigo</strong> in the App Store.</span>
     </div>
   </div>
   <div class="fan" aria-hidden="true">
