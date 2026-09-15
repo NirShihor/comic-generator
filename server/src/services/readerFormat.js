@@ -215,8 +215,19 @@ function transformToReaderFormat(comic, comicSlug) {
     });
   }
 
-  for (const page of comic.pages) {
-    const pageNum = pages.length + 1;
+  // Story pages first, then practice pages (kept in their own output array so
+  // the reader's page flow is untouched; they share every other structure).
+  const practicePages = [];
+  // Maps a generator practice-page id to its exported id. Built as pages are
+  // emitted (never by list position — a skipped page would shift every later
+  // phrase onto the wrong page).
+  const practiceIdByGenId = new Map();
+  const allPages = [
+    ...(comic.pages || []).map(p => ({ page: p, practice: false })),
+    ...(comic.practicePages || []).map(p => ({ page: p, practice: true })),
+  ];
+  for (const { page, practice } of allPages) {
+    const pageNum = practice ? page.pageNumber : pages.length + 1;
 
     // Track which bubbles are claimed by floating panels to avoid duplicates
     const claimedBubbleIds = new Set();
@@ -523,13 +534,28 @@ function transformToReaderFormat(comic, comicSlug) {
       }
     }
 
-    pages.push(exportedPage);
+    if (practice) {
+      exportedPage.keyPhraseId = page.keyPhraseId || '';
+      practicePages.push(exportedPage);
+      practiceIdByGenId.set(page.id, exportedPage.id);   // generator id → reader id, by identity
+    } else {
+      pages.push(exportedPage);
+    }
   }
+
 
   return {
     id: `comic-${comicSlug}`,
     title: comic.title,
     ...(comic.titleEn && { titleEn: comic.titleEn }),
+    // Key everyday phrases for the phrase-practice mode (only present once mined).
+    ...(comic.keyPhrases?.length && { keyPhrases: comic.keyPhrases.map(k => ({
+      id: k.id, es: k.es, en: k.en, kind: k.kind || 'verbatim',
+      sourcePages: k.sourcePages || [],
+      ...(k.exchange?.length && { exchange: k.exchange.map(x => ({ speaker: x.speaker, es: x.es, en: x.en })) }),
+      ...(k.practicePageId && practiceIdByGenId.get(k.practicePageId) && { practicePageId: practiceIdByGenId.get(k.practicePageId) })
+    })) }),
+    ...(practicePages.length && { practicePages }),
     description: comic.description || '',
     coverImage: `${comicSlug}_cover`,
     ...(comic.cover?.landscapeImage && { coverLandscape: `${comicSlug}_cover_landscape` }),
@@ -546,7 +572,7 @@ function transformToReaderFormat(comic, comicSlug) {
     ...(comic.collectionTitle && { collectionTitle: comic.collectionTitle }),
     ...(comic.episodeNumber && { episodeNumber: comic.episodeNumber }),
     pages,
-    reviewWords: pages.flatMap(page => [
+    reviewWords: [...pages, ...practicePages].flatMap(page => [
       ...(page.panels || []).flatMap(panel =>
         (panel.bubbles || []).flatMap(bubble =>
           (bubble.sentences || []).flatMap(sentence =>
@@ -594,7 +620,7 @@ function transformToReaderFormat(comic, comicSlug) {
     ]),
     wordAudioMap: (() => {
       const map = {};
-      for (const page of pages) {
+      for (const page of [...pages, ...practicePages]) {
         for (const panel of page.panels || []) {
           for (const bubble of panel.bubbles || []) {
             for (const sentence of bubble.sentences || []) {

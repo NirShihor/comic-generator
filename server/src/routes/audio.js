@@ -155,7 +155,8 @@ function collectUniqueWords(comic) {
   const wordMap = new Map(); // sanitized filename -> original text for TTS
   const allBubbles = [
     ...(comic.cover?.bubbles || []),
-    ...(comic.pages || []).flatMap(p => p.bubbles || [])
+    ...(comic.pages || []).flatMap(p => p.bubbles || []),
+    ...(comic.practicePages || []).flatMap(p => p.bubbles || [])
   ];
   for (const bubble of allBubbles) {
     for (const sentence of bubble.sentences || []) {
@@ -1330,6 +1331,11 @@ router.get('/english-audio-check/:comicId', async (req, res) => {
     await checkBubbles(comic.cover?.bubbles, 'Cover', null);
     for (const page of [...(comic.pages || [])].sort((a, b) => a.pageNumber - b.pageNumber)) {
       await checkBubbles(page.bubbles, `Page ${page.pageNumber}`, page.id);
+    }
+    // Key-phrase practice pages, labelled by their phrase.
+    const phraseFor = (pg) => (comic.keyPhrases || []).find(k => k.id === pg.keyPhraseId)?.es || `#${pg.pageNumber}`;
+    for (const page of [...(comic.practicePages || [])].sort((a, b) => a.pageNumber - b.pageNumber)) {
+      await checkBubbles(page.bubbles, `Practice “${phraseFor(page)}”`, page.id);
     }
 
     res.write(JSON.stringify({ type: 'done', checked, missingCount: missing.length, missing }) + '\n');

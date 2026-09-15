@@ -897,4 +897,105 @@ router.post('/generate-grammar-explanations', async (req, res) => {
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// Key phrases: mine short, everyday phrases from a comic using ONLY words that
+// appear in it. A phrase is either a verbatim line ("Por fin") or a recombination
+// of words from different panels that sit naturally together ("un perro pequeño").
+// GPT proposes; the server validates every token against the comic's vocabulary
+// and drops anything that smuggles in a new word. Nothing is persisted here —
+// the editor merges the proposals into comic.keyPhrases and saves them.
+
+const { phraseTokens, collectComicVocabulary } = require('../services/keyPhrases');
+
+// POST /api/chat/extract-key-phrases  { comicId, count? }
+//   → { phrases: [{ id, es, en, kind, sourcePages, note }], rejected: [{ es, reason }], vocabSize }
+router.post('/extract-key-phrases', async (req, res) => {
+  try {
+    const { comicId } = req.body;
+    const count = Math.min(30, Math.max(3, parseInt(req.body.count, 10) || 12));
+    if (!process.env.OPENAI_API_KEY) return res.status(400).json({ error: 'OpenAI API key not configured.' });
+    if (!comicId) return res.status(400).json({ error: 'comicId is required' });
+    const Comic = require('../models/Comic');
+    const comic = await Comic.findOne({ id: comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    const comicObj = comic.toObject();
+    const { sentences, vocab } = collectComicVocabulary(comicObj);
+    if (!sentences.length) return res.status(400).json({ error: 'This comic has no dialogue yet' });
+
+    const languageNames = { en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', pt: 'Portuguese' };
+    const sourceLang = languageNames[comic.language || 'es'] || comic.language;
+    const targetLang = languageNames[comic.targetLanguage || 'en'] || comic.targetLanguage;
+    const existing = (comicObj.keyPhrases || []).map(k => k.es).filter(Boolean);
+
+    const dialogue = sentences.map(s => `p${s.page}: ${s.text}`).join('\n');
+    const wordList = [...vocab].sort().join(', ');
+    const prompt = `You are mining a ${sourceLang} learners' comic for KEY EVERYDAY PHRASES — the short, reusable things people actually say (greetings, reactions, requests, small talk, everyday descriptions).
+
+Comic: "${comic.title}"
+Every line of dialogue, with page numbers:
+${dialogue}
+
+THE ONLY WORDS YOU MAY USE (every word of every phrase must be in this list, exactly as spelled):
+${wordList}
+
+Propose ${count + 6} candidate phrases, most useful first. Two kinds are allowed:
+- "verbatim": a short line or fragment taken directly from the dialogue (e.g. a 1–5 word chunk of a sentence).
+- "recombined": words from DIFFERENT lines put together into a natural, correct, everyday phrase (e.g. "un perro pequeño" from "un pueblo pequeño" + "su perro"). Grammar and agreement must be correct.
+Rules: 1–6 words each; natural spoken ${sourceLang}; no proper names or story-specific oddities; no duplicates or trivial variants; never invent a word, inflection or contraction that is not in the list; prefer phrases a beginner would reuse in real life. A recombined phrase must be ONE natural utterance (a noun phrase like "un perro pequeño", or a short sentence like "la cantina está abierta") — never a comma-joined list of words, and never a bare number or colour on its own.${existing.length ? `\nAlready collected (do not repeat): ${existing.join(' | ')}` : ''}
+
+Return ONLY a JSON array of ${count + 6} objects: [{ "es": "...", "en": "short natural ${targetLang}", "kind": "verbatim"|"recombined", "pages": [page numbers the words come from], "note": "≤8 words on when you'd say it" }]`;
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a precise language-teaching editor. Always respond with valid JSON only.' },
+        { role: 'user', content: prompt }
+      ],
+      max_completion_tokens: 2500
+    });
+    const m = completion.choices[0].message.content.match(/\[[\s\S]*\]/);
+    if (!m) return res.status(500).json({ error: 'Could not parse phrase suggestions' });
+    let parsed;
+    try { parsed = JSON.parse(m[0]); } catch { return res.status(500).json({ error: 'Phrase suggestions were not valid JSON' }); }
+
+    // Validate: every token must be a word form from the comic. Work out the
+    // source pages ourselves rather than trusting the model.
+    const normSentences = sentences.map(s => ({ page: s.page, norm: ' ' + phraseTokens(s.text).join(' ') + ' ' }));
+    const seen = new Set(existing.map(e => phraseTokens(e).join(' ')));
+    const phrases = [], rejected = [];
+    for (const c of Array.isArray(parsed) ? parsed : []) {
+      const es = String(c?.es || '').trim(), en = String(c?.en || '').trim();
+      const toks = phraseTokens(es);
+      if (!es || !en || toks.length === 0 || toks.length > 8) { if (es) rejected.push({ es, reason: 'empty or too long' }); continue; }
+      const missing = toks.filter(t => !vocab.has(t));
+      if (missing.length) { rejected.push({ es, reason: `not in comic: ${missing.join(', ')}` }); continue; }
+      const key = toks.join(' ');
+      if (seen.has(key)) { rejected.push({ es, reason: 'duplicate' }); continue; }
+      seen.add(key);
+      const verbatimPages = normSentences.filter(s => s.norm.includes(' ' + key + ' ')).map(s => s.page);
+      const kind = verbatimPages.length ? 'verbatim' : 'recombined';
+      // For recombined phrases, cite where the CONTENT words come from —
+      // articles/prepositions are on every page and would drown the list.
+      const contentToks = toks.filter(t => t.length >= 3);
+      const sourcePages = kind === 'verbatim'
+        ? [...new Set(verbatimPages)]
+        : [...new Set((contentToks.length ? contentToks : toks).flatMap(t => normSentences.filter(s => s.norm.includes(' ' + t + ' ')).map(s => s.page)))];
+      phrases.push({
+        id: require('crypto').randomUUID(), es, en, kind,
+        sourcePages: sourcePages.filter(p => p > 0).sort((a, b) => a - b),
+        note: String(c?.note || '').trim().slice(0, 80),
+        manual: false, exchange: []
+      });
+      if (phrases.length >= count) break;
+    }
+    console.log(`Key phrases (${comicId}): ${phrases.length} accepted, ${rejected.length} rejected, vocab ${vocab.size}`);
+    res.json({ phrases, rejected, vocabSize: vocab.size, sentenceCount: sentences.length });
+  } catch (error) {
+    console.error('Extract key phrases error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

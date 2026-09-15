@@ -157,6 +157,17 @@ async function shiftPageNumberTag(comicId, page, fromTag, toTag) {
   }
 }
 
+// Locate a page by id in either the story pages or the practice pages.
+// Returns { list, index, page } (list = 'pages' | 'practicePages') or null.
+function findPageRef(comic, pageId) {
+  for (const list of ['pages', 'practicePages']) {
+    const arr = comic[list] || [];
+    const index = arr.findIndex(p => p.id === pageId);
+    if (index !== -1) return { list, index, page: arr[index] };
+  }
+  return null;
+}
+
 // Get all comic projects
 router.get('/', async (req, res) => {
   try {
@@ -447,20 +458,42 @@ router.put('/:id', async (req, res) => {
         return res.status(404).json({ error: 'Comic not found' });
       }
 
-      // Update each existing page whose ID appears in the incoming data
+      // The page editor PUTs the whole comic: its LIVE page inside `pages`
+      // plus a STALE snapshot of `practicePages` from load time. Apply the
+      // stale snapshot first, then let the live page (which may be a
+      // practice page folded into `pages`) win.
+      let practiceTouched = false;
+      const mergePractice = (incoming) => {
+        const pIdx = (comic.practicePages || []).findIndex(p => p.id === incoming.id);
+        if (pIdx < 0) return false;
+        comic.practicePages[pIdx] = { ...comic.practicePages[pIdx].toObject?.() || comic.practicePages[pIdx], ...incoming };
+        practiceTouched = true;
+        return true;
+      };
+      const liveIds = new Set(incomingPages.map(p => p.id));
+      if (Array.isArray(updateData.practicePages)) {
+        for (const incoming of updateData.practicePages) {
+          if (!liveIds.has(incoming.id)) mergePractice(incoming);
+        }
+        delete updateData.practicePages;
+      }
+      // Update each existing page whose ID appears in the incoming data.
       for (const incoming of incomingPages) {
         const existingIdx = comic.pages.findIndex(p => p.id === incoming.id);
         if (existingIdx >= 0) {
           // Merge: update all fields from the incoming page except the id
           const merged = { ...comic.pages[existingIdx].toObject?.() || comic.pages[existingIdx], ...incoming };
           comic.pages[existingIdx] = merged;
+          continue;
         }
+        mergePractice(incoming);
         // Pages that only exist on the client (stale) are silently ignored
         // Pages that only exist on the server are preserved
       }
 
       // Build atomic update: set merged pages + any remaining fields
       const atomicSet = { pages: comic.pages.map(p => p.toObject?.() || p) };
+      if (practiceTouched) atomicSet.practicePages = (comic.practicePages || []).map(p => p.toObject?.() || p);
       for (const [key, value] of Object.entries(updateData)) {
         atomicSet[key] = value;
       }
@@ -617,12 +650,13 @@ router.put('/:id/pages/:pageId', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
 
-    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
-    if (pageIndex === -1) {
+    const pageRef = findPageRef(comic, req.params.pageId);
+    if (!pageRef) {
       return res.status(404).json({ error: 'Page not found' });
     }
+    const pageIndex = pageRef.index;
 
-    const page = comic.pages[pageIndex];
+    const page = pageRef.page;
     const sanitizedTitle = sanitizeTitle(comic.title);
     const imagesDir = path.join(PROJECTS_DIR, req.params.id, 'images');
 
@@ -693,9 +727,12 @@ router.put('/:id/pages/:pageId', async (req, res) => {
       }
     }
 
+    // Write back into whichever list the page lives in (story pages or
+    // practice pages) — a `pages.`-only path silently matched nothing for
+    // practice pages and every editor Save was lost.
     await Comic.updateOne(
-      { id: req.params.id, 'pages.id': req.params.pageId },
-      { $set: { [`pages.${pageIndex}`]: page.toObject?.() || page } }
+      { id: req.params.id, [`${pageRef.list}.id`]: req.params.pageId },
+      { $set: { [`${pageRef.list}.${pageIndex}`]: page.toObject?.() || page } }
     );
     res.json(page);
   } catch (error) {
@@ -711,15 +748,15 @@ router.put('/:id/pages/:pageId/panels', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
 
-    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
-    if (pageIndex === -1) {
+    const pageRef = findPageRef(comic, req.params.pageId);
+    if (!pageRef) {
       return res.status(404).json({ error: 'Page not found' });
     }
 
-    comic.pages[pageIndex].panels = req.body.panels;
+    pageRef.page.panels = req.body.panels;
     await comic.save();
 
-    res.json(comic.pages[pageIndex]);
+    res.json(pageRef.page);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -733,12 +770,13 @@ router.patch('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
 
-    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
-    if (pageIndex === -1) {
+    const pageRef = findPageRef(comic, req.params.pageId);
+    if (!pageRef) {
       return res.status(404).json({ error: 'Page not found' });
     }
+    const pageObj = pageRef.page;
 
-    const panel = comic.pages[pageIndex].panels.find(p => p.id === req.params.panelId);
+    const panel = pageObj.panels.find(p => p.id === req.params.panelId);
     if (!panel) {
       return res.status(404).json({ error: 'Panel not found' });
     }
@@ -752,8 +790,8 @@ router.patch('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
     }
 
     // Clear baked image if artwork changed — needs re-bake
-    if (req.body.artworkImage && comic.pages[pageIndex].bakedImage) {
-      comic.pages[pageIndex].bakedImage = '';
+    if (req.body.artworkImage && pageObj.bakedImage) {
+      pageObj.bakedImage = '';
     }
 
     await comic.save();
@@ -1000,7 +1038,7 @@ router.post('/:id/export-full', async (req, res) => {
       }
     }
 
-    for (const page of comicObj.pages) {
+    for (const page of [...comicObj.pages, ...(comicObj.practicePages || [])]) {
       const pageImage = page.bakedImage || page.masterImage;
       if (pageImage) {
         const pageNum = page.pageNumber;
@@ -1155,7 +1193,8 @@ router.post('/:id/export-full', async (req, res) => {
     // Copy audio files
     const allBubbles = [
       ...(comicObj.cover?.bubbles || []),
-      ...(comicObj.pages || []).flatMap(p => p.bubbles || [])
+      ...(comicObj.pages || []).flatMap(p => p.bubbles || []),
+      ...(comicObj.practicePages || []).flatMap(p => p.bubbles || [])
     ];
     for (const bubble of allBubbles) {
       for (const sentence of bubble.sentences || []) {
@@ -1359,12 +1398,13 @@ router.delete('/:id/pages/:pageId', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
 
-    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
-    if (pageIndex === -1) {
+    const pageRef = findPageRef(comic, req.params.pageId);
+    if (!pageRef) {
       return res.status(404).json({ error: 'Page not found' });
     }
+    const pageIndex = pageRef.index;
 
-    const page = comic.pages[pageIndex];
+    const page = pageRef.page;
     const deletedFiles = [];
 
     // If archiving, save to ArchivedPage collection
@@ -1400,11 +1440,17 @@ router.delete('/:id/pages/:pageId', async (req, res) => {
       }
     }
 
-    comic.pages.splice(pageIndex, 1);
+    comic[pageRef.list].splice(pageIndex, 1);
+    if (pageRef.list === 'practicePages') {
+      await Comic.updateOne({ id: req.params.id }, {
+        $pull: { practicePages: { id: req.params.pageId } },
+        $set: { 'keyPhrases.$[k].practicePageId': '' },
+      }, { arrayFilters: [{ 'k.practicePageId': req.params.pageId }] }).catch(() => {});
+    }
 
     // Renumber sequentially — renaming each page's files along (lowest first:
     // p7→p6 before p8→p7, so shifts down never collide).
-    for (let idx = 0; idx < comic.pages.length; idx++) {
+    for (let idx = 0; pageRef.list === 'pages' && idx < comic.pages.length; idx++) {
       const p = comic.pages[idx];
       const to = idx + 1;
       if (p.pageNumber !== to) {
@@ -1507,12 +1553,13 @@ router.delete('/:id/pages/:pageId/bubbles/:bubbleId', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
 
-    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
-    if (pageIndex === -1) {
+    const pageRef = findPageRef(comic, req.params.pageId);
+    if (!pageRef) {
       return res.status(404).json({ error: 'Page not found' });
     }
+    const pageIndex = pageRef.index;
 
-    const page = comic.pages[pageIndex];
+    const page = pageRef.page;
     const bubbleIndex = (page.bubbles || []).findIndex(b => b.id === req.params.bubbleId);
     if (bubbleIndex === -1) {
       return res.status(404).json({ error: 'Bubble not found' });
@@ -1554,12 +1601,13 @@ router.delete('/:id/pages/:pageId/panels/:panelId', async (req, res) => {
       return res.status(404).json({ error: 'Comic not found' });
     }
 
-    const pageIndex = comic.pages.findIndex(p => p.id === req.params.pageId);
-    if (pageIndex === -1) {
+    const pageRef = findPageRef(comic, req.params.pageId);
+    if (!pageRef) {
       return res.status(404).json({ error: 'Page not found' });
     }
+    const pageIndex = pageRef.index;
 
-    const page = comic.pages[pageIndex];
+    const page = pageRef.page;
     const panelIndex = (page.panels || []).findIndex(p => p.id === req.params.panelId);
     if (panelIndex === -1) {
       return res.status(404).json({ error: 'Panel not found' });
@@ -1730,7 +1778,7 @@ router.post('/:id/apply-language-fix', async (req, res) => {
     }
     const comic = await Comic.findOne({ id: req.params.id });
     if (!comic) return res.status(404).json({ error: 'Comic not found' });
-    const page = comic.pages.find(p => p.id === pageId);
+    const page = findPageRef(comic, pageId)?.page;
     if (!page) return res.status(404).json({ error: 'Page not found' });
 
     // Translate the corrected text
@@ -1775,6 +1823,81 @@ router.post('/:id/apply-language-fix', async (req, res) => {
     await comic.save();
     res.json({ updated, bubbleId: firstBubbleId, bubbleNumbers, translation });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// Practice pages — one full page per key phrase. The page starts blank apart
+// from the phrase itself in one speech bubble: the author writes the scene
+// prompt, picks the character/location references and the voice in the
+// normal page editor. Practice pages are numbered from 1001 so their
+// image/audio filenames never collide with story pages.
+router.post('/:id/practice-pages', async (req, res) => {
+  try {
+    const { keyPhraseId } = req.body;
+    if (!keyPhraseId) return res.status(400).json({ error: 'keyPhraseId is required' });
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    const phrase = (comic.keyPhrases || []).find(k => k.id === keyPhraseId);
+    if (!phrase) return res.status(404).json({ error: 'Key phrase not found' });
+    if (phrase.practicePageId && (comic.practicePages || []).some(p => p.id === phrase.practicePageId)) {
+      return res.status(409).json({ error: 'This phrase already has a practice page' });
+    }
+
+    const nextNumber = Math.max(1000, ...(comic.practicePages || []).map(p => p.pageNumber || 0)) + 1;
+    const pageId = `page-${uuidv4()}`;
+    const now = Date.now();
+    const page = {
+      id: pageId,
+      pageNumber: nextNumber,
+      keyPhraseId,
+      masterImage: '',
+      lines: [],
+      dividerLines: { horizontal: [], vertical: [] },
+      panels: [{
+        id: `panel-${uuidv4()}`,
+        panelOrder: 1,
+        tapZone: { x: 0, y: 0, width: 1, height: 1 },
+        content: '',
+        selectedBibleRefs: [],
+        bubbles: []
+      }],
+      // Same defaults the page editor gives a bubble it creates itself (tail
+      // geometry, rotation, style), so the bubble behaves exactly like one
+      // added by hand — including the thought-bubble tail controls.
+      bubbles: [{
+        id: `bubble-${now}`,
+        type: 'speech',
+        x: 0.08, y: 0.06, width: 0.5, height: 0.14,
+        // Practice-page house style: Bangers, black on white.
+        fontId: 'bangers',
+        fontSize: 15,
+        italic: false, uppercase: false,
+        bgColor: '#ffffff',
+        textColor: '#000000',
+        borderColor: '#000000',
+        borderWidth: 2.5,
+        cornerRadius: 20,
+        tailX: 0.03, tailY: 0.08, tailBaseX: 0.5, tailSide: 'bottom', tailWidth: 0.15,
+        showTail: true, rotation: 0, tailLength: 0.35, tailCurve: 0, tailBend: 0, textAngle: 0,
+        isSoundEffect: false,
+        tailCtrl1X: 0, tailCtrl1Y: 0, tailCtrl2X: 0, tailCtrl2Y: 0,
+        // No orderIndex: that is a manual pin. Left unset, reading order follows
+        // bubble position on the page, as on story pages.
+        sentences: [{ id: `sentence-${now}`, text: phrase.es, translation: phrase.en, words: [] }]
+      }],
+      hotspots: []
+    };
+
+    await Comic.updateOne({ id: comic.id }, {
+      $push: { practicePages: page },
+      $set: { 'keyPhrases.$[k].practicePageId': pageId }
+    }, { arrayFilters: [{ 'k.id': keyPhraseId }] });
+    res.json({ page });
+  } catch (error) {
+    console.error('Practice page error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

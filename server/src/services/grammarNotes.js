@@ -10,7 +10,7 @@ function collectPendingSentences(comicObj, forceRegenerate = false) {
   const pending = new Map(); // sentenceId -> { text, translation }
   const allBubbles = [
     ...(comicObj.cover?.bubbles || []),
-    ...(comicObj.pages || []).flatMap(p => [
+    ...[...(comicObj.pages || []), ...(comicObj.practicePages || [])].flatMap(p => [
       ...(p.bubbles || []),
       ...(p.panels || []).flatMap(panel => panel.bubbles || [])
     ])

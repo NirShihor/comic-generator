@@ -5,6 +5,10 @@ const path = require('path');
 const sharp = require('sharp');
 const OpenAI = require('openai');
 const Comic = require('../models/Comic');
+// OpenAI image model used for every ChatGPT-provider image call in this file.
+// Tried gpt-image-2.5-sunburst on 2026-09-10 — it drifted photorealistic and lost the
+// hand-drawn comic look, so reverted the same day. gpt-image-2.5-flare untested.
+const OPENAI_IMAGE_MODEL = 'gpt-image-2';
 
 const PROJECTS_DIR = path.join(__dirname, '../../projects');
 const LOGO_PATH = path.join(__dirname, '../../assets/comigo-bubble.png');
@@ -784,7 +788,7 @@ function resolveSlideImage(comicId, exportDir, f) {
 }
 
 // POST /api/marketing/carousel-image — generate a NEW still for a carousel
-// slide with the comic image model (gpt-image-2): reference image(s) from the
+// slide with the comic image model (OPENAI_IMAGE_MODEL): reference image(s) from the
 // comic + the user's prompt — the clips principle, for stills.
 // Body: { comicId, prompt, refImageFiles?: [..max 3], size? }
 router.post('/carousel-image', async (req, res) => {
@@ -808,9 +812,9 @@ router.post('/carousel-image', async (req, res) => {
     let response;
     if (streams.length) {
       const refInstructions = `IMPORTANT: The attached image(s) are STYLE, CHARACTER and SCENE REFERENCES from this comic. Match their art style, characters and world exactly, but compose the NEW image described below — do not copy a reference's layout. ${guard}\n\n`;
-      response = await openai.images.edit({ model: 'gpt-image-2', image: streams, prompt: refInstructions + String(prompt), n: 1, size, quality: 'high' });
+      response = await openai.images.edit({ model: OPENAI_IMAGE_MODEL, image: streams, prompt: refInstructions + String(prompt), n: 1, size, quality: 'high' });
     } else {
-      response = await openai.images.generate({ model: 'gpt-image-2', prompt: guard + String(prompt), n: 1, size, quality: 'high' });
+      response = await openai.images.generate({ model: OPENAI_IMAGE_MODEL, prompt: guard + String(prompt), n: 1, size, quality: 'high' });
     }
     const d = response.data[0];
     const buffer = d.b64_json ? Buffer.from(d.b64_json, 'base64') : Buffer.from(await (await fetch(d.url)).arrayBuffer());
