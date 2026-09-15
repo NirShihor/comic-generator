@@ -46,6 +46,9 @@ const SentenceSchema = new mongoose.Schema({
 const BubbleSchema = new mongoose.Schema({
   id: String,
   type: { type: String, enum: ['speech', 'thought', 'narration', 'image'], default: 'speech' },
+  // Character name (matches comic.voices[].name) — set on practice-page bubbles
+  // so the editor can pre-pick the right voice. Optional elsewhere.
+  speaker: String,
   x: Number,
   y: Number,
   width: Number,
@@ -216,6 +219,8 @@ const HotspotSchema = new mongoose.Schema({
 const PageSchema = new mongoose.Schema({
   id: String,
   pageNumber: Number,
+  // Set on practice pages (comic.practicePages): the key phrase this page drills.
+  keyPhraseId: String,
   masterImage: String,
   originalMasterImage: String,
   bakedImage: String,
@@ -352,6 +357,26 @@ const ComicSchema = new mongoose.Schema({
     scannedAt: Date,
     results: [mongoose.Schema.Types.Mixed]
   },
+  // Key everyday phrases mined from the comic's own vocabulary (verbatim lines
+  // or recombinations of words that all appear in the comic). Each may later
+  // carry a short practice exchange built around it. See /api/chat/extract-key-phrases.
+  keyPhrases: [{
+    id: String,
+    es: String,
+    en: String,
+    kind: { type: String, enum: ['verbatim', 'recombined'], default: 'verbatim' },
+    sourcePages: [Number],
+    note: String,
+    manual: Boolean,
+    exchange: [{ speaker: String, es: String, en: String }],
+    practicePageId: String
+  }],
+  keyPhrasesGeneratedAt: Date,
+  // Practice pages: one full page per key phrase, same PageSchema as story
+  // pages so the page editor, audio tooling and export all work on them. They
+  // use pageNumbers from 1001 up so their image/audio filenames never collide
+  // with (or get renumbered like) story pages.
+  practicePages: [PageSchema],
   collectionId: String,
   collectionTitle: String,
   episodeNumber: Number,

@@ -1071,12 +1071,14 @@ function PageEditor({ isCover = false }) {
     const enKey = `${sentenceId}-en`;
     setGeneratingAudio(prev => ({ ...prev, [enKey]: true }));
     try {
-      // Generate audio for the English translation (always use dedicated EN voice)
+      // Generate audio for the English translation: the dedicated EN narrator
+      // with FIXED house settings. (It used to inherit the sliders of whichever
+      // Spanish voice was selected, so the narrator drifted between pages.)
       const response = await api.post('/audio/generate', {
         text: sentence.translation,
         voice_id: 'GP1bgf0sjoFuuHkyrg8E',
         model_id: 'eleven_v3',
-        ...audioSettings,
+        ...DEFAULT_AUDIO_SETTINGS,
         language_code: 'en'
       });
 
@@ -1216,9 +1218,33 @@ function PageEditor({ isCover = false }) {
     }
   };
 
+  // Keep the comic snapshot's copy of THIS page's bubbles current. Several
+  // flows (bake, image save) PUT the whole comic built from `comic`; without
+  // this they carried the bubbles as loaded and silently resurrected deleted
+  // bubbles / dropped freshly generated audio on save.
+  useEffect(() => {
+    if (isCover) return;
+    setComic(prev => {
+      if (!prev?.pages) return prev;
+      const idx = prev.pages.findIndex(p => p.id === pageId);
+      if (idx === -1 || prev.pages[idx].bubbles === bubbles) return prev;
+      const pages = [...prev.pages];
+      pages[idx] = { ...pages[idx], bubbles };
+      return { ...prev, pages };
+    });
+  }, [bubbles, pageId, isCover]);
+
   const loadComic = async () => {
     try {
       const response = await api.get(`/comics/${id}`);
+      // A practice page (comic.practicePages) is edited with exactly the same
+      // tooling as a story page. Fold it into the local `pages` list so every
+      // "find my page by id" path below works unchanged; the server's PUT
+      // merge routes an id it doesn't find in pages back to practicePages.
+      const practicePage = !isCover && !(response.data.pages || []).some(p => p.id === pageId)
+        ? (response.data.practicePages || []).find(p => p.id === pageId)
+        : null;
+      if (practicePage) response.data = { ...response.data, pages: [...(response.data.pages || []), practicePage] };
       setComic(response.data);
 
       // Load default bubble style if saved on comic
@@ -1303,9 +1329,21 @@ function PageEditor({ isCover = false }) {
       const pages = response.data.pages || [];
       const currentPage = pages.find(p => p.id === pageId);
       if (!currentPage) {
+        // A page that was created a moment ago can be missing from a read that
+        // races the write. Retry once; if it's still missing, CLEAR the editor
+        // rather than keep the previous page's state under this URL — that is
+        // how one page's bubbles ended up saved onto another.
+        if (!loadRetriedRef.current) {
+          loadRetriedRef.current = true;
+          setTimeout(loadComic, 700);
+          return;
+        }
         console.error('Page not found:', pageId);
+        setPage(null); setLines([]); setPanels([]); setPanelImages({}); setBubbles([]); setHotspots([]);
+        alert('This page could not be loaded. Go back to the comic and open it again.');
         return;
       }
+      loadRetriedRef.current = false;
       // Reset all page state before loading new page data
       // (prevents stale state from previous page leaking into empty/new pages)
       justLoadedRef.current = true;   // snapshot the loaded state as "clean"
@@ -1361,7 +1399,26 @@ function PageEditor({ isCover = false }) {
         if (Object.keys(restored).length > 0) setPanelImages(restored);
       }
       if (currentPage?.bubbles) {
-        setBubbles(currentPage.bubbles);
+        // Practice-page bubbles created before 2026-09-10 were server-made with
+        // only the basics; fill in the editor's tail/style defaults so their
+        // controls (thought tails etc.) match a hand-added bubble.
+        const withDefaults = currentPage.keyPhraseId
+          ? currentPage.bubbles.map(b => ((b.showTail === undefined || b.fontSize === undefined) ? {
+              // Practice-page house style: Bangers, black on white (not the
+              // comic's default bubble style, which may be tuned for its art).
+              fontId: 'bangers',
+              fontSize: 15,
+              textColor: '#000000',
+              bgColor: '#ffffff',
+              borderColor: '#000000',
+              borderWidth: 2.5,
+              tailX: 0.03, tailY: 0.08, tailBaseX: 0.5, tailSide: 'bottom', tailWidth: 0.15,
+              showTail: true, rotation: 0, tailLength: 0.35, tailCurve: 0, tailBend: 0, textAngle: 0,
+              tailCtrl1X: 0, tailCtrl1Y: 0, tailCtrl2X: 0, tailCtrl2Y: 0,
+              cornerRadius: 20, isSoundEffect: false, ...b,
+            } : b))
+          : currentPage.bubbles;
+        setBubbles(withDefaults);
       }
       setHotspots(currentPage?.hotspots || []);
       // Build list of panels from other pages that have artwork
@@ -1937,6 +1994,12 @@ function PageEditor({ isCover = false }) {
   }, [selectedBubbleId, bubbles]);
 
   // Get display text from sentences
+  // Narration boxes and tail-less speech bubbles: drawn as an SVG rect with a
+  // rough displacement filter (like thought bubbles) so the hand-drawn edge
+  // survives the bake — html2canvas drops CSS url() filters, which is why they
+  // used to bake as perfect rectangles.
+  const isRoughBox = (b) => b.type === 'narration' || (b.type === 'speech' && b.showTail === false);
+
   const getBubbleDisplayText = (bubble) => {
     if (!bubble.sentences || bubble.sentences.length === 0) return '';
     return bubble.sentences.map(s => s.text).join(' ');
@@ -2993,6 +3056,7 @@ function PageEditor({ isCover = false }) {
   const pageDirtyRef = useRef(false);
   const cleanSnapshotRef = useRef('');
   const justLoadedRef = useRef(true);
+  const loadRetriedRef = useRef(false);
   const DIRTY_IGNORE_KEYS = useRef(new Set([
     'fitMode', 'cropX', 'cropY', 'zoom', 'brightness', 'contrast', 'saturation', 'memory',
     'artworkImage', 'bakedCropImage', 'refImages', 'annotations',
@@ -3270,6 +3334,10 @@ function PageEditor({ isCover = false }) {
 
   const savePage = async () => {
     try {
+      if (!isCover && page && page.id !== pageId) {
+        alert('The editor is showing a different page from the one in the address bar — nothing was saved. Reload the page.');
+        return;
+      }
       if (isCover) {
         // Save cover with prompt and bubbles
         const coverPrompt = panels[0]?.content || '';
@@ -5452,13 +5520,24 @@ function PageEditor({ isCover = false }) {
   if (!comic || !page) {
     return <div>Loading...</div>;
   }
+  // Never let the editor operate on a page other than the one in the URL.
+  // (Every save path keys on pageId; stale state here is how a page's bubbles
+  // once got written onto its neighbour.)
+  if (!isCover && page.id !== pageId) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center', color: '#f88' }}>
+        <p>This editor is out of step with the page in the address bar. Reloading…</p>
+        <button className="btn btn-secondary" onClick={() => window.location.reload()} style={{ padding: '0.4rem 1rem' }}>Reload now</button>
+      </div>
+    );
+  }
 
   const previewLine = getPreviewLine();
   const layoutDescription = generateLayoutDescription(panels);
   const selectedPanelData = panels.find(p => p.id === selectedPanel);
   const snapPoints = getSnapPoints();
 
-  const sortedPages = comic?.pages ? [...comic.pages].sort((a, b) => a.pageNumber - b.pageNumber) : [];
+  const sortedPages = comic?.pages ? [...comic.pages].filter(p => !p.keyPhraseId).sort((a, b) => a.pageNumber - b.pageNumber) : [];
   const currentPageIdx = sortedPages.findIndex(p => p.id === pageId);
   const prevPage = currentPageIdx > 0 ? sortedPages[currentPageIdx - 1] : null;
   const nextPage = currentPageIdx < sortedPages.length - 1 ? sortedPages[currentPageIdx + 1] : null;
@@ -5873,8 +5952,10 @@ function PageEditor({ isCover = false }) {
             ← Back to {comic.title}
           </a>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <h1 style={{ margin: 0 }}>{isCover ? 'Cover' : `Page ${page.pageNumber}`}</h1>
-            {!isCover && sortedPages.length > 0 && (
+            <h1 style={{ margin: 0 }}>
+              {isCover ? 'Cover' : page.keyPhraseId ? 'Practice page' : `Page ${page.pageNumber}`}
+            </h1>
+            {!isCover && !page.keyPhraseId && sortedPages.length > 0 && (
               <div style={{ display: 'flex', gap: '0.25rem' }}>
                 <button
                   onClick={async () => {
@@ -5921,7 +6002,60 @@ function PageEditor({ isCover = false }) {
                 </button>
               </div>
             )}
+            {!isCover && page.keyPhraseId && (() => {
+              // Practice pages navigate in Key Phrases order (the order the
+              // phrases are listed / drilled), not by creation.
+              const phrases = comic.keyPhrases || [];
+              const pageFor = (k) => (comic.practicePages || []).find(pp => pp.id === k.practicePageId);
+              const ordered = phrases.filter(k => pageFor(k)).map(k => ({ phrase: k, page: pageFor(k) }));
+              const idx = ordered.findIndex(o => o.page.id === pageId);
+              const prev = idx > 0 ? ordered[idx - 1] : null;
+              const next = idx >= 0 && idx < ordered.length - 1 ? ordered[idx + 1] : null;
+              const curPhraseIdx = phrases.findIndex(k => k.id === page.keyPhraseId);
+              // Next phrase (after this one, wrapping) that has no page yet.
+              const rotated = [...phrases.slice(curPhraseIdx + 1), ...phrases.slice(0, Math.max(curPhraseIdx, 0))];
+              const nextWithoutPage = rotated.find(k => !pageFor(k));
+              const go = async (pg) => {
+                if (!confirmLeavePage()) return;
+                while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
+                navigate(`/comic/${id}/page/${pg.id}`);
+              };
+              const btn = (enabled) => ({ padding: '0.3rem 0.6rem', fontSize: '0.85rem', background: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: enabled ? 'pointer' : 'default', opacity: enabled ? 1 : 0.4 });
+              return (
+                <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                  <button onClick={() => prev && go(prev.page)} disabled={!prev} style={btn(!!prev)}
+                          title={prev ? `“${prev.phrase.es}”` : 'First practice page'}>← Prev</button>
+                  <span style={{ color: '#888', fontSize: '0.8rem' }}>{idx + 1} / {ordered.length}</span>
+                  <button onClick={() => next && go(next.page)} disabled={!next} style={btn(!!next)}
+                          title={next ? `“${next.phrase.es}”` : 'Last practice page'}>Next →</button>
+                  <button
+                    onClick={async () => {
+                      if (!nextWithoutPage) return;
+                      if (!confirmLeavePage()) return;
+                      while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
+                      try {
+                        const response = await api.post(`/comics/${id}/practice-pages`, { keyPhraseId: nextWithoutPage.id });
+                        navigate(`/comic/${id}/page/${response.data.page.id}`);
+                      } catch (err) {
+                        alert('Failed to create practice page: ' + (err.response?.data?.error || err.message));
+                      }
+                    }}
+                    disabled={!nextWithoutPage}
+                    title={nextWithoutPage ? `Create the practice page for the next phrase without one: “${nextWithoutPage.es}”` : 'Every phrase already has a practice page'}
+                    style={{ ...btn(!!nextWithoutPage), background: '#27ae60' }}
+                  >
+                    + Next phrase page
+                  </button>
+                </div>
+              );
+            })()}
           </div>
+          {!isCover && page.keyPhraseId && (
+            // Phrase on its own line so the nav buttons stay put from page to page.
+            <div style={{ color: '#FFD23F', fontSize: '1.35rem', fontWeight: 700, marginTop: '0.2rem' }}>
+              “{(comic.keyPhrases || []).find(k => k.id === page.keyPhraseId)?.es || ''}”
+            </div>
+          )}
         </div>
       </div>
 
@@ -6921,7 +7055,7 @@ function PageEditor({ isCover = false }) {
                                 <span
                                   style={{
                                     fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
-                                    fontSize: `${bubble.fontSize}px`,
+                                    fontSize: `${bubble.fontSize || 15}px`,
                                     fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                                     fontStyle: bubble.italic ? 'italic' : 'normal',
                                     color: bubble.textColor || '#000000',
@@ -7177,6 +7311,25 @@ function PageEditor({ isCover = false }) {
                     );
                   })()}
 
+                  {/* Narration / tail-less speech body — SVG rect + rough filter (bakes correctly) */}
+                  {isRoughBox(bubble) && !bubble.hidden && (() => {
+                    const bx = bubble.x * CANVAS_WIDTH, by = bubble.y * CANVAS_HEIGHT, bw = bubble.width * CANVAS_WIDTH, bh = bubble.height * CANVAS_HEIGHT;
+                    const rot = (bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.type === 'narration' ? (bubble.rotation ?? 0) : 0);
+                    const rx = Math.min(bubble.cornerRadius || 8, bw / 2, bh / 2);
+                    return (
+                      <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 50, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
+                        <defs>
+                          <filter id={`roughBox-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+                          </filter>
+                        </defs>
+                        <g transform={`rotate(${rot} ${bx + bw / 2} ${by + bh / 2})`}>
+                          <rect x={bx} y={by} width={bw} height={bh} rx={rx} ry={rx} fill={bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff'))} stroke={bubble.noBorder ? 'none' : (bubble.borderColor || '#000')} strokeWidth={bubble.borderWidth ?? 2.5} filter={`url(#roughBox-${bubble.id})`} />
+                        </g>
+                      </svg>
+                    );
+                  })()}
                   {/* Bubble body - hand-drawn style (for non-speech or speech without tail) */}
                   {!(bubble.type === 'speech' && bubble.showTail !== false) && (
                   <div
@@ -7194,10 +7347,10 @@ function PageEditor({ isCover = false }) {
                       top: `${bubble.y * 100}%`,
                       width: `${bubble.width * 100}%`,
                       height: `${bubble.height * 100}%`,
-                      background: bubble.hidden ? 'transparent' : (bubble.type === 'thought' ? 'transparent' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')))),
+                      background: bubble.hidden ? 'transparent' : ((bubble.type === 'thought' || isRoughBox(bubble)) ? 'transparent' : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')))),
                       border: bubble.hidden
                         ? (selectedBubbleId === bubble.id ? '3px solid #00ff00' : '2px dashed #e74c3c')
-                        : (bubble.type === 'thought' ? (selectedBubbleId === bubble.id ? '3px solid #00ff00' : 'none') : (selectedBubbleId === bubble.id ? '3px solid #00ff00' : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`))),
+                        : ((bubble.type === 'thought' || isRoughBox(bubble)) ? (selectedBubbleId === bubble.id ? '3px solid #00ff00' : 'none') : (selectedBubbleId === bubble.id ? '3px solid #00ff00' : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`))),
                       borderRadius: bubble.type === 'thought'
                         ? `${bubble.cornerRadius ?? 50}%`
                         : `${bubble.cornerRadius || 8}px`,
@@ -7213,7 +7366,7 @@ function PageEditor({ isCover = false }) {
                       // Hand-drawn effect with slight rotation and rough filter, plus user rotation for thought bubbles
                       transform: `rotate(${(bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + ((bubble.type === 'thought' || bubble.type === 'narration') ? (bubble.rotation ?? 0) : 0)}deg)`,
                       transformOrigin: 'center center',
-                      filter: bubble.type === 'thought' ? 'none' : 'url(#roughEdge)'
+                      filter: (bubble.type === 'thought' || isRoughBox(bubble)) ? 'none' : 'url(#roughEdge)'
                     }}
                   >
                     {bubble.type === 'thought' && bubble.backgroundImageUrl && (
@@ -7247,7 +7400,7 @@ function PageEditor({ isCover = false }) {
                     <span
                       style={{
                         fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
-                        fontSize: `${bubble.fontSize}px`,
+                        fontSize: `${bubble.fontSize || 15}px`,
                         fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                         fontStyle: bubble.italic ? 'italic' : 'normal',
                         color: bubble.textColor || '#000000',
@@ -8683,7 +8836,7 @@ function PageEditor({ isCover = false }) {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[crying]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]', '[fade out]', '[assertive]', '[pleading]', '[loud]'].map(tag => {
+                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[crying]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]', '[fade out slowly]', '[assertive]', '[pleading]', '[loud]'].map(tag => {
                                 const tagKey = `${sentence.id}-${tag}`;
                                 const isCopied = copiedTag === tagKey;
                                 return (
@@ -8876,6 +9029,19 @@ function PageEditor({ isCover = false }) {
                                 </p>
                               ) : (
                                 <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                                  {bubble.speaker && (() => {
+                                    const sv = (comic.voices || []).find(v => (v.name || '').toLowerCase() === bubble.speaker.toLowerCase());
+                                    return sv ? (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); pickVoice(sv.voiceId); }}
+                                        title={`This bubble is spoken by ${bubble.speaker} — use that voice`}
+                                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', borderRadius: '3px', border: '1px solid #8e6bf0',
+                                                 background: selectedVoiceId === sv.voiceId ? '#8e6bf0' : 'transparent', color: selectedVoiceId === sv.voiceId ? '#fff' : '#8e6bf0', cursor: 'pointer' }}
+                                      >
+                                        🎙 {bubble.speaker}
+                                      </button>
+                                    ) : <span style={{ fontSize: '0.7rem', color: '#e67e22', alignSelf: 'center' }} title="No voice with this name in the cast">🎙 {bubble.speaker}: no voice</span>;
+                                  })()}
                                   <select
                                     value={selectedVoiceId}
                                     onChange={(e) => { e.stopPropagation(); pickVoice(e.target.value); }}
@@ -13344,7 +13510,7 @@ function PageEditor({ isCover = false }) {
                             }}>
                               <span style={{
                                 fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
-                                fontSize: `${bubble.fontSize}px`,
+                                fontSize: `${bubble.fontSize || 15}px`,
                                 fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                                 fontStyle: bubble.italic ? 'italic' : 'normal',
                                 color: bubble.textColor || '#000000',
@@ -13462,6 +13628,25 @@ function PageEditor({ isCover = false }) {
                       </svg>
                     );
                   })()}
+                  {/* Narration / tail-less speech body — SVG rect + rough filter (bakes correctly) */}
+                  {isRoughBox(bubble) && (() => {
+                    const bx = bubble.x * CANVAS_WIDTH, by = bubble.y * CANVAS_HEIGHT, bw = bubble.width * CANVAS_WIDTH, bh = bubble.height * CANVAS_HEIGHT;
+                    const rot = (bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2 + (bubble.type === 'narration' ? (bubble.rotation ?? 0) : 0);
+                    const rx = Math.min(bubble.cornerRadius || 8, bw / 2, bh / 2);
+                    return (
+                      <svg style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', zIndex: 50, overflow: 'visible' }} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
+                        <defs>
+                          <filter id={`roughBox${filtSuffix}-${bubble.id}`} x="-50%" y="-50%" width="200%" height="200%">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+                          </filter>
+                        </defs>
+                        <g transform={`rotate(${rot} ${bx + bw / 2} ${by + bh / 2})`}>
+                          <rect x={bx} y={by} width={bw} height={bh} rx={rx} ry={rx} fill={emptyPlaceholder ? (bubble.type === 'narration' ? '#fffde7' : '#ffffff') : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')))} stroke={emptyPlaceholder ? '#000' : (bubble.noBorder ? 'none' : (bubble.borderColor || '#000'))} strokeWidth={bubble.borderWidth ?? 2.5} filter={`url(#roughBox${filtSuffix}-${bubble.id})`} />
+                        </g>
+                      </svg>
+                    );
+                  })()}
                   {!(bubble.type === 'speech' && bubble.showTail !== false) && (
                   <div
                     style={{
@@ -13470,8 +13655,8 @@ function PageEditor({ isCover = false }) {
                       top: `${bubble.y * 100}%`,
                       width: `${bubble.width * 100}%`,
                       height: `${bubble.height * 100}%`,
-                      background: bubble.type === 'thought' ? 'transparent' : (emptyPlaceholder ? (bubble.type === 'narration' ? '#fffde7' : '#ffffff') : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')))),
-                      border: bubble.type === 'thought' ? 'none' : (emptyPlaceholder ? `${bubble.borderWidth ?? 2.5}px solid #000` : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`)),
+                      background: (bubble.type === 'thought' || isRoughBox(bubble)) ? 'transparent' : (emptyPlaceholder ? (bubble.type === 'narration' ? '#fffde7' : '#ffffff') : (bubble.bgTransparent ? 'transparent' : (bubble.bgColor || (bubble.type === 'narration' ? '#fffde7' : '#ffffff')))),
+                      border: (bubble.type === 'thought' || isRoughBox(bubble)) ? 'none' : (emptyPlaceholder ? `${bubble.borderWidth ?? 2.5}px solid #000` : (bubble.noBorder ? 'none' : `${bubble.borderWidth ?? 2.5}px solid ${bubble.borderColor || '#000'}`)),
                       borderRadius: bubble.type === 'thought' ? `${bubble.cornerRadius ?? 50}%` : `${bubble.cornerRadius || 8}px`,
                       display: 'flex',
                       alignItems: 'center',
@@ -13486,7 +13671,7 @@ function PageEditor({ isCover = false }) {
                       // whole element when it hits one — so skip roughEdge in the
                       // bake (the inline roughBubble SVG filter still gives the
                       // hand-drawn shape). Keep it in the on-screen preview.
-                      filter: (bubble.type === 'thought' || ref === bakeTargetRef) ? 'none' : `url(#roughEdge${filtSuffix})`
+                      filter: (bubble.type === 'thought' || isRoughBox(bubble) || ref === bakeTargetRef) ? 'none' : `url(#roughEdge${filtSuffix})`
                     }}
                   >
                     {bubble.type === 'thought' && bubble.backgroundImageUrl && (
@@ -13507,7 +13692,7 @@ function PageEditor({ isCover = false }) {
                     ) : (
                     <span style={{
                       fontFamily: (BUBBLE_FONTS.find(f => f.id === bubble.fontId) || BUBBLE_FONTS[0]).family,
-                      fontSize: `${bubble.fontSize}px`,
+                      fontSize: `${bubble.fontSize || 15}px`,
                       fontWeight: bubble.fontId === 'caveat' ? '700' : 'normal',
                       fontStyle: bubble.italic ? 'italic' : 'normal',
                       color: bubble.textColor || '#000000',

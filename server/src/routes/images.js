@@ -8,6 +8,10 @@ const OpenAI = require('openai');
 const { toFile } = require('openai');
 const sharp = require('sharp');
 const { GoogleGenAI } = require('@google/genai');
+// OpenAI image model used for every ChatGPT-provider image call in this file.
+// Tried gpt-image-2.5-sunburst on 2026-09-10 — it drifted photorealistic and lost the
+// hand-drawn comic look, so reverted the same day. gpt-image-2.5-flare untested.
+const OPENAI_IMAGE_MODEL = 'gpt-image-2';
 
 // Generate image using Gemini API
 async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [], isAngleChange = false, aspectRatio = 'square', annotationsMap = {}, hasMasterStyleImage = false) {
@@ -393,7 +397,7 @@ router.post('/generate', async (req, res) => {
       console.log('Generating with OpenAI, prompt length:', fullPrompt.length);
 
       const response = await openai.images.generate({
-        model: 'gpt-image-2',
+        model: OPENAI_IMAGE_MODEL,
         prompt: fullPrompt,
         n: 1,
         size: '1024x1536',
@@ -459,7 +463,7 @@ router.post('/generate-page', (req, res) => {
       if (refStreams.length > 0) {
         const refPrompt = `IMPORTANT: The attached image(s) are STYLE and CHARACTER REFERENCES ONLY. Do NOT reproduce or copy these images. Use them ONLY to match the art style, character appearance, and visual consistency. Generate a COMPLETELY NEW and ORIGINAL scene based on the prompt below.\n\n${finalPrompt}`;
         response = await openai.images.edit({
-          model: 'gpt-image-2',
+          model: OPENAI_IMAGE_MODEL,
           image: refStreams,
           prompt: refPrompt,
           n: 1,
@@ -467,7 +471,7 @@ router.post('/generate-page', (req, res) => {
         });
       } else {
         response = await openai.images.generate({
-          model: 'gpt-image-2',
+          model: OPENAI_IMAGE_MODEL,
           prompt: finalPrompt,
           n: 1,
           size: '1024x1536',
@@ -773,9 +777,9 @@ Other attached images are style/character references — use them for art style 
           }
         }
 
-        console.log(`[DEBUG] images.edit: model=gpt-image-2, refs=${allRefStreams.length}, size=${size}, prompt len=${(refInstructions + finalPrompt).length}`);
+        console.log(`[DEBUG] images.edit: model=${OPENAI_IMAGE_MODEL}, refs=${allRefStreams.length}, size=${size}, prompt len=${(refInstructions + finalPrompt).length}`);
         response = await openai.images.edit({
-          model: 'gpt-image-2',
+          model: OPENAI_IMAGE_MODEL,
           image: allRefStreams,
           prompt: refInstructions + finalPrompt,
           n: 1,
@@ -788,7 +792,7 @@ Other attached images are style/character references — use them for art style 
           finalPrompt = finalPrompt.substring(0, 30000);
         }
         response = await openai.images.generate({
-          model: 'gpt-image-2',
+          model: OPENAI_IMAGE_MODEL,
           prompt: finalPrompt,
           n: 1,
           size: size,
@@ -879,7 +883,7 @@ router.post('/generate-studio', (req, res) => {
         }
         promptSent = refInstructions + prompt;
         response = await openai.images.edit({
-          model: 'gpt-image-2',
+          model: OPENAI_IMAGE_MODEL,
           image: allRefStreams,
           prompt: promptSent,
           n: 1,
@@ -887,7 +891,7 @@ router.post('/generate-studio', (req, res) => {
         });
       } else {
         response = await openai.images.generate({
-          model: 'gpt-image-2',
+          model: OPENAI_IMAGE_MODEL,
           prompt: prompt,
           n: 1,
           size: size,
@@ -991,7 +995,7 @@ ${prompt}`;
       const response = await openai.responses.create({
         model: 'gpt-5.5',
         input: [{ role: 'user', content: [...refImageParts, { type: 'input_text', text: genInstruction }] }],
-        tools: [{ type: 'image_generation', quality: toolQuality, size }]
+        tools: [{ type: 'image_generation', model: OPENAI_IMAGE_MODEL, quality: toolQuality, size }]
       });
       const imageOutput = response.output.find(o => o.type === 'image_generation_call');
       if (!imageOutput || !imageOutput.result) throw new Error('Responses API returned no image');
@@ -1239,7 +1243,7 @@ router.post('/inpaint-region', (req, res) => {
       console.log(`Inpaint (OpenAI): attempt ${verifyAttempt}/${MAX_VERIFY_ATTEMPTS}, region [${pctLeft}%,${pctTop}%]-[${pctRight}%,${pctBottom}%], size: ${size}, quality: ${openaiQuality}, prompt: ${prompt.substring(0, 80)}...`);
 
       const response = await openai.images.edit({
-        model: 'gpt-image-2',
+        model: OPENAI_IMAGE_MODEL,
         image: allImages,
         mask: maskFile,
         prompt: inpaintPrompt,
@@ -1992,7 +1996,7 @@ router.post('/consistency/save-all', async (req, res) => {
         const newPath = `/projects/${comicId}/images/${filename}`;
 
         // Update artworkImage in the DB and clear stale bakedImage
-        const page = comic.pages.find(pg => pg.id === p.pageId);
+        const page = comic.pages.find(pg => pg.id === p.pageId) || (comic.practicePages || []).find(pg => pg.id === p.pageId);
         if (page) {
           const panel = page.panels.find(pn => pn.id === p.panelId);
           if (panel) {
@@ -2161,7 +2165,7 @@ The surrounding image must remain completely unchanged — same art style, same 
       console.log(`Consistency adjust (openai inpaint): mask region [${Math.round(boundingBox.x*100)}%,${Math.round(boundingBox.y*100)}%]-[${Math.round((boundingBox.x+boundingBox.width)*100)}%,${Math.round((boundingBox.y+boundingBox.height)*100)}%]`);
 
       const response = await openai.images.edit({
-        model: 'gpt-image-2',
+        model: OPENAI_IMAGE_MODEL,
         image: [sourceFile, refFile],
         mask: maskFile,
         prompt: inpaintPrompt,

@@ -223,6 +223,17 @@ function ComicEditor() {
   const [fillBaseRunning, setFillBaseRunning] = useState(false);
   const [fillBaseResult, setFillBaseResult] = useState(null);
   const [fillMeaningsResult, setFillMeaningsResult] = useState(null);
+  // Key Phrases tab: everyday phrases mined from the comic's own words.
+  const [keyPhrases, setKeyPhrases] = useState([]);
+  const [keyPhrasesDirty, setKeyPhrasesDirty] = useState(false);
+  const [keyPhrasesRunning, setKeyPhrasesRunning] = useState(false);
+  const [keyPhrasesSaving, setKeyPhrasesSaving] = useState(false);
+  const [keyPhrasesCount, setKeyPhrasesCount] = useState(12);
+  const [keyPhrasesRejected, setKeyPhrasesRejected] = useState([]);
+  const [keyPhrasesGeneratedAt, setKeyPhrasesGeneratedAt] = useState(null);
+  const [newPhrase, setNewPhrase] = useState({ es: '', en: '' });
+  const [newPhraseError, setNewPhraseError] = useState('');
+  const [practiceBusy, setPracticeBusy] = useState('');
 
   // Reference builder state
   const [refImage, setRefImage] = useState(null);
@@ -383,6 +394,10 @@ function ComicEditor() {
     try {
       const response = await api.get(`/comics/${id}`);
       setComic(response.data);
+
+      setKeyPhrases(response.data.keyPhrases || []);
+      setKeyPhrasesGeneratedAt(response.data.keyPhrasesGeneratedAt || null);
+      setKeyPhrasesDirty(false);
 
       // Restore the persisted Language Review scan (results survive reloads).
       if (response.data.languageReview?.results?.length) {
@@ -899,6 +914,139 @@ function ComicEditor() {
   if (!comic) {
     return <div>Comic not found</div>;
   }
+
+  // --- Key Phrases ---------------------------------------------------------
+  // Same normaliser as the server's validator (chat.js normalizePhraseToken):
+  // lowercase, punctuation stripped, accents kept.
+  const phraseTokens = (text) => String(text || '').toLowerCase()
+    .replace(/[¿¡!?.,;:"“”«»()\[\]…]/g, ' ').replace(/['’]/g, "'").trim().split(/\s+/).filter(Boolean);
+  const comicVocabulary = () => {
+    const vocab = new Set();
+    const visit = (bubbles) => {
+      for (const b of bubbles || []) for (const sent of b.sentences || []) {
+        for (const t of phraseTokens(sent.text)) vocab.add(t);
+        for (const w of sent.words || []) for (const t of phraseTokens(w.text)) vocab.add(t);
+      }
+    };
+    visit(comic?.cover?.bubbles);
+    for (const page of comic?.pages || []) {
+      visit(page.bubbles);
+      for (const panel of page.panels || []) visit(panel.bubbles);
+      for (const h of page.hotspots || []) for (const sl of h.slides || []) for (const t of phraseTokens(sl.text)) vocab.add(t);
+    }
+    return vocab;
+  };
+
+  const handleExtractKeyPhrases = async () => {
+    setKeyPhrasesRunning(true);
+    setKeyPhrasesRejected([]);
+    try {
+      const r = await api.post('/chat/extract-key-phrases', { comicId: id, count: keyPhrasesCount });
+      const incoming = r.data.phrases || [];
+      setKeyPhrasesRejected(r.data.rejected || []);
+      if (incoming.length === 0) {
+        alert('No phrases passed validation this time — try again.');
+        return;
+      }
+      // Append, skipping anything already in the list (the server already
+      // avoids repeats, but manual entries might overlap).
+      setKeyPhrases((prev) => {
+        const have = new Set(prev.map((k) => phraseTokens(k.es).join(' ')));
+        return [...prev, ...incoming.filter((k) => !have.has(phraseTokens(k.es).join(' ')))];
+      });
+      setKeyPhrasesGeneratedAt(new Date().toISOString());
+      setKeyPhrasesDirty(true);
+    } catch (err) {
+      alert(err.response?.data?.error || err.message);
+    } finally {
+      setKeyPhrasesRunning(false);
+    }
+  };
+
+  const handleSaveKeyPhrases = async () => {
+    setKeyPhrasesSaving(true);
+    try {
+      await api.put(`/comics/${id}`, { keyPhrases, keyPhrasesGeneratedAt });
+      setKeyPhrasesDirty(false);
+    } catch (err) {
+      alert(err.response?.data?.error || err.message);
+    } finally {
+      setKeyPhrasesSaving(false);
+    }
+  };
+
+  const updateKeyPhrase = (i, field, value) => {
+    setKeyPhrases((prev) => prev.map((k, j) => (j === i ? { ...k, [field]: value } : k)));
+    setKeyPhrasesDirty(true);
+  };
+  const removeKeyPhrase = (i) => {
+    setKeyPhrases((prev) => prev.filter((_, j) => j !== i));
+    setKeyPhrasesDirty(true);
+  };
+  const moveKeyPhrase = (i, d) => {
+    setKeyPhrases((prev) => {
+      const j = i + d;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+    setKeyPhrasesDirty(true);
+  };
+  // Practice page per phrase: a blank page with the phrase in one bubble,
+  // finished by hand in the page editor like any other page.
+  const practicePageFor = (k) => (comic?.practicePages || []).find(p => p.id === k.practicePageId);
+  const handleCreatePracticePage = async (k) => {
+    setPracticeBusy(k.id);
+    try {
+      const r = await api.post(`/comics/${id}/practice-pages`, { keyPhraseId: k.id });
+      navigate(`/comic/${id}/page/${r.data.page.id}`);
+    } catch (err) {
+      alert(err.response?.data?.error || err.message);
+    } finally {
+      setPracticeBusy('');
+    }
+  };
+  const handleDeletePracticePage = async (k) => {
+    const pg = practicePageFor(k);
+    if (!pg || !window.confirm(`Delete the practice page for “${k.es}”? Its art and audio files are removed too.`)) return;
+    setPracticeBusy(k.id);
+    try {
+      await api.delete(`/comics/${id}/pages/${pg.id}?deleteAudio=true`);
+      await loadComic();
+    } catch (err) {
+      alert(err.response?.data?.error || err.message);
+    } finally {
+      setPracticeBusy('');
+    }
+  };
+
+  const handleAddKeyPhrase = () => {
+    const es = newPhrase.es.trim(), en = newPhrase.en.trim();
+    const toks = phraseTokens(es);
+    if (!es || !en) { setNewPhraseError('Both the Spanish phrase and its English are needed.'); return; }
+    if (toks.length > 8) { setNewPhraseError('Keep phrases to 8 words or fewer.'); return; }
+    const vocab = comicVocabulary();
+    const missing = toks.filter((t) => !vocab.has(t));
+    if (missing.length) { setNewPhraseError(`Not in this comic: ${missing.join(', ')}`); return; }
+    if (keyPhrases.some((k) => phraseTokens(k.es).join(' ') === toks.join(' '))) { setNewPhraseError('Already in the list.'); return; }
+    // Pages where every word of the phrase occurs verbatim; else union of word pages.
+    const pageHits = (needle) => (comic?.pages || []).filter((page) => {
+      const texts = [];
+      const visit = (bubbles) => { for (const b of bubbles || []) for (const sent of b.sentences || []) texts.push(' ' + phraseTokens(sent.text).join(' ') + ' '); };
+      visit(page.bubbles);
+      for (const panel of page.panels || []) visit(panel.bubbles);
+      return texts.some((t) => t.includes(' ' + needle + ' '));
+    }).map((page) => page.pageNumber);
+    const verbatim = pageHits(toks.join(' '));
+    const kind = verbatim.length ? 'verbatim' : 'recombined';
+    const contentToks = toks.filter((t) => t.length >= 3);
+    const sourcePages = kind === 'verbatim' ? verbatim : [...new Set((contentToks.length ? contentToks : toks).flatMap(pageHits))].sort((a, b) => a - b);
+    setKeyPhrases((prev) => [...prev, { id: crypto.randomUUID(), es, en, kind, sourcePages, note: '', manual: true, exchange: [] }]);
+    setNewPhrase({ es: '', en: '' });
+    setNewPhraseError('');
+    setKeyPhrasesDirty(true);
+  };
 
   const settingsTabs = [
     { id: 'style', label: 'Style Bible' },
@@ -1720,7 +1868,14 @@ function ComicEditor() {
     if (languageScanning) return;
 
     const pagesToScan = [];
-    for (const page of (comic.pages || [])) {
+    // Story pages first, then the key-phrase practice pages (labelled by phrase
+    // rather than number so the results read naturally).
+    const phraseFor = (pg) => (comic.keyPhrases || []).find(k => k.id === pg.keyPhraseId)?.es || '';
+    const allPages = [
+      ...(comic.pages || []).map(pg => ({ ...pg, pageLabel: `Page ${pg.pageNumber}` })),
+      ...(comic.practicePages || []).map(pg => ({ ...pg, pageLabel: `Practice “${phraseFor(pg)}”` })),
+    ];
+    for (const page of allPages) {
       const pageImage = page.masterImage || page.bakedImage;
       if (!pageImage) continue;
 
@@ -1791,12 +1946,12 @@ function ComicEditor() {
               );
               if (found) { matchedPanelIndex = panel.panelIndex; break; }
             }
-            allResults.push({ pageNumber: page.pageNumber, pageId: page.id, ...issue, panelIndex: matchedPanelIndex });
+            allResults.push({ pageNumber: page.pageNumber, pageId: page.id, pageLabel: page.pageLabel, ...issue, panelIndex: matchedPanelIndex });
           }
           setLanguageResults([...allResults]);
         }
       } catch (err) {
-        console.error(`Language review failed for page ${page.pageNumber}:`, err.response?.data || err.message);
+        console.error(`Language review failed for ${page.pageLabel}:`, err.response?.data || err.message);
       }
     }
 
@@ -1944,6 +2099,13 @@ function ComicEditor() {
           style={{ padding: '0.6rem 1.2rem' }}
         >
           Language
+        </button>
+        <button
+          className={`btn ${activeTab === 'keyphrases' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('keyphrases')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Key Phrases{keyPhrases.length ? ` (${keyPhrases.length})` : ''}
         </button>
       </div>
 
@@ -5824,7 +5986,7 @@ function ComicEditor() {
           <h2 style={{ marginBottom: '0.5rem' }}>Language Review</h2>
           <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
             Scan pages to review translations for contextual accuracy and register consistency (tú vs usted).
-            Each page image is sent to AI along with all dialogue for analysis.
+            Each page image is sent to AI along with all dialogue for analysis. Key-phrase practice pages are included after the story pages.
           </p>
 
           {/* Controls */}
@@ -5865,7 +6027,7 @@ function ComicEditor() {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
-                      Page {issue.pageNumber} ({issue.bubbleType})
+                      {issue.pageLabel || `Page ${issue.pageNumber}`} ({issue.bubbleType})
                     </span>
                     <span style={{
                       background: issue.issueType === 'register_inconsistency' ? '#f39c12'
@@ -5943,9 +6105,11 @@ function ComicEditor() {
           {/* Which bubbles were modified by Implement — the audio regen list */}
           {(() => {
             const mods = {};
+            const labels = {};
             (languageResults || []).forEach(r => {
               if (r.implemented?.bubbleNumbers?.length) {
                 if (!mods[r.pageNumber]) mods[r.pageNumber] = new Set();
+                labels[r.pageNumber] = r.pageLabel || `Page ${r.pageNumber}`;
                 r.implemented.bubbleNumbers.forEach(n => mods[r.pageNumber].add(n));
               }
             });
@@ -5954,7 +6118,7 @@ function ComicEditor() {
             return (
               <div style={{ background: '#d4edda', border: '1px solid #28a745', borderRadius: '6px', padding: '0.75rem', marginBottom: '1rem', color: '#155724', fontSize: '0.88rem' }}>
                 <strong>Modified bubbles — regenerate audio (ES + EN) for:</strong>{' '}
-                {pagesList.map(pn => `Page ${pn}: bubble${mods[pn].size > 1 ? 's' : ''} ${[...mods[pn]].sort((a, b) => a - b).join(', ')}`).join('  ·  ')}
+                {pagesList.map(pn => `${labels[pn]}: bubble${mods[pn].size > 1 ? 's' : ''} ${[...mods[pn]].sort((a, b) => a - b).join(', ')}`).join('  ·  ')}
               </div>
             );
           })()}
@@ -5974,6 +6138,127 @@ function ComicEditor() {
               }
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'keyphrases' && (
+        <div style={{ maxWidth: '900px' }}>
+          <h2 style={{ marginBottom: '0.5rem' }}>Key Phrases</h2>
+          <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            Everyday phrases a learner can reuse, built only from words that appear in this comic. A phrase is either a
+            line taken verbatim ("Por fin") or words from different panels recombined ("un perro pequeño"). Every word is
+            checked against the comic's vocabulary — nothing new sneaks in. These feed the phrase-practice mode in the reader.
+          </p>
+
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '0.25rem' }}>Phrases to add</label>
+              <select
+                value={keyPhrasesCount}
+                onChange={(e) => setKeyPhrasesCount(Number(e.target.value))}
+                style={{ padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem', minWidth: '90px' }}
+              >
+                {[6, 8, 10, 12, 16, 20].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <button onClick={handleExtractKeyPhrases} disabled={keyPhrasesRunning} className="btn btn-primary" style={{ padding: '0.5rem 1.2rem' }}>
+              {keyPhrasesRunning ? 'Mining phrases…' : '✨ Generate phrases (GPT)'}
+            </button>
+            <button onClick={handleSaveKeyPhrases} disabled={!keyPhrasesDirty || keyPhrasesSaving} className="btn btn-secondary" style={{ padding: '0.5rem 1.2rem' }}>
+              {keyPhrasesSaving ? 'Saving…' : keyPhrasesDirty ? 'Save changes' : 'Saved ✓'}
+            </button>
+            {keyPhrasesGeneratedAt && (
+              <span style={{ fontSize: '0.8rem', color: '#888' }}>Last generated {new Date(keyPhrasesGeneratedAt).toLocaleString()}</span>
+            )}
+          </div>
+
+          {keyPhrasesRejected.length > 0 && (
+            <details style={{ marginBottom: '1rem', fontSize: '0.82rem', color: '#a88' }}>
+              <summary style={{ cursor: 'pointer' }}>{keyPhrasesRejected.length} suggestion{keyPhrasesRejected.length > 1 ? 's' : ''} rejected by the vocabulary check</summary>
+              <ul style={{ margin: '0.4rem 0 0 1.2rem' }}>
+                {keyPhrasesRejected.map((r, i) => <li key={i}><em>{r.es}</em> — {r.reason}</li>)}
+              </ul>
+            </details>
+          )}
+
+          {keyPhrases.length === 0 ? (
+            <div style={{ border: '2px dashed #444', borderRadius: '10px', padding: '2rem', textAlign: 'center', color: '#777', fontSize: '0.9rem' }}>
+              No phrases yet — generate some, or add one by hand below.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {keyPhrases.map((k, i) => (
+                <div key={k.id || i} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr 130px auto auto', gap: '0.5rem', alignItems: 'center', border: '1px solid #444', borderRadius: '8px', padding: '0.5rem 0.7rem' }}>
+                  <span style={{ color: '#888', fontSize: '0.8rem' }}>{i + 1}</span>
+                  <input
+                    value={k.es || ''}
+                    onChange={(e) => updateKeyPhrase(i, 'es', e.target.value)}
+                    style={{ padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #555', background: '#1a1332', color: '#FFD23F', fontWeight: 600 }}
+                  />
+                  <input
+                    value={k.en || ''}
+                    onChange={(e) => updateKeyPhrase(i, 'en', e.target.value)}
+                    style={{ padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #555', background: '#1a1332', color: '#e9e4ff' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#888' }} title={k.note || ''}>
+                    {k.kind === 'recombined' ? '🔀 recombined' : '📖 verbatim'}{k.manual ? ' · manual' : ''}
+                    {k.sourcePages?.length ? <><br />p{k.sourcePages.join(', p')}</> : null}
+                  </span>
+                  <span style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                    {(() => {
+                      const pg = practicePageFor(k);
+                      if (!pg) return (
+                        <button className="btn btn-secondary" disabled={practiceBusy !== '' || keyPhrasesDirty}
+                                title={keyPhrasesDirty ? 'Save the phrases first' : 'Creates a blank practice page with this phrase in one bubble, and opens it in the page editor'}
+                                onClick={() => handleCreatePracticePage(k)} style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                          {practiceBusy === k.id ? 'Drafting…' : '📄 Create page'}
+                        </button>
+                      );
+                      const done = pg.bakedImage ? '✅' : pg.masterImage ? '🎨' : '📝';
+                      return (
+                        <>
+                          <button className="btn btn-primary" onClick={() => navigate(`/comic/${id}/page/${pg.id}`)}
+                                  title={pg.bakedImage ? 'Baked — ready' : pg.masterImage ? 'Art done — bake bubbles' : 'Blank — write the prompt, generate art, place the bubble, add audio'}
+                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                            {done} Open page
+                          </button>
+                          <button className="btn btn-secondary" disabled={practiceBusy !== ''} onClick={() => handleDeletePracticePage(k)}
+                                  title="Delete this practice page" style={{ padding: '0.25rem 0.45rem', fontSize: '0.78rem', color: '#f88' }}>🗑</button>
+                        </>
+                      );
+                    })()}
+                  </span>
+                  <span style={{ display: 'flex', gap: '0.25rem' }}>
+                    <button className="btn btn-secondary" onClick={() => moveKeyPhrase(i, -1)} style={{ padding: '0.15rem 0.45rem' }}>↑</button>
+                    <button className="btn btn-secondary" onClick={() => moveKeyPhrase(i, 1)} style={{ padding: '0.15rem 0.45rem' }}>↓</button>
+                    <button className="btn btn-secondary" onClick={() => removeKeyPhrase(i)} style={{ padding: '0.15rem 0.45rem', color: '#f88' }}>✕</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ marginTop: '1.2rem', border: '1px solid #444', borderRadius: '8px', padding: '0.7rem' }}>
+            <div style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '0.4rem' }}>Add a phrase by hand — it must use only words from this comic</div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <input
+                placeholder="Spanish phrase"
+                value={newPhrase.es}
+                onChange={(e) => setNewPhrase({ ...newPhrase, es: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddKeyPhrase()}
+                style={{ flex: 1, minWidth: '200px', padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #555', background: '#1a1332', color: '#FFD23F' }}
+              />
+              <input
+                placeholder="English"
+                value={newPhrase.en}
+                onChange={(e) => setNewPhrase({ ...newPhrase, en: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddKeyPhrase()}
+                style={{ flex: 1, minWidth: '200px', padding: '0.4rem 0.6rem', borderRadius: '4px', border: '1px solid #555', background: '#1a1332', color: '#e9e4ff' }}
+              />
+              <button className="btn btn-secondary" onClick={handleAddKeyPhrase} style={{ padding: '0.4rem 1rem' }}>＋ Add</button>
+            </div>
+            {newPhraseError && <div style={{ color: '#f88', fontSize: '0.8rem', marginTop: '0.4rem' }}>{newPhraseError}</div>}
+          </div>
         </div>
       )}
 
