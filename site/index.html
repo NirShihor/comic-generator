@@ -98,21 +98,21 @@
   .bubble h1 { margin: 0; font-size: clamp(2rem, 5.2vw, 3.4rem); }
   .bubble h1 .row { display: block; }
 
-  /* Headline crossfade: Spanish holds 4s, slow ~1.8s fade, English holds 4s,
-     repeats. Both languages occupy the same grid cell so the bubble sizes to
-     the taller of the two and nothing jumps during the swap. */
+  /* Headline crossfade: Spanish holds 2.8s, slow ~1.8s fade, English holds 2.8s,
+     repeats (9.2s cycle). Both languages occupy the same grid cell so the bubble
+     sizes to the taller of the two and nothing jumps during the swap. */
   .bubble h1 { display: grid; }
   .bubble h1 .lang { grid-area: 1 / 1; }
-  .lang-es { animation: heroEs 11.6s ease-in-out infinite; }
-  .lang-en { opacity: 0; animation: heroEn 11.6s ease-in-out infinite; }
+  .lang-es { animation: heroEs 9.2s ease-in-out infinite; }
+  .lang-en { opacity: 0; animation: heroEn 9.2s ease-in-out infinite; }
   @keyframes heroEs {
-    0%, 34.5% { opacity: 1; }
-    50%, 84.5% { opacity: 0; }
+    0%, 30.4% { opacity: 1; }
+    50%, 80.4% { opacity: 0; }
     100% { opacity: 1; }
   }
   @keyframes heroEn {
-    0%, 34.5% { opacity: 0; }
-    50%, 84.5% { opacity: 1; }
+    0%, 30.4% { opacity: 0; }
+    50%, 80.4% { opacity: 1; }
     100% { opacity: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
