@@ -27,7 +27,7 @@ COPY server/src/ ./server/src/
 COPY --from=client-build /app/client/dist ./client/dist
 
 # Marketing site (served on comigo.net via host-based routing)
-COPY site/index.html site/privacy.html site/favicon.png site/demo.mp4 ./site/
+COPY site/index.html site/privacy.html site/favicon.png site/demo.mp4 site/demo-poster.jpg ./site/
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh ./
