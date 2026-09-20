@@ -39,6 +39,10 @@ app.use((req, res, next) => {
     if (req.path === '/favicon.png' || req.path === '/favicon.ico' || req.path === '/apple-touch-icon.png') {
       return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
     }
+    if (req.path === '/demo-poster.jpg') {
+      res.set('Cache-Control', 'public, max-age=86400');
+      return res.sendFile(path.join(SITE_DIR, 'demo-poster.jpg'));
+    }
     if (req.path === '/demo.mp4') {
       // The demo clip may be cached (unlike the HTML): it only changes when we
       // ship a new video, and 3MB per visit is worth saving.
