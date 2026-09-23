@@ -35,3 +35,6 @@ backups/
 .parcel-cache/
 db-backups/
 db-archive/
+
+# App Store screenshots, preview clips and listing copy (kept locally, not versioned)
+shots/
