@@ -160,7 +160,7 @@ async function shiftPageNumberTag(comicId, page, fromTag, toTag) {
 // Locate a page by id in either the story pages or the practice pages.
 // Returns { list, index, page } (list = 'pages' | 'practicePages') or null.
 function findPageRef(comic, pageId) {
-  for (const list of ['pages', 'practicePages']) {
+  for (const list of ['pages', 'practicePages', 'reelPages']) {
     const arr = comic[list] || [];
     const index = arr.findIndex(p => p.id === pageId);
     if (index !== -1) return { list, index, page: arr[index] };
@@ -470,12 +470,26 @@ router.put('/:id', async (req, res) => {
         practiceTouched = true;
         return true;
       };
+      let reelTouched = false;
+      const mergeReel = (incoming) => {
+        const rIdx = (comic.reelPages || []).findIndex(p => p.id === incoming.id);
+        if (rIdx < 0) return false;
+        comic.reelPages[rIdx] = { ...comic.reelPages[rIdx].toObject?.() || comic.reelPages[rIdx], ...incoming };
+        reelTouched = true;
+        return true;
+      };
       const liveIds = new Set(incomingPages.map(p => p.id));
       if (Array.isArray(updateData.practicePages)) {
         for (const incoming of updateData.practicePages) {
           if (!liveIds.has(incoming.id)) mergePractice(incoming);
         }
         delete updateData.practicePages;
+      }
+      if (Array.isArray(updateData.reelPages)) {
+        for (const incoming of updateData.reelPages) {
+          if (!liveIds.has(incoming.id)) mergeReel(incoming);
+        }
+        delete updateData.reelPages;
       }
       // Update each existing page whose ID appears in the incoming data.
       for (const incoming of incomingPages) {
@@ -486,7 +500,7 @@ router.put('/:id', async (req, res) => {
           comic.pages[existingIdx] = merged;
           continue;
         }
-        mergePractice(incoming);
+        if (!mergePractice(incoming)) mergeReel(incoming);
         // Pages that only exist on the client (stale) are silently ignored
         // Pages that only exist on the server are preserved
       }
@@ -494,6 +508,7 @@ router.put('/:id', async (req, res) => {
       // Build atomic update: set merged pages + any remaining fields
       const atomicSet = { pages: comic.pages.map(p => p.toObject?.() || p) };
       if (practiceTouched) atomicSet.practicePages = (comic.practicePages || []).map(p => p.toObject?.() || p);
+      if (reelTouched) atomicSet.reelPages = (comic.reelPages || []).map(p => p.toObject?.() || p);
       for (const [key, value] of Object.entries(updateData)) {
         atomicSet[key] = value;
       }
@@ -1447,6 +1462,9 @@ router.delete('/:id/pages/:pageId', async (req, res) => {
         $set: { 'keyPhrases.$[k].practicePageId': '' },
       }, { arrayFilters: [{ 'k.practicePageId': req.params.pageId }] }).catch(() => {});
     }
+    if (pageRef.list === 'reelPages') {
+      await Comic.updateOne({ id: req.params.id }, { $pull: { reelPages: { id: req.params.pageId } } }).catch(() => {});
+    }
 
     // Renumber sequentially — renaming each page's files along (lowest first:
     // p7→p6 before p8→p7, so shifts down never collide).
@@ -1834,6 +1852,82 @@ router.post('/:id/apply-language-fix', async (req, res) => {
 // prompt, picks the character/location references and the voice in the
 // normal page editor. Practice pages are numbered from 1001 so their
 // image/audio filenames never collide with story pages.
+// POST /api/comics/:id/reel-pages — a blank marketing "reel page": same page
+// editor and tooling as any page, numbered from 2001 so its files never
+// collide with story/practice pages, and never exported to the reader.
+router.post('/:id/reel-pages', async (req, res) => {
+  try {
+    const label = String(req.body.label || '').trim().slice(0, 80) || 'Reel page';
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    const nextNumber = Math.max(2000, ...(comic.reelPages || []).map(p => p.pageNumber || 0)) + 1;
+    const pageId = `page-${uuidv4()}`;
+    const now = Date.now();
+    // A "slide" page starts with the brand violet as its art (Comigo bubble logo
+    // at the top) so only the bubbles need adding — for prompt slides in reels.
+    let masterImage = '';
+    if (req.body.background === 'violet') {
+      const sharp = require('sharp');
+      const imgDir = path.join(__dirname, '../../projects', comic.id, 'images');
+      await fs.mkdir(imgDir, { recursive: true });
+      const file = `${comic.id}_p${nextNumber}.png`;
+      const logoPath = path.join(__dirname, '../../assets/comigo-bubble.png');
+      const layers = [];
+      try { const logo = await sharp(logoPath).resize({ width: 440 }).png().toBuffer(); const lm = await sharp(logo).metadata(); layers.push({ input: logo, left: Math.round((1024 - lm.width) / 2), top: 110 }); } catch {}
+      await sharp({ create: { width: 1024, height: 1536, channels: 4, background: '#6E40F0' } }).composite(layers).flatten({ background: '#6E40F0' }).png().toFile(path.join(imgDir, file));
+      masterImage = `/projects/${comic.id}/images/${file}`;
+    }
+    const page = {
+      id: pageId,
+      pageNumber: nextNumber,
+      reelLabel: label,
+      masterImage,
+      originalMasterImage: masterImage,
+      lines: [],
+      dividerLines: { horizontal: [], vertical: [] },
+      panels: [{
+        id: `panel-${uuidv4()}`,
+        panelOrder: 1,
+        tapZone: { x: 0, y: 0, width: 1, height: 1 },
+        content: '',
+        selectedBibleRefs: [],
+        bubbles: []
+      }],
+      // Same defaults the page editor gives a bubble it creates itself (tail
+      // geometry, rotation, style), so the bubble behaves exactly like one
+      // added by hand — including the thought-bubble tail controls.
+      bubbles: [{
+        id: `bubble-${now}`,
+        type: 'speech',
+        x: 0.08, y: 0.06, width: 0.5, height: 0.14,
+        // Practice-page house style: Bangers, black on white.
+        fontId: 'bangers',
+        fontSize: 15,
+        italic: false, uppercase: false,
+        bgColor: '#ffffff',
+        textColor: '#000000',
+        borderColor: '#000000',
+        borderWidth: 2.5,
+        cornerRadius: 20,
+        tailX: 0.03, tailY: 0.08, tailBaseX: 0.5, tailSide: 'bottom', tailWidth: 0.15,
+        showTail: true, rotation: 0, tailLength: 0.35, tailCurve: 0, tailBend: 0, textAngle: 0,
+        isSoundEffect: false,
+        tailCtrl1X: 0, tailCtrl1Y: 0, tailCtrl2X: 0, tailCtrl2Y: 0,
+        // No orderIndex: that is a manual pin. Left unset, reading order follows
+        // bubble position on the page, as on story pages.
+        sentences: [{ id: `sentence-${now}`, text: '', translation: '', words: [] }]
+      }],
+      hotspots: []
+    };
+
+    await Comic.updateOne({ id: comic.id }, { $push: { reelPages: page } });
+    res.json({ page });
+  } catch (error) {
+    console.error('Reel page error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/:id/practice-pages', async (req, res) => {
   try {
     const { keyPhraseId } = req.body;

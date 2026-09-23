@@ -1337,6 +1337,9 @@ router.get('/english-audio-check/:comicId', async (req, res) => {
     for (const page of [...(comic.practicePages || [])].sort((a, b) => a.pageNumber - b.pageNumber)) {
       await checkBubbles(page.bubbles, `Practice “${phraseFor(page)}”`, page.id);
     }
+    for (const page of [...(comic.reelPages || [])].sort((a, b) => a.pageNumber - b.pageNumber)) {
+      await checkBubbles(page.bubbles, `Reel “${page.reelLabel || page.pageNumber}”`, page.id);
+    }
 
     res.write(JSON.stringify({ type: 'done', checked, missingCount: missing.length, missing }) + '\n');
     res.end();

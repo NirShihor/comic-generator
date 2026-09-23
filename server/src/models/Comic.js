@@ -221,6 +221,11 @@ const PageSchema = new mongoose.Schema({
   pageNumber: Number,
   // Set on practice pages (comic.practicePages): the key phrase this page drills.
   keyPhraseId: String,
+  // Set on reel pages (comic.reelPages): marketing-only pages, never exported.
+  reelLabel: String,
+  // Last challenge reel built from this page (file in projects/<id>/marketing) and the settings used.
+  reelVideo: String,
+  reelSettings: mongoose.Schema.Types.Mixed,
   masterImage: String,
   originalMasterImage: String,
   bakedImage: String,
@@ -377,6 +382,9 @@ const ComicSchema = new mongoose.Schema({
   // use pageNumbers from 1001 up so their image/audio filenames never collide
   // with (or get renumbered like) story pages.
   practicePages: [PageSchema],
+  // Reel pages: pages made for marketing reels (challenge reels etc.), edited
+  // like any page but NEVER exported to the reader. Numbered from 2001.
+  reelPages: [PageSchema],
   collectionId: String,
   collectionTitle: String,
   episodeNumber: Number,

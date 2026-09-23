@@ -234,6 +234,15 @@ function ComicEditor() {
   const [newPhrase, setNewPhrase] = useState({ es: '', en: '' });
   const [newPhraseError, setNewPhraseError] = useState('');
   const [practiceBusy, setPracticeBusy] = useState('');
+  const [reelBusy, setReelBusy] = useState('');   // Challenge reels tab (declared up here: hooks must precede any early return)
+  const [reelBuild, setReelBuild] = useState({});   // Challenge reels tab: per-page build settings + result
+  // Story reel (Challenge reels tab): shots of story/reel pages whose bubbles pop in with their audio.
+  // Remembered per comic in localStorage so a refresh doesn't lose the shot list.
+  const [story, setStory] = useState(() => {
+    try { const s = JSON.parse(localStorage.getItem(`storyReel:${id}`) || 'null'); if (s && Array.isArray(s.shots)) return { ...s, busy: false }; } catch {}
+    return { shots: [], fx: { dust: true, vignette: true, grain: false }, subtitles: 'none', volume: 130, busy: false, result: null, error: '' };
+  });
+  useEffect(() => { try { localStorage.setItem(`storyReel:${id}`, JSON.stringify({ ...story, busy: false, error: '' })); } catch {} }, [story, id]);
 
   // Reference builder state
   const [refImage, setRefImage] = useState(null);
@@ -1005,6 +1014,81 @@ function ComicEditor() {
       alert(err.response?.data?.error || err.message);
     } finally {
       setPracticeBusy('');
+    }
+  };
+  // --- Challenge reels: marketing-only "reel pages", made and edited like any
+  // page (same page editor), never exported to the reader.
+  const handleCreateReelPage = async (background) => {
+    const label = window.prompt(background === 'violet' ? 'Name for the new slide page (e.g. "Challenge prompt")' : 'Name for the new reel page (e.g. "Challenge 1 — the library")', background === 'violet' ? 'Prompt slide' : `Challenge ${(comic?.reelPages || []).length + 1}`);
+    if (label === null) return;
+    setReelBusy('new');
+    try {
+      const r = await api.post(`/comics/${id}/reel-pages`, { label, ...(background ? { background } : {}) });
+      navigate(`/comic/${id}/page/${r.data.page.id}`);
+    } catch (err) {
+      alert(err.response?.data?.error || err.message);
+    } finally {
+      setReelBusy('');
+    }
+  };
+  // Building a challenge reel from a reel page (or any baked page).
+  const reelCfg = (pid) => {
+    if (reelBuild[pid]) return reelBuild[pid];
+    // Saved on the page by the last build (survives a refresh); otherwise sensible defaults.
+    const saved = (comic?.reelPages || []).find(p => p.id === pid) || {};
+    const st = saved.reelSettings || {};
+    return { open: false, busy: false,
+      result: saved.reelVideo ? { file: saved.reelVideo, url: `/projects/${id}/marketing/${saved.reelVideo}` } : null,
+      spanish: { on: true, showText: true, gap: 0.6, hold: 1.0, words: {}, popupDelay: 1, popupHold: 2.5, ...(st.spanish || {}) },
+      // default slide: the first reel page with "slide" in its name
+      prompt: st.prompt || { on: true, line1: 'How much did you understand?', line2: 'Can you say it in Spanish?', seconds: 3.5, style: 'page',
+                pageId: ((comic?.reelPages || []).find(p => p.id !== pid && (p.reelLabel || '').toLowerCase().includes('slide')) || {}).id || '', reveal: true, gap: 0.7, text: 'baked', voice: true, hold: 1.0, bg: 'gradient' },
+      english: st.english || { on: true, showText: true, gap: 0.6, hold: 1.0 },
+      volume: st.volume || 130 };
+  };
+  const setReelCfg = (pid, patch) => setReelBuild(prev => ({ ...prev, [pid]: { ...reelCfg(pid), ...patch } }));
+  const handleBuildReel = async (pg) => {
+    const cfg = reelCfg(pg.id);
+    setReelCfg(pg.id, { busy: true });
+    try {
+      const r = await api.post('/marketing/challenge-reel', { comicId: id, pageId: pg.id, spanish: cfg.spanish, prompt: cfg.prompt, english: cfg.english, volume: cfg.volume }, { timeout: 600000 });
+      setReelCfg(pg.id, { busy: false, result: r.data });
+    } catch (err) {
+      setReelCfg(pg.id, { busy: false });
+      alert(err.response?.data?.error || err.message);
+    }
+  };
+  // Story reel: shots of story/reel pages (or single panels) whose real bubbles
+  // pop in with their audio, like the challenge reel's Spanish run, with a camera move.
+  const storyPages = () => [...(comic?.pages || []).filter(p => !p.keyPhraseId).sort((a, b) => a.pageNumber - b.pageNumber), ...(comic?.reelPages || [])];
+  const storyPageLabel = (p) => p.reelLabel ? `Reel: ${p.reelLabel}` : `Page ${p.pageNumber}`;
+  const patchStory = (patch) => setStory(s => ({ ...s, ...(typeof patch === 'function' ? patch(s) : patch) }));
+  const addStoryShot = (pageId, panelOrder = 0) => {
+    const pg = storyPages().find(p => p.id === pageId);
+    if (!pg || story.shots.length >= 12) return;
+    patchStory(s => ({ shots: [...s.shots, { id: `${Date.now()}-${s.shots.length}`, pageId: pg.id, panelOrder, move: ['in', 'out', 'left', 'right', 'drift'][s.shots.length % 5], fit: panelOrder ? 'fill' : 'fit', bubbles: 'text', gap: 0.6, hold: 1.0 }] }));
+  };
+  const updStoryShot = (sid, patch) => patchStory(s => ({ shots: s.shots.map(sh => (sh.id === sid ? { ...sh, ...patch } : sh)) }));
+  const moveStoryShot = (i, d) => patchStory(s => { const j = i + d; if (j < 0 || j >= s.shots.length) return {}; const n = [...s.shots]; [n[i], n[j]] = [n[j], n[i]]; return { shots: n }; });
+  const handleBuildStoryReel = async () => {
+    patchStory({ busy: true, error: '', result: null });
+    try {
+      const r = await api.post('/marketing/story-reel', { comicId: id, shots: story.shots.map(({ id: _i, ...sh }) => sh), fx: story.fx, subtitles: story.subtitles, volume: story.volume }, { timeout: 900000 });
+      patchStory({ busy: false, result: r.data });
+    } catch (err) {
+      patchStory({ busy: false, error: err.response?.data?.error || err.message });
+    }
+  };
+  const handleDeleteReelPage = async (pg) => {
+    if (!window.confirm(`Delete the reel page “${pg.reelLabel || pg.pageNumber}”? Its art and audio files are removed too.`)) return;
+    setReelBusy(pg.id);
+    try {
+      await api.delete(`/comics/${id}/pages/${pg.id}?deleteAudio=true`);
+      await loadComic();
+    } catch (err) {
+      alert(err.response?.data?.error || err.message);
+    } finally {
+      setReelBusy('');
     }
   };
   const handleDeletePracticePage = async (k) => {
@@ -2106,6 +2190,13 @@ function ComicEditor() {
           style={{ padding: '0.6rem 1.2rem' }}
         >
           Key Phrases{keyPhrases.length ? ` (${keyPhrases.length})` : ''}
+        </button>
+        <button
+          className={`btn ${activeTab === 'challenge' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('challenge')}
+          style={{ padding: '0.6rem 1.2rem' }}
+        >
+          Challenge Reels{(comic?.reelPages || []).length ? ` (${comic.reelPages.length})` : ''}
         </button>
       </div>
 
@@ -6138,6 +6229,258 @@ function ComicEditor() {
               }
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'challenge' && (
+        <div style={{ maxWidth: '900px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+            <h3 style={{ margin: 0 }}>Challenge reels</h3>
+            <button className="btn btn-primary" disabled={reelBusy !== ''} onClick={() => handleCreateReelPage()}
+                    title="A blank page for reels: write the prompt, generate art, place bubbles, add audio and bake — exactly like a story page. Never exported to the reader."
+                    style={{ padding: '0.35rem 0.8rem' }}>
+              {reelBusy === 'new' ? 'Creating…' : '📄 New reel page'}
+            </button>
+            <button className="btn btn-secondary" disabled={reelBusy !== ''} onClick={() => handleCreateReelPage('violet')}
+                    title="A page whose art is already the brand violet with the Comigo logo: add your prompt bubbles (any shape, rough boxes, fonts) and bake — then pick it as the slide when building a reel"
+                    style={{ padding: '0.35rem 0.8rem' }}>
+              🟪 New slide page
+            </button>
+          </div>
+          <p style={{ color: '#aaa', fontSize: '0.85rem', marginTop: 0 }}>
+            Pages made for challenge reels. They live with this comic and use its style, characters and voices, but never reach the reader.
+          </p>
+          {(comic?.reelPages || []).length === 0 ? (
+            <p style={{ color: '#777', fontSize: '0.9rem' }}>No reel pages yet.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {[...(comic.reelPages || [])].sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0)).map(pg => {
+                const done = pg.bakedImage ? '✅' : pg.masterImage ? '🎨' : '📝';
+                return (
+                  <div key={pg.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#1a1332', border: '1px solid #444', borderRadius: '6px', padding: '0.5rem 0.75rem' }}>
+                    {pg.bakedImage || pg.masterImage ? (
+                      <img src={pg.bakedImage || pg.masterImage} alt="" style={{ width: 44, height: 66, objectFit: 'cover', borderRadius: 3, border: '1px solid #555' }} />
+                    ) : <div style={{ width: 44, height: 66, borderRadius: 3, border: '1px dashed #555' }} />}
+                    <span style={{ flex: 1 }}>
+                      <strong>{pg.reelLabel || `Reel page ${pg.pageNumber}`}</strong>
+                      <span style={{ color: '#888', fontSize: '0.8rem', marginLeft: 8 }}>#{pg.pageNumber} · {(pg.bubbles || []).length} bubble{(pg.bubbles || []).length === 1 ? '' : 's'}</span>
+                    </span>
+                    <button className="btn btn-primary" onClick={() => navigate(`/comic/${id}/page/${pg.id}`)}
+                            title={pg.bakedImage ? 'Baked — ready' : pg.masterImage ? 'Art done — place bubbles and bake' : 'Blank — write the prompt, generate art, add bubbles and audio'}
+                            style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                      {done} Open page
+                    </button>
+                    {pg.reelVideo && !reelCfg(pg.id).open && (
+                      <a href={`/projects/${id}/marketing/${pg.reelVideo}`} target="_blank" rel="noreferrer" style={{ color: '#c4b5fd', fontSize: '0.8rem' }} title="The last reel built from this page">🎞 last reel</a>
+                    )}
+                    {(pg.reelLabel || '').toLowerCase().includes('slide') ? (
+                      <span style={{ color: '#888', fontSize: '0.78rem' }}>slide — pick it in a Build reel panel</span>
+                    ) : (
+                      <button className="btn btn-secondary" disabled={!pg.bakedImage} onClick={() => setReelCfg(pg.id, { open: !reelCfg(pg.id).open })}
+                              title={pg.bakedImage ? 'Build a challenge reel from this page' : 'Bake the page first'} style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                        🎬 Build reel {reelCfg(pg.id).open ? '▴' : '▾'}
+                      </button>
+                    )}
+                    <button className="btn btn-secondary" disabled={reelBusy !== ''} onClick={() => handleDeleteReelPage(pg)}
+                            title="Delete this reel page" style={{ padding: '0.25rem 0.45rem', fontSize: '0.78rem', color: '#f88' }}>🗑</button>
+                  </div>
+                );
+              }).flatMap((row) => {
+                const pg = (comic.reelPages || []).find(p => p.id === row.key); const cfg = reelCfg(pg.id);
+                if (!cfg.open) return [row];
+                const inp = { padding: '0.3rem 0.5rem', borderRadius: 4, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem' };
+                const runRow = (key, title, v, opts) => (
+                  <div key={key} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.85rem', color: '#ccc', marginTop: 6 }}>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 120 }}><input type="checkbox" checked={v.on} onChange={e => setReelCfg(pg.id, { [key]: { ...v, on: e.target.checked } })} /> {title}</label>
+                    <select value={v.showText ? 'text' : 'hide'} onChange={e => setReelCfg(pg.id, { [key]: { ...v, showText: e.target.value === 'text' } })} style={inp} disabled={!v.on}>
+                      <option value="text">{opts[0]}</option><option value="hide">{opts[1]}</option>
+                    </select>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>gap <input type="number" min={0} max={5} step={0.1} value={v.gap} onChange={e => setReelCfg(pg.id, { [key]: { ...v, gap: Number(e.target.value) } })} style={{ ...inp, width: 64 }} disabled={!v.on} /> s</label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>hold at end <input type="number" min={0} max={10} step={0.5} value={v.hold} onChange={e => setReelCfg(pg.id, { [key]: { ...v, hold: Number(e.target.value) } })} style={{ ...inp, width: 64 }} disabled={!v.on} /> s</label>
+                  </div>
+                );
+                return [row, (
+                  <div key={pg.id + '-build'} style={{ background: '#15102a', border: '1px solid #444', borderTop: 'none', borderRadius: '0 0 6px 6px', padding: '0.6rem 0.75rem', marginTop: -6 }}>
+                    {runRow('spanish', 'Spanish run', cfg.spanish, ['Show the Spanish as each line plays', 'Bubbles stay empty — highlight + audio only'])}
+                    {cfg.spanish.on && (
+                      <div style={{ marginLeft: 130, marginTop: 4, fontSize: '0.8rem', color: '#bbb' }}>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+                          <span title="Pick words: after the line is read, each picked word's card (word, meaning, base form — as in the reader) pops up by the bubble">Word popups:</span>
+                          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>show <input type="number" min={0} max={5} step={0.5} value={cfg.spanish.popupDelay ?? 1} onChange={e => setReelCfg(pg.id, { spanish: { ...cfg.spanish, popupDelay: Number(e.target.value) } })} style={{ ...inp, width: 56 }} /> s after the line,</label>
+                          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>each for <input type="number" min={0.5} max={10} step={0.5} value={cfg.spanish.popupHold ?? 2.5} onChange={e => setReelCfg(pg.id, { spanish: { ...cfg.spanish, popupHold: Number(e.target.value) } })} style={{ ...inp, width: 56 }} /> s</label>
+                        </div>
+                        {(pg.bubbles || []).filter(b => !b.hidden && !b.isSoundEffect && (b.sentences || [])[0]?.text).map(b => {
+                          const sen = b.sentences[0]; const picked = (cfg.spanish.words || {})[b.id] || [];
+                          const words = (sen.words || []).map((w, n) => ({ w, n })).filter(({ w }) => (w.text || '').trim() && !/fade|\[/.test(w.text || ''));
+                          return (
+                            <div key={b.id} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 3 }}>
+                              <span style={{ color: '#777', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>“{sen.text}”</span>
+                              {words.length === 0 && <span style={{ color: '#666' }}>no word data — run the Language scan for this page</span>}
+                              {words.map(({ w, n }) => {
+                                const on = picked.includes(n);
+                                return <button key={n} onClick={() => { const next = on ? picked.filter(x => x !== n) : [...picked, n].sort((a, b) => a - b); setReelCfg(pg.id, { spanish: { ...cfg.spanish, words: { ...(cfg.spanish.words || {}), [b.id]: next } } }); }}
+                                        title={`${w.meaning || ''}${w.baseForm ? ' · base: ' + w.baseForm : ''}`}
+                                        style={{ padding: '0.1rem 0.5rem', borderRadius: 12, border: '1px solid ' + (on ? '#98F872' : '#555'), background: on ? '#98F872' : '#1a1332', color: on ? '#111' : '#ddd', fontSize: '0.78rem', cursor: 'pointer' }}>{w.text}</button>;
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.85rem', color: '#ccc', marginTop: 6 }}>
+                      <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 120 }}><input type="checkbox" checked={cfg.prompt.on} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, on: e.target.checked } })} /> Prompt slide</label>
+                      {cfg.prompt.style !== 'page' && <>
+                        <input style={{ ...inp, width: 240 }} value={cfg.prompt.line1} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, line1: e.target.value } })} placeholder="Line 1" disabled={!cfg.prompt.on} />
+                        <input style={{ ...inp, width: 240 }} value={cfg.prompt.line2} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, line2: e.target.value } })} placeholder="Line 2" disabled={!cfg.prompt.on} />
+                      </>}
+                      <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="number" min={1} max={15} step={0.5} value={cfg.prompt.seconds} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, seconds: Number(e.target.value) || 3.5 } })} style={{ ...inp, width: 64 }} disabled={!cfg.prompt.on} /> s</label>
+                      <select value={cfg.prompt.style || 'bubbles'} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, style: e.target.value } })} style={inp} disabled={!cfg.prompt.on} title="How the slide is made">
+                        <option value="page">A slide page of mine (baked reel page)</option>
+                        <option value="bubbles">Generated: logo + narration boxes, page font</option>
+                        <option value="text">Generated: logo + plain text (white / yellow)</option>
+                      </select>
+                      {cfg.prompt.style === 'page' && (
+                        <>
+                          <select value={cfg.prompt.pageId || ''} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, pageId: e.target.value } })} style={inp} disabled={!cfg.prompt.on}>
+                            <option value="">Choose the slide page…</option>
+                            {(comic.reelPages || []).filter(p => p.id !== pg.id).map(p => <option key={p.id} value={p.id}>{p.reelLabel || `Reel page ${p.pageNumber}`}{p.bakedImage ? '' : ' (not baked)'}</option>)}
+                          </select>
+                          <select value={cfg.prompt.text || 'baked'} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, text: e.target.value } })} style={inp} disabled={!cfg.prompt.on} title="What the slide's bubbles say">
+                            <option value="baked">Bubbles as baked (type the English straight into the bubble text)</option><option value="english">Bubbles show their translation field instead</option>
+                          </select>
+                          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="The house English narrator reads each bubble as it appears (generated once per text, then cached)"><input type="checkbox" checked={cfg.prompt.voice !== false} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, voice: e.target.checked } })} disabled={!cfg.prompt.on} /> English voice reads it</label>
+                          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="The text is typed into each bubble, line by line, while it is read"><input type="checkbox" checked={cfg.prompt.typewriter === true} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, typewriter: e.target.checked } })} disabled={!cfg.prompt.on} /> text typed in as it's read</label>
+                          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Bubbles appear one after another (needs the page's empty-bubbles bake)"><input type="checkbox" checked={cfg.prompt.reveal !== false} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, reveal: e.target.checked } })} disabled={!cfg.prompt.on} /> bubbles pop in, every</label>
+                          <input type="number" min={0} max={5} step={0.1} value={cfg.prompt.gap ?? 0.7} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, gap: Number(e.target.value) } })} style={{ ...inp, width: 64 }} disabled={!cfg.prompt.on || cfg.prompt.reveal === false} /> s
+                          <select value={cfg.prompt.bg || 'page'} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, bg: e.target.value } })} style={inp} disabled={!cfg.prompt.on} title="The slide page's violet is swapped for this (bubbles, text and logo untouched)">
+                            <option value="page">Background: as baked (violet)</option><option value="gradient">Background: blue → purple gradient</option><option value="black">Background: black</option><option value="white">Background: white</option>
+                          </select>
+                          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Pause after the last bubble (and its line) before the slide ends">pause at end <input type="number" min={0} max={15} step={0.5} value={cfg.prompt.hold ?? 1.0} onChange={e => setReelCfg(pg.id, { prompt: { ...cfg.prompt, hold: Number(e.target.value) } })} style={{ ...inp, width: 64 }} disabled={!cfg.prompt.on} /> s</label>
+                        </>
+                      )}
+                    </div>
+                    {runRow('english', 'English run', cfg.english, ['Write the English into the bubbles as each line plays', 'Bubbles stay empty — highlight + English audio only'])}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+                      <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem', color: '#ccc' }} title="Loudness of all the reel's audio (100 = as recorded)">Volume <input type="number" min={30} max={300} step={10} value={cfg.volume ?? 130} onChange={e => setReelCfg(pg.id, { volume: Number(e.target.value) || 100 })} style={{ ...inp, width: 64 }} /> %</label>
+                      <button className="btn btn-primary" disabled={cfg.busy} onClick={() => handleBuildReel(pg)} style={{ padding: '0.35rem 0.9rem' }}>{cfg.busy ? 'Building…' : '🎬 Build reel'}</button>
+                      {cfg.result && (
+                        <>
+                          <button className="btn btn-secondary" onClick={() => navigate(`/marketing?tab=clips&comicId=${id}&clip=${encodeURIComponent(cfg.result.file)}`)}
+                                  title="Open it in the Marketing tab to add the opening card, covers, sign-off and margins" style={{ padding: '0.35rem 0.9rem' }}>➡ Finish in Marketing</button>
+                          <a href={cfg.result.url} target="_blank" rel="noreferrer" style={{ color: '#c4b5fd', fontSize: '0.85rem' }}>Open video</a>
+                        </>
+                      )}
+                    </div>
+                    {cfg.result && <video src={cfg.result.url} controls playsInline style={{ width: 240, marginTop: 8, borderRadius: 6, border: '1px solid #555' }} />}
+                  </div>
+                )];
+              })}
+            </div>
+          )}
+          {(() => {
+            const inp = { padding: '0.3rem 0.5rem', borderRadius: 4, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem' };
+            const pages = storyPages();
+                        const panelsOf = (pg) => (pg?.panels || []).filter(p => p.panelOrder >= 2).sort((a, b) => a.panelOrder - b.panelOrder);
+            const MOVES = [['in', 'Push in'], ['out', 'Pull out'], ['left', 'Pan left'], ['right', 'Pan right'], ['up', 'Tilt up'], ['down', 'Tilt down'], ['drift', 'Drift'], ['still', 'Hold']];
+            // A page's baked image cropped to a panel's tap zone (or the whole page), as a background — exact crop, any box size.
+            const cropStyle = (pg, tz) => {
+              const img = pg?.bakedImage || pg?.masterImage;
+              if (!img) return { background: '#222' };
+              if (!tz || tz.width >= 1) return { backgroundImage: `url("${img}")`, backgroundSize: 'cover', backgroundPosition: 'center' };
+              const px = tz.width < 1 ? (tz.x / (1 - tz.width)) * 100 : 0, py = tz.height < 1 ? (tz.y / (1 - tz.height)) * 100 : 0;
+              return { backgroundImage: `url("${img}")`, backgroundSize: `${100 / tz.width}% ${100 / tz.height}%`, backgroundPosition: `${px}% ${py}%` };
+            };
+            const zoneOf = (pg, order) => (order ? (pg?.panels || []).find(p => p.panelOrder === order)?.tapZone : null);
+            return (
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid #444', paddingTop: '1rem' }}>
+                <h3 style={{ margin: '0 0 0.25rem' }}>Story reel</h3>
+                <p style={{ color: '#aaa', fontSize: '0.85rem', marginTop: 0 }}>
+                  The marketing reel, built like a challenge reel: each shot is a page (or one panel) shown with its bubbles empty; the real bubbles then pop in one after another,
+                  exactly as baked, while each line plays — with a slow camera move. Pages must be baked (the bake also makes the empty-bubbles image).
+                </p>
+                <div style={{ color: '#aaa', fontSize: '0.82rem', marginBottom: 6 }}>Click a page to add it as a shot, or one of its panels underneath. {story.shots.length}/12 shots.</div>
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8, marginBottom: 8 }}>
+                  {pages.map(p => {
+                    const panels = panelsOf(p), ok = !!p.bakedImage;
+                    const pageRatio = 2 / 3;   // pages are 1024×1536
+                    return (
+                      <div key={p.id} style={{ flexShrink: 0, width: 132, opacity: ok ? 1 : 0.45 }}>
+                        <div onClick={() => ok && addStoryShot(p.id, 0)} title={ok ? `Add ${storyPageLabel(p)} (whole page)` : 'Not baked yet — bake it in the page editor'}
+                             style={{ width: 132, height: Math.round(132 / pageRatio), borderRadius: 6, border: '1px solid #555', cursor: ok ? 'pointer' : 'not-allowed', ...cropStyle(p, null) }} />
+                        <div style={{ fontSize: '0.78rem', color: '#ccc', margin: '4px 0 3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{storyPageLabel(p)}{ok ? '' : ' · not baked'}</div>
+                        {panels.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {panels.map(pn => {
+                              const tz = pn.tapZone || { x: 0, y: 0, width: 1, height: 1 };
+                              const ratio = (tz.width * 1024) / (tz.height * 1536), h = 40, w = Math.max(20, Math.min(60, Math.round(h * ratio)));
+                              return (
+                                <div key={pn.id} onClick={() => ok && addStoryShot(p.id, pn.panelOrder)} title={ok ? `Add panel ${pn.panelOrder} of ${storyPageLabel(p)}` : 'Not baked yet'}
+                                     style={{ width: w, height: h, borderRadius: 3, border: '1px solid #666', cursor: ok ? 'pointer' : 'not-allowed', position: 'relative', ...cropStyle(p, tz) }}>
+                                  <span style={{ position: 'absolute', right: 1, bottom: 0, fontSize: 9, color: '#fff', background: 'rgba(0,0,0,0.6)', padding: '0 3px', borderRadius: 2 }}>{pn.panelOrder}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {story.shots.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {story.shots.map((sh, i) => {
+                      const pg = pages.find(p => p.id === sh.pageId);
+                      return (
+                        <div key={sh.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', background: '#1a1332', border: '1px solid #444', borderRadius: 6, padding: '0.45rem 0.6rem', fontSize: '0.82rem', color: '#ccc' }}>
+                          <div style={{ width: 44, height: 66, borderRadius: 3, border: '1px solid #555', flexShrink: 0, ...cropStyle(pg, zoneOf(pg, sh.panelOrder)) }} />
+                          <strong style={{ color: '#c9bfff', minWidth: 120 }}>{i + 1}. {pg ? storyPageLabel(pg) : '(page gone)'}{sh.panelOrder ? ` · panel ${sh.panelOrder}` : ''}</strong>
+                          <select value={sh.move} onChange={e => updStoryShot(sh.id, { move: e.target.value })} style={inp} title="Camera move across the shot">
+                            {MOVES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                          </select>
+                          <select value={sh.fit} onChange={e => updStoryShot(sh.id, { fit: e.target.value })} style={inp} title="Fit: all of it over a blurred copy (pages). Fill: cover-crop to 9:16 (panels)">
+                            <option value="fit">Fit whole</option><option value="fill">Fill frame</option>
+                          </select>
+                          <select value={sh.bubbles} onChange={e => updStoryShot(sh.id, { bubbles: e.target.value })} style={inp} title="How the bubbles behave">
+                            <option value="text">Bubbles pop in as baked, with audio</option>
+                            <option value="highlight">Bubbles stay empty — green highlight + audio</option>
+                            <option value="none">No bubbles, silent shot</option>
+                          </select>
+                          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>gap <input type="number" min={0} max={5} step={0.1} value={sh.gap} onChange={e => updStoryShot(sh.id, { gap: Number(e.target.value) })} style={{ ...inp, width: 58 }} /> s</label>
+                          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>hold <input type="number" min={0} max={10} step={0.5} value={sh.hold} onChange={e => updStoryShot(sh.id, { hold: Number(e.target.value) })} style={{ ...inp, width: 58 }} /> s</label>
+                          <span style={{ flex: 1 }} />
+                          <button className="btn btn-secondary" onClick={() => moveStoryShot(i, -1)} style={{ padding: '0.15rem 0.45rem' }}>↑</button>
+                          <button className="btn btn-secondary" onClick={() => moveStoryShot(i, 1)} style={{ padding: '0.15rem 0.45rem' }}>↓</button>
+                          <button className="btn btn-secondary" onClick={() => patchStory(s => ({ shots: s.shots.filter(x => x.id !== sh.id) }))} style={{ padding: '0.15rem 0.45rem', color: '#f88' }}>✕</button>
+                        </div>
+                      );
+                    })}
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.82rem', color: '#ccc', marginTop: 4 }}>
+                      <span style={{ color: '#888' }}>Atmosphere:</span>
+                      {[['dust', '✨ Dust'], ['vignette', '🌑 Vignette'], ['grain', '🎞 Grain']].map(([k, l]) => (
+                        <label key={k} style={{ display: 'flex', gap: 4, alignItems: 'center' }}><input type="checkbox" checked={!!story.fx[k]} onChange={e => patchStory(s => ({ fx: { ...s.fx, [k]: e.target.checked } }))} /> {l}</label>
+                      ))}
+                      <label style={{ display: 'flex', gap: 4, alignItems: 'center' }} title="Burn the English translation under the picture while each bubble speaks">Subtitles
+                        <select value={story.subtitles} onChange={e => patchStory({ subtitles: e.target.value })} style={inp}><option value="none">None</option><option value="en">🇬🇧 English</option></select>
+                      </label>
+                      <label style={{ display: 'flex', gap: 4, alignItems: 'center' }} title="Loudness of the lines (100 = as recorded)">Volume <input type="number" min={30} max={300} step={10} value={story.volume} onChange={e => patchStory({ volume: Number(e.target.value) || 100 })} style={{ ...inp, width: 60 }} /> %</label>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                      <button className="btn btn-primary" disabled={story.busy || story.shots.length === 0} onClick={handleBuildStoryReel} style={{ padding: '0.35rem 0.9rem' }}>{story.busy ? 'Building…' : '🎬 Build story reel'}</button>
+                      {story.result && (
+                        <>
+                          <button className="btn btn-secondary" onClick={() => navigate(`/marketing?tab=clips&comicId=${id}&clip=${encodeURIComponent(story.result.file)}`)}
+                                  title="Open it in the Marketing tab to add the opening card, covers, sign-off, margins and the phone frame" style={{ padding: '0.35rem 0.9rem' }}>➡ Finish in Marketing</button>
+                          <a href={story.result.url} target="_blank" rel="noreferrer" style={{ color: '#c4b5fd', fontSize: '0.85rem' }}>Open video</a>
+                        </>
+                      )}
+                      {story.error && <span style={{ color: '#f88', fontSize: '0.82rem' }}>{story.error}</span>}
+                    </div>
+                    {story.result && <video key={story.result.file} src={story.result.url} controls playsInline style={{ width: 240, marginTop: 8, borderRadius: 6, border: '1px solid #555' }} />}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 

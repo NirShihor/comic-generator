@@ -1242,7 +1242,7 @@ function PageEditor({ isCover = false }) {
       // "find my page by id" path below works unchanged; the server's PUT
       // merge routes an id it doesn't find in pages back to practicePages.
       const practicePage = !isCover && !(response.data.pages || []).some(p => p.id === pageId)
-        ? (response.data.practicePages || []).find(p => p.id === pageId)
+        ? ((response.data.practicePages || []).find(p => p.id === pageId) || (response.data.reelPages || []).find(p => p.id === pageId))
         : null;
       if (practicePage) response.data = { ...response.data, pages: [...(response.data.pages || []), practicePage] };
       setComic(response.data);
@@ -1402,7 +1402,7 @@ function PageEditor({ isCover = false }) {
         // Practice-page bubbles created before 2026-09-10 were server-made with
         // only the basics; fill in the editor's tail/style defaults so their
         // controls (thought tails etc.) match a hand-added bubble.
-        const withDefaults = currentPage.keyPhraseId
+        const withDefaults = (currentPage.keyPhraseId || currentPage.reelLabel)
           ? currentPage.bubbles.map(b => ((b.showTail === undefined || b.fontSize === undefined) ? {
               // Practice-page house style: Bangers, black on white (not the
               // comic's default bubble style, which may be tuned for its art).
@@ -5537,7 +5537,7 @@ function PageEditor({ isCover = false }) {
   const selectedPanelData = panels.find(p => p.id === selectedPanel);
   const snapPoints = getSnapPoints();
 
-  const sortedPages = comic?.pages ? [...comic.pages].filter(p => !p.keyPhraseId).sort((a, b) => a.pageNumber - b.pageNumber) : [];
+  const sortedPages = comic?.pages ? [...comic.pages].filter(p => !p.keyPhraseId && !p.reelLabel).sort((a, b) => a.pageNumber - b.pageNumber) : [];
   const currentPageIdx = sortedPages.findIndex(p => p.id === pageId);
   const prevPage = currentPageIdx > 0 ? sortedPages[currentPageIdx - 1] : null;
   const nextPage = currentPageIdx < sortedPages.length - 1 ? sortedPages[currentPageIdx + 1] : null;
@@ -5953,9 +5953,9 @@ function PageEditor({ isCover = false }) {
           </a>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <h1 style={{ margin: 0 }}>
-              {isCover ? 'Cover' : page.keyPhraseId ? 'Practice page' : `Page ${page.pageNumber}`}
+              {isCover ? 'Cover' : page.keyPhraseId ? 'Practice page' : page.reelLabel ? `Reel page — ${page.reelLabel}` : `Page ${page.pageNumber}`}
             </h1>
-            {!isCover && !page.keyPhraseId && sortedPages.length > 0 && (
+            {!isCover && !page.keyPhraseId && !page.reelLabel && sortedPages.length > 0 && (
               <div style={{ display: 'flex', gap: '0.25rem' }}>
                 <button
                   onClick={async () => {
