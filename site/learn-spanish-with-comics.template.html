@@ -1,0 +1,415 @@
+<title>Learn Spanish with Comics | Comigo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Learn Spanish through comics with visual context, spoken dialogue and translations. See how interactive Spanish stories turn reading into language practice.">
+<link rel="canonical" href="https://comigo.net/learn-spanish-with-comics">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Comigo">
+<meta property="og:title" content="Learn Spanish with Comics | Comigo">
+<meta property="og:description" content="Learn Spanish through comics with visual context, spoken dialogue and translations. See how interactive Spanish stories turn reading into language practice.">
+<meta property="og:url" content="https://comigo.net/learn-spanish-with-comics">
+<meta property="og:image" content="https://comigo.net/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Learn Spanish with Comics | Comigo">
+<meta name="twitter:description" content="Learn Spanish through comics with visual context, spoken dialogue and translations. See how interactive Spanish stories turn reading into language practice.">
+<meta name="twitter:image" content="https://comigo.net/og-image.jpg">
+<link rel="icon" type="image/png" sizes="196x196" href="/favicon.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  /* Shares the homepage's design system: same tokens, faces and component
+     shapes (a trimmed copy — the homepage template stays self-contained). */
+  :root, :root[data-theme="light"], :root[data-theme="dark"] {
+    --paper: #12111C;
+    --card: #1C1A2C;
+    --ink: #ECEBF4;
+    --muted: #9C99B8;
+    --accent: #5B5BD6;
+    --deep: #6E40F0;
+    --line: #ECEBF4;
+    --shadow: rgba(0, 0, 0, 0.75);
+    --dot: rgba(236, 235, 244, 0.05);
+    --band: #6E40F0;
+    --band-text: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { overflow-x: hidden; }
+  body {
+    margin: 0;
+    margin-top: 40px;
+    background-color: var(--paper);
+    background-image: radial-gradient(var(--dot) 1.2px, transparent 1.2px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-family: Charter, Georgia, 'Times New Roman', serif;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  img { height: auto; }
+  .display {
+    font-family: 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', system-ui, sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.015em;
+    line-height: 1.02;
+    text-wrap: balance;
+  }
+  .label {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 26px 0 8px; }
+  .wordmark img { height: 135px; width: auto; display: block; }
+  @media (max-width: 800px) {
+    header { justify-content: center; padding: 0 0 2px; }
+    .wordmark img { height: 110px; }
+  }
+
+  /* hero: text + one framed comic page */
+  .hero { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 48px; align-items: center; padding: 40px 0 34px; }
+  @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 34px; padding: 28px 0 10px; } }
+  .hero .eyebrow { color: var(--muted); display: block; margin-bottom: 14px; }
+  .hero h1 { margin: 0 0 20px; font-size: clamp(2rem, 4.6vw, 3.2rem); }
+  .hero p { max-width: 58ch; margin: 0 0 16px; font-size: 1.06rem; }
+  .hero p strong { color: var(--ink); }
+  .page-frame img {
+    width: 100%; border: 3px solid var(--line); border-radius: 9px;
+    box-shadow: 6px 6px 0 var(--shadow); display: block;
+  }
+
+  .cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 26px; }
+  .cta {
+    font-family: system-ui, sans-serif; font-weight: 800; font-size: 1rem;
+    background: var(--accent); color: #FFFFFF; border: 3px solid #16182E;
+    border-radius: 14px; padding: 13px 24px; box-shadow: 5px 5px 0 var(--shadow);
+    text-decoration: none; display: inline-block;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .cta:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--shadow); }
+  .cta-link { font-family: system-ui, sans-serif; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+  .cta-link:hover { opacity: 0.75; }
+
+  .strip-head { padding: 38px 0 6px; }
+  .strip-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
+  .strip-head p { margin: 10px 0 0; color: var(--muted); max-width: 62ch; }
+  .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; padding: 22px 0 10px; }
+  @media (max-width: 800px) { .strip { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
+    padding: 24px 22px 20px; box-shadow: 6px 6px 0 var(--shadow);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .panel h3 { margin: 0; font-size: 1.5rem; }
+  .panel p { margin: 0; font-size: 0.98rem; }
+  .panel .glyph { font-size: 1.7rem; line-height: 1; }
+
+  /* the readable example */
+  .demo { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 40px; align-items: start; padding: 22px 0 10px; }
+  @media (max-width: 800px) { .demo { grid-template-columns: 1fr; } }
+  .lines { display: flex; flex-direction: column; gap: 14px; }
+  .line {
+    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
+    padding: 16px 18px 14px; box-shadow: 5px 5px 0 var(--shadow);
+  }
+  .line .who { color: var(--muted); display: block; margin-bottom: 6px; }
+  .line .es { margin: 0; font-size: 1.18rem; font-weight: 700; }
+  .line details { margin-top: 10px; font-family: system-ui, sans-serif; }
+  .line summary {
+    cursor: pointer; list-style: none; display: inline-block;
+    font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--accent); border: 2px solid var(--accent); border-radius: 999px; padding: 4px 12px;
+  }
+  .line summary::-webkit-details-marker { display: none; }
+  .line details[open] summary { background: var(--accent); color: #FFFFFF; }
+  .line .en { margin: 12px 0 0; font-family: Charter, Georgia, serif; font-size: 1rem; }
+  .line .vocab { margin: 8px 0 0; font-size: 0.88rem; color: var(--muted); }
+  .line .vocab b { color: var(--ink); font-weight: 700; }
+
+  /* prose + callout */
+  .prose { padding: 6px 0 0; }
+  .prose p { font-size: 1.04rem; max-width: 66ch; margin-left: 0; }
+  .callout {
+    background: var(--deep); color: #FFFFFF; border: 3px solid var(--line); border-radius: 30px;
+    padding: 26px 30px; box-shadow: 7px 7px 0 var(--shadow); max-width: 620px; margin: 26px 0 10px;
+  }
+  .callout p { margin: 0; font-size: 1.12rem; }
+
+  /* read → listen → … flow */
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 18px 0 6px; }
+  .flow .step {
+    font-family: system-ui, sans-serif; font-weight: 800; font-size: 0.8rem;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    border: 2px solid var(--line); border-radius: 999px; padding: 6px 14px; background: var(--card);
+  }
+  .flow .arrow { color: var(--muted); font-family: system-ui, sans-serif; }
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; padding: 18px 0 8px; }
+  .mode {
+    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
+    padding: 18px 18px 16px; box-shadow: 5px 5px 0 var(--shadow);
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .mode h3 { margin: 0; font-family: system-ui, sans-serif; font-size: 1.02rem; font-weight: 800; }
+  .mode p { margin: 0; font-size: 0.92rem; color: var(--muted); }
+
+  /* series cards */
+  .series { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 22px 0 14px; }
+  @media (max-width: 800px) { .series { grid-template-columns: 1fr; max-width: 340px; } }
+  .book { display: flex; flex-direction: column; }
+  .book img {
+    width: 100%; border: 3px solid var(--line); border-radius: 8px;
+    box-shadow: 5px 5px 0 var(--shadow); display: block;
+    transition: transform 0.2s ease;
+  }
+  .book:hover img { transform: translateY(-6px); }
+  .book .meta { padding: 12px 2px 0; }
+  .book .t { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.95rem; line-height: 1.25; }
+  .book .g { font-family: Charter, Georgia, serif; font-style: italic; font-size: 0.85rem; color: var(--muted); margin-top: 3px; }
+
+  .band { background: var(--band); color: var(--band-text); border-top: 3px solid var(--line); border-bottom: 3px solid var(--line); margin-top: 44px; }
+  .band .wrap { padding: 52px 24px; }
+  .band h2 { font-size: clamp(1.8rem, 4.4vw, 3rem); margin: 0 0 14px; }
+  .band p { max-width: 62ch; margin: 0 0 22px; font-size: 1.05rem; }
+  .band .cta { background: #FFFFFF; color: var(--deep); }
+  .band .cta-link { color: #FFFFFF; }
+
+  footer { border-top: 3px solid var(--line); }
+  footer .wrap {
+    display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center;
+    justify-content: space-between; padding: 26px 24px 34px;
+    font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted);
+  }
+  footer a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  footer .links { display: flex; gap: 22px; }
+
+  @media (max-width: 800px) {
+    .wrap { padding-left: 34px; padding-right: 34px; }
+    .hero p { font-size: 1.22rem; }
+    .panel p { font-size: 1.13rem; }
+    .mode p { font-size: 1.06rem; }
+    .strip-head p { font-size: 1.15rem; }
+    .band p { font-size: 1.21rem; }
+    .prose p { font-size: 1.18rem; }
+    .callout p { font-size: 1.18rem; }
+    .cta-row { flex-direction: column; align-items: flex-start; }
+    .cta-row .cta { align-self: center; }
+  }
+</style>
+
+<header class="wrap">
+  <a class="wordmark" href="/"><img src="{{IMG_logo}}" alt="Comigo"></a>
+</header>
+
+<section class="hero wrap">
+  <div>
+    <span class="label eyebrow">Learn Spanish with comics</span>
+    <h1 class="display">A picture gives every Spanish sentence a head start.</h1>
+    <p>
+      When you can see who is speaking, where they are and what is happening, Spanish
+      stops being a collection of words to decode. The story is already giving you clues.
+    </p>
+    <p>
+      That&rsquo;s the idea behind <strong>Comigo</strong>: original Spanish comics where reading,
+      listening, translation and practice all happen inside the story.
+    </p>
+    <div class="cta-row">
+      <a class="cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Try Comigo free</a>
+    </div>
+  </div>
+  <div class="page-frame">
+    <img src="{{IMG_page-biblioteca3}}" alt="A page from La Biblioteca, an original Comigo Spanish comic: a surveillance screen looms over rows of worker robots in a dystopian city.">
+  </div>
+</section>
+
+<section class="wrap strip-head">
+  <h2 class="display">You understand more than the words.</h2>
+  <p>
+    In a comic, language doesn&rsquo;t arrive alone. A character&rsquo;s expression, an object
+    they&rsquo;re holding, the place they&rsquo;re standing and what happened in the previous
+    panel all help you make sense of what you&rsquo;re reading.
+  </p>
+</section>
+<section class="wrap strip">
+  <div class="panel">
+    <span class="glyph">👀</span>
+    <h3 class="display">See the meaning</h3>
+    <p>Pictures give unfamiliar Spanish context. You can often understand the direction of a sentence before you know every word.</p>
+  </div>
+  <div class="panel">
+    <span class="glyph">🔊</span>
+    <h3 class="display">Hear the language</h3>
+    <p>Reading shows you how Spanish looks. Hearing the same dialogue gives you pronunciation, rhythm and tone.</p>
+  </div>
+  <div class="panel">
+    <span class="glyph">📖</span>
+    <h3 class="display">Want to continue</h3>
+    <p>There&rsquo;s a reason to understand the next sentence: you want to know what happens next. Curiosity becomes part of the learning process.</p>
+  </div>
+</section>
+
+<section class="wrap strip-head" id="try">
+  <h2 class="display">Try reading this.</h2>
+  <p>
+    Don&rsquo;t worry about understanding every word. Look at the picture, read the Spanish
+    and see how much you can work out from the scene.
+  </p>
+</section>
+<section class="wrap demo">
+  <div class="page-frame">
+    <img loading="lazy" decoding="async" src="{{IMG_page-carta1}}" alt="The opening page of La Carta Negra: a lone rider crosses the New Mexico desert towards a small town, 1883.">
+  </div>
+  <div class="lines">
+    <!-- Real dialogue from La Carta Negra (El Rey Negro, episode 1), as read in the app. -->
+    <div class="line">
+      <span class="label who">Caption</span>
+      <p class="es" lang="es">Territorio de Nuevo México, 1883</p>
+      <details>
+        <summary>Show translation</summary>
+        <p class="en">New Mexico Territory, 1883</p>
+      </details>
+      <!-- AUDIO PLACEHOLDER: add data-audio="<mp3 url>" and remove `hidden` once the line audio is published. -->
+      <button class="play" data-audio="" hidden aria-label="Play this line in Spanish">🔊 Play</button>
+    </div>
+    <div class="line">
+      <span class="label who">The rider</span>
+      <p class="es" lang="es">Por fin... ya no queda mucho...</p>
+      <details>
+        <summary>Show translation</summary>
+        <p class="en">At last... not far now...</p>
+        <p class="vocab"><b>por fin</b> — at last &nbsp;·&nbsp; <b>queda</b> — from <i lang="es">quedar</i>, to stay / remain</p>
+      </details>
+      <!-- AUDIO PLACEHOLDER: add data-audio="<mp3 url>" and remove `hidden` once the line audio is published. -->
+      <button class="play" data-audio="" hidden aria-label="Play this line in Spanish">🔊 Play</button>
+    </div>
+    <div class="line">
+      <span class="label who">The rider</span>
+      <p class="es" lang="es">Puedo verlo...</p>
+      <details>
+        <summary>Show translation</summary>
+        <p class="en">I can see it...</p>
+        <p class="vocab"><b>puedo</b> — from <i lang="es">poder</i>, to be able &nbsp;·&nbsp; <b>verlo</b> — from <i lang="es">ver</i>, to see (&ldquo;see it&rdquo;)</p>
+      </details>
+      <!-- AUDIO PLACEHOLDER: add data-audio="<mp3 url>" and remove `hidden` once the line audio is published. -->
+      <button class="play" data-audio="" hidden aria-label="Play this line in Spanish">🔊 Play</button>
+    </div>
+    <div class="line">
+      <span class="label who">The rider</span>
+      <p class="es" lang="es">Un pueblo pequeño...</p>
+      <details>
+        <summary>Show translation</summary>
+        <p class="en">A small town...</p>
+        <p class="vocab"><b>pueblo</b> — town &nbsp;·&nbsp; <b>pequeño</b> — small</p>
+      </details>
+      <!-- AUDIO PLACEHOLDER: add data-audio="<mp3 url>" and remove `hidden` once the line audio is published. -->
+      <button class="play" data-audio="" hidden aria-label="Play this line in Spanish">🔊 Play</button>
+    </div>
+  </div>
+</section>
+
+<section class="wrap strip-head">
+  <h2 class="display">The picture is doing some of the teaching.</h2>
+</section>
+<section class="wrap prose">
+  <p>
+    Traditional reading practice can leave you reaching for a dictionary every few words.
+    Comics add another source of information: the scene itself.
+  </p>
+  <p>
+    You begin by making a reasonable guess from the picture and the story. When you need
+    help, you check the language. Over time, more of those guesses become understanding.
+  </p>
+  <div class="callout">
+    <p>
+      You don&rsquo;t need to understand every word to understand what&rsquo;s happening.
+      And wanting to understand what&rsquo;s happening gives you a reason to learn the
+      words you don&rsquo;t know.
+    </p>
+  </div>
+</section>
+
+<section class="wrap strip-head">
+  <h2 class="display">In Comigo, the story becomes the lesson.</h2>
+</section>
+<div class="wrap flow" aria-hidden="true">
+  <span class="step">Read</span><span class="arrow">→</span>
+  <span class="step">Listen</span><span class="arrow">→</span>
+  <span class="step">Explore</span><span class="arrow">→</span>
+  <span class="step">Speak</span><span class="arrow">→</span>
+  <span class="step">Practise</span>
+</div>
+<section class="wrap modes">
+  <div class="mode">
+    <h3>Read</h3>
+    <p>Follow the story in Spanish, one bubble at a time.</p>
+  </div>
+  <div class="mode">
+    <h3>Listen</h3>
+    <p>Hear the dialogue spoken with tone and character.</p>
+  </div>
+  <div class="mode">
+    <h3>Explore</h3>
+    <p>Tap unfamiliar words and reveal explanations or translations when you need them.</p>
+  </div>
+  <div class="mode">
+    <h3>Speak</h3>
+    <p>Say the dialogue yourself and practise producing the Spanish, not just recognising it.</p>
+  </div>
+  <div class="mode">
+    <h3>Practise</h3>
+    <p>After the episode, work with the vocabulary and sentences you have just encountered in the story.</p>
+  </div>
+</section>
+
+<section class="wrap strip-head">
+  <h2 class="display">Spanish you actually want to keep reading.</h2>
+  <p>
+    A western. A spy thriller. A dystopian mystery. A time-travel adventure. Comigo uses
+    different kinds of stories so Spanish reading practice doesn&rsquo;t have to feel like
+    textbook reading practice.
+  </p>
+</section>
+<section class="wrap series">
+  <!-- Cards are ready to become links to public sample story pages when those exist. -->
+  <div class="book">
+    <img loading="lazy" decoding="async" src="{{IMG_carta}}" alt="Cover of El Rey Negro: a gunslinger and a woman in a saloon.">
+    <div class="meta"><div class="t">EL REY NEGRO</div><div class="g">A revenge western.</div></div>
+  </div>
+  <div class="book">
+    <img loading="lazy" decoding="async" src="{{IMG_oferta}}" alt="Cover of La Oferta, from the series La Mensajera: a man and a woman in 1940s coats on a city street.">
+    <div class="meta"><div class="t">LA MENSAJERA</div><div class="g">A WW2 spy thriller.</div></div>
+  </div>
+  <div class="book">
+    <img loading="lazy" decoding="async" src="{{IMG_biblioteca}}" alt="Cover of Los Niños en las Sombras: two figures in a dystopian city.">
+    <div class="meta"><div class="t">LOS NIÑOS EN LAS SOMBRAS</div><div class="g">A childless dystopia hides the truth.</div></div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <h2 class="display">Another chapter. Not another lesson.</h2>
+    <p>
+      Start reading Spanish with Comigo. Explore the stories, listen to the characters and
+      discover how much you can understand when Spanish has a story around it.
+    </p>
+    <div class="cta-row">
+      <a class="cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Try Comigo free</a>
+      <a class="cta-link" href="/">Back to Comigo</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Comigo</div>
+    <div class="links">
+      <a href="mailto:nir@comigo.net">Support</a>
+      <a href="/privacy">Privacy Policy</a>
+    </div>
+  </div>
+</footer>
