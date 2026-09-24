@@ -36,6 +36,10 @@ app.use((req, res, next) => {
       res.set('Cache-Control', 'no-store');
       return res.sendFile(path.join(SITE_DIR, 'privacy.html'));
     }
+    if (req.path === '/learn-spanish-with-comics' || req.path === '/learn-spanish-with-comics.html') {
+      res.set('Cache-Control', 'no-store');
+      return res.sendFile(path.join(SITE_DIR, 'learn-spanish-with-comics.html'));
+    }
     if (req.path === '/favicon.png' || req.path === '/favicon.ico') {
       return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
     }
@@ -65,7 +69,8 @@ app.use((req, res, next) => {
       // picked up automatically. index.html is the homepage.
       const fsSync = require('fs');
       const entries = fsSync.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && !f.includes('.template.')).map(f => {
-        const loc = f === 'index.html' ? 'https://comigo.net/' : `https://comigo.net/${f}`;
+        // Extensionless canonical URLs (the server serves both spellings).
+        const loc = f === 'index.html' ? 'https://comigo.net/' : `https://comigo.net/${f.replace(/\.html$/, '')}`;
         const lastmod = fsSync.statSync(path.join(SITE_DIR, f)).mtime.toISOString().slice(0, 10);
         return `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`;
       });
