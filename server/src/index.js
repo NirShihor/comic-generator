@@ -36,8 +36,42 @@ app.use((req, res, next) => {
       res.set('Cache-Control', 'no-store');
       return res.sendFile(path.join(SITE_DIR, 'privacy.html'));
     }
-    if (req.path === '/favicon.png' || req.path === '/favicon.ico' || req.path === '/apple-touch-icon.png') {
+    if (req.path === '/favicon.png' || req.path === '/favicon.ico') {
       return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
+    }
+    if (req.path === '/favicon-512.png' || req.path === '/apple-touch-icon.png') {
+      res.set('Cache-Control', 'public, max-age=86400');
+      return res.sendFile(path.join(SITE_DIR, 'favicon-512.png'));
+    }
+    if (req.path === '/og-image.jpg') {
+      res.set('Cache-Control', 'public, max-age=86400');
+      return res.sendFile(path.join(SITE_DIR, 'og-image.jpg'));
+    }
+    if (req.path.startsWith('/assets/')) {
+      // Content-hashed filenames from site/build.py — safe to cache forever.
+      const f = req.path.slice('/assets/'.length);
+      if (/^[\w.\-]+\.(webp|jpg|png)$/.test(f)) {
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.sendFile(path.join(SITE_DIR, 'assets-dist', f), err => { if (err) res.status(404).end(); });
+      }
+      return res.status(404).end();
+    }
+    if (req.path === '/robots.txt') {
+      res.set('Cache-Control', 'public, max-age=86400');
+      return res.sendFile(path.join(SITE_DIR, 'robots.txt'));
+    }
+    if (req.path === '/sitemap.xml') {
+      // Built from the .html files actually in site/, so new public pages are
+      // picked up automatically. index.html is the homepage.
+      const fsSync = require('fs');
+      const entries = fsSync.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && !f.includes('.template.')).map(f => {
+        const loc = f === 'index.html' ? 'https://comigo.net/' : `https://comigo.net/${f}`;
+        const lastmod = fsSync.statSync(path.join(SITE_DIR, f)).mtime.toISOString().slice(0, 10);
+        return `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`;
+      });
+      res.set('Cache-Control', 'public, max-age=3600');
+      return res.type('application/xml').send(
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join('\n')}\n</urlset>\n`);
     }
     if (req.path === '/demo-poster.jpg') {
       res.set('Cache-Control', 'public, max-age=86400');

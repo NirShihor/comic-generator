@@ -1,7 +1,47 @@
-<title>Comigo — Spanish, by story</title>
+<title>Comigo – Learn Spanish Through Interactive Comics</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" type="image/png" href="/favicon.png">
-<link rel="apple-touch-icon" href="/favicon.png">
+<meta name="description" content="Learn Spanish through interactive comics with audio, translations and learning tools built into every story.">
+<link rel="canonical" href="https://comigo.net/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Comigo">
+<meta property="og:title" content="Comigo – Learn Spanish Through Interactive Comics">
+<meta property="og:description" content="Learn Spanish through interactive comics with audio, translations and learning tools built into every story.">
+<meta property="og:url" content="https://comigo.net/">
+<meta property="og:image" content="https://comigo.net/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Comigo – Learn Spanish Through Interactive Comics">
+<meta name="twitter:description" content="Learn Spanish through interactive comics with audio, translations and learning tools built into every story.">
+<meta name="twitter:image" content="https://comigo.net/og-image.jpg">
+<link rel="icon" type="image/png" sizes="196x196" href="/favicon.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://comigo.net/#org",
+      "name": "Comigo",
+      "url": "https://comigo.net/",
+      "logo": { "@type": "ImageObject", "url": "https://comigo.net/favicon-512.png" },
+      "email": "nir@comigo.net"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Comigo: Learn Spanish",
+      "operatingSystem": "iOS",
+      "applicationCategory": "EducationalApplication",
+      "url": "https://comigo.net/",
+      "installUrl": "https://apps.apple.com/app/id6760253260",
+      "publisher": { "@id": "https://comigo.net/#org" },
+      "description": "Learn Spanish through interactive comics with audio, translations and learning tools built into every story."
+    }
+  ]
+}
+</script>
 <style>
   /* Single committed look: the dark night-reading theme on every device,
      regardless of the visitor's OS light/dark preference. */
@@ -20,6 +60,10 @@
   }
 
   * { box-sizing: border-box; }
+  /* Images carry width/height attributes (CLS); CSS sizes one dimension, the
+     other must stay auto or the attribute would stretch it. */
+  .fan img, .book img { height: auto; }
+  .wordmark img { width: auto; }
   html { scroll-behavior: smooth; }
   /* No sideways wobble: nothing may scroll the page horizontally. */
   html, body { overflow-x: hidden; }
@@ -412,39 +456,39 @@
 <div class="wrap shelf-scroll">
   <div class="shelf">
     <div class="book">
-      <img src="{{IMG_page-carta1}}" alt="A page from La Carta Negra">
+      <img loading="lazy" decoding="async" src="{{IMG_page-carta1}}" alt="A page from La Carta Negra">
       <div class="meta"><div class="t">LA CARTA NEGRA</div><div class="c">El Rey Negro</div><div class="g">A revenge western.</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_page-biblioteca3}}" alt="A page from La Biblioteca">
+      <img loading="lazy" decoding="async" src="{{IMG_page-biblioteca3}}" alt="A page from La Biblioteca">
       <div class="meta"><div class="t">LA BIBLIOTECA</div><div class="c">Los Niños en las Sombras</div><div class="g">A childless dystopia hides the truth.</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_page-colina4}}" alt="A page from La Casa en la Colina">
+      <img loading="lazy" decoding="async" src="{{IMG_page-colina4}}" alt="A page from La Casa en la Colina">
       <div class="meta"><div class="t">LA CASA EN LA COLINA</div><div class="c">El Superviviente</div><div class="g">Survival among the infected.</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_page-descubrimiento10}}" alt="A page from El Descubrimiento">
+      <img loading="lazy" decoding="async" src="{{IMG_page-descubrimiento10}}" alt="A page from El Descubrimiento">
       <div class="meta"><div class="t">EL DESCUBRIMIENTO</div><div class="c">Ollie Dice</div><div class="g">A small dog&rsquo;s simple wisdom.</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_page-llegada4}}" alt="A page from La Llegada">
+      <img loading="lazy" decoding="async" src="{{IMG_page-llegada4}}" alt="A page from La Llegada">
       <div class="meta"><div class="t">LA LLEGADA</div><div class="c">El Visitante</div><div class="g">An alien houseguest.</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_page-primer4}}" alt="A page from Primer Turno">
+      <img loading="lazy" decoding="async" src="{{IMG_page-primer4}}" alt="A page from Primer Turno">
       <div class="meta"><div class="t">PRIMER TURNO</div><div class="c">El Restaurante</div><div class="g">First job, bigger trouble.</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_page-maquina8}}" alt="A page from La Máquina">
+      <img loading="lazy" decoding="async" src="{{IMG_page-maquina8}}" alt="A page from La Máquina">
       <div class="meta"><div class="t">LA MÁQUINA</div><div class="c">Los Vientos del Tiempo</div><div class="g">A time-travel adventure.</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_page-casa4}}" alt="A page from La Casa">
+      <img loading="lazy" decoding="async" src="{{IMG_page-casa4}}" alt="A page from La Casa">
       <div class="meta"><div class="t">LA CASA</div><div class="c">La Batalla Después de la Guerra</div><div class="g">A WW1 soldier&rsquo;s second battle.</div></div>
     </div>
     <div class="book">
-      <img src="{{IMG_page-oferta9}}" alt="A page from La Oferta">
+      <img loading="lazy" decoding="async" src="{{IMG_page-oferta9}}" alt="A page from La Oferta">
       <div class="meta"><div class="t">LA OFERTA</div><div class="c">La Mensajera</div><div class="g">A WW2 spy thriller.</div></div>
     </div>
     </div>
