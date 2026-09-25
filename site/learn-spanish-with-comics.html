@@ -125,7 +125,7 @@
   }
   .stage > img { width: 100%; display: block; }
   .hotspot { position: absolute; background: transparent; border: 0; border-radius: 50%; cursor: pointer; padding: 0; }
-  .hotspot.active-fallback { background: rgba(96, 220, 120, 0.5); box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.4); }
+  .hotspot.active-fallback { background: rgba(96, 220, 120, 0.42); border-radius: 12px; }
   .bubble-glow { position: absolute; pointer-events: none; z-index: 2; }
   .hint {
     position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px;
@@ -280,6 +280,7 @@
   <nav class="nav-links" aria-label="Main">
     <a href="/" data-nav="index">Home</a>
     <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics" aria-current="page">How it works</a>
+    <a href="/spanish-reading-practice" data-nav="spanish-reading-practice">Reading practice</a>
     <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
     <a class="nav-cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Get the app</a>
   </nav>
@@ -288,6 +289,7 @@
     <nav class="menu-panel" aria-label="Main">
       <a href="/" data-nav="index">Home</a>
       <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics" aria-current="page">How it works</a>
+    <a href="/spanish-reading-practice" data-nav="spanish-reading-practice">Reading practice</a>
       <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
       <a class="nav-cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Get the app</a>
     </nav>
@@ -354,7 +356,7 @@
   <h3 class="display stage-head">Click on a bubble</h3>
   <div class="stage">
     <img src="/assets/page-carta1.7767753d.jpg" width="550" height="825" alt="The opening page of La Carta Negra: a lone rider crosses the New Mexico desert towards a small town, 1883.">
-    <button class="hotspot" style="left:8.5%;top:0.6%;width:80.5%;height:10%" data-who="Caption" data-es="Territorio de Nuevo México, 1883" data-en="New Mexico Territory, 1883" data-words='[{"t":"Territorio","m":"territory","b":"territorio","bm":"territory","a":"/assets/cw-territorio.38207c0c.mp3"},{"t":"de","m":"of","b":"de","bm":"of","a":"/assets/cw-de.7b68374c.mp3"},{"t":"Nuevo","m":"new","b":"nuevo","bm":"new","a":"/assets/cw-nuevo.01929c57.mp3"},{"t":"México,","m":"mexico","b":"méxico","bm":"mexico","a":"/assets/cw-mexico.01bbc617.mp3"},{"t":"1883","m":"1883","b":"1883","bm":"1883","a":"/assets/cw-1883.77e48803.mp3"}]' data-audio="/assets/carta-b1.6ca277c6.mp3" aria-label="Territorio de Nuevo México, 1883 — tap to hear and translate"></button>
+    <button class="hotspot" style="left:21%;top:4.6%;width:66%;height:5.6%" data-caption data-who="Caption" data-es="Territorio de Nuevo México, 1883" data-en="New Mexico Territory, 1883" data-words='[{"t":"Territorio","m":"territory","b":"territorio","bm":"territory","a":"/assets/cw-territorio.38207c0c.mp3"},{"t":"de","m":"of","b":"de","bm":"of","a":"/assets/cw-de.7b68374c.mp3"},{"t":"Nuevo","m":"new","b":"nuevo","bm":"new","a":"/assets/cw-nuevo.01929c57.mp3"},{"t":"México,","m":"mexico","b":"méxico","bm":"mexico","a":"/assets/cw-mexico.01bbc617.mp3"},{"t":"1883","m":"1883","b":"1883","bm":"1883","a":"/assets/cw-1883.77e48803.mp3"}]' data-audio="/assets/carta-b1.6ca277c6.mp3" aria-label="Territorio de Nuevo México, 1883 — tap to hear and translate"></button>
     <button class="hotspot" style="left:0%;top:6.8%;width:21%;height:17%" data-who="The rider" data-es="Por fin... ya no queda mucho..." data-en="At last... not far now..." data-vocab="<b>por fin</b> — at last &middot; <b>queda</b> — from <i>quedar</i>, to stay / remain" data-words='[{"t":"Por","m":"by/for","b":"por","bm":"by/for","a":"/assets/cw-por.40a56b72.mp3"},{"t":"fin...","m":"end","b":"fin","bm":"end","a":"/assets/cw-fin.7a690c4b.mp3"},{"t":"ya","m":"already","b":"ya","bm":"already","a":"/assets/cw-ya.ac9558e2.mp3"},{"t":"no","m":"no/not","b":"no","bm":"no/not","a":"/assets/cw-no.3db18283.mp3"},{"t":"queda","m":"remains","b":"quedar","bm":"to stay","a":"/assets/cw-queda.157e0344.mp3","ba":"/assets/cw-quedar.4fbf265d.mp3"},{"t":"mucho...","m":"much/a lot","b":"mucho","bm":"much/a lot","a":"/assets/cw-mucho.8e3def30.mp3"}]' data-audio="/assets/carta-b2.d4b0f156.mp3" aria-label="Por fin... ya no queda mucho... — tap to hear and translate"></button>
     <button class="hotspot" style="left:1.7%;top:35.3%;width:20%;height:14.2%" data-who="The rider" data-es="Puedo verlo..." data-en="I can see it..." data-vocab="<b>puedo</b> — from <i>poder</i>, to be able &middot; <b>verlo</b> — from <i>ver</i>, to see" data-words='[{"t":"Puedo","m":"I can","b":"poder","bm":"to be able","a":"/assets/cw-puedo.31ad733c.mp3","ba":"/assets/cw-poder.1272175a.mp3"},{"t":"verlo...","m":"to see it","b":"ver","bm":"to see","a":"/assets/cw-verlo.7ad4481f.mp3","ba":"/assets/cw-ver.8085c268.mp3"}]' data-audio="/assets/carta-b3.d1dde35a.mp3" aria-label="Puedo verlo... — tap to hear and translate"></button>
     <button class="hotspot" style="left:41.5%;top:64.5%;width:37%;height:7.2%" data-who="The rider" data-es="Un pueblo pequeño..." data-en="A small town..." data-vocab="<b>pueblo</b> — town &middot; <b>pequeño</b> — small" data-words='[{"t":"Un","m":"a","b":"un","bm":"a","a":"/assets/cw-un.66615f4f.mp3"},{"t":"pueblo","m":"town","b":"pueblo","bm":"town","a":"/assets/cw-pueblo.2652c832.mp3"},{"t":"pequeño...","m":"small","b":"pequeño","bm":"small","a":"/assets/cw-pequeno.1309689c.mp3"}]' data-audio="/assets/carta-b4.9ec0caef.mp3" aria-label="Un pueblo pequeño... — tap to hear and translate"></button>
@@ -373,6 +375,9 @@
     <audio preload="none"></audio>
     <div class="hint">👆 Tap a speech bubble</div>
   </div>
+</section>
+<section class="wrap" style="text-align: center; padding-top: 4px;">
+  <a class="cta-link" href="/spanish-reading-practice">Try Spanish reading practice with a real comic &rarr;</a>
 </section>
 <div class="wrap visually-hidden">
   <p lang="es">Territorio de Nuevo México, 1883 — New Mexico Territory, 1883. Por fin... ya no queda mucho... — At last... not far now... Puedo verlo... — I can see it... Un pueblo pequeño... — A small town...</p>
@@ -508,44 +513,81 @@
     }
     function highlightFor(h) {
       if (h._glow !== undefined) return h._glow;
+      // Captions lettered straight onto the art have no bubble to fill.
+      if (h.dataset.caption !== undefined) { h._glow = null; return null; }
       var p = pageData();
       if (!p || p.failed) return undefined;
       var W = p.W, H = p.H, d = p.d;
       var rx = parseFloat(h.style.left) / 100 * W, ry = parseFloat(h.style.top) / 100 * H;
       var rw = parseFloat(h.style.width) / 100 * W, rh = parseFloat(h.style.height) / 100 * H;
-      var x0 = Math.max(0, Math.round(rx - rw * 0.1)), y0 = Math.max(0, Math.round(ry - rh * 0.1));
-      var x1 = Math.min(W - 1, Math.round(rx + rw * 1.1)), y1 = Math.min(H - 1, Math.round(ry + rh * 1.1));
       function light(i) { return d[i] > 205 && d[i + 1] > 195 && d[i + 2] > 160; }
-      var seed = -1, cxp = Math.round(rx + rw / 2), cyp = Math.round(ry + rh / 2);
-      outer:
-      for (var oy = 0; oy <= 6; oy++) for (var sy = -1; sy <= 1; sy += 2)
-        for (var ox = 0; ox <= 6; ox++) for (var sx = -1; sx <= 1; sx += 2) {
-          var px = cxp + sx * ox * Math.max(1, Math.round(rw / 14));
-          var py = cyp + sy * oy * Math.max(1, Math.round(rh / 14));
-          if (px < x0 || px > x1 || py < y0 || py > y1) continue;
-          if (light((py * W + px) * 4)) { seed = py * W + px; break outer; }
-        }
-      if (seed < 0) { h._glow = null; return null; }
-      var visited = new Uint8Array(W * H);
-      var stack = [seed], fill = [];
-      var limit = (x1 - x0 + 1) * (y1 - y0 + 1);
-      while (stack.length) {
-        var q = stack.pop();
-        if (visited[q]) continue;
-        visited[q] = 1;
-        var qx = q % W, qy = (q / W) | 0;
-        if (qx < x0 || qx > x1 || qy < y0 || qy > y1) continue;
-        if (!light(q * 4)) continue;
-        fill.push(q);
-        if (fill.length > limit) break;
-        stack.push(q - 1, q + 1, q - W, q + W);
+      var cxp = Math.round(rx + rw / 2), cyp = Math.round(ry + rh / 2);
+      var stepX = Math.max(1, Math.round(rw / 14)), stepY = Math.max(1, Math.round(rh / 14));
+      // A seed can land in a sealed pocket (inside a letter), so try several
+      // candidates. A fill that reaches the search-box edge is either a long
+      // tail (it ends once the box is wider) or a real leak (it never does),
+      // so widen the box and retry before giving up.
+      var fill = null, pads = [0.1, 0.6, 1.4];
+      for (var pi = 0; pi < pads.length && !fill; pi++) {
+        var pad = pads[pi];
+        var x0 = Math.max(0, Math.round(rx - rw * pad)), y0 = Math.max(0, Math.round(ry - rh * pad));
+        var x1 = Math.min(W - 1, Math.round(rx + rw * (1 + pad))), y1 = Math.min(H - 1, Math.round(ry + rh * (1 + pad)));
+        var visited = new Uint8Array(W * H);
+        var limit = (x1 - x0 + 1) * (y1 - y0 + 1);
+        for (var oy = 0; oy <= 6 && !fill; oy++) for (var sy = -1; sy <= 1 && !fill; sy += 2)
+          for (var ox = 0; ox <= 6 && !fill; ox++) for (var sx = -1; sx <= 1 && !fill; sx += 2) {
+            var px = cxp + sx * ox * stepX, py = cyp + sy * oy * stepY;
+            var c0 = py * W + px;
+            if (px < x0 || px > x1 || py < y0 || py > y1 || visited[c0] || !light(c0 * 4)) continue;
+            var f = [], edge = 0, stack = [c0];
+            while (stack.length) {
+              var q = stack.pop();
+              if (visited[q]) continue;
+              visited[q] = 1;
+              var qx = q % W, qy = (q / W) | 0;
+              if (qx < x0 || qx > x1 || qy < y0 || qy > y1) continue;
+              if (!light(q * 4)) continue;
+              f.push(q);
+              if (qx === x0 || qx === x1 || qy === y0 || qy === y1) edge++;
+              if (f.length > limit) break;
+              stack.push(q - 1, q + 1, q - W, q + W);
+            }
+            // A real bubble interior fills a good share of its tap area; tiny
+            // light patches (e.g. a caption lettered straight onto the art)
+            // aren't bubbles, and fall back to the plain tint.
+            if (f.length >= 0.15 * rw * rh && f.length <= limit && edge <= 6) fill = f;
+          }
       }
-      if (fill.length < 60 || fill.length > 0.92 * limit) { h._glow = null; return null; }
+      if (!fill) { h._glow = null; return null; }
       var bx0 = W, by0 = H, bx1 = 0, by1 = 0;
       for (var k = 0; k < fill.length; k++) {
         var fx = fill[k] % W, fy = (fill[k] / W) | 0;
         if (fx < bx0) bx0 = fx; if (fx > bx1) bx1 = fx;
         if (fy < by0) by0 = fy; if (fy > by1) by1 = fy;
+      }
+      // Letter counters (the enclosed white inside o, e, a...) belong to the
+      // bubble too: tint any light pocket fully enclosed in the fill's box.
+      var inFill = new Uint8Array(W * H);
+      for (var k3 = 0; k3 < fill.length; k3++) inFill[fill[k3]] = 1;
+      var checked = new Uint8Array(W * H);
+      for (var yy = by0; yy <= by1; yy++) for (var xx = bx0; xx <= bx1; xx++) {
+        var p0 = yy * W + xx;
+        if (checked[p0] || inFill[p0] || !light(p0 * 4)) continue;
+        var comp = [], touches = false, st = [p0];
+        while (st.length) {
+          var q3 = st.pop();
+          if (checked[q3] || inFill[q3]) continue;
+          var qx3 = q3 % W, qy3 = (q3 / W) | 0;
+          if (qx3 < bx0 || qx3 > bx1 || qy3 < by0 || qy3 > by1) { touches = true; continue; }
+          checked[q3] = 1;
+          if (!light(q3 * 4)) continue;
+          if (qx3 === bx0 || qx3 === bx1 || qy3 === by0 || qy3 === by1) touches = true;
+          comp.push(q3);
+          st.push(q3 - 1, q3 + 1, q3 - W, q3 + W);
+        }
+        if (!touches && comp.length && comp.length < fill.length * 0.35) {
+          for (var k4 = 0; k4 < comp.length; k4++) fill.push(comp[k4]);
+        }
       }
       var bw = bx1 - bx0 + 1, bh = by1 - by0 + 1;
       var out = document.createElement('canvas');
@@ -576,6 +618,11 @@
       var glow = on ? highlightFor(h) : h._glow;
       if (glow) { glow.hidden = !on; h.classList.remove('active-fallback'); }
       else h.classList.toggle('active-fallback', !!on);
+      // Tapped before the page image finished loading: swap the plain tint
+      // for the exact highlight as soon as it arrives.
+      if (on && glow === undefined && !img.complete) {
+        img.addEventListener('load', function () { if (current === h) setActive(h, true); }, { once: true });
+      }
     }
     function close() {
       popup.hidden = true; audio.pause();

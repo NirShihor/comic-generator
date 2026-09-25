@@ -60,7 +60,7 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/assets/')) {
       // Content-hashed filenames from site/build.py — safe to cache forever.
       const f = req.path.slice('/assets/'.length);
-      if (/^[\w.\-]+\.(webp|jpg|png|mp3)$/.test(f)) {
+      if (/^[\w.\-]+\.(webp|jpg|png|mp3|mp4)$/.test(f)) {
         res.set('Cache-Control', 'public, max-age=31536000, immutable');
         return res.sendFile(path.join(SITE_DIR, 'assets-dist', f), err => { if (err) res.status(404).end(); });
       }
