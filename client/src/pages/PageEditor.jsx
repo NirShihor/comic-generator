@@ -1242,7 +1242,7 @@ function PageEditor({ isCover = false }) {
       // "find my page by id" path below works unchanged; the server's PUT
       // merge routes an id it doesn't find in pages back to practicePages.
       const practicePage = !isCover && !(response.data.pages || []).some(p => p.id === pageId)
-        ? ((response.data.practicePages || []).find(p => p.id === pageId) || (response.data.reelPages || []).find(p => p.id === pageId))
+        ? ((response.data.practicePages || []).find(p => p.id === pageId) || (response.data.reelPages || []).find(p => p.id === pageId) || (response.data.examplePages || []).find(p => p.id === pageId))
         : null;
       if (practicePage) response.data = { ...response.data, pages: [...(response.data.pages || []), practicePage] };
       setComic(response.data);
@@ -5537,7 +5537,7 @@ function PageEditor({ isCover = false }) {
   const selectedPanelData = panels.find(p => p.id === selectedPanel);
   const snapPoints = getSnapPoints();
 
-  const sortedPages = comic?.pages ? [...comic.pages].filter(p => !p.keyPhraseId && !p.reelLabel).sort((a, b) => a.pageNumber - b.pageNumber) : [];
+  const sortedPages = comic?.pages ? [...comic.pages].filter(p => !p.keyPhraseId && !p.reelLabel && !p.exampleLabel).sort((a, b) => a.pageNumber - b.pageNumber) : [];
   const currentPageIdx = sortedPages.findIndex(p => p.id === pageId);
   const prevPage = currentPageIdx > 0 ? sortedPages[currentPageIdx - 1] : null;
   const nextPage = currentPageIdx < sortedPages.length - 1 ? sortedPages[currentPageIdx + 1] : null;
@@ -5940,22 +5940,22 @@ function PageEditor({ isCover = false }) {
       <div className="page-header">
         <div>
           <a
-            href={`/comic/${id}`}
+            href={page.exampleLabel ? '/marketing?tab=examples' : `/comic/${id}`}
             onClick={async (e) => {
               e.preventDefault();
               if (!confirmLeavePage()) return;
               while (pendingSavesRef.current > 0) await new Promise(r => setTimeout(r, 50));
-              navigate(`/comic/${id}`);
+              navigate(page.exampleLabel ? '/marketing?tab=examples' : `/comic/${id}`);
             }}
             style={{ color: '#888', textDecoration: 'none', marginBottom: '0.5rem', display: 'block', cursor: 'pointer' }}
           >
-            ← Back to {comic.title}
+            ← Back to {page.exampleLabel ? 'Examples' : comic.title}
           </a>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <h1 style={{ margin: 0 }}>
-              {isCover ? 'Cover' : page.keyPhraseId ? 'Practice page' : page.reelLabel ? `Reel page — ${page.reelLabel}` : `Page ${page.pageNumber}`}
+              {isCover ? 'Cover' : page.keyPhraseId ? 'Practice page' : page.reelLabel ? `Reel page — ${page.reelLabel}` : page.exampleLabel ? `Example — ${page.exampleLabel}` : `Page ${page.pageNumber}`}
             </h1>
-            {!isCover && !page.keyPhraseId && !page.reelLabel && sortedPages.length > 0 && (
+            {!isCover && !page.keyPhraseId && !page.reelLabel && !page.exampleLabel && sortedPages.length > 0 && (
               <div style={{ display: 'flex', gap: '0.25rem' }}>
                 <button
                   onClick={async () => {

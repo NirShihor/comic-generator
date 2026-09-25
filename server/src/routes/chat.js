@@ -695,7 +695,8 @@ router.post('/generate-word-forms', async (req, res) => {
       ...(comic.pages || []).flatMap(p => [
         ...(p.bubbles || []),
         ...(p.panels || []).flatMap(panel => panel.bubbles || [])
-      ])
+      ]),
+      ...(comic.examplePages || []).flatMap(p => p.bubbles || [])
     ];
 
     for (const bubble of allBubbles) {
@@ -829,11 +830,12 @@ Return ONLY the JSON object, no other text.`;
         applyForms(panel.bubbles);
       }
     }
+    for (const page of comicObj.examplePages || []) applyForms(page.bubbles);
 
     // Save with atomic update
     await Comic.updateOne(
       { id: comicId },
-      { $set: { pages: comicObj.pages, ...(comicObj.cover && { cover: comicObj.cover }) } }
+      { $set: { pages: comicObj.pages, ...(comicObj.cover && { cover: comicObj.cover }), ...(comicObj.examplePages && { examplePages: comicObj.examplePages }) } }
     );
 
     console.log(`Word forms: generated for ${allForms.size} base forms, updated ${updated} word instances`);

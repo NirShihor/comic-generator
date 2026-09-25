@@ -1,0 +1,600 @@
+{
+ "slug": "meeting-zik",
+ "label": "Meeting Zik",
+ "comic": "LA LLEGADA",
+ "collection": "EL VISITANTE",
+ "image": "example-meeting-zik",
+ "width": 1024,
+ "height": 1536,
+ "publishedAt": "2026-09-25T14:11:55.125Z",
+ "bubbles": [
+  {
+   "x": 0.4499999999999999,
+   "y": 0.06750000000000002,
+   "w": 0.18500000000000005,
+   "h": 0.08166666666666669,
+   "sentences": [
+    {
+     "es": "Soy una chica",
+     "en": "I am a girl.",
+     "g": "Soy una chica also uses 'soy' for 'I am.' The phrase states identity, with 'una' showing that 'chica' is feminine.",
+     "a": "{{AUD_ex-meeting-zik-b1-1}}",
+     "words": [
+      {
+       "t": "Soy",
+       "m": "I am",
+       "b": "ser",
+       "bm": "to be",
+       "a": "{{AUD_ex-meeting-zik-w-soy}}",
+       "ba": "{{AUD_ex-meeting-zik-w-ser}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "soy",
+         "a": "{{AUD_ex-meeting-zik-w-soy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "fui",
+         "a": "{{AUD_ex-meeting-zik-w-fui}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "era",
+         "a": "{{AUD_ex-meeting-zik-w-era}}"
+        },
+        {
+         "label": "Future",
+         "text": "seré",
+         "a": "{{AUD_ex-meeting-zik-w-sere-7ef6bb}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "sería",
+         "a": "{{AUD_ex-meeting-zik-w-seria-d04c57}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sea",
+         "a": "{{AUD_ex-meeting-zik-w-sea}}"
+        },
+        {
+         "label": "Command",
+         "text": "sé",
+         "a": "{{AUD_ex-meeting-zik-w-se-edf401}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "siendo",
+         "a": "{{AUD_ex-meeting-zik-w-siendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sido",
+         "a": "{{AUD_ex-meeting-zik-w-sido}}"
+        }
+       ],
+       "ex": "\"Soy\" is a verb form in this sentence. It is the first person singular present tense of the verb \"ser,\" which means \"to be.\" In this context, \"soy\" translates to \"I am\" in English. \n\nThe conjugation for \"ser\" in the present tense is as follows:\n- yo soy (I am)\n- tú eres (you are)\n- él/ella/usted es (he/she/you formal is)\n- nosotros/nosotras somos (we are)\n- ellos/ellas/ustedes son (they/you all are)\n\nIn the sentence \"Soy una chica,\" \"soy\" establishes the identity of the speaker. It connects the subject \"yo\" (I) with the predicate \"una chica\" (a girl), indicating that the speaker identifies as a girl. This is a simple and direct way to express who someone is."
+      },
+      {
+       "t": "una",
+       "m": "a",
+       "b": "uno",
+       "bm": "a",
+       "a": "{{AUD_ex-meeting-zik-w-una}}",
+       "ba": "{{AUD_ex-meeting-zik-w-uno}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "uno",
+         "a": "{{AUD_ex-meeting-zik-w-uno}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "una",
+         "a": "{{AUD_ex-meeting-zik-w-una}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "unos",
+         "a": "{{AUD_ex-meeting-zik-w-unos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "unas",
+         "a": "{{AUD_ex-meeting-zik-w-unas}}"
+        }
+       ],
+       "ex": "\"Una\" is an indefinite article in Spanish, which translates to \"a\" or \"an\" in English. In this sentence, \"Soy una chica,\" it is used to introduce the noun \"chica,\" meaning \"girl.\" \n\nThe role of \"una\" is to specify that the speaker identifies as one of many girls, rather than a specific girl. It indicates that the speaker is part of a broader category. \n\nIn terms of grammatical function, \"una\" agrees in gender and number with \"chica,\" which is feminine and singular. This agreement is essential in Spanish, as articles must match the nouns they modify."
+      },
+      {
+       "t": "chica",
+       "m": "girl",
+       "b": "chica",
+       "bm": "girl",
+       "a": "{{AUD_ex-meeting-zik-w-chica}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "chico",
+         "a": "{{AUD_ex-meeting-zik-w-chico}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "chica",
+         "a": "{{AUD_ex-meeting-zik-w-chica}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "chicos",
+         "a": "{{AUD_ex-meeting-zik-w-chicos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "chicas",
+         "a": "{{AUD_ex-meeting-zik-w-chicas}}"
+        }
+       ],
+       "ex": "In the sentence \"Soy una chica,\" the word \"chica\" is a noun. It means \"girl\" in English and refers to a female person. Here, \"chica\" is the subject complement that describes the subject \"yo\" (I) after the verb \"soy\" (am).\n\nThe structure of the sentence is typical in Spanish, where the verb \"ser\" (to be) is used to identify or describe the subject. \"Una\" is an indefinite article meaning \"a\" or \"one,\" which indicates that the speaker is identifying herself as one of many girls. \n\nSo, in this context, \"chica\" is essential because it tells us what the speaker is — specifically, that she is a girl."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.39499999999999985,
+   "y": 0.22249999999999998,
+   "w": 0.22750000000000015,
+   "h": 0.07499999999999996,
+   "sentences": [
+    {
+     "es": "Soy Mía.",
+     "en": "I am Mía.",
+     "g": "Soy Mía. uses 'soy' which is the present tense of 'to be' for identity. It's a statement introducing oneself.",
+     "a": "{{AUD_ex-meeting-zik-b2-1}}",
+     "words": [
+      {
+       "t": "Soy",
+       "m": "I am",
+       "b": "ser",
+       "bm": "to be",
+       "a": "{{AUD_ex-meeting-zik-w-soy}}",
+       "ba": "{{AUD_ex-meeting-zik-w-ser}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "soy",
+         "a": "{{AUD_ex-meeting-zik-w-soy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "fui",
+         "a": "{{AUD_ex-meeting-zik-w-fui}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "era",
+         "a": "{{AUD_ex-meeting-zik-w-era}}"
+        },
+        {
+         "label": "Future",
+         "text": "seré",
+         "a": "{{AUD_ex-meeting-zik-w-sere-7ef6bb}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "sería",
+         "a": "{{AUD_ex-meeting-zik-w-seria-d04c57}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sea",
+         "a": "{{AUD_ex-meeting-zik-w-sea}}"
+        },
+        {
+         "label": "Command",
+         "text": "sé",
+         "a": "{{AUD_ex-meeting-zik-w-se-edf401}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "siendo",
+         "a": "{{AUD_ex-meeting-zik-w-siendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sido",
+         "a": "{{AUD_ex-meeting-zik-w-sido}}"
+        }
+       ],
+       "ex": "\"Soy\" is the first-person singular form of the verb \"ser,\" which means \"to be.\" In this sentence, \"Soy\" translates to \"I am.\" It indicates identity, showing who the speaker is.\n\nIn the present tense, the conjugation of \"ser\" is as follows:\n- Yo soy (I am)\n- Tú eres (You are)\n- Él/Ella/Usted es (He/She/You formal is)\n- Nosotros/as somos (We are)\n- Ellos/Ellas/Ustedes son (They/You all are)\n\nIn \"Soy Mía,\" \"Mía\" means \"mine,\" emphasizing that the speaker identifies as Mía. The structure \"Soy [name]\" is a common way to introduce oneself in Spanish. Here, \"Soy\" establishes the speaker's identity clearly and directly."
+      },
+      {
+       "t": "Mía.",
+       "m": "Mia",
+       "b": "",
+       "bm": "mine",
+       "a": "{{AUD_ex-meeting-zik-w-mia-b05737}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "mío",
+         "a": "{{AUD_ex-meeting-zik-w-mio-e7da11}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "mía",
+         "a": "{{AUD_ex-meeting-zik-w-mia-b05737}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "míos",
+         "a": "{{AUD_ex-meeting-zik-w-mios-08ed6d}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "mías",
+         "a": "{{AUD_ex-meeting-zik-w-mias-fcec8b}}"
+        }
+       ],
+       "ex": "In the sentence \"Soy Mía,\" the word \"Mía\" is a proper noun, specifically a name. It functions as a subject complement, which means it describes or identifies the subject \"yo\" (I). \n\nThe verb \"soy\" comes from the infinitive \"ser,\" which means \"to be.\" In the present tense, it conjugates as follows: \n\n- yo soy (I am)\n- tú eres (you are)\n- él/ella es (he/she is)\n- nosotros somos (we are)\n- ellos son (they are)\n\nSo, in this context, \"Mía\" is used to indicate the speaker's name, making it clear who is speaking. The sentence translates directly to \"I am Mía,\" establishing the identity of the speaker."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.45499999999999996,
+   "y": 0.3308333333333333,
+   "w": 0.2,
+   "h": 0.1,
+   "sentences": [
+    {
+     "es": "Mi nombre es Mía.",
+     "en": "My name is Mía.",
+     "g": "Mi nombre es means 'my name is'. Es is the present tense of ser, used for identity.",
+     "a": "{{AUD_ex-meeting-zik-b3-1}}",
+     "words": [
+      {
+       "t": "Mi",
+       "m": "my",
+       "b": "mi",
+       "bm": "my",
+       "a": "{{AUD_ex-meeting-zik-w-mi}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "mi",
+         "a": "{{AUD_ex-meeting-zik-w-mi}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "mi",
+         "a": "{{AUD_ex-meeting-zik-w-mi}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "mis",
+         "a": "{{AUD_ex-meeting-zik-w-mis}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "mis",
+         "a": "{{AUD_ex-meeting-zik-w-mis}}"
+        }
+       ],
+       "ex": "\"Mi\" is a possessive adjective in this sentence. It translates to \"my\" in English and shows ownership. In \"Mi nombre,\" it indicates that the name belongs to the speaker.\n\nIn Spanish, possessive adjectives agree in number and gender with the noun they modify. Since \"nombre\" is a masculine singular noun, \"mi\" is the appropriate form to use here. \n\nSo, in this context, \"mi\" connects the speaker to their name, making it clear that they are introducing themselves."
+      },
+      {
+       "t": "nombre",
+       "m": "name",
+       "b": "nombre",
+       "bm": "name",
+       "a": "{{AUD_ex-meeting-zik-w-nombre}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "nombre",
+         "a": "{{AUD_ex-meeting-zik-w-nombre}}"
+        },
+        {
+         "label": "Plural",
+         "text": "nombres",
+         "a": "{{AUD_ex-meeting-zik-w-nombres}}"
+        }
+       ],
+       "ex": "The word \"nombre\" in this sentence is a noun. It means \"name\" in English and is used to identify or label a person. In the sentence \"Mi nombre es Mía,\" it functions as the subject complement, which means it describes or identifies the subject \"Mi\" (my).\n\nThe sentence structure is straightforward: \"Mi\" is a possessive adjective that shows ownership, and \"nombre\" is the noun that follows, indicating what belongs to \"mi.\" The verb \"es\" connects the subject \"Mi nombre\" with the complement \"Mía,\" establishing that the speaker's name is Mía. \n\nIn summary, \"nombre\" is crucial here as it tells us what the speaker is referring to — their name."
+      },
+      {
+       "t": "es",
+       "m": "is",
+       "b": "ser",
+       "bm": "to be",
+       "a": "{{AUD_ex-meeting-zik-w-es}}",
+       "ba": "{{AUD_ex-meeting-zik-w-ser}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "soy",
+         "a": "{{AUD_ex-meeting-zik-w-soy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "fui",
+         "a": "{{AUD_ex-meeting-zik-w-fui}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "era",
+         "a": "{{AUD_ex-meeting-zik-w-era}}"
+        },
+        {
+         "label": "Future",
+         "text": "seré",
+         "a": "{{AUD_ex-meeting-zik-w-sere-7ef6bb}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "sería",
+         "a": "{{AUD_ex-meeting-zik-w-seria-d04c57}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sea",
+         "a": "{{AUD_ex-meeting-zik-w-sea}}"
+        },
+        {
+         "label": "Command",
+         "text": "sé",
+         "a": "{{AUD_ex-meeting-zik-w-se-edf401}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "siendo",
+         "a": "{{AUD_ex-meeting-zik-w-siendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sido",
+         "a": "{{AUD_ex-meeting-zik-w-sido}}"
+        }
+       ],
+       "ex": "The word \"es\" is a verb in this sentence. It is the third person singular form of the verb \"ser,\" which means \"to be.\" In the present tense, the conjugation of \"ser\" is as follows:\n\n- yo soy\n- tú eres\n- él/ella/usted es\n- nosotros/nosotras somos\n- ellos/ellas/ustedes son\n\nIn the sentence \"Mi nombre es Mía,\" \"es\" connects the subject \"Mi nombre\" (My name) to the complement \"Mía.\" It indicates identity, showing that the name being referred to is \"Mía.\" This is a common structure in Spanish for stating what something is or identifying someone."
+      },
+      {
+       "t": "Mía.",
+       "m": "mine",
+       "b": "mío",
+       "bm": "mine",
+       "a": "{{AUD_ex-meeting-zik-w-mia-b05737}}",
+       "ba": "{{AUD_ex-meeting-zik-w-mio-e7da11}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "mío",
+         "a": "{{AUD_ex-meeting-zik-w-mio-e7da11}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "mía",
+         "a": "{{AUD_ex-meeting-zik-w-mia-b05737}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "míos",
+         "a": "{{AUD_ex-meeting-zik-w-mios-08ed6d}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "mías",
+         "a": "{{AUD_ex-meeting-zik-w-mias-fcec8b}}"
+        }
+       ],
+       "ex": "In the sentence \"Mi nombre es Mía,\" the word \"Mía\" is a proper noun, specifically a name. It functions as the subject complement, which means it describes or identifies the subject, \"mi nombre\" (my name). \n\n\"Mía\" is a feminine singular name, and it agrees in gender with \"nombre,\" which is masculine but here is used to indicate that the name being referred to is \"Mía.\" In Spanish, names often stand alone without an article, so \"Mía\" is presented directly after the verb \"es\" (is) to indicate who the speaker is.\n\nThis sentence structure is common in Spanish for introducing oneself, and \"Mía\" serves to personalize the statement, making it clear that this is the speaker's name."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.14250000000000004,
+   "y": 0.8333333333333335,
+   "w": 0.26,
+   "h": 0.08666666666666667,
+   "sentences": [
+    {
+     "es": "Me llamo Zik.",
+     "en": "My name is Zik.",
+     "g": "Me llamo means 'I call myself', using the reflexive form of the verb llamar. It indicates the speaker's name.",
+     "a": "{{AUD_ex-meeting-zik-b4-1}}",
+     "words": [
+      {
+       "t": "Me",
+       "m": "me",
+       "b": "me",
+       "bm": "me",
+       "a": "{{AUD_ex-meeting-zik-w-me}}",
+       "ex": "In the sentence \"Me llamo Zik,\" the word \"me\" is a reflexive pronoun. It refers back to the subject of the sentence, which is implied to be \"yo\" (I). In this context, \"me\" indicates that the action of the verb is being done to oneself.\n\nThe verb here is \"llamar,\" which means \"to call.\" The infinitive form is \"llamar,\" and in the present tense, it conjugates as follows:\n\n- yo llamo\n- tú llamas\n- él/ella/usted llama\n- nosotros/nosotras llamamos\n- ellos/ellas/ustedes llaman\n\nIn this case, \"me\" is used with the reflexive form \"me llamo,\" meaning \"I call myself.\" So, the sentence translates to \"I call myself Zik,\" which is a common way to say \"My name is Zik\" in Spanish. The reflexive pronoun \"me\" is essential here to convey that you are identifying yourself by that name."
+      },
+      {
+       "t": "llamo",
+       "m": "I call",
+       "b": "llamar",
+       "bm": "to call",
+       "a": "{{AUD_ex-meeting-zik-w-llamo}}",
+       "ba": "{{AUD_ex-meeting-zik-w-llamar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "llamo",
+         "a": "{{AUD_ex-meeting-zik-w-llamo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "llamé",
+         "a": "{{AUD_ex-meeting-zik-w-llame-92f46e}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "llamaba",
+         "a": "{{AUD_ex-meeting-zik-w-llamaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "llamaré",
+         "a": "{{AUD_ex-meeting-zik-w-llamare-dab2ce}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "llamaría",
+         "a": "{{AUD_ex-meeting-zik-w-llamaria-ae0ecb}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "llame",
+         "a": "{{AUD_ex-meeting-zik-w-llame}}"
+        },
+        {
+         "label": "Command",
+         "text": "llama",
+         "a": "{{AUD_ex-meeting-zik-w-llama}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "llamando",
+         "a": "{{AUD_ex-meeting-zik-w-llamando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "llamado",
+         "a": "{{AUD_ex-meeting-zik-w-llamado}}"
+        }
+       ],
+       "ex": "The word \"llamo\" is a verb form in this sentence. It comes from the infinitive verb \"llamar,\" which means \"to call.\" In this context, \"llamo\" is the first-person singular present tense form, meaning \"I call\" or \"I am called.\" \n\nThe full present tense conjugation for \"llamar\" is:\n\n- Yo llamo (I call)\n- Tú llamas (You call)\n- Él/Ella/Usted llama (He/She/You call)\n- Nosotros/as llamamos (We call)\n- Ellos/Ellas/Ustedes llaman (They/You all call)\n\nIn the sentence \"Me llamo Zik,\" \"llamo\" is used reflexively with \"me,\" which refers back to the speaker. Here, \"me\" indicates that the action of calling is directed towards oneself. So, the sentence translates to \"I call myself Zik,\" which is a common way to introduce oneself in Spanish."
+      },
+      {
+       "t": "Zik.",
+       "m": "Zik (name)",
+       "b": "",
+       "bm": "Zik",
+       "a": "{{AUD_ex-meeting-zik-w-zik}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "Zik",
+         "a": "{{AUD_ex-meeting-zik-w-zik}}"
+        },
+        {
+         "label": "Plural",
+         "text": "Ziks",
+         "a": "{{AUD_ex-meeting-zik-w-ziks}}"
+        }
+       ],
+       "ex": "In the sentence \"Me llamo Zik,\" the word \"Zik\" is a proper noun, specifically a name. It serves as the subject of the sentence, indicating who is being referred to. In this context, \"Zik\" is the name of the person speaking.\n\nThe phrase \"Me llamo\" translates to \"I call myself,\" which is a common way to introduce oneself in Spanish. The structure of the sentence emphasizes the name that follows, which is \"Zik.\" So, \"Zik\" is essential for identifying the speaker in this introduction."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.6075,
+   "y": 0.8041666666666667,
+   "w": 0.19499999999999995,
+   "h": 0.07333333333333336,
+   "sentences": [
+    {
+     "es": "Mal…",
+     "en": "Bad…",
+     "g": "Mal is an adverb meaning 'bad'. It's often used alone for emphasis or to express dissatisfaction.",
+     "a": "{{AUD_ex-meeting-zik-b5-1}}",
+     "words": [
+      {
+       "t": "Mal…",
+       "m": "bad",
+       "b": "mal",
+       "bm": "bad",
+       "a": "{{AUD_ex-meeting-zik-w-mal}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "mal",
+         "a": "{{AUD_ex-meeting-zik-w-mal}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "mala",
+         "a": "{{AUD_ex-meeting-zik-w-mala}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "mals",
+         "a": "{{AUD_ex-meeting-zik-w-mals}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "malas",
+         "a": "{{AUD_ex-meeting-zik-w-malas}}"
+        }
+       ],
+       "ex": "The word \"Mal\" in this sentence is an adverb meaning \"bad\" or \"poorly.\" It is used to describe the quality or state of something, but since the sentence is just \"Mal…,\" it suggests a negative feeling or situation without providing further context.\n\nIn Spanish, \"mal\" can also function as an adjective, but in this case, it’s likely being used to express discontent or disappointment. It stands alone, indicating that something is not right or is undesirable. \n\nSo, in this instance, \"Mal\" serves to convey a strong, immediate reaction, possibly to a situation or event that the speaker finds unfavorable."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.8300000000000001,
+   "y": 0.8783333333333332,
+   "w": 0.1349999999999998,
+   "h": 0.08166666666666678,
+   "sentences": [
+    {
+     "es": "Muy mal...",
+     "en": "Very bad...",
+     "g": "Muy mal is an expression used to describe something as very bad. Muy means 'very', and mal means 'bad'.",
+     "a": "{{AUD_ex-meeting-zik-b6-1}}",
+     "words": [
+      {
+       "t": "Muy",
+       "m": "very",
+       "b": "muy",
+       "bm": "very",
+       "a": "{{AUD_ex-meeting-zik-w-muy}}",
+       "ex": "The word \"muy\" is an adverb in this sentence. Its role is to modify the adjective \"mal,\" which means \"bad.\" In Spanish, adverbs like \"muy\" are used to intensify or enhance the meaning of adjectives or other adverbs.\n\nIn the phrase \"muy mal,\" \"muy\" translates to \"very\" in English, indicating a high degree of badness. So, together, \"muy mal\" means \"very bad.\" This construction is common in Spanish to express strong feelings or conditions. \n\nOverall, \"muy\" is essential here because it emphasizes just how bad the situation is being described."
+      },
+      {
+       "t": "mal...",
+       "m": "bad",
+       "b": "mal",
+       "bm": "bad",
+       "a": "{{AUD_ex-meeting-zik-w-mal}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "mal",
+         "a": "{{AUD_ex-meeting-zik-w-mal}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "mala",
+         "a": "{{AUD_ex-meeting-zik-w-mala}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "mals",
+         "a": "{{AUD_ex-meeting-zik-w-mals}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "malas",
+         "a": "{{AUD_ex-meeting-zik-w-malas}}"
+        }
+       ],
+       "ex": "The word \"mal\" in this sentence is an adverb meaning \"bad.\" It describes the quality of something, indicating that it is not good. In this case, \"mal\" is used to intensify the meaning of the word \"muy,\" which means \"very.\" Together, \"muy mal\" translates to \"very bad.\"\n\nAs an adverb, \"mal\" modifies an implied situation or feeling, suggesting that something is in a poor state. It doesn't refer back to a specific noun in this sentence but rather conveys a general sense of negativity. This construction is common in Spanish to express strong disapproval or dissatisfaction."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

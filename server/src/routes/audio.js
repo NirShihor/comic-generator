@@ -156,7 +156,8 @@ function collectUniqueWords(comic) {
   const allBubbles = [
     ...(comic.cover?.bubbles || []),
     ...(comic.pages || []).flatMap(p => p.bubbles || []),
-    ...(comic.practicePages || []).flatMap(p => p.bubbles || [])
+    ...(comic.practicePages || []).flatMap(p => p.bubbles || []),
+    ...(comic.examplePages || []).flatMap(p => p.bubbles || [])
   ];
   for (const bubble of allBubbles) {
     for (const sentence of bubble.sentences || []) {
