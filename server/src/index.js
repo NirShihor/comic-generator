@@ -36,9 +36,15 @@ app.use((req, res, next) => {
       res.set('Cache-Control', 'no-store');
       return res.sendFile(path.join(SITE_DIR, 'privacy.html'));
     }
-    if (req.path === '/learn-spanish-with-comics' || req.path === '/learn-spanish-with-comics.html') {
-      res.set('Cache-Control', 'no-store');
-      return res.sendFile(path.join(SITE_DIR, 'learn-spanish-with-comics.html'));
+    // SEO/content pages: any site/<name>.html is served at its extensionless
+    // URL (and at the .html spelling) — new pages need no server change.
+    const pageMatch = req.path.match(/^\/([\w-]+?)(?:\.html)?$/);
+    if (pageMatch && pageMatch[1] !== 'index' && !pageMatch[1].includes('template')) {
+      const pageFile = path.join(SITE_DIR, `${pageMatch[1]}.html`);
+      if (require('fs').existsSync(pageFile)) {
+        res.set('Cache-Control', 'no-store');
+        return res.sendFile(pageFile);
+      }
     }
     if (req.path === '/favicon.png' || req.path === '/favicon.ico') {
       return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
@@ -54,7 +60,7 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/assets/')) {
       // Content-hashed filenames from site/build.py — safe to cache forever.
       const f = req.path.slice('/assets/'.length);
-      if (/^[\w.\-]+\.(webp|jpg|png)$/.test(f)) {
+      if (/^[\w.\-]+\.(webp|jpg|png|mp3)$/.test(f)) {
         res.set('Cache-Control', 'public, max-age=31536000, immutable');
         return res.sendFile(path.join(SITE_DIR, 'assets-dist', f), err => { if (err) res.status(404).end(); });
       }

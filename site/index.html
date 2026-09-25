@@ -353,9 +353,70 @@
 </head>
 <body>
 
-<header class="wrap">
-  <div class="wordmark"><img src="/assets/logo.d3ff3c45.webp" width="520" height="327" alt="Comigo"></div>
+<style>
+  .site-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 18px; padding: 26px 24px 8px; position: relative;
+  }
+  .site-nav .nav-logo img { height: 135px; width: auto; display: block; }
+  .nav-links { display: flex; align-items: center; gap: 26px; font-family: system-ui, sans-serif; }
+  .nav-links a { color: var(--ink); text-decoration: none; font-weight: 700; font-size: 1.08rem; }
+  .nav-links a:hover { text-decoration: underline; text-underline-offset: 4px; }
+  .nav-links a[aria-current="page"] { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--accent); }
+  .nav-links .nav-cta {
+    background: var(--accent); color: #FFFFFF; border: 3px solid #16182E; border-radius: 12px;
+    padding: 9px 18px; box-shadow: 4px 4px 0 var(--shadow);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .nav-links .nav-cta:hover { text-decoration: none; transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--shadow); }
+  .nav-menu { display: none; }
+  @media (max-width: 800px) {
+    .site-nav { justify-content: center; padding: 0 24px 2px; }
+    .site-nav .nav-logo img { height: 110px; }
+    .nav-links { display: none; }
+    .nav-menu { display: block; position: absolute; top: 8px; right: 20px; font-family: system-ui, sans-serif; }
+    .nav-menu summary {
+      list-style: none; cursor: pointer; width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2.5px solid var(--line); border-radius: 12px; background: var(--card);
+      font-size: 1.2rem; color: var(--ink);
+    }
+    .nav-menu summary::-webkit-details-marker { display: none; }
+    .nav-menu[open] summary { background: var(--accent); color: #FFFFFF; }
+    .nav-menu .menu-panel {
+      position: absolute; right: 0; top: 52px; z-index: 20; min-width: 230px;
+      background: var(--card); border: 3px solid var(--line); border-radius: 14px;
+      box-shadow: 6px 6px 0 var(--shadow); padding: 10px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .nav-menu .menu-panel a {
+      color: var(--ink); text-decoration: none; font-weight: 700; font-size: 1.1rem;
+      padding: 10px 12px; border-radius: 9px; display: block;
+    }
+    .nav-menu .menu-panel a:hover { background: rgba(91, 91, 214, 0.18); }
+    .nav-menu .menu-panel a[aria-current="page"] { color: var(--accent); }
+    .nav-menu .menu-panel .nav-cta { background: var(--accent); color: #FFFFFF; text-align: center; margin-top: 6px; }
+  }
+</style>
+<header class="site-nav">
+  <a class="nav-logo" href="/" aria-label="Comigo home"><img src="/assets/logo.d3ff3c45.webp" width="520" height="327" alt="Comigo"></a>
+  <nav class="nav-links" aria-label="Main">
+    <a href="/" data-nav="index" aria-current="page">Home</a>
+    <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics">How it works</a>
+    <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
+    <a class="nav-cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Get the app</a>
+  </nav>
+  <details class="nav-menu">
+    <summary aria-label="Menu">&#9776;</summary>
+    <nav class="menu-panel" aria-label="Main">
+      <a href="/" data-nav="index" aria-current="page">Home</a>
+      <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics">How it works</a>
+      <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
+      <a class="nav-cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Get the app</a>
+    </nav>
+  </details>
 </header>
+
 
 <section class="hero wrap">
   <div>

@@ -2,28 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Learn Spanish with Comics | Comigo</title>
+<title>Visual Learning and Language Learning: Why Pictures Can Help | Comigo</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Learn Spanish through comics with visual context, spoken dialogue and translations. See how interactive Spanish stories turn reading into language practice.">
-<link rel="canonical" href="https://comigo.net/learn-spanish-with-comics">
+<meta name="description" content="Discover what research says about using pictures, visual context and digital reading to support vocabulary and language learning.">
+<link rel="canonical" href="https://comigo.net/visual-learning-language">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Comigo">
-<meta property="og:title" content="Learn Spanish with Comics | Comigo">
-<meta property="og:description" content="Learn Spanish through comics with visual context, spoken dialogue and translations. See how interactive Spanish stories turn reading into language practice.">
-<meta property="og:url" content="https://comigo.net/learn-spanish-with-comics">
+<meta property="og:title" content="Visual Learning and Language Learning: Why Pictures Can Help | Comigo">
+<meta property="og:description" content="Discover what research says about using pictures, visual context and digital reading to support vocabulary and language learning.">
+<meta property="og:url" content="https://comigo.net/visual-learning-language">
 <meta property="og:image" content="https://comigo.net/og-image.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Learn Spanish with Comics | Comigo">
-<meta name="twitter:description" content="Learn Spanish through comics with visual context, spoken dialogue and translations. See how interactive Spanish stories turn reading into language practice.">
+<meta name="twitter:title" content="Visual Learning and Language Learning: Why Pictures Can Help | Comigo">
+<meta name="twitter:description" content="Discover what research says about using pictures, visual context and digital reading to support vocabulary and language learning.">
 <meta name="twitter:image" content="https://comigo.net/og-image.jpg">
 <link rel="icon" type="image/png" sizes="196x196" href="/favicon.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
-  /* Shares the homepage's design system: same tokens, faces and component
-     shapes (a trimmed copy — the homepage template stays self-contained). */
+  /* Shares the Comigo design system (same tokens and component shapes as the
+     homepage and /learn-spanish-with-comics; each page stays self-contained). */
   :root, :root[data-theme="light"], :root[data-theme="dark"] {
     --paper: #12111C;
     --card: #1C1A2C;
@@ -76,13 +76,11 @@
     .wordmark img { height: 110px; }
   }
 
-  /* hero: text + one framed comic page */
   .hero { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 48px; align-items: center; padding: 40px 0 34px; }
   @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 34px; padding: 28px 0 10px; } }
   .hero .eyebrow { color: var(--muted); display: block; margin-bottom: 14px; }
-  .hero h1 { margin: 0 0 20px; font-size: clamp(2rem, 4.6vw, 3.2rem); }
+  .hero h1 { margin: 0 0 20px; font-size: clamp(2rem, 4.4vw, 3rem); }
   .hero p { max-width: 58ch; margin: 0 0 16px; font-size: 1.06rem; }
-  .hero p strong { color: var(--ink); }
   .page-frame img {
     width: 100%; border: 3px solid var(--line); border-radius: 9px;
     box-shadow: 6px 6px 0 var(--shadow); display: block;
@@ -97,22 +95,47 @@
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
   .cta:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--shadow); }
-  .cta-link { font-family: system-ui, sans-serif; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+  .cta-link { font-family: system-ui, sans-serif; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .cta-link:hover { opacity: 0.75; }
 
   .strip-head { padding: 38px 0 6px; }
   .strip-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
-  .strip-head p { margin: 10px 0 0; color: var(--muted); max-width: 62ch; }
-  .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; padding: 22px 0 10px; }
-  @media (max-width: 800px) { .strip { grid-template-columns: 1fr; } }
-  .panel {
-    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
-    padding: 24px 22px 20px; box-shadow: 6px 6px 0 var(--shadow);
-    display: flex; flex-direction: column; gap: 10px;
+  .prose { padding: 6px 0 0; }
+  .prose p { font-size: 1.04rem; max-width: 66ch; margin-left: 0; }
+
+  /* research citation: quiet, but visible and linked */
+  .source {
+    max-width: 66ch; margin: 20px 0 6px; padding: 14px 18px;
+    background: var(--card); border: 2px solid var(--muted); border-radius: 10px;
+    font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); line-height: 1.5;
   }
-  .panel h3 { margin: 0; font-size: 1.5rem; }
-  .panel p { margin: 0; font-size: 0.98rem; }
-  .panel .glyph { font-size: 1.7rem; line-height: 1; }
+  .source .label { display: block; margin-bottom: 4px; color: var(--accent); }
+  .source a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+
+  .callout {
+    background: var(--deep); color: #FFFFFF; border: 3px solid var(--line); border-radius: 30px;
+    padding: 26px 30px; box-shadow: 7px 7px 0 var(--shadow); max-width: 620px; margin: 26px 0 10px;
+  }
+  .callout p { margin: 0; font-size: 1.12rem; }
+
+  /* the "imagine reading" bubble treatment (a design treatment, not a comic panel) */
+  .quote {
+    display: inline-block; background: #FFFFFF; color: #16182E;
+    border: 3px solid #16182E; border-radius: 26px; padding: 16px 26px;
+    box-shadow: 5px 5px 0 var(--shadow); margin: 8px 0 4px;
+    font-size: 1.3rem; font-weight: 700;
+  }
+  .reveal { margin: 12px 0 0; font-family: system-ui, sans-serif; max-width: 66ch; }
+  .reveal summary {
+    cursor: pointer; list-style: none; display: inline-block;
+    font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--accent); border: 2px solid var(--accent); border-radius: 999px; padding: 4px 12px;
+  }
+  .reveal summary::-webkit-details-marker { display: none; }
+  .reveal[open] summary { background: var(--accent); color: #FFFFFF; }
+  .reveal .en { margin: 12px 0 0; font-family: Charter, Georgia, serif; font-size: 1.05rem; }
+  .reveal .vocab { margin: 8px 0 0; font-size: 0.88rem; color: var(--muted); }
+  .reveal .vocab b { color: var(--ink); }
 
   /* app-style reading stage: the real page with tappable bubbles; tapping
      opens the app's popup (audio + translation) and tints the bubble green */
@@ -157,46 +180,6 @@
   .popup-vocab b { color: #16182E; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-  /* prose + callout */
-  .prose { padding: 6px 0 0; }
-  .prose p { font-size: 1.04rem; max-width: 66ch; margin-left: 0; }
-  .callout {
-    background: var(--deep); color: #FFFFFF; border: 3px solid var(--line); border-radius: 30px;
-    padding: 26px 30px; box-shadow: 7px 7px 0 var(--shadow); max-width: 620px; margin: 26px 0 10px;
-  }
-  .callout p { margin: 0; font-size: 1.12rem; }
-
-  /* read → listen → … flow */
-  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 18px 0 6px; }
-  .flow .step {
-    font-family: system-ui, sans-serif; font-weight: 800; font-size: 0.8rem;
-    text-transform: uppercase; letter-spacing: 0.1em;
-    border: 2px solid var(--line); border-radius: 999px; padding: 6px 14px; background: var(--card);
-  }
-  .flow .arrow { color: var(--muted); font-family: system-ui, sans-serif; }
-  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; padding: 18px 0 8px; }
-  .mode {
-    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
-    padding: 18px 18px 16px; box-shadow: 5px 5px 0 var(--shadow);
-    display: flex; flex-direction: column; gap: 7px;
-  }
-  .mode h3 { margin: 0; font-family: system-ui, sans-serif; font-size: 1.02rem; font-weight: 800; }
-  .mode p { margin: 0; font-size: 0.92rem; color: var(--muted); }
-
-  /* series cards */
-  .series { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 22px 0 14px; }
-  @media (max-width: 800px) { .series { grid-template-columns: 1fr; max-width: 340px; } }
-  .book { display: flex; flex-direction: column; }
-  .book img {
-    width: 100%; border: 3px solid var(--line); border-radius: 8px;
-    box-shadow: 5px 5px 0 var(--shadow); display: block;
-    transition: transform 0.2s ease;
-  }
-  .book:hover img { transform: translateY(-6px); }
-  .book .meta { padding: 12px 2px 0; }
-  .book .t { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.95rem; line-height: 1.25; }
-  .book .g { font-family: Charter, Georgia, serif; font-style: italic; font-size: 0.85rem; color: var(--muted); margin-top: 3px; }
-
   .band { background: var(--band); color: var(--band-text); border-top: 3px solid var(--line); border-bottom: 3px solid var(--line); margin-top: 44px; }
   .band .wrap { padding: 52px 24px; }
   .band h2 { font-size: clamp(1.8rem, 4.4vw, 3rem); margin: 0 0 14px; }
@@ -216,12 +199,9 @@
   @media (max-width: 800px) {
     .wrap { padding-left: 34px; padding-right: 34px; }
     .hero p { font-size: 1.22rem; }
-    .panel p { font-size: 1.13rem; }
-    .mode p { font-size: 1.06rem; }
-    .strip-head p { font-size: 1.15rem; }
-    .band p { font-size: 1.21rem; }
     .prose p { font-size: 1.18rem; }
     .callout p { font-size: 1.18rem; }
+    .band p { font-size: 1.21rem; }
     .cta-row { flex-direction: column; align-items: flex-start; }
     .cta-row .cta { align-self: center; }
   }
@@ -278,16 +258,16 @@
   <a class="nav-logo" href="/" aria-label="Comigo home"><img src="/assets/logo.d3ff3c45.webp" width="520" height="327" alt="Comigo"></a>
   <nav class="nav-links" aria-label="Main">
     <a href="/" data-nav="index">Home</a>
-    <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics" aria-current="page">How it works</a>
-    <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
+    <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics">How it works</a>
+    <a href="/visual-learning-language" data-nav="visual-learning-language" aria-current="page">Why visuals help</a>
     <a class="nav-cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Get the app</a>
   </nav>
   <details class="nav-menu">
     <summary aria-label="Menu">&#9776;</summary>
     <nav class="menu-panel" aria-label="Main">
       <a href="/" data-nav="index">Home</a>
-      <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics" aria-current="page">How it works</a>
-      <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
+      <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics">How it works</a>
+      <a href="/visual-learning-language" data-nav="visual-learning-language" aria-current="page">Why visuals help</a>
       <a class="nav-cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Get the app</a>
     </nav>
   </details>
@@ -296,67 +276,151 @@
 
 <section class="hero wrap">
   <div>
-    <span class="label eyebrow">Learn Spanish with comics</span>
-    <h1 class="display">A picture gives every Spanish sentence a head start.</h1>
+    <span class="label eyebrow">Visual learning &amp; language</span>
+    <h1 class="display">Why pictures can make a new language easier to understand</h1>
+    <p>Before you translate a word, look at what&rsquo;s happening.</p>
     <p>
-      When you can see who is speaking, where they are and what is happening, Spanish
-      stops being a collection of words to decode. The story is already giving you clues.
+      A raised eyebrow. A locked door. An empty glass. Someone running away. Visual
+      information gives language context &mdash; another set of clues that can help you
+      work out what you&rsquo;re reading.
     </p>
     <p>
-      That&rsquo;s the idea behind <strong>Comigo</strong>: original Spanish comics where reading,
-      listening, translation and practice all happen inside the story.
+      But do pictures actually help us learn a language? Research suggests they can &mdash;
+      particularly when visual information is combined with words rather than used as a
+      replacement for them.
     </p>
-    <div class="cta-row">
-      <a class="cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Try Comigo free</a>
-    </div>
   </div>
   <div class="page-frame">
-    <img src="/assets/page-biblioteca3.40a2cb2e.webp" width="550" height="825" alt="A page from La Biblioteca, an original Comigo Spanish comic: a surveillance screen looms over rows of worker robots in a dystopian city.">
+    <img src="/assets/page-colina4.f9fc1091.webp" width="550" height="825" alt="A page from La Casa en la Colina, an original Comigo Spanish comic: in near darkness, a frightened boy and a man with a lighter search an abandoned house.">
   </div>
 </section>
 
 <section class="wrap strip-head">
-  <h2 class="display">You understand more than the words.</h2>
-  <p>
-    In a comic, language doesn&rsquo;t arrive alone. A character&rsquo;s expression, an object
-    they&rsquo;re holding, the place they&rsquo;re standing and what happened in the previous
-    panel all help you make sense of what you&rsquo;re reading.
-  </p>
+  <h2 class="display">Words and pictures can work better together.</h2>
 </section>
-<section class="wrap strip">
-  <div class="panel">
-    <span class="glyph">👀</span>
-    <h3 class="display">See the meaning</h3>
-    <p>Pictures give unfamiliar Spanish context. You can often understand the direction of a sentence before you know every word.</p>
-  </div>
-  <div class="panel">
-    <span class="glyph">🔊</span>
-    <h3 class="display">Hear the language</h3>
-    <p>Reading shows you how Spanish looks. Hearing the same dialogue gives you pronunciation, rhythm and tone.</p>
-  </div>
-  <div class="panel">
-    <span class="glyph">📖</span>
-    <h3 class="display">Want to continue</h3>
-    <p>There&rsquo;s a reason to understand the next sentence: you want to know what happens next. Curiosity becomes part of the learning process.</p>
+<section class="wrap prose">
+  <p>
+    A 2025 meta-analysis examined multimedia second-language vocabulary learning across
+    studies involving 2,056 participants. It compared learning with first-language
+    information, pictures, and combinations of the two.
+  </p>
+  <p>
+    For immediate vocabulary learning, combining first-language words with pictures
+    performed better than using either first-language information or pictures alone. The
+    advantage was less clear in delayed testing, so the research shouldn&rsquo;t be
+    interpreted as saying that adding a picture automatically guarantees better long-term
+    learning.
+  </p>
+  <div class="source">
+    <span class="label">Source</span>
+    Zhang, C., Sala, G. &amp; Gobet, F. (2025), <a href="https://doi.org/10.1016/j.edurev.2025.100681" rel="noopener">Effectiveness of L1 and pictures in multimedia conditions on learning second-language vocabulary: A meta-analysis</a>, Educational Research Review, 47, 100681.
   </div>
 </section>
 
-<section class="wrap strip-head" id="try">
-  <h2 class="display">Try reading this.</h2>
+<section class="wrap strip-head">
+  <h2 class="display">Pictures aren&rsquo;t magic.</h2>
+</section>
+<section class="wrap prose">
   <p>
-    Don&rsquo;t worry about understanding every word. Look at the picture, read the Spanish
-    and see how much you can work out from the scene &mdash; then tap a speech bubble to hear it
-    and check yourself, just as in the app.
+    The research is more interesting than simply saying &ldquo;pictures are better.&rdquo;
+    The same 2025 meta-analysis found no significant difference overall between learning
+    with first-language information alone and learning with pictures alone. The strongest
+    immediate results came from combining the two.
+  </p>
+  <p>
+    That matters. A useful visual shouldn&rsquo;t simply decorate a word. It can become
+    another source of information that works alongside the language.
+  </p>
+</section>
+
+<section class="wrap strip-head">
+  <h2 class="display">A comic gives you more than a picture. It gives you a situation.</h2>
+</section>
+<section class="wrap prose">
+  <p>Imagine reading:</p>
+  <p class="quote" lang="es">No abras la puerta.</p>
+  <p>On its own, you have only the words.</p>
+  <p>
+    Now imagine those words inside a comic panel: one character looks frightened, another
+    is reaching towards a door, and something appears to be waiting outside. Before
+    reaching for a translation, the scene has already started narrowing down what the
+    sentence might mean.
+  </p>
+  <details class="reveal">
+    <summary>Show translation</summary>
+    <p class="en">Don&rsquo;t open the door.</p>
+  </details>
+  <p style="margin-top: 20px;">
+    That&rsquo;s different from simply putting a picture next to a vocabulary word. A story
+    supplies characters, actions, expressions, objects and consequences. The learner is
+    using language inside a situation.
+  </p>
+</section>
+
+<section class="wrap strip-head">
+  <h2 class="display">The words can help you when you need them.</h2>
+</section>
+<section class="wrap prose">
+  <p>
+    Visual context won&rsquo;t always be enough. Sometimes you need to know exactly what a
+    word means. That&rsquo;s where interactive reading can add another layer.
+  </p>
+  <p>
+    A 2024 meta-analysis brought together 21 studies of second- and foreign-language
+    vocabulary learning through digital reading. Overall, digital reading was associated
+    with significant vocabulary-learning effects, although results varied according to
+    factors such as learner proficiency, testing method and the digital resources
+    available.
+  </p>
+  <p>
+    One particularly relevant finding was the usefulness of lexical glosses &mdash;
+    explanations of unfamiliar words available while reading.
+  </p>
+  <div class="source">
+    <span class="label">Source</span>
+    Zhu, T., Zhang, Y. &amp; Irwin, D. (2024), <a href="https://doi.org/10.1007/s10639-023-11969-1" rel="noopener">Second and Foreign Language Vocabulary Learning through Digital Reading: A Meta-Analysis</a>, Education and Information Technologies, 29, 4531&ndash;4563.
+  </div>
+</section>
+
+<section class="wrap strip-head">
+  <h2 class="display">See it. Read it. Hear it. Check it. Keep going.</h2>
+</section>
+<section class="wrap prose">
+  <p>This is the thinking behind Comigo.</p>
+  <p>
+    The comic gives the Spanish a visual situation. The speech bubbles give you the
+    written language. Audio lets you hear the dialogue. Translations and vocabulary help
+    are there when context isn&rsquo;t enough. And the story gives you a reason to keep
+    reading.
+  </p>
+  <div class="callout">
+    <p>
+      Comigo hasn&rsquo;t been the subject of these academic studies, so we don&rsquo;t
+      claim that the research proves Comigo itself is more effective than other ways of
+      learning Spanish. Instead, we&rsquo;ve designed Comigo around several ideas that
+      language-learning research has investigated: contextual reading, multimedia
+      information, listening and accessible vocabulary support.
+    </p>
+  </div>
+</section>
+
+<section class="wrap strip-head">
+  <h2 class="display">How much can you understand before you translate?</h2>
+  <p style="margin: 10px 0 0; color: var(--muted); max-width: 62ch; font-family: Charter, Georgia, serif;">
+    A moment from <i lang="es">La Llegada</i> (El Visitante, episode one). Look at the scene,
+    then tap a speech bubble &mdash; hear the line spoken, and reveal the translation only when you want it. Just as in the app.
   </p>
 </section>
 <section class="wrap stage-wrap">
   <h3 class="display stage-head">Click on a bubble</h3>
   <div class="stage">
-    <img src="/assets/page-carta1.7767753d.jpg" width="550" height="825" alt="The opening page of La Carta Negra: a lone rider crosses the New Mexico desert towards a small town, 1883.">
-    <button class="hotspot" style="left:8.5%;top:0.6%;width:80.5%;height:10%" data-who="Caption" data-es="Territorio de Nuevo México, 1883" data-en="New Mexico Territory, 1883" data-words='[{"t":"Territorio","m":"territory","b":"territorio","bm":"territory","a":"/assets/cw-territorio.38207c0c.mp3"},{"t":"de","m":"of","b":"de","bm":"of","a":"/assets/cw-de.7b68374c.mp3"},{"t":"Nuevo","m":"new","b":"nuevo","bm":"new","a":"/assets/cw-nuevo.01929c57.mp3"},{"t":"México,","m":"mexico","b":"méxico","bm":"mexico","a":"/assets/cw-mexico.01bbc617.mp3"},{"t":"1883","m":"1883","b":"1883","bm":"1883","a":"/assets/cw-1883.77e48803.mp3"}]' data-audio="/assets/carta-b1.6ca277c6.mp3" aria-label="Territorio de Nuevo México, 1883 — tap to hear and translate"></button>
-    <button class="hotspot" style="left:0%;top:6.8%;width:21%;height:17%" data-who="The rider" data-es="Por fin... ya no queda mucho..." data-en="At last... not far now..." data-vocab="<b>por fin</b> — at last &middot; <b>queda</b> — from <i>quedar</i>, to stay / remain" data-words='[{"t":"Por","m":"by/for","b":"por","bm":"by/for","a":"/assets/cw-por.40a56b72.mp3"},{"t":"fin...","m":"end","b":"fin","bm":"end","a":"/assets/cw-fin.7a690c4b.mp3"},{"t":"ya","m":"already","b":"ya","bm":"already","a":"/assets/cw-ya.ac9558e2.mp3"},{"t":"no","m":"no/not","b":"no","bm":"no/not","a":"/assets/cw-no.3db18283.mp3"},{"t":"queda","m":"remains","b":"quedar","bm":"to stay","a":"/assets/cw-queda.157e0344.mp3","ba":"/assets/cw-quedar.4fbf265d.mp3"},{"t":"mucho...","m":"much/a lot","b":"mucho","bm":"much/a lot","a":"/assets/cw-mucho.8e3def30.mp3"}]' data-audio="/assets/carta-b2.d4b0f156.mp3" aria-label="Por fin... ya no queda mucho... — tap to hear and translate"></button>
-    <button class="hotspot" style="left:1.7%;top:35.3%;width:20%;height:14.2%" data-who="The rider" data-es="Puedo verlo..." data-en="I can see it..." data-vocab="<b>puedo</b> — from <i>poder</i>, to be able &middot; <b>verlo</b> — from <i>ver</i>, to see" data-words='[{"t":"Puedo","m":"I can","b":"poder","bm":"to be able","a":"/assets/cw-puedo.31ad733c.mp3","ba":"/assets/cw-poder.1272175a.mp3"},{"t":"verlo...","m":"to see it","b":"ver","bm":"to see","a":"/assets/cw-verlo.7ad4481f.mp3","ba":"/assets/cw-ver.8085c268.mp3"}]' data-audio="/assets/carta-b3.d1dde35a.mp3" aria-label="Puedo verlo... — tap to hear and translate"></button>
-    <button class="hotspot" style="left:41.5%;top:64.5%;width:37%;height:7.2%" data-who="The rider" data-es="Un pueblo pequeño..." data-en="A small town..." data-vocab="<b>pueblo</b> — town &middot; <b>pequeño</b> — small" data-words='[{"t":"Un","m":"a","b":"un","bm":"a","a":"/assets/cw-un.66615f4f.mp3"},{"t":"pueblo","m":"town","b":"pueblo","bm":"town","a":"/assets/cw-pueblo.2652c832.mp3"},{"t":"pequeño...","m":"small","b":"pequeño","bm":"small","a":"/assets/cw-pequeno.1309689c.mp3"}]' data-audio="/assets/carta-b4.9ec0caef.mp3" aria-label="Un pueblo pequeño... — tap to hear and translate"></button>
+    <img src="/assets/page-llegada4.dcc8d03b.webp" width="550" height="825" alt="A page from La Llegada: a girl and a small alien in a spacesuit introduce themselves beside a crashed spaceship.">
+    <button class="hotspot" style="left:43.5%;top:5.3%;width:21.5%;height:11.2%" data-who="Mía" data-es="Soy una chica" data-en="I am a girl." data-vocab="<b>soy</b> — from <i>ser</i>, to be &middot; <b>chica</b> — girl" data-words='[{"t":"Soy","m":"I am","b":"ser","bm":"to be","a":"/assets/lw-soy.3fb3b6b1.mp3","ba":"/assets/lw-ser.38326a6c.mp3"},{"t":"una","m":"a","b":"uno","bm":"a","a":"/assets/lw-una.e88b6eef.mp3","ba":"/assets/lw-uno.824ac6f5.mp3"},{"t":"chica","m":"girl","b":"chica","bm":"girl","a":"/assets/lw-chica.ecd040ed.mp3"}]' data-audio="/assets/llegada-b1.71a901f3.mp3" aria-label="Soy una chica — tap to hear and translate"></button>
+    <button class="hotspot" style="left:38%;top:20.7%;width:25.8%;height:10.5%" data-who="Mía" data-es="Soy Mía." data-en="I am Mía." data-vocab="<b>soy</b> — from <i>ser</i>, to be" data-words='[{"t":"Soy","m":"I am","b":"ser","bm":"to be","a":"/assets/lw-soy.3fb3b6b1.mp3","ba":"/assets/lw-ser.38326a6c.mp3"},{"t":"Mía.","m":"Mia","b":"Mía","bm":"mine","a":"/assets/lw-mia.3ae853c6.mp3"}]' data-audio="/assets/llegada-b2.eacbb476.mp3" aria-label="Soy Mía. — tap to hear and translate"></button>
+    <button class="hotspot" style="left:44%;top:31.6%;width:23%;height:13%" data-who="Mía" data-es="Mi nombre es Mía." data-en="My name is Mía." data-vocab="<b>nombre</b> — name" data-words='[{"t":"Mi","m":"my","b":"mi","bm":"my","a":"/assets/lw-mi.ed24731b.mp3"},{"t":"nombre","m":"name","b":"nombre","bm":"name","a":"/assets/lw-nombre.59fe6350.mp3"},{"t":"es","m":"is","b":"ser","bm":"to be","a":"/assets/lw-es.9bbff8ba.mp3","ba":"/assets/lw-ser.38326a6c.mp3"},{"t":"Mía.","m":"mine","b":"mío","bm":"mine","a":"/assets/lw-mia.3ae853c6.mp3","ba":"/assets/lw-mio.a49a5114.mp3"}]' data-audio="/assets/llegada-b3.8afdb213.mp3" aria-label="Mi nombre es Mía. — tap to hear and translate"></button>
+    <button class="hotspot" style="left:12.8%;top:81.8%;width:29%;height:11.7%" data-who="Zik" data-es="Me llamo Zik." data-en="My name is Zik." data-vocab="<b>llamo</b> — from <i>llamar</i>, to call" data-words='[{"t":"Me","m":"me","b":"me","bm":"me","a":"/assets/lw-me.89f28fbc.mp3"},{"t":"llamo","m":"I call","b":"llamar","bm":"to call","a":"/assets/lw-llamo.5e3a033d.mp3","ba":"/assets/lw-llamar.f42bb017.mp3"},{"t":"Zik.","m":"Zik (name)","b":"Zik","bm":"Zik","a":"/assets/lw-zik.fb3916a7.mp3"}]' data-audio="/assets/llegada-b4.f604d29f.mp3" aria-label="Me llamo Zik. — tap to hear and translate"></button>
+    <button class="hotspot" style="left:59.3%;top:78.9%;width:22.5%;height:10.3%" data-who="Zik" data-es="Mal…" data-en="Bad…" data-vocab="<b>mal</b> — bad" data-words='[{"t":"Mal…","m":"bad","b":"mal","bm":"bad","a":"/assets/lw-mal.80df52fa.mp3"}]' data-audio="/assets/llegada-b5.f8ae138f.mp3" aria-label="Mal… — tap to hear and translate"></button>
+    <button class="hotspot" style="left:81.5%;top:86.3%;width:16.5%;height:11.2%" data-who="Zik" data-es="Muy mal..." data-en="Very bad..." data-vocab="<b>muy</b> — very" data-words='[{"t":"Muy","m":"very","b":"muy","bm":"very","a":"/assets/lw-muy.3f919c37.mp3"},{"t":"mal...","m":"bad","b":"mal","bm":"bad","a":"/assets/lw-mal.80df52fa.mp3"}]' data-audio="/assets/llegada-b6.696a285b.mp3" aria-label="Muy mal... — tap to hear and translate"></button>
     <div class="popup" hidden>
       <button class="popup-x" aria-label="Close">✕</button>
       <div class="popup-who label"></div>
@@ -374,98 +438,19 @@
   </div>
 </section>
 <div class="wrap visually-hidden">
-  <p lang="es">Territorio de Nuevo México, 1883 — New Mexico Territory, 1883. Por fin... ya no queda mucho... — At last... not far now... Puedo verlo... — I can see it... Un pueblo pequeño... — A small town...</p>
+  <p lang="es">Soy una chica — I am a girl. Soy Mía. — I am Mía. Mi nombre es Mía. — My name is Mía. Me llamo Zik. — My name is Zik. Mal… — Bad… Muy mal... — Very bad...</p>
 </div>
-
-<section class="wrap strip-head">
-  <h2 class="display">The picture is doing some of the teaching.</h2>
-</section>
-<section class="wrap prose">
-  <p>
-    Traditional reading practice can leave you reaching for a dictionary every few words.
-    Comics add another source of information: the scene itself.
-  </p>
-  <p>
-    You begin by making a reasonable guess from the picture and the story. When you need
-    help, you check the language. Over time, more of those guesses become understanding.
-  </p>
-  <div class="callout">
-    <p>
-      You don&rsquo;t need to understand every word to understand what&rsquo;s happening.
-      And wanting to understand what&rsquo;s happening gives you a reason to learn the
-      words you don&rsquo;t know.
-    </p>
-  </div>
-  <p><a class="cta-link" href="/visual-learning-language">What does research say about pictures and language learning? &rarr;</a></p>
-</section>
-
-<section class="wrap strip-head">
-  <h2 class="display">In Comigo, the story becomes the lesson.</h2>
-</section>
-<div class="wrap flow" aria-hidden="true">
-  <span class="step">Read</span><span class="arrow">→</span>
-  <span class="step">Listen</span><span class="arrow">→</span>
-  <span class="step">Explore</span><span class="arrow">→</span>
-  <span class="step">Speak</span><span class="arrow">→</span>
-  <span class="step">Practise</span>
-</div>
-<section class="wrap modes">
-  <div class="mode">
-    <h3>Read</h3>
-    <p>Follow the story in Spanish, one bubble at a time.</p>
-  </div>
-  <div class="mode">
-    <h3>Listen</h3>
-    <p>Hear the dialogue spoken with tone and character.</p>
-  </div>
-  <div class="mode">
-    <h3>Explore</h3>
-    <p>Tap unfamiliar words and reveal explanations or translations when you need them.</p>
-  </div>
-  <div class="mode">
-    <h3>Speak</h3>
-    <p>Say the dialogue yourself and practise producing the Spanish, not just recognising it.</p>
-  </div>
-  <div class="mode">
-    <h3>Practise</h3>
-    <p>After the episode, work with the vocabulary and sentences you have just encountered in the story.</p>
-  </div>
-</section>
-
-<section class="wrap strip-head">
-  <h2 class="display">Spanish you actually want to keep reading.</h2>
-  <p>
-    A western. A spy thriller. A dystopian mystery. A time-travel adventure. Comigo uses
-    different kinds of stories so Spanish reading practice doesn&rsquo;t have to feel like
-    textbook reading practice.
-  </p>
-</section>
-<section class="wrap series">
-  <!-- Cards are ready to become links to public sample story pages when those exist. -->
-  <div class="book">
-    <img loading="lazy" decoding="async" src="/assets/carta.f01d9456.webp" width="600" height="900" alt="Cover of El Rey Negro: a gunslinger and a woman in a saloon.">
-    <div class="meta"><div class="t">EL REY NEGRO</div><div class="g">A revenge western.</div></div>
-  </div>
-  <div class="book">
-    <img loading="lazy" decoding="async" src="/assets/llegada.eb493c1a.webp" width="600" height="900" alt="Cover of La Llegada, from the series El Visitante: a little girl beside a small alien in a spacesuit outside a house.">
-    <div class="meta"><div class="t">EL VISITANTE</div><div class="g">An alien houseguest.</div></div>
-  </div>
-  <div class="book">
-    <img loading="lazy" decoding="async" src="/assets/biblioteca.9535da9d.webp" width="600" height="900" alt="Cover of Los Niños en las Sombras: two figures in a dystopian city.">
-    <div class="meta"><div class="t">LOS NIÑOS EN LAS SOMBRAS</div><div class="g">A childless dystopia hides the truth.</div></div>
-  </div>
-</section>
 
 <section class="band">
   <div class="wrap">
-    <h2 class="display">Another chapter. Not another lesson.</h2>
+    <h2 class="display">Put the idea into practice.</h2>
     <p>
-      Start reading Spanish with Comigo. Explore the stories, listen to the characters and
-      discover how much you can understand when Spanish has a story around it.
+      Read an original Spanish comic, use the pictures to follow the story, listen to the
+      characters and ask for help only when you need it.
     </p>
     <div class="cta-row">
       <a class="cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Try Comigo free</a>
-      <a class="cta-link" href="/">Back to Comigo</a>
+      <a class="cta-link" href="/learn-spanish-with-comics">Learn how Comigo uses comics to teach Spanish &rarr;</a>
     </div>
   </div>
 </section>
