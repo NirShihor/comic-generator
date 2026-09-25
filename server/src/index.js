@@ -46,6 +46,15 @@ app.use((req, res, next) => {
         return res.sendFile(pageFile);
       }
     }
+    // Published example pages (built by site/build.py): /examples/<slug>.
+    const exMatch = req.path.match(/^\/examples\/([\w-]+?)(?:\.html)?$/);
+    if (exMatch) {
+      const exFile = path.join(SITE_DIR, 'examples', `${exMatch[1]}.html`);
+      if (require('fs').existsSync(exFile)) {
+        res.set('Cache-Control', 'no-store');
+        return res.sendFile(exFile);
+      }
+    }
     if (req.path === '/favicon.png' || req.path === '/favicon.ico') {
       return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
     }
@@ -80,6 +89,13 @@ app.use((req, res, next) => {
         const lastmod = fsSync.statSync(path.join(SITE_DIR, f)).mtime.toISOString().slice(0, 10);
         return `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`;
       });
+      const exDir = path.join(SITE_DIR, 'examples');
+      if (fsSync.existsSync(exDir)) {
+        for (const f of fsSync.readdirSync(exDir).filter(f => f.endsWith('.html')).sort()) {
+          const lastmod = fsSync.statSync(path.join(exDir, f)).mtime.toISOString().slice(0, 10);
+          entries.push(`  <url><loc>https://comigo.net/examples/${f.replace(/\.html$/, '')}</loc><lastmod>${lastmod}</lastmod></url>`);
+        }
+      }
       res.set('Cache-Control', 'public, max-age=3600');
       return res.type('application/xml').send(
         `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join('\n')}\n</urlset>\n`);

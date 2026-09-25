@@ -280,6 +280,10 @@ const ComicSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
   locked: { type: Boolean, default: true },
   published: { type: Boolean, default: false },
+  // Example comics: made with the full comic toolkit (studio, style, voices…)
+  // but never go to the reader app — each page is an interactive example that
+  // can be published to comigo.net (Marketing → Examples).
+  isExample: { type: Boolean, default: false },
   title: { type: String, required: true },
   titleEn: String,   // optional English title, shown under the Spanish in the reader
   description: String,

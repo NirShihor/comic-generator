@@ -10,6 +10,8 @@ function ComicList() {
   const [newComic, setNewComic] = useState({ title: '', titleEn: '', description: '', level: 'beginner' });
   // When set, the create modal is adding a new episode to this collection.
   const [newComicCollection, setNewComicCollection] = useState(null);
+  // When set, the create modal makes an EXAMPLE comic (pages for comigo.net).
+  const [newComicIsExample, setNewComicIsExample] = useState(false);
   const [collapsedCollections, setCollapsedCollections] = useState({});
   const [renamingComic, setRenamingComic] = useState(null);
   const [renameTitle, setRenameTitle] = useState('');
@@ -20,11 +22,14 @@ function ComicList() {
   const collectionRefs = useRef({});
 
   // Group comics: collections grouped together, standalone comics separate
-  const { collections, standaloneComics } = (() => {
+  const { collections, standaloneComics, exampleComics } = (() => {
     const collectionMap = {};
     const standalone = [];
+    const examples = [];
     for (const comic of comics) {
-      if (comic.collectionId) {
+      if (comic.isExample) {
+        examples.push(comic);
+      } else if (comic.collectionId) {
         if (!collectionMap[comic.collectionId]) {
           collectionMap[comic.collectionId] = {
             id: comic.collectionId,
@@ -41,7 +46,7 @@ function ComicList() {
     for (const col of Object.values(collectionMap)) {
       col.comics.sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0));
     }
-    return { collections: Object.values(collectionMap), standaloneComics: standalone };
+    return { collections: Object.values(collectionMap), standaloneComics: standalone, exampleComics: examples };
   })();
 
   const toggleCollection = (collectionId) => {
@@ -100,6 +105,11 @@ function ComicList() {
     loadComics();
   }, []);
 
+  // ?newExample=1 (from Marketing → Examples) opens the create modal in example mode.
+  useEffect(() => {
+    if (searchParams.get('newExample') === '1') { setNewComicCollection(null); setNewComicIsExample(true); setShowModal(true); }
+  }, []);
+
   // Auto-expand and scroll to collection if ?collection= is in the URL
   useEffect(() => {
     if (highlightCollectionId && collections.length > 0) {
@@ -127,12 +137,13 @@ function ComicList() {
         ? { ...newComic, collectionId: newComicCollection.id,
             collectionTitle: newComicCollection.title,
             episodeNumber: newComicCollection.nextEpisode }
-        : newComic;
+        : newComicIsExample ? { ...newComic, isExample: true } : newComic;
       const response = await api.post('/comics', payload);
       setComics([...comics, response.data]);
       setShowModal(false);
       setNewComic({ title: '', titleEn: '', description: '', level: 'beginner' });
       setNewComicCollection(null);
+      setNewComicIsExample(false);
       navigate(`/comic/${response.data.id}`);
     } catch (error) {
       console.error('Failed to create comic:', error);
@@ -236,10 +247,18 @@ function ComicList() {
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
           <button
             className="btn btn-primary"
-            onClick={() => { setNewComicCollection(null); setShowModal(true); }}
+            onClick={() => { setNewComicCollection(null); setNewComicIsExample(false); setShowModal(true); }}
             style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
           >
             + New Comic
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => { setNewComicCollection(null); setNewComicIsExample(true); setShowModal(true); }}
+            style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+            title="A comic made with every tool, whose pages become interactive examples on comigo.net — never published to the app"
+          >
+            📖 New Example
           </button>
           <button
             className="btn btn-secondary"
@@ -333,15 +352,51 @@ function ComicList() {
         {/* Standalone comics */}
         {standaloneComics.map(comic => renderComicCard(comic, false))}
 
+        {/* Example comics: pages for comigo.net, never published to the app */}
+        <div style={{ border: '2px solid #cbb8ff', borderRadius: '10px', margin: '1.5rem 0', overflow: 'hidden' }}>
+          <div
+            onClick={() => toggleCollection('__examples')}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: '#f3eeff', cursor: 'pointer', userSelect: 'none' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.1rem' }}>{collapsedCollections.__examples ? '\u25B6' : '\u25BC'}</span>
+              <h3 style={{ margin: 0, fontSize: '1rem', color: '#5a3fc0' }}>📖 Examples</h3>
+              <span style={{ fontSize: '0.8rem', color: '#999' }}>
+                ({exampleComics.length} comic{exampleComics.length !== 1 ? 's' : ''}) · pages for comigo.net, never published to the app
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setNewComicCollection(null); setNewComicIsExample(true); setShowModal(true); }}
+              style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff', background: '#6E40F0', border: 'none', borderRadius: '5px', padding: '0.3rem 0.6rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              + New example comic
+            </button>
+          </div>
+          {!collapsedCollections.__examples && (
+            <div style={{ padding: '0.5rem' }}>
+              {exampleComics.length === 0
+                ? <p style={{ color: '#888', margin: '0.5rem' }}>No example comics yet. Make one from scratch with every tool, then publish its pages from Marketing → Examples.</p>
+                : exampleComics.map(comic => renderComicCard(comic, false))}
+            </div>
+          )}
+        </div>
+
         {comics.length === 0 && (
           <p style={{ color: '#888' }}>No comics yet. Create your first one!</p>
         )}
       </div>
 
       {showModal && (
-        <div className="modal-overlay" onClick={() => { setShowModal(false); setNewComicCollection(null); }}>
+        <div className="modal-overlay" onClick={() => { setShowModal(false); setNewComicCollection(null); setNewComicIsExample(false); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>{newComicCollection ? 'New Episode' : 'Create New Comic'}</h2>
+            <h2>{newComicCollection ? 'New Episode' : newComicIsExample ? 'New Example Comic' : 'Create New Comic'}</h2>
+            {newComicIsExample && (
+              <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: '#555' }}>
+                Made with every comic tool — studio, style images, characters, voices — but <strong>never published to the app</strong>.
+                Each page you make can be published to comigo.net as an interactive example from <strong>Marketing → Examples</strong>.
+              </p>
+            )}
             {newComicCollection && (
               <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: '#555' }}>
                 Adding to collection <strong>{newComicCollection.title}</strong> as episode{' '}

@@ -185,7 +185,7 @@ router.get('/notebook', async (req, res) => {
 
 router.get('/catalog', async (req, res) => {
   try {
-    const comics = await Comic.find({ published: true })
+    const comics = await Comic.find({ published: true, isExample: { $ne: true } })
       .sort({ order: 1, createdAt: 1 })
       .lean();
 

@@ -2,29 +2,27 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Learn Spanish with Comics | Comigo</title>
+<title>Meeting Zik — Beginner Spanish Reading Practice | Comigo</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Learn Spanish through comics with visual context, spoken dialogue and translations. See how interactive Spanish stories turn reading into language practice.">
-<link rel="canonical" href="https://comigo.net/learn-spanish-with-comics">
-<meta property="og:type" content="website">
+<meta name="description" content="Read &quot;Meeting Zik&quot;, a beginner Spanish comic page from La llegada. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
+<link rel="canonical" href="https://comigo.net/examples/meeting-zik">
+<meta property="og:type" content="article">
 <meta property="og:site_name" content="Comigo">
-<meta property="og:title" content="Learn Spanish with Comics | Comigo">
-<meta property="og:description" content="Learn Spanish through comics with visual context, spoken dialogue and translations. See how interactive Spanish stories turn reading into language practice.">
-<meta property="og:url" content="https://comigo.net/learn-spanish-with-comics">
+<meta property="og:title" content="Meeting Zik — Beginner Spanish Reading Practice | Comigo">
+<meta property="og:description" content="Read &quot;Meeting Zik&quot;, a beginner Spanish comic page from La llegada. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
+<meta property="og:url" content="https://comigo.net/examples/meeting-zik">
 <meta property="og:image" content="https://comigo.net/og-image.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Learn Spanish with Comics | Comigo">
-<meta name="twitter:description" content="Learn Spanish through comics with visual context, spoken dialogue and translations. See how interactive Spanish stories turn reading into language practice.">
+<meta name="twitter:title" content="Meeting Zik — Beginner Spanish Reading Practice | Comigo">
+<meta name="twitter:description" content="Read &quot;Meeting Zik&quot;, a beginner Spanish comic page from La llegada. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
 <meta name="twitter:image" content="https://comigo.net/og-image.jpg">
 <link rel="icon" type="image/png" sizes="196x196" href="/favicon.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
-  /* Shares the homepage's design system: same tokens, faces and component
-     shapes (a trimmed copy — the homepage template stays self-contained). */
-  :root, :root[data-theme="light"], :root[data-theme="dark"] {
+:root, :root[data-theme="light"], :root[data-theme="dark"] {
     --paper: #12111C;
     --card: #1C1A2C;
     --ink: #ECEBF4;
@@ -68,26 +66,35 @@
     letter-spacing: 0.14em;
   }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
-
-  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 26px 0 8px; }
-  .wordmark img { height: 135px; width: auto; display: block; }
+  .crumbs { padding: 18px 24px 0; font-family: system-ui, sans-serif; font-size: 0.9rem; color: var(--muted); }
+  .crumbs a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  .hero-min { padding: 18px 24px 8px; }
+  .hero-min .eyebrow { color: var(--accent); display: block; margin-bottom: 12px; }
+  .hero-min h1 { margin: 0 0 16px; font-size: clamp(1.9rem, 4vw, 2.7rem); }
+  .hero-min p { max-width: 62ch; margin: 0 0 12px; font-size: 1.06rem; }
+  .strip-head { padding: 34px 24px 6px; }
+  .strip-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
+  .strip-head .eyebrow { color: var(--accent); display: block; margin-bottom: 10px; }
+  .strip-head p { margin: 10px 0 0; color: var(--muted); max-width: 62ch; }
+  .practice { padding: 4px 24px 0; }
+  .practice h3 { font-size: 1.35rem; margin: 30px 0 6px; }
+  .practice .hint-line { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.9rem; margin: 0 0 12px; }
+  .qa { display: flex; flex-direction: column; gap: 10px; max-width: 66ch; }
+  .qa details {
+    background: var(--card); border: 3px solid var(--line); border-radius: 12px;
+    padding: 12px 16px; box-shadow: 4px 4px 0 var(--shadow);
+  }
+  .qa summary { cursor: pointer; font-weight: 700; font-size: 1.08rem; list-style: none; }
+  .qa summary::-webkit-details-marker { display: none; }
+  .qa summary::before { content: "\25B8\FE0E  "; color: var(--accent); }
+  .qa details[open] summary::before { content: "\25BE\FE0E  "; }
+  .qa .ans { margin: 8px 0 0; color: var(--muted); font-size: 1rem; }
+  .stage-note { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.88rem; margin: 0 0 14px; text-align: center; }
   @media (max-width: 800px) {
-    header { justify-content: center; padding: 0 0 2px; }
-    .wordmark img { height: 110px; }
+    .wrap { padding-left: 34px; padding-right: 34px; }
+    .hero-min p, .strip-head p { font-size: 1.18rem; }
+    .qa summary { font-size: 1.12rem; }
   }
-
-  /* hero: text + one framed comic page */
-  .hero { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 48px; align-items: center; padding: 40px 0 34px; }
-  @media (max-width: 800px) { .hero { grid-template-columns: 1fr; gap: 34px; padding: 28px 0 10px; } }
-  .hero .eyebrow { color: var(--muted); display: block; margin-bottom: 14px; }
-  .hero h1 { margin: 0 0 20px; font-size: clamp(2rem, 4.6vw, 3.2rem); }
-  .hero p { max-width: 58ch; margin: 0 0 16px; font-size: 1.06rem; }
-  .hero p strong { color: var(--ink); }
-  .page-frame img {
-    width: 100%; border: 3px solid var(--line); border-radius: 9px;
-    box-shadow: 6px 6px 0 var(--shadow); display: block;
-  }
-
   .cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 26px; }
   .cta {
     font-family: system-ui, sans-serif; font-weight: 800; font-size: 1rem;
@@ -98,71 +105,13 @@
   }
   .cta:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--shadow); }
   .cta-link { font-family: system-ui, sans-serif; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
-  .cta-link:hover { opacity: 0.75; }
-
-  .strip-head { padding: 38px 0 6px; }
-  .strip-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
-  .strip-head p { margin: 10px 0 0; color: var(--muted); max-width: 62ch; }
-  .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; padding: 22px 0 10px; }
-  @media (max-width: 800px) { .strip { grid-template-columns: 1fr; } }
-  .panel {
-    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
-    padding: 24px 22px 20px; box-shadow: 6px 6px 0 var(--shadow);
-    display: flex; flex-direction: column; gap: 10px;
-  }
-  .panel h3 { margin: 0; font-size: 1.5rem; }
-  .panel p { margin: 0; font-size: 0.98rem; }
-  .panel .glyph { font-size: 1.7rem; line-height: 1; }
-
-
-  /* prose + callout */
-  .prose { padding: 6px 0 0; }
-  .prose p { font-size: 1.04rem; max-width: 66ch; margin-left: 0; }
-  .callout {
-    background: var(--deep); color: #FFFFFF; border: 3px solid var(--line); border-radius: 30px;
-    padding: 26px 30px; box-shadow: 7px 7px 0 var(--shadow); max-width: 620px; margin: 26px 0 10px;
-  }
-  .callout p { margin: 0; font-size: 1.12rem; }
-
-  /* read → listen → … flow */
-  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 18px 0 6px; }
-  .flow .step {
-    font-family: system-ui, sans-serif; font-weight: 800; font-size: 0.8rem;
-    text-transform: uppercase; letter-spacing: 0.1em;
-    border: 2px solid var(--line); border-radius: 999px; padding: 6px 14px; background: var(--card);
-  }
-  .flow .arrow { color: var(--muted); font-family: system-ui, sans-serif; }
-  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; padding: 18px 0 8px; }
-  .mode {
-    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
-    padding: 18px 18px 16px; box-shadow: 5px 5px 0 var(--shadow);
-    display: flex; flex-direction: column; gap: 7px;
-  }
-  .mode h3 { margin: 0; font-family: system-ui, sans-serif; font-size: 1.02rem; font-weight: 800; }
-  .mode p { margin: 0; font-size: 0.92rem; color: var(--muted); }
-
-  /* series cards */
-  .series { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 22px 0 14px; }
-  @media (max-width: 800px) { .series { grid-template-columns: 1fr; max-width: 340px; } }
-  .book { display: flex; flex-direction: column; }
-  .book img {
-    width: 100%; border: 3px solid var(--line); border-radius: 8px;
-    box-shadow: 5px 5px 0 var(--shadow); display: block;
-    transition: transform 0.2s ease;
-  }
-  .book:hover img { transform: translateY(-6px); }
-  .book .meta { padding: 12px 2px 0; }
-  .book .t { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.95rem; line-height: 1.25; }
-  .book .g { font-family: Charter, Georgia, serif; font-style: italic; font-size: 0.85rem; color: var(--muted); margin-top: 3px; }
-
   .band { background: var(--band); color: var(--band-text); border-top: 3px solid var(--line); border-bottom: 3px solid var(--line); margin-top: 44px; }
   .band .wrap { padding: 52px 24px; }
   .band h2 { font-size: clamp(1.8rem, 4.4vw, 3rem); margin: 0 0 14px; }
   .band p { max-width: 62ch; margin: 0 0 22px; font-size: 1.05rem; }
   .band .cta { background: #FFFFFF; color: var(--deep); }
   .band .cta-link { color: #FFFFFF; }
-
-  footer { border-top: 3px solid var(--line); }
+  footer { border-top: 3px solid var(--line); margin-top: 48px; }
   footer .wrap {
     display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center;
     justify-content: space-between; padding: 26px 24px 34px;
@@ -170,19 +119,6 @@
   }
   footer a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   footer .links { display: flex; gap: 22px; }
-
-  @media (max-width: 800px) {
-    .wrap { padding-left: 34px; padding-right: 34px; }
-    .hero p { font-size: 1.22rem; }
-    .panel p { font-size: 1.13rem; }
-    .mode p { font-size: 1.06rem; }
-    .strip-head p { font-size: 1.15rem; }
-    .band p { font-size: 1.21rem; }
-    .prose p { font-size: 1.18rem; }
-    .callout p { font-size: 1.18rem; }
-    .cta-row { flex-direction: column; align-items: flex-start; }
-    .cta-row .cta { align-self: center; }
-  }
 </style>
 <script>!function(w,d,s,u){if(w.oaiq)return;var q=function(){q.q.push(arguments)};q.q=[];w.oaiq=q;var j=d.createElement(s);j.async=1;j.src=u;var f=d.getElementsByTagName(s)[0];f.parentNode.insertBefore(j,f)}(window,document,"script","https://bzrcdn.openai.com/sdk/oaiq.min.js");oaiq("init",{pixelId:"TvYodr4Ct4JBQ2GkX5u1gK"});</script>
 </head>
@@ -237,8 +173,8 @@
   <a class="nav-logo" href="/" aria-label="Comigo home"><img src="/assets/logo.d3ff3c45.webp" width="520" height="327" alt="Comigo"></a>
   <nav class="nav-links" aria-label="Main">
     <a href="/" data-nav="index">Home</a>
-    <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics" aria-current="page">How it works</a>
-    <a href="/spanish-reading-practice" data-nav="spanish-reading-practice">Reading practice</a>
+    <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics">How it works</a>
+    <a href="/spanish-reading-practice" data-nav="spanish-reading-practice" aria-current="page">Reading practice</a>
     <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
     <a class="nav-cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Get the app</a>
   </nav>
@@ -246,8 +182,8 @@
     <summary aria-label="Menu">&#9776;</summary>
     <nav class="menu-panel" aria-label="Main">
       <a href="/" data-nav="index">Home</a>
-      <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics" aria-current="page">How it works</a>
-    <a href="/spanish-reading-practice" data-nav="spanish-reading-practice">Reading practice</a>
+      <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics">How it works</a>
+    <a href="/spanish-reading-practice" data-nav="spanish-reading-practice" aria-current="page">Reading practice</a>
       <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
       <a class="nav-cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Get the app</a>
     </nav>
@@ -255,177 +191,116 @@
 </header>
 
 
-<section class="hero wrap">
-  <div>
-    <span class="label eyebrow">Learn Spanish with comics</span>
-    <h1 class="display">A picture gives every Spanish sentence a head start.</h1>
-    <p>
-      When you can see who is speaking, where they are and what is happening, Spanish
-      stops being a collection of words to decode. The story is already giving you clues.
-    </p>
-    <p>
-      That&rsquo;s the idea behind <strong>Comigo</strong>: original Spanish comics where reading,
-      listening, translation and practice all happen inside the story.
-    </p>
-    <div class="cta-row">
-      <a class="cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Try Comigo free</a>
-    </div>
-  </div>
-  <div class="page-frame">
-    <img src="/assets/page-biblioteca3.40a2cb2e.webp" width="550" height="825" alt="A page from La Biblioteca, an original Comigo Spanish comic: a surveillance screen looms over rows of worker robots in a dystopian city.">
-  </div>
-</section>
+<nav class="wrap crumbs" aria-label="Breadcrumb">
+  <a href="/spanish-reading-practice">Reading practice</a> &rsaquo; <span aria-current="page">Meeting Zik</span>
+</nav>
 
-<section class="wrap strip-head">
-  <h2 class="display">You understand more than the words.</h2>
+<section class="wrap hero-min">
+  <span class="label eyebrow">Beginner · Spanish reading practice</span>
+  <h1 class="display">Meeting Zik</h1>
+  <p>A beginner Spanish reading exercise: a real page from <i lang="es">La llegada</i>, from the <i lang="es">El visitante</i> collection &mdash; an original Comigo comic, voiced line by line.</p>
   <p>
-    In a comic, language doesn&rsquo;t arrive alone. A character&rsquo;s expression, an object
-    they&rsquo;re holding, the place they&rsquo;re standing and what happened in the previous
-    panel all help you make sense of what you&rsquo;re reading.
+    Look at the whole page first &mdash; who is there and what is happening? Then read the
+    Spanish. Tap a bubble to hear it, and tap any word for its meaning.
   </p>
 </section>
-<section class="wrap strip">
-  <div class="panel">
-    <span class="glyph">👀</span>
-    <h3 class="display">See the meaning</h3>
-    <p>Pictures give unfamiliar Spanish context. You can often understand the direction of a sentence before you know every word.</p>
-  </div>
-  <div class="panel">
-    <span class="glyph">🔊</span>
-    <h3 class="display">Hear the language</h3>
-    <p>Reading shows you how Spanish looks. Hearing the same dialogue gives you pronunciation, rhythm and tone.</p>
-  </div>
-  <div class="panel">
-    <span class="glyph">📖</span>
-    <h3 class="display">Want to continue</h3>
-    <p>There&rsquo;s a reason to understand the next sentence: you want to know what happens next. Curiosity becomes part of the learning process.</p>
-  </div>
-</section>
 
-<section class="wrap strip-head" id="try">
-  <h2 class="display">Try reading this.</h2>
-  <p>
-    Don&rsquo;t worry about understanding every word. Look at the picture, read the Spanish
-    and see how much you can work out from the scene &mdash; then tap a speech bubble to hear it
-    and check yourself, just as in the app.
-  </p>
-</section>
 <section class="wrap stage-wrap">
   <h3 class="display stage-head">Click on a bubble</h3>
-  <div class="stage" data-ex="a-small-town">
-    <img loading="lazy" decoding="async" src="/assets/example-a-small-town.11ff2274.webp" width="640" height="960" alt="A page from LA CARTA NEGRA (EL REY NEGRO), an original Comigo Spanish comic.">
-    <button class="hotspot" data-i="0" style="left:10.0%;top:2.1%;width:77.5%;height:7.0%" data-caption aria-label="Territorio de Nuevo México, 1883 — tap to hear and explore"></button>
-    <button class="hotspot" data-i="1" style="left:0.0%;top:6.8%;width:20.4%;height:17.0%" aria-label="Por fin... ya no queda mucho... — tap to hear and explore"></button>
-    <button class="hotspot" data-i="2" style="left:2.0%;top:35.3%;width:19.4%;height:14.2%" aria-label="Puedo verlo... — tap to hear and explore"></button>
-    <button class="hotspot" data-i="3" style="left:41.8%;top:64.5%;width:36.4%;height:7.2%" aria-label="Un pueblo pequeño... — tap to hear and explore"></button>
+  <p class="stage-note">Every line is voiced — tap a bubble to listen, tap a word for its meaning.</p>
+  <div class="stage" data-ex="meeting-zik">
+    <img loading="lazy" decoding="async" src="/assets/example-meeting-zik.c67392d4.webp" width="640" height="960" alt="A page from LA LLEGADA (EL VISITANTE), an original Comigo Spanish comic.">
+    <button class="hotspot" data-i="0" style="left:43.8%;top:5.3%;width:20.9%;height:11.2%" aria-label="Soy una chica — tap to hear and explore"></button>
+    <button class="hotspot" data-i="1" style="left:38.3%;top:20.7%;width:25.2%;height:10.5%" aria-label="Soy Mía. — tap to hear and explore"></button>
+    <button class="hotspot" data-i="2" style="left:44.3%;top:31.6%;width:22.4%;height:13.0%" aria-label="Mi nombre es Mía. — tap to hear and explore"></button>
+    <button class="hotspot" data-i="3" style="left:13.1%;top:81.8%;width:28.4%;height:11.7%" aria-label="Me llamo Zik. — tap to hear and explore"></button>
+    <button class="hotspot" data-i="4" style="left:59.6%;top:78.9%;width:21.9%;height:10.3%" aria-label="Mal… — tap to hear and explore"></button>
+    <button class="hotspot" data-i="5" style="left:81.8%;top:86.3%;width:15.9%;height:11.2%" aria-label="Muy mal... — tap to hear and explore"></button>
     <div class="popup" hidden><button class="popup-x" aria-label="Close">✕</button><div class="popup-body"></div></div>
     <div class="ex-sheet" hidden><div class="sh-head"><b></b><button class="sh-done">Done</button></div><div class="sh-body"></div></div>
     <audio preload="none"></audio>
     <div class="hint">👆 Tap a speech bubble</div>
   </div>
-  <script type="application/json" class="ex-data">{"bubbles": [{"x": 0.09999999999999976, "y": 0.021499989827473948, "w": 0.7750000000000001, "h": 0.07, "caption": true, "sentences": [{"es": "Territorio de Nuevo México, 1883", "en": "New Mexico Territory, 1883", "g": "'Territorio de Nuevo México' is a proper noun and includes a time reference with '1883'. This structure indicates a specific place and time.", "a": "/assets/ex-a-small-town-b1-1.6ca277c6.mp3", "words": [{"t": "Territorio", "m": "territory", "b": "territorio", "bm": "territory", "s": 0, "e": 642, "a": "/assets/ex-a-small-town-w-territorio.38207c0c.mp3", "forms": [{"label": "Singular", "text": "territorio", "a": "/assets/ex-a-small-town-w-territorio.38207c0c.mp3"}, {"label": "Plural", "text": "territorios", "a": "/assets/ex-a-small-town-w-territorios.772930ef.mp3"}], "ex": "The word \"territorio\" in this sentence is a noun. It means \"territory\" in English and refers to a defined area of land. In the phrase \"Territorio de Nuevo México,\" it indicates that we are talking about a specific region, which is New Mexico, during the year 1883.\n\nIn this context, \"territorio\" functions as the subject of the phrase, identifying what kind of area is being discussed. It is important because it sets the geographical and historical context for the information that follows. The use of \"territorio\" helps to clarify that we are not just talking about New Mexico in general, but specifically about its status as a territory during that time period."}, {"t": "de", "m": "of", "b": "de", "bm": "of", "s": 695, "e": 801, "a": "/assets/ex-a-small-town-w-de.7b68374c.mp3", "ex": "In the sentence \"Territorio de Nuevo México, 1883,\" the word \"de\" is a preposition. It connects the noun \"Territorio\" (territory) with \"Nuevo México\" (New Mexico), indicating possession or a relationship between the two. In English, this translates to \"of,\" showing that the territory belongs to or is associated with New Mexico.\n\nSo, \"de\" helps clarify that we are talking about the territory specifically designated as New Mexico. Without \"de,\" the phrase would lose that important connection, making it unclear what territory is being referred to."}, {"t": "Nuevo", "m": "new", "b": "nuevo", "bm": "new", "s": 841, "e": 1041, "a": "/assets/ex-a-small-town-w-nuevo.01929c57.mp3", "forms": [{"label": "Masc. sing.", "text": "nuevo", "a": "/assets/ex-a-small-town-w-nuevo.01929c57.mp3"}, {"label": "Fem. sing.", "text": "nueva", "a": "/assets/ex-a-small-town-w-nueva.bd1263be.mp3"}, {"label": "Masc. plural", "text": "nuevos", "a": "/assets/ex-a-small-town-w-nuevos.b3051410.mp3"}, {"label": "Fem. plural", "text": "nuevas", "a": "/assets/ex-a-small-town-w-nuevas.e0ec79cf.mp3"}], "ex": "In this sentence, \"nuevo\" is an adjective that means \"new.\" It describes the noun \"México,\" indicating that this territory is a recent or newly designated area. \n\nIn Spanish, adjectives like \"nuevo\" must agree in gender and number with the nouns they modify. Since \"México\" is masculine and singular, \"nuevo\" is also in its masculine singular form. If it were describing a feminine noun, it would change to \"nueva.\" \n\nSo, in \"Territorio de Nuevo México,\" the phrase translates to \"New Mexico Territory,\" where \"nuevo\" helps convey that this territory is newly established or recognized."}, {"t": "México,", "m": "mexico", "b": "méxico", "bm": "mexico", "s": 1121, "e": 2081, "a": "/assets/ex-a-small-town-w-mexico-bfd01f.01bbc617.mp3", "forms": [{"label": "Singular", "text": "México", "a": "/assets/ex-a-small-town-w-mexico-bfd01f.01bbc617.mp3"}, {"label": "Plural", "text": "Méxicos", "a": "/assets/ex-a-small-town-w-mexicos-e9ffa2.4cfe0a5a.mp3"}], "ex": "In this sentence, \"México\" is a proper noun and refers to the country of Mexico. It is part of the name \"Nuevo México,\" which translates to \"New Mexico\" in English. Here, \"México\" indicates the origin or connection of the territory to the country of Mexico.\n\nThe word \"Nuevo\" functions as an adjective meaning \"new,\" and together they form the name of the territory. The phrase \"Territorio de Nuevo México\" indicates that this area was designated as a territory associated with Mexico, emphasizing its historical context in 1883. \n\nSo, \"México\" is crucial here because it identifies the geographical and cultural link of the territory to the nation of Mexico."}, {"t": "1883", "m": "1883", "b": "1883", "bm": "1883", "s": 2161, "e": 4000, "a": "/assets/ex-a-small-town-w-1883.77e48803.mp3", "forms": [{"label": "Singular", "text": "1883", "a": "/assets/ex-a-small-town-w-1883.77e48803.mp3"}, {"label": "Plural", "text": "1883", "a": "/assets/ex-a-small-town-w-1883.77e48803.mp3"}], "ex": "In the sentence \"Territorio de Nuevo México, 1883,\" the word \"1883\" is a numerical expression that indicates a specific year. It serves as a temporal reference, providing context about when the events or conditions related to \"Territorio de Nuevo México\" are taking place.\n\nHere, \"1883\" functions as a noun, specifically a year, and it helps to situate the historical context of the New Mexico Territory. It tells the reader that the information or events being discussed are relevant to that particular year. This is important for understanding the timeline and significance of the territory during that period."}]}]}, {"x": 0.010000000000000016, "y": 0.0829166666666667, "w": 0.17999999999999994, "h": 0.14, "sentences": [{"es": "Por fin... ya no queda mucho...", "en": "At last... not far now...", "g": "The phrase 'Por fin' means 'At last,' indicating that something has been awaited. 'Ya no queda mucho' uses 'queda' in the present tense to show that it's still ongoing.", "a": "/assets/ex-a-small-town-b2-1.d4b0f156.mp3", "words": [{"t": "Por", "m": "by/for", "b": "por", "bm": "by/for", "s": 0, "e": 159, "a": "/assets/ex-a-small-town-w-por.40a56b72.mp3", "ex": "In this sentence, \"por\" is a preposition. It is used to express a sense of time or a moment when something happens. Here, \"Por fin\" translates to \"At last,\" indicating that the speaker has been waiting for a significant moment or outcome, and it has finally arrived.\n\nThe phrase \"Por fin\" sets a tone of relief or anticipation, suggesting that the speaker is pleased that something they were looking forward to is happening. In this context, \"por\" connects the feeling of finally reaching a point after a wait."}, {"t": "fin...", "m": "end", "b": "fin", "bm": "end", "s": 279, "e": 1278, "a": "/assets/ex-a-small-town-w-fin.7a690c4b.mp3", "forms": [{"label": "Singular", "text": "fin", "a": "/assets/ex-a-small-town-w-fin.7a690c4b.mp3"}, {"label": "Plural", "text": "fines", "a": "/assets/ex-a-small-town-w-fines.03217e31.mp3"}], "ex": "The word \"fin\" in this sentence is a noun that means \"end\" or \"finish.\" In the phrase \"Por fin,\" it translates to \"At last\" or \"Finally,\" indicating a sense of relief or conclusion after a wait or effort.\n\nIn this context, \"fin\" is part of the expression \"por fin,\" which is commonly used to express that something has finally happened or that a long-awaited moment has arrived. It emphasizes the speaker's feelings about reaching a significant point, as seen in \"ya no queda mucho,\" meaning \"not far now.\" The use of \"fin\" here conveys a positive culmination of anticipation."}, {"t": "ya", "m": "already", "b": "ya", "bm": "already", "s": 1318, "e": 1520, "a": "/assets/ex-a-small-town-w-ya.ac9558e2.mp3", "ex": "In this sentence, \"ya\" is an adverb. It translates to \"already\" or \"now\" in English, and it indicates a change in state or situation. Here, it emphasizes that something has reached a certain point or conclusion. \n\nThe phrase \"ya no queda mucho\" translates to \"not far now,\" where \"ya\" signals that the time or distance has changed — it's no longer a long way to go. It adds a sense of relief or finality to the statement, suggesting that the end is near. \n\nOverall, \"ya\" plays a crucial role in conveying the speaker's feeling of progress and anticipation in this context."}, {"t": "no", "m": "no/not", "b": "no", "bm": "no/not", "s": 1547, "e": 1601, "a": "/assets/ex-a-small-town-w-no.3db18283.mp3", "ex": "In this sentence, \"no\" is an adverb that negates the phrase that follows it. It translates to \"not\" in English. Here, it modifies \"queda mucho,\" meaning \"there is much left.\" So, \"ya no queda mucho\" translates to \"there is not much left.\"\n\nThe role of \"no\" is to indicate the absence or negation of something. In this context, it emphasizes that the speaker feels that the remaining distance or effort is minimal. This use of \"no\" helps convey a sense of relief or optimism about nearing the end of a journey or task."}, {"t": "queda", "m": "remains", "b": "quedar", "bm": "to stay", "s": 1654, "e": 1919, "a": "/assets/ex-a-small-town-w-queda.157e0344.mp3", "ba": "/assets/ex-a-small-town-w-quedar.4fbf265d.mp3", "forms": [{"label": "Present", "text": "quedo", "a": "/assets/ex-a-small-town-w-quedo.011ec44d.mp3"}, {"label": "Preterite", "text": "quedé", "a": "/assets/ex-a-small-town-w-quede-bff6bb.e8f9eb01.mp3"}, {"label": "Imperfect", "text": "quedaba", "a": "/assets/ex-a-small-town-w-quedaba.d26e1a07.mp3"}, {"label": "Future", "text": "quedaré", "a": "/assets/ex-a-small-town-w-quedare-c4021d.bea9cf75.mp3"}, {"label": "Conditional", "text": "quedaría", "a": "/assets/ex-a-small-town-w-quedaria-099484.3c1e818a.mp3"}, {"label": "Subjunctive", "text": "quede", "a": "/assets/ex-a-small-town-w-quede.89628293.mp3"}, {"label": "Command", "text": "queda", "a": "/assets/ex-a-small-town-w-queda.157e0344.mp3"}, {"label": "Gerund", "text": "quedando", "a": "/assets/ex-a-small-town-w-quedando.bf23d3d5.mp3"}, {"label": "Past Participle", "text": "quedado", "a": "/assets/ex-a-small-town-w-quedado.b1821abc.mp3"}], "ex": "The word \"queda\" in this sentence is a verb form. It comes from the infinitive \"quedar,\" which means \"to remain\" or \"to be left.\" In this context, \"queda\" is the third-person singular present tense form, indicating something that is still remaining.\n\nHere's a short conjugation table for \"quedar\" in the present tense:\n\n- yo quedo\n- tú quedas\n- él/ella/usted queda\n- nosotros/nosotras quedamos\n- ellos/ellas/ustedes quedan\n\nIn the sentence \"Por fin... ya no queda mucho...\", \"queda\" is used to express that there is not much left to do or to reach. The phrase \"ya no queda mucho\" translates to \"not far now,\" emphasizing that the remaining distance or time is minimal. This gives a sense of relief or anticipation, as it indicates that the end is near."}, {"t": "mucho...", "m": "much/a lot", "b": "mucho", "bm": "much/a lot", "s": 1999, "e": 3040, "a": "/assets/ex-a-small-town-w-mucho.8e3def30.mp3", "forms": [{"label": "Masc. sing.", "text": "mucho", "a": "/assets/ex-a-small-town-w-mucho.8e3def30.mp3"}, {"label": "Fem. sing.", "text": "mucha", "a": "/assets/ex-a-small-town-w-mucha.da34fc29.mp3"}, {"label": "Masc. plural", "text": "muchos", "a": "/assets/ex-a-small-town-w-muchos.3da3d69a.mp3"}, {"label": "Fem. plural", "text": "muchas", "a": "/assets/ex-a-small-town-w-muchas.e040323a.mp3"}], "ex": "In the sentence \"Por fin... ya no queda mucho...\", the word \"mucho\" is an adjective meaning \"much\" or \"a lot.\" Here, it describes the quantity of something that remains, which is implied to be time or distance. \n\nThe phrase \"ya no queda mucho\" translates to \"there is not much left.\" In this context, \"mucho\" modifies the noun that is understood to be \"tiempo\" (time) or \"distancia\" (distance), indicating that there is only a small amount remaining. \n\nAs an adjective, \"mucho\" agrees in number and gender with the noun it modifies, but in this case, it is used in a general sense without a specific noun following it. It conveys a sense of relief that the end is near, which is emphasized by the earlier phrase \"Por fin\" (At last)."}]}]}, {"x": 0.032266392374048936, "y": 0.3683843558537591, "w": 0.17046721525190217, "h": 0.11156462162581514, "sentences": [{"es": "Puedo verlo...", "en": "I can see it...", "g": "'Puedo' is the present tense of 'poder,' meaning 'I can.' The infinitive 'verlo' means 'to see it,' indicating what the speaker can do.", "a": "/assets/ex-a-small-town-b3-1.d1dde35a.mp3", "words": [{"t": "Puedo", "m": "I can", "b": "poder", "bm": "to be able", "s": 0, "e": 241, "a": "/assets/ex-a-small-town-w-puedo.31ad733c.mp3", "ba": "/assets/ex-a-small-town-w-poder.1272175a.mp3", "forms": [{"label": "Present", "text": "puedo", "a": "/assets/ex-a-small-town-w-puedo.31ad733c.mp3"}, {"label": "Preterite", "text": "pude", "a": "/assets/ex-a-small-town-w-pude.a52da72b.mp3"}, {"label": "Imperfect", "text": "podía", "a": "/assets/ex-a-small-town-w-podia-b0bdf7.ea05d78b.mp3"}, {"label": "Future", "text": "podré", "a": "/assets/ex-a-small-town-w-podre-15a714.757f7f7d.mp3"}, {"label": "Conditional", "text": "podría", "a": "/assets/ex-a-small-town-w-podria-3e008c.65af3e21.mp3"}, {"label": "Subjunctive", "text": "pueda", "a": "/assets/ex-a-small-town-w-pueda.eb411789.mp3"}, {"label": "Command", "text": "puede", "a": "/assets/ex-a-small-town-w-puede.1d5af4f8.mp3"}, {"label": "Gerund", "text": "pudiendo", "a": "/assets/ex-a-small-town-w-pudiendo.cc08b542.mp3"}, {"label": "Past Participle", "text": "podido", "a": "/assets/ex-a-small-town-w-podido.788b7d7a.mp3"}], "ex": "\"puedo\" is the first-person singular form of the verb \"poder,\" which means \"to be able to\" or \"can.\" In this sentence, \"Puedo verlo,\" it translates to \"I can see it.\" \n\nThe verb is conjugated in the present tense as follows:  \n- yo puedo  \n- tú puedes  \n- él/ella/usted puede  \n- nosotros/nosotras podemos  \n- ellos/ellas/ustedes pueden  \n\nIn this context, \"puedo\" indicates the speaker's ability or permission to see something. The sentence expresses a current capability, making it clear that the speaker is stating what they can do right now."}, {"t": "verlo...", "m": "to see it", "b": "ver", "bm": "to see", "s": 321, "e": 1521, "a": "/assets/ex-a-small-town-w-verlo.7ad4481f.mp3", "ba": "/assets/ex-a-small-town-w-ver.8085c268.mp3", "forms": [{"label": "Present", "text": "veo", "a": "/assets/ex-a-small-town-w-veo.b00ba1d0.mp3"}, {"label": "Preterite", "text": "vi", "a": "/assets/ex-a-small-town-w-vi.576b2d23.mp3"}, {"label": "Imperfect", "text": "veía", "a": "/assets/ex-a-small-town-w-veia-614122.ba50e302.mp3"}, {"label": "Future", "text": "veré", "a": "/assets/ex-a-small-town-w-vere-26ad8d.7cd5c9cc.mp3"}, {"label": "Conditional", "text": "vería", "a": "/assets/ex-a-small-town-w-veria-ffc767.a289a486.mp3"}, {"label": "Subjunctive", "text": "vea", "a": "/assets/ex-a-small-town-w-vea.679d7625.mp3"}, {"label": "Command", "text": "ve", "a": "/assets/ex-a-small-town-w-ve.6abcd1aa.mp3"}, {"label": "Gerund", "text": "viendo", "a": "/assets/ex-a-small-town-w-viendo.62d4dae9.mp3"}, {"label": "Past Participle", "text": "visto", "a": "/assets/ex-a-small-town-w-visto.52cd5179.mp3"}], "ex": "The word \"verlo\" is an infinitive verb form combined with an object pronoun. The infinitive is \"ver,\" which means \"to see.\" In this sentence, \"verlo\" translates to \"see it,\" where \"lo\" is the object pronoun referring to something specific that can be seen.\n\nIn the sentence \"Puedo verlo,\" the verb \"puedo\" (I can) indicates the ability to perform the action of seeing. The \"lo\" connects the action of seeing to the specific object being seen, making it clear that the speaker can see that particular thing. \n\nIn terms of conjugation, \"ver\" in the present tense is as follows:\n- yo veo (I see)\n- tú ves (you see)\n- él/ella/usted ve (he/she/you see)\n- nosotros/nosotras vemos (we see)\n- ellos/ellas/ustedes ven (they/you all see)\n\nSo, \"verlo\" is functioning as the action of seeing something specific, which is essential for understanding what the speaker is capable of doing."}]}]}, {"x": 0.42999999999999994, "y": 0.6602878686153529, "w": 0.33999999999999997, "h": 0.04166666666666652, "sentences": [{"es": "Un pueblo pequeño...", "en": "A small town...", "g": "The article 'Un' means 'a' and is used for singular, masculine nouns. The adjective 'pequeño' follows the noun 'pueblo' to describe it.", "a": "/assets/ex-a-small-town-b4-1.9ec0caef.mp3", "words": [{"t": "Un", "m": "a", "b": "un", "bm": "a", "s": 0, "e": 80, "a": "/assets/ex-a-small-town-w-un.66615f4f.mp3", "forms": [{"label": "Masc. sing.", "text": "un", "a": "/assets/ex-a-small-town-w-un.66615f4f.mp3"}, {"label": "Fem. sing.", "text": "una", "a": "/assets/ex-a-small-town-w-una.128d4a61.mp3"}, {"label": "Masc. plural", "text": "unos", "a": "/assets/ex-a-small-town-w-unos.0152908f.mp3"}, {"label": "Fem. plural", "text": "unas", "a": "/assets/ex-a-small-town-w-unas.6c910a24.mp3"}], "ex": "The word \"un\" is an indefinite article in Spanish, which translates to \"a\" or \"an\" in English. In the sentence \"Un pueblo pequeño...\", \"un\" is used to introduce a noun, \"pueblo\" (town), indicating that it is one of many towns, not a specific one. \n\n\"Un\" is masculine singular, which matches the masculine noun \"pueblo.\" In Spanish, articles must agree in gender and number with the nouns they modify. Here, \"un\" helps specify that we are talking about \"a small town\" in general, rather than a particular one. \n\nSo, in this context, \"un\" serves to indicate that the speaker is referring to any small town, making it a key part of the sentence's meaning."}, {"t": "pueblo", "m": "town", "b": "pueblo", "bm": "town", "s": 149, "e": 563, "a": "/assets/ex-a-small-town-w-pueblo.2652c832.mp3", "forms": [{"label": "Singular", "text": "pueblo", "a": "/assets/ex-a-small-town-w-pueblo.2652c832.mp3"}, {"label": "Plural", "text": "pueblos", "a": "/assets/ex-a-small-town-w-pueblos.4733a34d.mp3"}], "ex": "The word \"pueblo\" in this sentence is a noun meaning \"town\" or \"village.\" It is the subject of the phrase \"Un pueblo pequeño,\" which translates to \"A small town.\" \n\nIn Spanish, nouns have gender, and \"pueblo\" is masculine. Therefore, it uses the masculine article \"un\" (a) in this context. The adjective \"pequeño\" (small) also agrees in gender and number with \"pueblo,\" which is singular and masculine.\n\nSo, in this sentence, \"pueblo\" is essential because it identifies what is being described: a small town."}, {"t": "pequeño...", "m": "small", "b": "pequeño", "bm": "small", "s": 630, "e": 1364, "a": "/assets/ex-a-small-town-w-pequeno-7cd991.1309689c.mp3", "forms": [{"label": "Masc. sing.", "text": "pequeño", "a": "/assets/ex-a-small-town-w-pequeno-7cd991.1309689c.mp3"}, {"label": "Fem. sing.", "text": "pequeña", "a": "/assets/ex-a-small-town-w-pequena-d95deb.87bb765b.mp3"}, {"label": "Masc. plural", "text": "pequeños", "a": "/assets/ex-a-small-town-w-pequenos-1f71f4.292c5f5a.mp3"}, {"label": "Fem. plural", "text": "pequeñas", "a": "/assets/ex-a-small-town-w-pequenas-5e426f.18c281a4.mp3"}], "ex": "The word \"pequeño\" is an adjective in this sentence. It describes the noun \"pueblo,\" which means \"town.\" In Spanish, adjectives usually come after the noun they modify, but \"pequeño\" is placed before \"pueblo\" here to emphasize its size.\n\nIn this context, \"pequeño\" means \"small,\" indicating that the town is not large. It helps to give a clearer picture of what kind of town is being referred to. So, in the phrase \"Un pueblo pequeño,\" the adjective \"pequeño\" directly modifies \"pueblo,\" providing important information about it."}]}]}]}</script>
+  <script type="application/json" class="ex-data">{"bubbles": [{"x": 0.4499999999999999, "y": 0.06750000000000002, "w": 0.18500000000000005, "h": 0.08166666666666669, "sentences": [{"es": "Soy una chica", "en": "I am a girl.", "g": "Soy una chica also uses 'soy' for 'I am.' The phrase states identity, with 'una' showing that 'chica' is feminine.", "a": "/assets/ex-meeting-zik-b1-1.71a901f3.mp3", "words": [{"t": "Soy", "m": "I am", "b": "ser", "bm": "to be", "s": 0, "e": 316, "a": "/assets/ex-meeting-zik-w-soy.3fb3b6b1.mp3", "ba": "/assets/ex-meeting-zik-w-ser.38326a6c.mp3", "forms": [{"label": "Present", "text": "soy", "a": "/assets/ex-meeting-zik-w-soy.3fb3b6b1.mp3"}, {"label": "Preterite", "text": "fui", "a": "/assets/ex-meeting-zik-w-fui.1f7754d3.mp3"}, {"label": "Imperfect", "text": "era", "a": "/assets/ex-meeting-zik-w-era.1f9e892e.mp3"}, {"label": "Future", "text": "seré", "a": "/assets/ex-meeting-zik-w-sere-7ef6bb.ea170143.mp3"}, {"label": "Conditional", "text": "sería", "a": "/assets/ex-meeting-zik-w-seria-d04c57.62ec3e0d.mp3"}, {"label": "Subjunctive", "text": "sea", "a": "/assets/ex-meeting-zik-w-sea.16500190.mp3"}, {"label": "Command", "text": "sé", "a": "/assets/ex-meeting-zik-w-se-edf401.d9767fdd.mp3"}, {"label": "Gerund", "text": "siendo", "a": "/assets/ex-meeting-zik-w-siendo.9bb546a0.mp3"}, {"label": "Past Participle", "text": "sido", "a": "/assets/ex-meeting-zik-w-sido.a269173b.mp3"}], "ex": "\"Soy\" is a verb form in this sentence. It is the first person singular present tense of the verb \"ser,\" which means \"to be.\" In this context, \"soy\" translates to \"I am\" in English. \n\nThe conjugation for \"ser\" in the present tense is as follows:\n- yo soy (I am)\n- tú eres (you are)\n- él/ella/usted es (he/she/you formal is)\n- nosotros/nosotras somos (we are)\n- ellos/ellas/ustedes son (they/you all are)\n\nIn the sentence \"Soy una chica,\" \"soy\" establishes the identity of the speaker. It connects the subject \"yo\" (I) with the predicate \"una chica\" (a girl), indicating that the speaker identifies as a girl. This is a simple and direct way to express who someone is."}, {"t": "una", "m": "a", "b": "uno", "bm": "a", "s": 396, "e": 636, "a": "/assets/ex-meeting-zik-w-una.e88b6eef.mp3", "ba": "/assets/ex-meeting-zik-w-uno.824ac6f5.mp3", "forms": [{"label": "Masc. sing.", "text": "uno", "a": "/assets/ex-meeting-zik-w-uno.824ac6f5.mp3"}, {"label": "Fem. sing.", "text": "una", "a": "/assets/ex-meeting-zik-w-una.e88b6eef.mp3"}, {"label": "Masc. plural", "text": "unos", "a": "/assets/ex-meeting-zik-w-unos.a052599b.mp3"}, {"label": "Fem. plural", "text": "unas", "a": "/assets/ex-meeting-zik-w-unas.e37ba9aa.mp3"}], "ex": "\"Una\" is an indefinite article in Spanish, which translates to \"a\" or \"an\" in English. In this sentence, \"Soy una chica,\" it is used to introduce the noun \"chica,\" meaning \"girl.\" \n\nThe role of \"una\" is to specify that the speaker identifies as one of many girls, rather than a specific girl. It indicates that the speaker is part of a broader category. \n\nIn terms of grammatical function, \"una\" agrees in gender and number with \"chica,\" which is feminine and singular. This agreement is essential in Spanish, as articles must match the nouns they modify."}, {"t": "chica", "m": "girl", "b": "chica", "bm": "girl", "s": 716, "e": 1276, "a": "/assets/ex-meeting-zik-w-chica.ecd040ed.mp3", "forms": [{"label": "Masc. sing.", "text": "chico", "a": "/assets/ex-meeting-zik-w-chico.818ac651.mp3"}, {"label": "Fem. sing.", "text": "chica", "a": "/assets/ex-meeting-zik-w-chica.ecd040ed.mp3"}, {"label": "Masc. plural", "text": "chicos", "a": "/assets/ex-meeting-zik-w-chicos.4ba0fdcf.mp3"}, {"label": "Fem. plural", "text": "chicas", "a": "/assets/ex-meeting-zik-w-chicas.49fd2b45.mp3"}], "ex": "In the sentence \"Soy una chica,\" the word \"chica\" is a noun. It means \"girl\" in English and refers to a female person. Here, \"chica\" is the subject complement that describes the subject \"yo\" (I) after the verb \"soy\" (am).\n\nThe structure of the sentence is typical in Spanish, where the verb \"ser\" (to be) is used to identify or describe the subject. \"Una\" is an indefinite article meaning \"a\" or \"one,\" which indicates that the speaker is identifying herself as one of many girls. \n\nSo, in this context, \"chica\" is essential because it tells us what the speaker is — specifically, that she is a girl."}]}]}, {"x": 0.39499999999999985, "y": 0.22249999999999998, "w": 0.22750000000000015, "h": 0.07499999999999996, "sentences": [{"es": "Soy Mía.", "en": "I am Mía.", "g": "Soy Mía. uses 'soy' which is the present tense of 'to be' for identity. It's a statement introducing oneself.", "a": "/assets/ex-meeting-zik-b2-1.eacbb476.mp3", "words": [{"t": "Soy", "m": "I am", "b": "ser", "bm": "to be", "s": 0, "e": 160, "a": "/assets/ex-meeting-zik-w-soy.3fb3b6b1.mp3", "ba": "/assets/ex-meeting-zik-w-ser.38326a6c.mp3", "forms": [{"label": "Present", "text": "soy", "a": "/assets/ex-meeting-zik-w-soy.3fb3b6b1.mp3"}, {"label": "Preterite", "text": "fui", "a": "/assets/ex-meeting-zik-w-fui.1f7754d3.mp3"}, {"label": "Imperfect", "text": "era", "a": "/assets/ex-meeting-zik-w-era.1f9e892e.mp3"}, {"label": "Future", "text": "seré", "a": "/assets/ex-meeting-zik-w-sere-7ef6bb.ea170143.mp3"}, {"label": "Conditional", "text": "sería", "a": "/assets/ex-meeting-zik-w-seria-d04c57.62ec3e0d.mp3"}, {"label": "Subjunctive", "text": "sea", "a": "/assets/ex-meeting-zik-w-sea.16500190.mp3"}, {"label": "Command", "text": "sé", "a": "/assets/ex-meeting-zik-w-se-edf401.d9767fdd.mp3"}, {"label": "Gerund", "text": "siendo", "a": "/assets/ex-meeting-zik-w-siendo.9bb546a0.mp3"}, {"label": "Past Participle", "text": "sido", "a": "/assets/ex-meeting-zik-w-sido.a269173b.mp3"}], "ex": "\"Soy\" is the first-person singular form of the verb \"ser,\" which means \"to be.\" In this sentence, \"Soy\" translates to \"I am.\" It indicates identity, showing who the speaker is.\n\nIn the present tense, the conjugation of \"ser\" is as follows:\n- Yo soy (I am)\n- Tú eres (You are)\n- Él/Ella/Usted es (He/She/You formal is)\n- Nosotros/as somos (We are)\n- Ellos/Ellas/Ustedes son (They/You all are)\n\nIn \"Soy Mía,\" \"Mía\" means \"mine,\" emphasizing that the speaker identifies as Mía. The structure \"Soy [name]\" is a common way to introduce oneself in Spanish. Here, \"Soy\" establishes the speaker's identity clearly and directly."}, {"t": "Mía.", "m": "Mia", "b": "", "bm": "mine", "s": 240, "e": 1040, "a": "/assets/ex-meeting-zik-w-mia-b05737.3ae853c6.mp3", "forms": [{"label": "Masc. sing.", "text": "mío", "a": "/assets/ex-meeting-zik-w-mio-e7da11.a49a5114.mp3"}, {"label": "Fem. sing.", "text": "mía", "a": "/assets/ex-meeting-zik-w-mia-b05737.3ae853c6.mp3"}, {"label": "Masc. plural", "text": "míos", "a": "/assets/ex-meeting-zik-w-mios-08ed6d.fede5b2d.mp3"}, {"label": "Fem. plural", "text": "mías", "a": "/assets/ex-meeting-zik-w-mias-fcec8b.ae20e8d9.mp3"}], "ex": "In the sentence \"Soy Mía,\" the word \"Mía\" is a proper noun, specifically a name. It functions as a subject complement, which means it describes or identifies the subject \"yo\" (I). \n\nThe verb \"soy\" comes from the infinitive \"ser,\" which means \"to be.\" In the present tense, it conjugates as follows: \n\n- yo soy (I am)\n- tú eres (you are)\n- él/ella es (he/she is)\n- nosotros somos (we are)\n- ellos son (they are)\n\nSo, in this context, \"Mía\" is used to indicate the speaker's name, making it clear who is speaking. The sentence translates directly to \"I am Mía,\" establishing the identity of the speaker."}]}]}, {"x": 0.45499999999999996, "y": 0.3308333333333333, "w": 0.2, "h": 0.1, "sentences": [{"es": "Mi nombre es Mía.", "en": "My name is Mía.", "g": "Mi nombre es means 'my name is'. Es is the present tense of ser, used for identity.", "a": "/assets/ex-meeting-zik-b3-1.8afdb213.mp3", "words": [{"t": "Mi", "m": "my", "b": "mi", "bm": "my", "s": 0, "e": 160, "a": "/assets/ex-meeting-zik-w-mi.ed24731b.mp3", "forms": [{"label": "Masc. sing.", "text": "mi", "a": "/assets/ex-meeting-zik-w-mi.ed24731b.mp3"}, {"label": "Fem. sing.", "text": "mi", "a": "/assets/ex-meeting-zik-w-mi.ed24731b.mp3"}, {"label": "Masc. plural", "text": "mis", "a": "/assets/ex-meeting-zik-w-mis.d8033fe2.mp3"}, {"label": "Fem. plural", "text": "mis", "a": "/assets/ex-meeting-zik-w-mis.d8033fe2.mp3"}], "ex": "\"Mi\" is a possessive adjective in this sentence. It translates to \"my\" in English and shows ownership. In \"Mi nombre,\" it indicates that the name belongs to the speaker.\n\nIn Spanish, possessive adjectives agree in number and gender with the noun they modify. Since \"nombre\" is a masculine singular noun, \"mi\" is the appropriate form to use here. \n\nSo, in this context, \"mi\" connects the speaker to their name, making it clear that they are introducing themselves."}, {"t": "nombre", "m": "name", "b": "nombre", "bm": "name", "s": 251, "e": 797, "a": "/assets/ex-meeting-zik-w-nombre.59fe6350.mp3", "forms": [{"label": "Singular", "text": "nombre", "a": "/assets/ex-meeting-zik-w-nombre.59fe6350.mp3"}, {"label": "Plural", "text": "nombres", "a": "/assets/ex-meeting-zik-w-nombres.189f8aae.mp3"}], "ex": "The word \"nombre\" in this sentence is a noun. It means \"name\" in English and is used to identify or label a person. In the sentence \"Mi nombre es Mía,\" it functions as the subject complement, which means it describes or identifies the subject \"Mi\" (my).\n\nThe sentence structure is straightforward: \"Mi\" is a possessive adjective that shows ownership, and \"nombre\" is the noun that follows, indicating what belongs to \"mi.\" The verb \"es\" connects the subject \"Mi nombre\" with the complement \"Mía,\" establishing that the speaker's name is Mía. \n\nIn summary, \"nombre\" is crucial here as it tells us what the speaker is referring to — their name."}, {"t": "es", "m": "is", "b": "ser", "bm": "to be", "s": 1010, "e": 1436, "a": "/assets/ex-meeting-zik-w-es.9bbff8ba.mp3", "ba": "/assets/ex-meeting-zik-w-ser.38326a6c.mp3", "forms": [{"label": "Present", "text": "soy", "a": "/assets/ex-meeting-zik-w-soy.3fb3b6b1.mp3"}, {"label": "Preterite", "text": "fui", "a": "/assets/ex-meeting-zik-w-fui.1f7754d3.mp3"}, {"label": "Imperfect", "text": "era", "a": "/assets/ex-meeting-zik-w-era.1f9e892e.mp3"}, {"label": "Future", "text": "seré", "a": "/assets/ex-meeting-zik-w-sere-7ef6bb.ea170143.mp3"}, {"label": "Conditional", "text": "sería", "a": "/assets/ex-meeting-zik-w-seria-d04c57.62ec3e0d.mp3"}, {"label": "Subjunctive", "text": "sea", "a": "/assets/ex-meeting-zik-w-sea.16500190.mp3"}, {"label": "Command", "text": "sé", "a": "/assets/ex-meeting-zik-w-se-edf401.d9767fdd.mp3"}, {"label": "Gerund", "text": "siendo", "a": "/assets/ex-meeting-zik-w-siendo.9bb546a0.mp3"}, {"label": "Past Participle", "text": "sido", "a": "/assets/ex-meeting-zik-w-sido.a269173b.mp3"}], "ex": "The word \"es\" is a verb in this sentence. It is the third person singular form of the verb \"ser,\" which means \"to be.\" In the present tense, the conjugation of \"ser\" is as follows:\n\n- yo soy\n- tú eres\n- él/ella/usted es\n- nosotros/nosotras somos\n- ellos/ellas/ustedes son\n\nIn the sentence \"Mi nombre es Mía,\" \"es\" connects the subject \"Mi nombre\" (My name) to the complement \"Mía.\" It indicates identity, showing that the name being referred to is \"Mía.\" This is a common structure in Spanish for stating what something is or identifying someone."}, {"t": "Mía.", "m": "mine", "b": "mío", "bm": "mine", "s": 1716, "e": 2396, "a": "/assets/ex-meeting-zik-w-mia-b05737.3ae853c6.mp3", "ba": "/assets/ex-meeting-zik-w-mio-e7da11.a49a5114.mp3", "forms": [{"label": "Masc. sing.", "text": "mío", "a": "/assets/ex-meeting-zik-w-mio-e7da11.a49a5114.mp3"}, {"label": "Fem. sing.", "text": "mía", "a": "/assets/ex-meeting-zik-w-mia-b05737.3ae853c6.mp3"}, {"label": "Masc. plural", "text": "míos", "a": "/assets/ex-meeting-zik-w-mios-08ed6d.fede5b2d.mp3"}, {"label": "Fem. plural", "text": "mías", "a": "/assets/ex-meeting-zik-w-mias-fcec8b.ae20e8d9.mp3"}], "ex": "In the sentence \"Mi nombre es Mía,\" the word \"Mía\" is a proper noun, specifically a name. It functions as the subject complement, which means it describes or identifies the subject, \"mi nombre\" (my name). \n\n\"Mía\" is a feminine singular name, and it agrees in gender with \"nombre,\" which is masculine but here is used to indicate that the name being referred to is \"Mía.\" In Spanish, names often stand alone without an article, so \"Mía\" is presented directly after the verb \"es\" (is) to indicate who the speaker is.\n\nThis sentence structure is common in Spanish for introducing oneself, and \"Mía\" serves to personalize the statement, making it clear that this is the speaker's name."}]}]}, {"x": 0.14250000000000004, "y": 0.8333333333333335, "w": 0.26, "h": 0.08666666666666667, "sentences": [{"es": "Me llamo Zik.", "en": "My name is Zik.", "g": "Me llamo means 'I call myself', using the reflexive form of the verb llamar. It indicates the speaker's name.", "a": "/assets/ex-meeting-zik-b4-1.f604d29f.mp3", "words": [{"t": "Me", "m": "me", "b": "me", "bm": "me", "s": 0, "e": 160, "a": "/assets/ex-meeting-zik-w-me.89f28fbc.mp3", "ex": "In the sentence \"Me llamo Zik,\" the word \"me\" is a reflexive pronoun. It refers back to the subject of the sentence, which is implied to be \"yo\" (I). In this context, \"me\" indicates that the action of the verb is being done to oneself.\n\nThe verb here is \"llamar,\" which means \"to call.\" The infinitive form is \"llamar,\" and in the present tense, it conjugates as follows:\n\n- yo llamo\n- tú llamas\n- él/ella/usted llama\n- nosotros/nosotras llamamos\n- ellos/ellas/ustedes llaman\n\nIn this case, \"me\" is used with the reflexive form \"me llamo,\" meaning \"I call myself.\" So, the sentence translates to \"I call myself Zik,\" which is a common way to say \"My name is Zik\" in Spanish. The reflexive pronoun \"me\" is essential here to convey that you are identifying yourself by that name."}, {"t": "llamo", "m": "I call", "b": "llamar", "bm": "to call", "s": 213, "e": 559, "a": "/assets/ex-meeting-zik-w-llamo.5e3a033d.mp3", "ba": "/assets/ex-meeting-zik-w-llamar.f42bb017.mp3", "forms": [{"label": "Present", "text": "llamo", "a": "/assets/ex-meeting-zik-w-llamo.5e3a033d.mp3"}, {"label": "Preterite", "text": "llamé", "a": "/assets/ex-meeting-zik-w-llame-92f46e.c120ffc1.mp3"}, {"label": "Imperfect", "text": "llamaba", "a": "/assets/ex-meeting-zik-w-llamaba.fd972cc1.mp3"}, {"label": "Future", "text": "llamaré", "a": "/assets/ex-meeting-zik-w-llamare-dab2ce.7f652dee.mp3"}, {"label": "Conditional", "text": "llamaría", "a": "/assets/ex-meeting-zik-w-llamaria-ae0ecb.c1f6f922.mp3"}, {"label": "Subjunctive", "text": "llame", "a": "/assets/ex-meeting-zik-w-llame.ddbb2cef.mp3"}, {"label": "Command", "text": "llama", "a": "/assets/ex-meeting-zik-w-llama.58512269.mp3"}, {"label": "Gerund", "text": "llamando", "a": "/assets/ex-meeting-zik-w-llamando.431d8062.mp3"}, {"label": "Past Participle", "text": "llamado", "a": "/assets/ex-meeting-zik-w-llamado.0c716f90.mp3"}], "ex": "The word \"llamo\" is a verb form in this sentence. It comes from the infinitive verb \"llamar,\" which means \"to call.\" In this context, \"llamo\" is the first-person singular present tense form, meaning \"I call\" or \"I am called.\" \n\nThe full present tense conjugation for \"llamar\" is:\n\n- Yo llamo (I call)\n- Tú llamas (You call)\n- Él/Ella/Usted llama (He/She/You call)\n- Nosotros/as llamamos (We call)\n- Ellos/Ellas/Ustedes llaman (They/You all call)\n\nIn the sentence \"Me llamo Zik,\" \"llamo\" is used reflexively with \"me,\" which refers back to the speaker. Here, \"me\" indicates that the action of calling is directed towards oneself. So, the sentence translates to \"I call myself Zik,\" which is a common way to introduce oneself in Spanish."}, {"t": "Zik.", "m": "Zik (name)", "b": "", "bm": "Zik", "a": "/assets/ex-meeting-zik-w-zik.fb3916a7.mp3", "forms": [{"label": "Singular", "text": "Zik", "a": "/assets/ex-meeting-zik-w-zik.fb3916a7.mp3"}, {"label": "Plural", "text": "Ziks", "a": "/assets/ex-meeting-zik-w-ziks.e9046b52.mp3"}], "ex": "In the sentence \"Me llamo Zik,\" the word \"Zik\" is a proper noun, specifically a name. It serves as the subject of the sentence, indicating who is being referred to. In this context, \"Zik\" is the name of the person speaking.\n\nThe phrase \"Me llamo\" translates to \"I call myself,\" which is a common way to introduce oneself in Spanish. The structure of the sentence emphasizes the name that follows, which is \"Zik.\" So, \"Zik\" is essential for identifying the speaker in this introduction."}]}]}, {"x": 0.6075, "y": 0.8041666666666667, "w": 0.19499999999999995, "h": 0.07333333333333336, "sentences": [{"es": "Mal…", "en": "Bad…", "g": "Mal is an adverb meaning 'bad'. It's often used alone for emphasis or to express dissatisfaction.", "a": "/assets/ex-meeting-zik-b5-1.f8ae138f.mp3", "words": [{"t": "Mal…", "m": "bad", "b": "mal", "bm": "bad", "s": 0, "e": 714, "a": "/assets/ex-meeting-zik-w-mal.80df52fa.mp3", "forms": [{"label": "Masc. sing.", "text": "mal", "a": "/assets/ex-meeting-zik-w-mal.80df52fa.mp3"}, {"label": "Fem. sing.", "text": "mala", "a": "/assets/ex-meeting-zik-w-mala.ec0e3653.mp3"}, {"label": "Masc. plural", "text": "mals", "a": "/assets/ex-meeting-zik-w-mals.368cb2d5.mp3"}, {"label": "Fem. plural", "text": "malas", "a": "/assets/ex-meeting-zik-w-malas.91cd517a.mp3"}], "ex": "The word \"Mal\" in this sentence is an adverb meaning \"bad\" or \"poorly.\" It is used to describe the quality or state of something, but since the sentence is just \"Mal…,\" it suggests a negative feeling or situation without providing further context.\n\nIn Spanish, \"mal\" can also function as an adjective, but in this case, it’s likely being used to express discontent or disappointment. It stands alone, indicating that something is not right or is undesirable. \n\nSo, in this instance, \"Mal\" serves to convey a strong, immediate reaction, possibly to a situation or event that the speaker finds unfavorable."}]}]}, {"x": 0.8300000000000001, "y": 0.8783333333333332, "w": 0.1349999999999998, "h": 0.08166666666666678, "sentences": [{"es": "Muy mal...", "en": "Very bad...", "g": "Muy mal is an expression used to describe something as very bad. Muy means 'very', and mal means 'bad'.", "a": "/assets/ex-meeting-zik-b6-1.696a285b.mp3", "words": [{"t": "Muy", "m": "very", "b": "muy", "bm": "very", "s": 0, "e": 476, "a": "/assets/ex-meeting-zik-w-muy.3f919c37.mp3", "ex": "The word \"muy\" is an adverb in this sentence. Its role is to modify the adjective \"mal,\" which means \"bad.\" In Spanish, adverbs like \"muy\" are used to intensify or enhance the meaning of adjectives or other adverbs.\n\nIn the phrase \"muy mal,\" \"muy\" translates to \"very\" in English, indicating a high degree of badness. So, together, \"muy mal\" means \"very bad.\" This construction is common in Spanish to express strong feelings or conditions. \n\nOverall, \"muy\" is essential here because it emphasizes just how bad the situation is being described."}, {"t": "mal...", "m": "bad", "b": "mal", "bm": "bad", "s": 696, "e": 1515, "a": "/assets/ex-meeting-zik-w-mal.80df52fa.mp3", "forms": [{"label": "Masc. sing.", "text": "mal", "a": "/assets/ex-meeting-zik-w-mal.80df52fa.mp3"}, {"label": "Fem. sing.", "text": "mala", "a": "/assets/ex-meeting-zik-w-mala.ec0e3653.mp3"}, {"label": "Masc. plural", "text": "mals", "a": "/assets/ex-meeting-zik-w-mals.368cb2d5.mp3"}, {"label": "Fem. plural", "text": "malas", "a": "/assets/ex-meeting-zik-w-malas.91cd517a.mp3"}], "ex": "The word \"mal\" in this sentence is an adverb meaning \"bad.\" It describes the quality of something, indicating that it is not good. In this case, \"mal\" is used to intensify the meaning of the word \"muy,\" which means \"very.\" Together, \"muy mal\" translates to \"very bad.\"\n\nAs an adverb, \"mal\" modifies an implied situation or feeling, suggesting that something is in a poor state. It doesn't refer back to a specific noun in this sentence but rather conveys a general sense of negativity. This construction is common in Spanish to express strong disapproval or dissatisfaction."}]}]}]}</script>
 </section>
-<div class="wrap visually-hidden"><p lang="es">Territorio de Nuevo México, 1883 — New Mexico Territory, 1883 Por fin... ya no queda mucho... — At last... not far now... Puedo verlo... — I can see it... Un pueblo pequeño... — A small town...</p></div>
-<section class="wrap" style="text-align: center; padding-top: 4px;">
-  <a class="cta-link" href="/spanish-reading-practice">Try Spanish reading practice with a real comic &rarr;</a>
-</section>
-<div class="wrap visually-hidden">
-  <p lang="es">Territorio de Nuevo México, 1883 — New Mexico Territory, 1883. Por fin... ya no queda mucho... — At last... not far now... Puedo verlo... — I can see it... Un pueblo pequeño... — A small town...</p>
-</div>
+<div class="wrap visually-hidden"><p lang="es">Soy una chica — I am a girl. Soy Mía. — I am Mía. Mi nombre es Mía. — My name is Mía. Me llamo Zik. — My name is Zik. Mal… — Bad… Muy mal... — Very bad...</p></div>
 
-<section class="wrap strip-head">
-  <h2 class="display">The picture is doing some of the teaching.</h2>
-</section>
-<section class="wrap prose">
-  <p>
-    Traditional reading practice can leave you reaching for a dictionary every few words.
-    Comics add another source of information: the scene itself.
-  </p>
-  <p>
-    You begin by making a reasonable guess from the picture and the story. When you need
-    help, you check the language. Over time, more of those guesses become understanding.
-  </p>
-  <div class="callout">
-    <p>
-      You don&rsquo;t need to understand every word to understand what&rsquo;s happening.
-      And wanting to understand what&rsquo;s happening gives you a reason to learn the
-      words you don&rsquo;t know.
-    </p>
-  </div>
-  <p><a class="cta-link" href="/visual-learning-language">What does research say about pictures and language learning? &rarr;</a></p>
-</section>
-
-<section class="wrap strip-head">
-  <h2 class="display">In Comigo, the story becomes the lesson.</h2>
-</section>
-<div class="wrap flow" aria-hidden="true">
-  <span class="step">Read</span><span class="arrow">→</span>
-  <span class="step">Listen</span><span class="arrow">→</span>
-  <span class="step">Explore</span><span class="arrow">→</span>
-  <span class="step">Speak</span><span class="arrow">→</span>
-  <span class="step">Practise</span>
-</div>
-<section class="wrap modes">
-  <div class="mode">
-    <h3>Read</h3>
-    <p>Follow the story in Spanish, one bubble at a time.</p>
-  </div>
-  <div class="mode">
-    <h3>Listen</h3>
-    <p>Hear the dialogue spoken with tone and character.</p>
-  </div>
-  <div class="mode">
-    <h3>Explore</h3>
-    <p>Tap unfamiliar words and reveal explanations or translations when you need them.</p>
-  </div>
-  <div class="mode">
-    <h3>Speak</h3>
-    <p>Say the dialogue yourself and practise producing the Spanish, not just recognising it.</p>
-  </div>
-  <div class="mode">
-    <h3>Practise</h3>
-    <p>After the episode, work with the vocabulary and sentences you have just encountered in the story.</p>
-  </div>
-</section>
-
-<section class="wrap strip-head">
-  <h2 class="display">Spanish you actually want to keep reading.</h2>
-  <p>
-    A western. A spy thriller. A dystopian mystery. A time-travel adventure. Comigo uses
-    different kinds of stories so Spanish reading practice doesn&rsquo;t have to feel like
-    textbook reading practice.
-  </p>
-</section>
-<section class="wrap series">
-  <!-- Cards are ready to become links to public sample story pages when those exist. -->
-  <div class="book">
-    <img loading="lazy" decoding="async" src="/assets/carta.f01d9456.webp" width="600" height="900" alt="Cover of El Rey Negro: a gunslinger and a woman in a saloon.">
-    <div class="meta"><div class="t">EL REY NEGRO</div><div class="g">A revenge western.</div></div>
-  </div>
-  <div class="book">
-    <img loading="lazy" decoding="async" src="/assets/llegada.eb493c1a.webp" width="600" height="900" alt="Cover of La Llegada, from the series El Visitante: a little girl beside a small alien in a spacesuit outside a house.">
-    <div class="meta"><div class="t">EL VISITANTE</div><div class="g">An alien houseguest.</div></div>
-  </div>
-  <div class="book">
-    <img loading="lazy" decoding="async" src="/assets/biblioteca.9535da9d.webp" width="600" height="900" alt="Cover of Los Niños en las Sombras: two figures in a dystopian city.">
-    <div class="meta"><div class="t">LOS NIÑOS EN LAS SOMBRAS</div><div class="g">A childless dystopia hides the truth.</div></div>
+<section class="wrap practice">
+  <h3 class="display">Read the Spanish</h3>
+  <p class="hint-line">Try each line on your own first, then tap it for the English.</p>
+  <div class="qa">
+    <details><summary lang="es">Soy una chica</summary><p class="ans">I am a girl.</p></details>
+    <details><summary lang="es">Soy Mía.</summary><p class="ans">I am Mía.</p></details>
+    <details><summary lang="es">Mi nombre es Mía.</summary><p class="ans">My name is Mía.</p></details>
+    <details><summary lang="es">Me llamo Zik.</summary><p class="ans">My name is Zik.</p></details>
+    <details><summary lang="es">Mal…</summary><p class="ans">Bad…</p></details>
+    <details><summary lang="es">Muy mal...</summary><p class="ans">Very bad...</p></details>
   </div>
 </section>
 
 <section class="band">
   <div class="wrap">
-    <h2 class="display">Another chapter. Not another lesson.</h2>
+    <h2 class="display">This is only one page of the story.</h2>
     <p>
-      Start reading Spanish with Comigo. Explore the stories, listen to the characters and
-      discover how much you can understand when Spanish has a story around it.
+      In Comigo, the story continues. Read the next page, listen to the characters, reveal
+      translations when you need them and practise the Spanish you&rsquo;ve just encountered &mdash;
+      and discover more features.
     </p>
     <div class="cta-row">
-      <a class="cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Try Comigo free</a>
-      <a class="cta-link" href="/">Back to Comigo</a>
+      <a class="cta" href="https://apps.apple.com/app/id6760253260" target="_blank" rel="noopener">&#63743;&nbsp; Continue reading with Comigo</a>
+      <span class="cta-link" style="text-decoration: none; cursor: default;">One complete comic is free.</span>
     </div>
   </div>
 </section>
 
+<section class="wrap strip-head">
+  <span class="label eyebrow">Keep reading</span>
+  <h2 class="display">More Spanish comic pages</h2>
+</section>
+<style>
+  .ex-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 22px; padding: 18px 24px 6px; }
+  .ex-card {
+    display: flex; flex-direction: column; background: var(--card); color: var(--ink); text-decoration: none;
+    border: 3px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 6px 6px 0 var(--shadow);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ex-card:hover { transform: translate(2px, 2px); box-shadow: 4px 4px 0 var(--shadow); }
+  .ex-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; display: block; border-bottom: 3px solid var(--line); }
+  .ex-card .ex-card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .ex-card .label { color: var(--accent); }
+  .ex-card h3 { margin: 0; font-size: 1.3rem; }
+  .ex-card .ex-src { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); }
+  .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: 4px; }
+</style>
+<section class="wrap ex-links">
+  <a class="ex-card" href="/examples/a-small-town">
+    <img loading="lazy" decoding="async" src="/assets/example-a-small-town.11ff2274.webp" width="640" height="960" alt="">
+    <div class="ex-card-body">
+      <span class="label">Beginner</span>
+      <h3 class="display">A small town</h3>
+      <span class="ex-src" lang="es">La carta negra · El rey negro</span>
+      <span class="ex-go">Read this page &rarr;</span>
+    </div>
+  </a>
+  <a class="ex-card" href="/examples/looking-for-work">
+    <img loading="lazy" decoding="async" src="/assets/example-looking-for-work.309e36d0.webp" width="640" height="960" alt="">
+    <div class="ex-card-body">
+      <span class="label">Beginner</span>
+      <h3 class="display">Looking for work</h3>
+      <span class="ex-src" lang="es">Primer turno · El restaurante</span>
+      <span class="ex-go">Read this page &rarr;</span>
+    </div>
+  </a>
+  <a class="ex-card" href="/examples/staying-safe">
+    <img loading="lazy" decoding="async" src="/assets/example-staying-safe.a3f1dcad.webp" width="640" height="960" alt="">
+    <div class="ex-card-body">
+      <span class="label">Intermediate</span>
+      <h3 class="display">Staying safe</h3>
+      <span class="ex-src" lang="es">Una alianza improbable · El superviviente</span>
+      <span class="ex-go">Read this page &rarr;</span>
+    </div>
+  </a>
+</section>
 
 <footer>
   <div class="wrap">

@@ -1844,7 +1844,7 @@ function Examples() {
     setBusy(ex.pageId); setMsg('');
     try {
       const r = await api.post(`/marketing/examples/${ex.comicId}/${ex.pageId}/publish`, { slug });
-      setMsg(`Published "${ex.label}" as ${r.data.slug}: ${r.data.bubbles} bubbles, ${r.data.audioFiles} audio files, ${r.data.explained} new explanations. Embed it in a site page with ${r.data.embed}, then rebuild the site.`);
+      setMsg(`Published "${ex.label}" as ${r.data.slug}: ${r.data.bubbles} bubbles, ${r.data.audioFiles} audio files, ${r.data.explained} new explanations. It gets its own page at comigo.net/examples/${r.data.slug} (listed on Reading practice) once the site is rebuilt and deployed; ${r.data.embed} also embeds it inside another page.`);
       load();
     } catch (e) { setMsg(e.response?.data?.error || e.message); }
     finally { setBusy(''); }
@@ -1869,8 +1869,21 @@ function Examples() {
         Explanations are generated once at publish time and saved.
       </p>
 
+      <div style={{ border: '1px solid #5a4a99', background: '#1d1733', borderRadius: 10, padding: 14, marginBottom: 14, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ fontWeight: 700 }}>From scratch: an example comic</div>
+          <div style={{ fontSize: '0.85rem', color: '#aaa', marginTop: 4 }}>
+            A comic with every tool — studio, style images, characters, voices, page generation — that is never
+            published to the app. Each of its pages shows up here, ready to publish.
+          </div>
+        </div>
+        <button className="btn btn-primary" onClick={() => navigate('/?newExample=1')} style={{ padding: '0.5rem 1.1rem' }}>
+          📖 New example comic →
+        </button>
+      </div>
+
       <div style={{ border: '1px solid #444', borderRadius: 10, padding: 14, marginBottom: 20 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>New example</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Or a single page, copied from an existing comic</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, minWidth: 260 }}>
             <option value="">Choose a comic…</option>
@@ -1912,7 +1925,10 @@ function Examples() {
                 ? <img src={ex.image} alt="" style={{ width: '100%', borderRadius: 6, border: '1px solid #333' }} />
                 : <div style={{ aspectRatio: '2 / 3', background: '#1a1332', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>No art yet</div>}
               <div style={{ fontWeight: 700 }}>{ex.label}</div>
-              <div style={{ fontSize: '0.78rem', color: '#999' }}>{ex.comicTitle}{ex.collectionTitle ? ` — ${ex.collectionTitle}` : ''}</div>
+              <div style={{ fontSize: '0.78rem', color: '#999' }}>
+                {ex.isExampleComic && <span style={{ color: '#b69cff' }}>📖 Example comic · </span>}
+                {ex.comicTitle}{ex.collectionTitle ? ` — ${ex.collectionTitle}` : ''}
+              </div>
               <div style={{ fontSize: '0.78rem', color: '#999' }}>
                 {ex.bubbles} bubble{ex.bubbles === 1 ? '' : 's'}
                 {ex.missingAudio > 0 && <span style={{ color: '#f0b04a' }}> · {ex.missingAudio} without audio</span>}
@@ -1920,6 +1936,7 @@ function Examples() {
               <div style={{ fontSize: '0.78rem', color: ex.publishedAt ? '#7fd08a' : '#777' }}>
                 {ex.publishedAt ? `Published as ${ex.slug} · ${new Date(ex.publishedAt).toLocaleDateString()}` : 'Not published'}
               </div>
+              {ex.slug && <div style={{ fontSize: '0.78rem', color: '#999' }}>Page: comigo.net/examples/{ex.slug}</div>}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
                 <button className="btn btn-secondary" onClick={() => navigate(`/comic/${ex.comicId}/page/${ex.pageId}`)} style={{ padding: '0.3rem 0.8rem' }}>Edit</button>
                 <button className="btn btn-primary" disabled={busy === ex.pageId || ex.bubbles === 0} onClick={() => publish(ex)} style={{ padding: '0.3rem 0.8rem' }}>
@@ -1929,7 +1946,9 @@ function Examples() {
                   <button className="btn btn-secondary" title="Copy the embed code for a site template"
                           onClick={() => navigator.clipboard.writeText(`{{EXAMPLE:${ex.slug}}}`)} style={{ padding: '0.3rem 0.8rem' }}>Copy embed</button>
                 )}
-                <button className="btn btn-secondary" disabled={busy === ex.pageId} onClick={() => remove(ex)} style={{ padding: '0.3rem 0.8rem', color: '#f88' }}>Delete</button>
+                {ex.kind === 'comic'
+                  ? <button className="btn btn-secondary" title="Add, remove and reorder its pages in the comic itself" onClick={() => navigate(`/comic/${ex.comicId}`)} style={{ padding: '0.3rem 0.8rem' }}>Open comic</button>
+                  : <button className="btn btn-secondary" disabled={busy === ex.pageId} onClick={() => remove(ex)} style={{ padding: '0.3rem 0.8rem', color: '#f88' }}>Delete</button>}
               </div>
             </div>
           ))}

@@ -29,6 +29,7 @@ COPY --from=client-build /app/client/dist ./client/dist
 # Marketing site (served on comigo.net via host-based routing)
 COPY site/index.html site/learn-spanish-with-comics.html site/visual-learning-language.html site/spanish-reading-practice.html site/privacy.html site/favicon.png site/favicon-512.png site/og-image.jpg site/robots.txt site/demo.mp4 site/demo-poster.jpg ./site/
 COPY site/assets-dist ./site/assets-dist
+COPY site/examples/*.html ./site/examples/
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh ./
