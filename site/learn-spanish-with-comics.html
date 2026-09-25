@@ -502,6 +502,20 @@
     position: absolute; inset: 0; z-index: 5; background: #F7F6FB; color: #16182E;
     display: flex; flex-direction: column; font-family: system-ui, sans-serif;
   }
+  /* Previous / next bubble, as in the app: kept at the bottom of the card
+     so the next bubble is reachable even when the card covers it. */
+  .ex-nav {
+    position: sticky; bottom: -16px; margin: 14px -18px -16px; padding: 8px 18px 10px;
+    background: #F7F6FB; border-top: 1px solid #E2E0EC;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .ex-nav button {
+    width: 38px; height: 38px; border: 0; border-radius: 50%; cursor: pointer;
+    background: #3D7BFA; color: #FFFFFF; font-size: 1.3rem; font-weight: 800; line-height: 1;
+    display: flex; align-items: center; justify-content: center; padding: 0 0 2px;
+  }
+  .ex-nav button:disabled { background: #C9C7D6; cursor: default; }
+  .ex-nav span { font-weight: 700; color: #6B6982; font-size: 0.95rem; }
   .ex-sheet[hidden], .popup[hidden], .word-card[hidden] { display: none; }
   .ex-sheet .sh-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #E2E0EC; }
   .ex-sheet .sh-head b { font-size: 1.15rem; }
@@ -838,26 +852,46 @@
       var b = ev.target.closest('.wplay');
       if (b) { ev.stopPropagation(); playSrc(b.dataset.snd); }
     });
-    stage.querySelectorAll('.hotspot').forEach(function (h) {
-      h.addEventListener('click', function () {
-        if (hint) hint.style.display = 'none';
-        closeSheet();
-        if (current) setActive(current, false);
-        current = h; setActive(h, true);
-        var b = data.bubbles[+h.dataset.i] || { sentences: [] };
-        renderBubble(b);
-        popup.hidden = false;
-        popup.scrollTop = 0;
-        placePopup();
-        // Play the bubble's lines one after another, each with its highlight.
-        var els = body.querySelectorAll('.ex-sent'), sents = b.sentences || [];
-        (function playFrom(k) {
-          if (k >= sents.length) return;
-          if (!sents[k].a) return playFrom(k + 1);
-          playSrc(sents[k].a, els[k], sents[k].words);
-          if (speaking) speaking.next = function () { playFrom(k + 1); };
-        })(0);
-      });
+    var hotspots = Array.prototype.slice.call(stage.querySelectorAll('.hotspot'));
+    function navRow(i) {
+      if (hotspots.length < 2) return;
+      var nav = document.createElement('div');
+      nav.className = 'ex-nav';
+      nav.innerHTML = '<button class="ex-prev" aria-label="Previous bubble">&#8249;</button>'
+        + '<span>' + (i + 1) + ' / ' + hotspots.length + '</span>'
+        + '<button class="ex-next" aria-label="Next bubble">&#8250;</button>';
+      var prev = nav.querySelector('.ex-prev'), next = nav.querySelector('.ex-next');
+      prev.disabled = i === 0;
+      next.disabled = i === hotspots.length - 1;
+      prev.addEventListener('click', function () { if (i > 0) openBubble(i - 1); });
+      next.addEventListener('click', function () { if (i < hotspots.length - 1) openBubble(i + 1); });
+      body.appendChild(nav);
+    }
+    function openBubble(i) {
+      var h = hotspots[i];
+      if (!h) return;
+      if (hint) hint.style.display = 'none';
+      closeSheet();
+      audio.pause();
+      if (current) setActive(current, false);
+      current = h; setActive(h, true);
+      var b = data.bubbles[+h.dataset.i] || { sentences: [] };
+      renderBubble(b);
+      navRow(i);
+      popup.hidden = false;
+      popup.scrollTop = 0;
+      placePopup();
+      // Play the bubble's lines one after another, each with its highlight.
+      var els = body.querySelectorAll('.ex-sent'), sents = b.sentences || [];
+      (function playFrom(k) {
+        if (k >= sents.length) return;
+        if (!sents[k].a) return playFrom(k + 1);
+        playSrc(sents[k].a, els[k], sents[k].words);
+        if (speaking) speaking.next = function () { playFrom(k + 1); };
+      })(0);
+    }
+    hotspots.forEach(function (h, i) {
+      h.addEventListener('click', function () { openBubble(i); });
     });
     popup.querySelector('.popup-x').addEventListener('click', close);
     sheet.querySelector('.sh-done').addEventListener('click', closeSheet);
