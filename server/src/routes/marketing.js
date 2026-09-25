@@ -2522,4 +2522,193 @@ router.post('/story-reel', async (req, res) => {
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// Examples: single pages (comic.examplePages) published to comigo.net as
+// interactive demos. Edited in the normal page editor; published here.
+// ---------------------------------------------------------------------------
+const SITE_DIR = path.join(__dirname, '../../../site');
+
+// GET /api/marketing/examples — every example page across all comics.
+router.get('/examples', async (req, res) => {
+  try {
+    const comics = await Comic.find({ 'examplePages.0': { $exists: true } },
+      { id: 1, title: 1, collectionTitle: 1, examplePages: 1 }).lean();
+    const examples = [];
+    for (const c of comics) {
+      for (const p of c.examplePages || []) {
+        const bubbles = (p.bubbles || []).filter(b => (b.sentences || []).some(s => (s.text || '').trim()));
+        examples.push({
+          comicId: c.id, comicTitle: c.title, collectionTitle: c.collectionTitle || '',
+          pageId: p.id, label: p.exampleLabel || 'Example', pageNumber: p.pageNumber,
+          image: (p.bakedImage || p.masterImage || '').split('?')[0],
+          bubbles: bubbles.length,
+          missingAudio: bubbles.filter(b => (b.sentences || []).some(s => (s.text || '').trim() && !s.audioUrl)).length,
+          slug: p.exampleSlug || '', publishedAt: p.examplePublishedAt || null,
+        });
+      }
+    }
+    res.json({ examples });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/marketing/examples/:comicId/:pageId/publish — body { slug? }.
+// Writes the page image to site/assets/example-<slug>, line/word/form audio
+// to site/audio/ex-<slug>-*.mp3 and the bubble data to
+// site/examples/<slug>.json. A site page embeds it with {{EXAMPLE:<slug>}}.
+// Missing "Explain further" texts are generated and saved on the words.
+router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
+  try {
+    const { sanitizeWordForFilename } = require('../services/readerFormat');
+    const { explainWord } = require('../services/explainWord');
+    const fsSync = require('fs');
+    const comic = await Comic.findOne({ id: req.params.comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    const idx = (comic.examplePages || []).findIndex(p => p.id === req.params.pageId);
+    if (idx < 0) return res.status(404).json({ error: 'Example page not found' });
+    const page = comic.examplePages[idx];
+    const slugify = t => String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50);
+    const slug = slugify(req.body.slug || page.exampleSlug || page.exampleLabel) || `example-${page.pageNumber}`;
+    const ascii = t => String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '') || 'x';
+    const projectDir = path.join(PROJECTS_DIR, comic.id);
+
+    // Page image: the baked version (bubble text drawn in) when there is one.
+    const imgUrl = (page.bakedImage || page.masterImage || '').split('?')[0];
+    if (!imgUrl) return res.status(400).json({ error: 'This example has no page image yet.' });
+    const imgSrc = path.join(PROJECTS_DIR, imgUrl.replace(/^\/projects\//, ''));
+    if (!fsSync.existsSync(imgSrc)) return res.status(400).json({ error: `Page image missing on disk: ${imgUrl}` });
+    const assetsDir = path.join(SITE_DIR, 'assets');
+    for (const ext of ['png', 'jpg']) await fs.rm(path.join(assetsDir, `example-${slug}.${ext}`), { force: true });
+    const ext = path.extname(imgSrc).toLowerCase() === '.jpg' ? 'jpg' : 'png';
+    await fs.copyFile(imgSrc, path.join(assetsDir, `example-${slug}.${ext}`));
+
+    // Fresh audio set for this slug.
+    const audioOut = path.join(SITE_DIR, 'audio');
+    await fs.mkdir(audioOut, { recursive: true });
+    for (const f of await fs.readdir(audioOut)) if (f.startsWith(`ex-${slug}-`)) await fs.rm(path.join(audioOut, f));
+    const copied = new Map();
+    const copyAudio = async (rel, token) => {
+      if (!rel) return undefined;
+      const src = path.join(projectDir, 'audio', `${rel}.mp3`);
+      if (!fsSync.existsSync(src)) return undefined;
+      if (!copied.has(src)) {
+        await fs.copyFile(src, path.join(audioOut, `${token}.mp3`));
+        copied.set(src, token);
+      }
+      return `{{AUD_${copied.get(src)}}}`;
+    };
+    const wordAudio = async (text) => {
+      const key = sanitizeWordForFilename(text);
+      if (!key) return undefined;
+      // Accents distinguish real Spanish forms (quedé ≠ quede), so an
+      // accented key gets a short hash to keep its file name unique.
+      const plain = ascii(key);
+      const tag = plain === key ? plain : `${plain}-${require('crypto').createHash('md5').update(key).digest('hex').slice(0, 6)}`;
+      return copyAudio(`words/${key}`, `ex-${slug}-w-${tag}`);
+    };
+
+    // Bubbles in the reader's order: by owning panel (the panel whose tap zone
+    // holds the bubble's centre, else the nearest), then top to bottom and
+    // left to right within it; a manual orderIndex wins inside its panel.
+    const geo = (a, b) => (Math.abs((a.y || 0) - (b.y || 0)) < 0.02 ? (a.x || 0) - (b.x || 0) : (a.y || 0) - (b.y || 0));
+    // Same owner rule as the reader export: floating panels win when the
+    // centre is inside more than one (a full-page base panel holds them all),
+    // otherwise the nearest panel centre.
+    const eligible = (page.panels || []).filter(p => !p.skipInReader);
+    const priority = [...eligible].sort((a, b) => (b.floating ? 1 : 0) - (a.floating ? 1 : 0));
+    const panelOf = (b) => {
+      const cx = (b.x || 0) + (b.width || 0) / 2, cy = (b.y || 0) + (b.height || 0) / 2;
+      const inside = p => { const t = p.tapZone || { x: 0, y: 0, width: 1, height: 1 }; return cx >= t.x && cx < t.x + t.width && cy >= t.y && cy < t.y + t.height; };
+      let owner = priority.find(inside);
+      if (!owner) {
+        let bestD = Infinity;
+        for (const p of eligible) {
+          const t = p.tapZone || { x: 0, y: 0, width: 1, height: 1 };
+          const d = (cx - (t.x + t.width / 2)) ** 2 + (cy - (t.y + t.height / 2)) ** 2;
+          if (d < bestD) { bestD = d; owner = p; }
+        }
+      }
+      return owner ? (owner.panelOrder || 0) : 0;
+    };
+    const bubbles = (page.bubbles || [])
+      .filter(b => !b.hidden && b.type !== 'image' && (b.sentences || []).some(s => (s.text || '').trim()))
+      .sort((a, b) => panelOf(a) - panelOf(b) || (a.orderIndex ?? 1e9) - (b.orderIndex ?? 1e9) || geo(a, b));
+
+    const out = [];
+    let explained = 0, n = 0;
+    for (const b of bubbles) {
+      n++;
+      const sentences = [];
+      let m = 0;
+      for (const s of b.sentences || []) {
+        if (!(s.text || '').trim()) continue;
+        m++;
+        const tokens = (s.text || '').match(/\S+/g) || [];
+        const words = [];
+        for (let wi = 0; wi < (s.words || []).length; wi++) {
+          const w = s.words[wi];
+          // Show the word as it appears in the sentence (with its punctuation).
+          const bare = t => String(t || '').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+          const shown = tokens[wi] && bare(tokens[wi]) === bare(w.text) ? tokens[wi] : w.text;
+          if (!w.explanation) {
+            try {
+              w.explanation = await explainWord({ word: w.text, sentence: s.text, translation: s.translation });
+              explained++;
+            } catch (e) { console.warn('[examples] explain failed for', w.text, e.message); }
+          }
+          const forms = [];
+          for (const f of w.forms || []) {
+            const fa = await wordAudio(f.text);
+            forms.push({ label: f.label, text: f.text, ...(fa && { a: fa }) });
+          }
+          const a = await wordAudio(w.text);
+          const ba = await wordAudio(w.baseForm || w.text);
+          words.push({
+            t: shown || '', m: w.meaning || '', b: w.baseForm || '', bm: w.baseMeaning || '',
+            // When the word is spoken in the line's audio (ms) — drives the
+            // reader-style green highlight that follows playback.
+            ...(w.startTimeMs != null && { s: w.startTimeMs }), ...(w.endTimeMs != null && { e: w.endTimeMs }),
+            ...(a && { a }), ...(ba && ba !== a && { ba }),
+            ...(forms.length && { forms }),
+            ...(w.explanation && { ex: w.explanation }),
+          });
+        }
+        const la = await copyAudio(s.audioUrl, `ex-${slug}-b${n}-${m}`);
+        sentences.push({
+          es: s.text, en: s.translation || '',
+          ...(s.grammarNote && { g: s.grammarNote }),
+          ...(la && { a: la }),
+          words,
+        });
+      }
+      out.push({
+        x: b.x || 0, y: b.y || 0, w: b.width || 0, h: b.height || 0,
+        ...(b.type === 'narration' && { caption: true }),
+        sentences,
+      });
+    }
+
+    const meta = await require('sharp')(imgSrc).metadata();
+    const data = {
+      slug, label: page.exampleLabel || '', comic: comic.title || '', collection: comic.collectionTitle || '',
+      image: `example-${slug}`, width: meta.width, height: meta.height,
+      publishedAt: new Date().toISOString(),
+      bubbles: out,
+    };
+    await fs.mkdir(path.join(SITE_DIR, 'examples'), { recursive: true });
+    await fs.writeFile(path.join(SITE_DIR, 'examples', `${slug}.json`), JSON.stringify(data, null, 1));
+
+    page.exampleSlug = slug;
+    page.examplePublishedAt = new Date();
+    await Comic.updateOne({ id: comic.id }, { $set: { [`examplePages.${idx}`]: page.toObject ? page.toObject() : page } });
+    res.json({ slug, bubbles: out.length, audioFiles: copied.size, explained, embed: `{{EXAMPLE:${slug}}}` });
+  } catch (error) {
+    console.error('Example publish error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

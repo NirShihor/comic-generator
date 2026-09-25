@@ -160,7 +160,7 @@ async function shiftPageNumberTag(comicId, page, fromTag, toTag) {
 // Locate a page by id in either the story pages or the practice pages.
 // Returns { list, index, page } (list = 'pages' | 'practicePages') or null.
 function findPageRef(comic, pageId) {
-  for (const list of ['pages', 'practicePages', 'reelPages']) {
+  for (const list of ['pages', 'practicePages', 'reelPages', 'examplePages']) {
     const arr = comic[list] || [];
     const index = arr.findIndex(p => p.id === pageId);
     if (index !== -1) return { list, index, page: arr[index] };
@@ -478,6 +478,14 @@ router.put('/:id', async (req, res) => {
         reelTouched = true;
         return true;
       };
+      let exampleTouched = false;
+      const mergeExample = (incoming) => {
+        const eIdx = (comic.examplePages || []).findIndex(p => p.id === incoming.id);
+        if (eIdx < 0) return false;
+        comic.examplePages[eIdx] = { ...comic.examplePages[eIdx].toObject?.() || comic.examplePages[eIdx], ...incoming };
+        exampleTouched = true;
+        return true;
+      };
       const liveIds = new Set(incomingPages.map(p => p.id));
       if (Array.isArray(updateData.practicePages)) {
         for (const incoming of updateData.practicePages) {
@@ -491,6 +499,12 @@ router.put('/:id', async (req, res) => {
         }
         delete updateData.reelPages;
       }
+      if (Array.isArray(updateData.examplePages)) {
+        for (const incoming of updateData.examplePages) {
+          if (!liveIds.has(incoming.id)) mergeExample(incoming);
+        }
+        delete updateData.examplePages;
+      }
       // Update each existing page whose ID appears in the incoming data.
       for (const incoming of incomingPages) {
         const existingIdx = comic.pages.findIndex(p => p.id === incoming.id);
@@ -500,7 +514,7 @@ router.put('/:id', async (req, res) => {
           comic.pages[existingIdx] = merged;
           continue;
         }
-        if (!mergePractice(incoming)) mergeReel(incoming);
+        if (!mergePractice(incoming) && !mergeReel(incoming)) mergeExample(incoming);
         // Pages that only exist on the client (stale) are silently ignored
         // Pages that only exist on the server are preserved
       }
@@ -509,6 +523,7 @@ router.put('/:id', async (req, res) => {
       const atomicSet = { pages: comic.pages.map(p => p.toObject?.() || p) };
       if (practiceTouched) atomicSet.practicePages = (comic.practicePages || []).map(p => p.toObject?.() || p);
       if (reelTouched) atomicSet.reelPages = (comic.reelPages || []).map(p => p.toObject?.() || p);
+      if (exampleTouched) atomicSet.examplePages = (comic.examplePages || []).map(p => p.toObject?.() || p);
       for (const [key, value] of Object.entries(updateData)) {
         atomicSet[key] = value;
       }
@@ -1465,6 +1480,9 @@ router.delete('/:id/pages/:pageId', async (req, res) => {
     if (pageRef.list === 'reelPages') {
       await Comic.updateOne({ id: req.params.id }, { $pull: { reelPages: { id: req.params.pageId } } }).catch(() => {});
     }
+    if (pageRef.list === 'examplePages') {
+      await Comic.updateOne({ id: req.params.id }, { $pull: { examplePages: { id: req.params.pageId } } }).catch(() => {});
+    }
 
     // Renumber sequentially — renaming each page's files along (lowest first:
     // p7→p6 before p8→p7, so shifts down never collide).
@@ -1852,6 +1870,79 @@ router.post('/:id/apply-language-fix', async (req, res) => {
 // prompt, picks the character/location references and the voice in the
 // normal page editor. Practice pages are numbered from 1001 so their
 // image/audio filenames never collide with story pages.
+// Copy a page's image files to another page number (comic-x_p5.png ->
+// comic-x_p3001.png, ...) and point the copy's stored paths at them, so
+// editing or re-baking the copy never touches the original's files.
+async function copyPageNumberTag(comicId, page, fromTag, toTag) {
+  const imagesDir = path.join(PROJECTS_DIR, comicId, 'images');
+  const prefix = `${comicId}${fromTag}`;
+  let entries = [];
+  try { entries = await fs.readdir(imagesDir); } catch (e) { /* no images dir yet */ }
+  for (const name of entries) {
+    if (name.startsWith(prefix) && /[._]/.test(name[prefix.length] || '')) {
+      const newName = `${comicId}${toTag}` + name.slice(prefix.length);
+      try { await fs.copyFile(path.join(imagesDir, name), path.join(imagesDir, newName)); } catch (e) {}
+    }
+  }
+  const re = new RegExp(`${comicId}${fromTag}(?=[._])`, 'g');
+  const fix = (v) => (typeof v === 'string' && v) ? v.replace(re, `${comicId}${toTag}`) : v;
+  for (const f of ['masterImage', 'originalMasterImage', 'bakedImage', 'emptyBubblesImage', 'noFloatImage']) {
+    page[f] = fix(page[f]);
+  }
+  for (const panel of page.panels || []) {
+    panel.artworkImage = fix(panel.artworkImage);
+    panel.bakedCropImage = fix(panel.bakedCropImage);
+  }
+}
+
+// POST /api/comics/:id/example-pages — an example page for comigo.net.
+// Body: { label, sourcePageId? }. With sourcePageId the example starts as a
+// full copy of that page (art, panels, bubbles, sentences, words, audio
+// references) with fresh ids and its own image files; otherwise it's blank.
+// Numbered from 3001; edited in the normal page editor; never exported.
+router.post('/:id/example-pages', async (req, res) => {
+  try {
+    const label = String(req.body.label || '').trim().slice(0, 80) || 'Example';
+    const comic = await Comic.findOne({ id: req.params.id });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    const nextNumber = Math.max(3000, ...(comic.examplePages || []).map(p => p.pageNumber || 0)) + 1;
+    let page;
+    if (req.body.sourcePageId) {
+      const ref = findPageRef(comic, req.body.sourcePageId);
+      if (!ref) return res.status(404).json({ error: 'Source page not found' });
+      page = JSON.parse(JSON.stringify(ref.page.toObject ? ref.page.toObject() : ref.page));
+      const now = Date.now();
+      let n = 0;
+      page.id = `page-${uuidv4()}`;
+      for (const panel of page.panels || []) panel.id = `panel-${uuidv4()}`;
+      for (const b of page.bubbles || []) {
+        b.id = `bubble-${now}-${n++}`;
+        for (const s of b.sentences || []) s.id = `sentence-${now}-${n++}`;
+      }
+      for (const h of page.hotspots || []) h.id = `hotspot-${now}-${n++}`;
+      delete page.keyPhraseId; delete page.reelLabel; delete page.reelVideo; delete page.reelSettings;
+      await copyPageNumberTag(comic.id, page, `_p${ref.page.pageNumber}`, `_p${nextNumber}`);
+      page.pageNumber = nextNumber;
+    } else {
+      page = {
+        id: `page-${uuidv4()}`,
+        pageNumber: nextNumber,
+        masterImage: '', originalMasterImage: '',
+        lines: [], dividerLines: { horizontal: [], vertical: [] },
+        panels: [{ id: `panel-${uuidv4()}`, panelOrder: 1, tapZone: { x: 0, y: 0, width: 1, height: 1 }, content: '', selectedBibleRefs: [], bubbles: [] }],
+        bubbles: [], hotspots: []
+      };
+    }
+    page.exampleLabel = label;
+    delete page.exampleSlug; delete page.examplePublishedAt;
+    await Comic.updateOne({ id: comic.id }, { $push: { examplePages: page } });
+    res.json({ page });
+  } catch (error) {
+    console.error('Example page error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/comics/:id/reel-pages — a blank marketing "reel page": same page
 // editor and tooling as any page, numbered from 2001 so its files never
 // collide with story/practice pages, and never exported to the reader.

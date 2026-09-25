@@ -126,12 +126,6 @@
   }
   .vchip b { font-family: Charter, Georgia, serif; font-size: 1.02rem; }
   .vchip span { color: var(--muted); }
-  .clip-wrap { display: flex; flex-direction: column; align-items: center; padding: 18px 24px 8px; text-align: center; }
-  .clip-wrap p { color: var(--muted); max-width: 52ch; margin: 10px 0 20px; }
-  .clip-wrap video {
-    width: min(340px, 82vw); aspect-ratio: 9 / 16; border: 3px solid var(--line); border-radius: 18px;
-    box-shadow: 7px 7px 0 var(--shadow); display: block; background: var(--deep);
-  }
   .divider { border-top: 3px solid var(--line); margin: 48px auto 8px; max-width: 1032px; }
   .gcall {
     background: var(--deep); color: #FFFFFF; border: 3px solid var(--line); border-radius: 22px;
@@ -159,48 +153,6 @@
   .cta:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--shadow); }
   .cta-link { font-family: system-ui, sans-serif; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
   .cta-link:hover { opacity: 0.75; }
-  /* app-style reading stage: the real page with tappable bubbles; tapping
-     opens the app's popup (audio + translation) and tints the bubble green */
-  .stage-wrap { display: flex; flex-direction: column; align-items: center; padding: 22px 0 10px; }
-  .stage-head { font-size: 1.35rem; margin: 0 0 16px; }
-  .stage {
-    position: relative; width: min(540px, 100%);
-    border: 3px solid var(--line); border-radius: 12px;
-    box-shadow: 6px 6px 0 var(--shadow); overflow: hidden;
-  }
-  .stage > img { width: 100%; display: block; }
-  .hotspot { position: absolute; background: transparent; border: 0; border-radius: 50%; cursor: pointer; padding: 0; }
-  .hotspot.active-fallback { background: rgba(96, 220, 120, 0.42); border-radius: 12px; }
-  .bubble-glow { position: absolute; pointer-events: none; z-index: 2; }
-  .hint {
-    position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px;
-    background: rgba(22, 24, 46, 0.88); color: #FFFFFF; pointer-events: none;
-    font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.85rem;
-    padding: 8px 16px; border-radius: 999px; white-space: nowrap;
-  }
-  .popup {
-    position: absolute; left: 4%; width: 92%; z-index: 3;
-    background: #F7F6FB; color: #16182E; border-radius: 20px;
-    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.6); padding: 14px 18px 16px;
-    font-family: system-ui, sans-serif;
-  }
-  .popup.at-bottom { bottom: 3%; }
-  .popup.at-top { top: 3%; }
-  .popup-x { position: absolute; top: 10px; right: 12px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: #E4E2EE; color: #55536B; cursor: pointer; font-size: 0.8rem; }
-  .popup-who { color: #8B88A6; margin-bottom: 2px; }
-  .popup-es { margin: 0 0 10px; font-family: Charter, Georgia, serif; font-size: 1.22rem; font-weight: 700; }
-  .popup-es .chip { display: inline-block; background: #FFFFFF; border: 1.5px solid #D9D6E6; border-radius: 10px; padding: 2px 10px 3px; margin: 0 6px 6px 0; cursor: pointer; }
-  .popup-es .chip.sel { background: #3D7BFA; border-color: #3D7BFA; color: #FFFFFF; }
-  .word-card { background: #FFFFFF; border: 1.5px solid #E2E0EC; border-radius: 14px; padding: 10px 14px 11px; margin: 0 0 12px; font-size: 0.95rem; }
-  .word-card .base { color: #55536B; margin-top: 3px; }
-  .word-card .wplay { border: 0; background: #EAF1FF; color: #3D7BFA; border-radius: 50%; width: 26px; height: 26px; cursor: pointer; margin-left: 8px; vertical-align: middle; }
-  .popup-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .popup-play { border: 0; background: #3D7BFA; color: #FFFFFF; font-weight: 700; font-size: 0.95rem; border-radius: 999px; padding: 8px 20px; cursor: pointer; }
-  .popup-tr { border: 0; background: transparent; color: #3D7BFA; font-weight: 700; font-size: 0.9rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 8px 2px; }
-  .popup-en { margin: 10px 0 0; font-family: Charter, Georgia, serif; font-size: 1.02rem; }
-  .popup-vocab { margin: 6px 0 0; font-size: 0.85rem; color: #55536B; }
-  .popup-vocab b { color: #16182E; }
-  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .band { background: var(--band); color: var(--band-text); border-top: 3px solid var(--line); border-bottom: 3px solid var(--line); margin-top: 44px; }
   .band .wrap { padding: 52px 24px; }
   .band h2 { font-size: clamp(1.8rem, 4.4vw, 3rem); margin: 0 0 14px; }
@@ -328,29 +280,21 @@
 </section>
 <section class="wrap stage-wrap">
   <h3 class="display stage-head">Click on a bubble</h3>
-  <p class="stage-note">Every line is voiced &mdash; tap a bubble to listen, tap a word for its meaning.</p>
-  <div class="stage">
-    <img loading="lazy" decoding="async" src="/assets/practice-beginner.a58f644d.webp" width="640" height="960" alt="Spanish comic page showing a young man looking for work in cafés and shops.">
-    <button class="hotspot" style="left:25.8%;top:0.0%;width:22.4%;height:13.0%" data-who="" data-es="Debo encontrar trabajo..." data-en="I need to find a job..." data-words='[{"t":"Debo","m":"I must","b":"deber","bm":"to must","a":"/assets/pw-debo.ab3a9ddc.mp3","ba":"/assets/pw-deber.3ab727f0.mp3"},{"t":"encontrar","m":"to find","b":"encontrar","bm":"to find","a":"/assets/pw-encontrar.0f1761c4.mp3"},{"t":"trabajo...","m":"work","b":"trabajo","bm":"work","a":"/assets/pw-trabajo.9ae866bb.mp3"}]' data-audio="/assets/pb1.08246e0d.mp3" aria-label="Debo encontrar trabajo... — tap to hear and translate"></button>
-    <button class="hotspot" style="left:12.8%;top:45.1%;width:21.6%;height:11.1%" data-who="" data-es="No, lo siento..." data-en="No, I&rsquo;m sorry..." data-words='[{"t":"No,","m":"no","b":"no","bm":"no","a":"/assets/pw-no.f56f17d4.mp3"},{"t":"lo","m":"it","b":"lo","bm":"it","a":"/assets/pw-lo.83c41870.mp3"},{"t":"siento...","m":"I feel","b":"sentir","bm":"to feel","a":"/assets/pw-siento.5cf42fd1.mp3","ba":"/assets/pw-sentir.a23be24e.mp3"}]' data-audio="/assets/pb2.4691f6ca.mp3" aria-label="No, lo siento... — tap to hear and translate"></button>
-    <button class="hotspot" style="left:59.3%;top:44.9%;width:29.2%;height:10.5%" data-who="" data-es="Me encantan los libros..." data-en="I love books..." data-words='[{"t":"Me","m":"me","b":"me","bm":"me","a":"/assets/pw-me.14e8f0c8.mp3"},{"t":"encantan","m":"love","b":"encantar","bm":"to love","a":"/assets/pw-encantan.a71c49b4.mp3","ba":"/assets/pw-encantar.79f93f86.mp3"},{"t":"los","m":"the","b":"el","bm":"the (male)","a":"/assets/pw-los.1e426e93.mp3","ba":"/assets/pw-el.17d81074.mp3"},{"t":"libros...","m":"books","b":"libro","bm":"book","a":"/assets/pw-libros.d2dfae30.mp3","ba":"/assets/pw-libro.54ef5b13.mp3"}]' data-audio="/assets/pb3.88391337.mp3" aria-label="Me encantan los libros... — tap to hear and translate"></button>
-    <button class="hotspot" style="left:56.5%;top:81.5%;width:23.2%;height:11.4%" data-who="" data-es="No por el momento..." data-en="Not at the moment..." data-words='[{"t":"No","m":"not","b":"no","bm":"no","a":"/assets/pw-no.f56f17d4.mp3"},{"t":"por","m":"for","b":"por","bm":"for","a":"/assets/pw-por.b58ce57d.mp3"},{"t":"el","m":"the","b":"el","bm":"the (male)","a":"/assets/pw-el.17d81074.mp3"},{"t":"momento...","m":"moment","b":"momento","bm":"moment","a":"/assets/pw-momento.2b52853a.mp3"}]' data-audio="/assets/pb4.2ec015fd.mp3" aria-label="No por el momento... — tap to hear and translate"></button>
-    <div class="popup" hidden>
-      <button class="popup-x" aria-label="Close">✕</button>
-      <div class="popup-who label"></div>
-      <p class="popup-es" lang="es"></p>
-      <div class="word-card" hidden></div>
-      <div class="popup-row">
-        <button class="popup-play">▶︎&nbsp; Play</button>
-        <button class="popup-tr">Show translation</button>
-      </div>
-      <p class="popup-en" hidden></p>
-      <p class="popup-vocab" hidden></p>
-    </div>
+  <p class="stage-note">Every line is voiced — tap a bubble to listen, tap a word for its meaning.</p>
+  <div class="stage" data-ex="looking-for-work">
+    <img loading="lazy" decoding="async" src="/assets/example-looking-for-work.309e36d0.webp" width="640" height="960" alt="A page from PRIMER TURNO (EL RESTAURANTE), an original Comigo Spanish comic.">
+    <button class="hotspot" data-i="0" style="left:25.8%;top:0.0%;width:22.4%;height:13.0%" aria-label="Debo encontrar trabajo... — tap to hear and explore"></button>
+    <button class="hotspot" data-i="1" style="left:12.8%;top:45.1%;width:21.6%;height:11.1%" aria-label="No, lo siento... — tap to hear and explore"></button>
+    <button class="hotspot" data-i="2" style="left:59.3%;top:44.9%;width:29.2%;height:10.5%" aria-label="Me encantan los libros... — tap to hear and explore"></button>
+    <button class="hotspot" data-i="3" style="left:56.5%;top:81.5%;width:23.2%;height:11.4%" aria-label="No por el momento... — tap to hear and explore"></button>
+    <div class="popup" hidden><button class="popup-x" aria-label="Close">✕</button><div class="popup-body"></div></div>
+    <div class="ex-sheet" hidden><div class="sh-head"><b></b><button class="sh-done">Done</button></div><div class="sh-body"></div></div>
     <audio preload="none"></audio>
     <div class="hint">👆 Tap a speech bubble</div>
   </div>
+  <script type="application/json" class="ex-data">{"bubbles": [{"x": 0.27, "y": 0.01300000508626302, "w": 0.2, "h": 0.1, "sentences": [{"es": "Debo encontrar trabajo...", "en": "I must find work...", "g": "'Debo' is the first-person singular present tense of 'deber', meaning 'I must'. It expresses obligation and is followed by the infinitive 'encontrar' which means 'to find'.", "a": "/assets/ex-looking-for-work-b1-1.08246e0d.mp3", "words": [{"t": "Debo", "m": "I must", "b": "deber", "bm": "to must", "s": 0, "e": 396, "a": "/assets/ex-looking-for-work-w-debo.ab3a9ddc.mp3", "ba": "/assets/ex-looking-for-work-w-deber.3ab727f0.mp3", "forms": [{"label": "Present", "text": "debo", "a": "/assets/ex-looking-for-work-w-debo.ab3a9ddc.mp3"}, {"label": "Preterite", "text": "debí", "a": "/assets/ex-looking-for-work-w-debi-7f61f8.03d38443.mp3"}, {"label": "Imperfect", "text": "debía", "a": "/assets/ex-looking-for-work-w-debia-9a1ae1.0f97f019.mp3"}, {"label": "Future", "text": "deberé", "a": "/assets/ex-looking-for-work-w-debere-2e203f.c4bd35c5.mp3"}, {"label": "Conditional", "text": "debería", "a": "/assets/ex-looking-for-work-w-deberia-1bf823.89b34cca.mp3"}, {"label": "Subjunctive", "text": "deba", "a": "/assets/ex-looking-for-work-w-deba.93899889.mp3"}, {"label": "Command", "text": "debes", "a": "/assets/ex-looking-for-work-w-debes.65b7446d.mp3"}, {"label": "Gerund", "text": "debiendo", "a": "/assets/ex-looking-for-work-w-debiendo.2a548d84.mp3"}, {"label": "Past Participle", "text": "deber", "a": "/assets/ex-looking-for-work-w-deber.3ab727f0.mp3"}], "ex": "\"Debo\" is a verb in the present tense, specifically the first person singular form of the verb \"deber,\" which means \"to must\" or \"to have to.\" In this sentence, \"Debo\" translates to \"I must,\" indicating a necessity or obligation. \n\nHere's a short conjugation table for \"deber\" in the present tense:\n\n- yo debo\n- tú debes\n- él/ella/usted debe\n- nosotros/nosotras debemos\n- ellos/ellas/ustedes deben\n\nIn the sentence \"Debo encontrar trabajo,\" \"Debo\" sets the tone for the speaker's obligation to find work, emphasizing the urgency or importance of the action that follows."}, {"t": "encontrar", "m": "to find", "b": "encontrar", "bm": "to find", "s": 452, "e": 956, "a": "/assets/ex-looking-for-work-w-encontrar.0f1761c4.mp3", "forms": [{"label": "Present", "text": "encuentro", "a": "/assets/ex-looking-for-work-w-encuentro.e6033d32.mp3"}, {"label": "Preterite", "text": "encontré", "a": "/assets/ex-looking-for-work-w-encontre-59d5eb.c44963fa.mp3"}, {"label": "Imperfect", "text": "encontraba", "a": "/assets/ex-looking-for-work-w-encontraba.3872affd.mp3"}, {"label": "Future", "text": "encontraré", "a": "/assets/ex-looking-for-work-w-encontrare-8b7d35.d8a75bcc.mp3"}, {"label": "Conditional", "text": "encontraría", "a": "/assets/ex-looking-for-work-w-encontraria-11e2ae.11cf23c0.mp3"}, {"label": "Subjunctive", "text": "encuentre", "a": "/assets/ex-looking-for-work-w-encuentre.508b2b7f.mp3"}, {"label": "Command", "text": "encuentra", "a": "/assets/ex-looking-for-work-w-encuentra.de9662e7.mp3"}, {"label": "Gerund", "text": "encontrando", "a": "/assets/ex-looking-for-work-w-encontrando.f3a5adc7.mp3"}, {"label": "Past Participle", "text": "encontrado", "a": "/assets/ex-looking-for-work-w-encontrado.cd72a899.mp3"}], "ex": "The word \"encontrar\" is a verb in its infinitive form, meaning \"to find.\" In the sentence \"Debo encontrar trabajo,\" it functions as the main action that the subject must perform. The phrase \"Debo encontrar\" translates to \"I must find,\" indicating a necessity or obligation.\n\nIn the present tense, \"encontrar\" is conjugated as follows:\n\n- yo encuentro (I find)\n- tú encuentras (you find)\n- él/ella/usted encuentra (he/she/you find)\n- nosotros/nosotras encontramos (we find)\n- ellos/ellas/ustedes encuentran (they/you all find)\n\nHere, \"encontrar\" is essential because it expresses the action that the speaker needs to take, which is finding work. The sentence conveys a sense of urgency or importance regarding the task at hand."}, {"t": "trabajo...", "m": "work", "b": "trabajo", "bm": "work", "s": 1026, "e": 2236, "a": "/assets/ex-looking-for-work-w-trabajo.9ae866bb.mp3", "forms": [{"label": "Singular", "text": "trabajo", "a": "/assets/ex-looking-for-work-w-trabajo.9ae866bb.mp3"}, {"label": "Plural", "text": "trabajos", "a": "/assets/ex-looking-for-work-w-trabajos.a2c86b41.mp3"}], "ex": "The word \"trabajo\" in this sentence is a noun meaning \"work\" or \"job.\" It is the object of the verb \"encontrar,\" which means \"to find.\" In the context of the sentence, \"Debo encontrar trabajo,\" it indicates what the speaker needs to find.\n\nThe structure of the sentence shows that \"trabajo\" is essential because it completes the action of finding. The phrase translates to \"I must find work,\" where \"trabajo\" specifies what the speaker is looking for. \n\nIn summary, \"trabajo\" is a noun that plays the role of the direct object in the sentence, indicating the specific thing that the subject (implied \"yo\" or \"I\") must find."}]}]}, {"x": 0.14, "y": 0.46633333841959645, "w": 0.1925, "h": 0.08058331807454422, "sentences": [{"es": "No, lo siento...", "en": "No, I'm sorry...", "g": "'Lo siento' is a fixed expression meaning 'I'm sorry'. 'Lo' is a pronoun referring to a situation that has been mentioned before.", "a": "/assets/ex-looking-for-work-b2-1.4691f6ca.mp3", "words": [{"t": "No,", "m": "no", "b": "no", "bm": "no", "s": 0, "e": 400, "a": "/assets/ex-looking-for-work-w-no.f56f17d4.mp3", "ex": "In this sentence, \"No,\" is an adverb that means \"no\" or \"not.\" It is used to express a negative response or to deny something. Here, it appears at the beginning of the sentence, indicating a refusal or disagreement with what might have been said or implied before.\n\nThe phrase \"lo siento\" translates to \"I'm sorry,\" so \"No, lo siento...\" can be understood as a way of saying \"No, I'm sorry...\" in response to a question or statement. The \"No\" sets the tone for the speaker's reply, emphasizing that they are rejecting or negating whatever was previously mentioned."}, {"t": "lo", "m": "it", "b": "lo", "bm": "it", "s": 453, "e": 559, "a": "/assets/ex-looking-for-work-w-lo.83c41870.mp3", "ex": "In this sentence, \"lo\" is an object pronoun. It is used to refer to the situation or feeling of regret that the speaker is expressing. The phrase \"lo siento\" translates to \"I'm sorry,\" where \"lo\" helps to emphasize the sentiment being conveyed.\n\nThe verb here is \"sentir,\" which means \"to feel.\" In this case, \"siento\" is the first-person singular present tense form of \"sentir.\" Here’s a short conjugation table for \"sentir\":\n\n- yo siento\n- tú sientes\n- él/ella siente\n- nosotros/nosotras sentimos\n- ellos/ellas sienten\n\nSo, \"lo\" is there to connect the speaker's apology to the feeling they are expressing, making the phrase more complete."}, {"t": "siento...", "m": "I feel", "b": "sentir", "bm": "to feel", "s": 599, "e": 1199, "a": "/assets/ex-looking-for-work-w-siento.5cf42fd1.mp3", "ba": "/assets/ex-looking-for-work-w-sentir.a23be24e.mp3", "forms": [{"label": "Present", "text": "siento", "a": "/assets/ex-looking-for-work-w-siento.5cf42fd1.mp3"}, {"label": "Preterite", "text": "sentí", "a": "/assets/ex-looking-for-work-w-senti-50b593.70ed99f6.mp3"}, {"label": "Imperfect", "text": "sentía", "a": "/assets/ex-looking-for-work-w-sentia-2a3865.96e6456c.mp3"}, {"label": "Future", "text": "sentiré", "a": "/assets/ex-looking-for-work-w-sentire-13bddd.0cd68f75.mp3"}, {"label": "Conditional", "text": "sentiría", "a": "/assets/ex-looking-for-work-w-sentiria-e15ea9.2c706a77.mp3"}, {"label": "Subjunctive", "text": "sienta", "a": "/assets/ex-looking-for-work-w-sienta.bffd54fd.mp3"}, {"label": "Command", "text": "siente", "a": "/assets/ex-looking-for-work-w-siente.95543afb.mp3"}, {"label": "Gerund", "text": "sintiendo", "a": "/assets/ex-looking-for-work-w-sintiendo.96291cc0.mp3"}, {"label": "Past Participle", "text": "sentido", "a": "/assets/ex-looking-for-work-w-sentido.4bc19e91.mp3"}], "ex": "The word \"siento\" is a verb form in this sentence. It comes from the infinitive verb \"sentir,\" which means \"to feel.\" In the present tense, \"sentir\" is conjugated as follows:\n\n- yo siento (I feel)\n- tú sientes (you feel)\n- él/ella siente (he/she feels)\n- nosotros/nosotras sentimos (we feel)\n- ellos/ellas sienten (they feel)\n\nIn the sentence \"No, lo siento...\", \"siento\" is the first-person singular form, meaning \"I feel.\" It expresses an apology or regret, so the phrase translates to \"I'm sorry.\" The \"lo\" in \"lo siento\" is an object pronoun that refers to the situation or thing the speaker is apologizing for, though it is not explicitly stated in this context. \n\nOverall, \"siento\" is crucial here as it conveys the speaker's feelings of remorse or regret."}]}]}, {"x": 0.6049999999999999, "y": 0.46375, "w": 0.2675000000000002, "h": 0.07499999999999996, "sentences": [{"es": "Me encantan los libros...", "en": "I love books...", "g": "'Me encantan' is used to express love for something in the plural, with 'encantar' meaning 'to love' or 'to delight'. 'Los libros' means 'the books', which is a plural noun.", "a": "/assets/ex-looking-for-work-b3-1.88391337.mp3", "words": [{"t": "Me", "m": "me", "b": "me", "bm": "me", "s": 0, "e": 160, "a": "/assets/ex-looking-for-work-w-me.14e8f0c8.mp3", "ex": "In this sentence, \"me\" is an object pronoun. It is used to indicate who is experiencing the action of loving. In English, we would say \"I love,\" but in Spanish, the structure requires the pronoun \"me\" to clarify that it is \"me\" who loves.\n\nThe verb here is \"encantan,\" which comes from the infinitive \"encantar.\" This verb means \"to love\" or \"to delight.\" In the present tense, it conjugates as follows:\n\n- yo encanto\n- tú encantas\n- él/ella/usted encanta\n- nosotros/nosotras encantamos\n- ellos/ellas/ustedes encantan\n\nIn this case, \"me\" connects to the subject of the sentence, which is implied as \"yo\" (I). The full meaning is that \"books\" (los libros) are delightful to \"me.\" So, \"me\" is essential to show who is feeling the love for the books."}, {"t": "encantan", "m": "love", "b": "encantar", "bm": "to love", "s": 260, "e": 960, "a": "/assets/ex-looking-for-work-w-encantan.a71c49b4.mp3", "ba": "/assets/ex-looking-for-work-w-encantar.79f93f86.mp3", "forms": [{"label": "Present", "text": "encanto", "a": "/assets/ex-looking-for-work-w-encanto.7190be21.mp3"}, {"label": "Preterite", "text": "encanté", "a": "/assets/ex-looking-for-work-w-encante-d8d923.373e1338.mp3"}, {"label": "Imperfect", "text": "encantaba", "a": "/assets/ex-looking-for-work-w-encantaba.5a7fd4ac.mp3"}, {"label": "Future", "text": "encantaré", "a": "/assets/ex-looking-for-work-w-encantare-a06f87.94d6d644.mp3"}, {"label": "Conditional", "text": "encantaría", "a": "/assets/ex-looking-for-work-w-encantaria-ce401e.9fe6d579.mp3"}, {"label": "Subjunctive", "text": "encante", "a": "/assets/ex-looking-for-work-w-encante.deb74627.mp3"}, {"label": "Command", "text": "encanta", "a": "/assets/ex-looking-for-work-w-encanta.e3d970a6.mp3"}, {"label": "Gerund", "text": "encantando", "a": "/assets/ex-looking-for-work-w-encantando.c1f7ac69.mp3"}, {"label": "Past Participle", "text": "encantado", "a": "/assets/ex-looking-for-work-w-encantado.e87a0392.mp3"}], "ex": "The word \"encantan\" is a verb in the present tense. It comes from the infinitive \"encantar,\" which means \"to love\" or \"to delight.\" In this sentence, \"Me encantan los libros,\" it is conjugated in the third person plural form because it refers to \"los libros\" (the books), which is plural.\n\nHere's a short present-tense conjugation table for \"encantar\":\n\n- yo encanto\n- tú encantas\n- él/ella/usted encanta\n- nosotros/nosotras encantamos\n- vosotros/vosotras encantáis\n- ellos/ellas/ustedes encantan\n\nIn this context, \"encantan\" indicates that the speaker loves multiple books. The phrase \"Me encantan\" translates to \"I love\" in English, where \"me\" is an indirect object pronoun that indicates who is experiencing the love or delight. So, the structure shows that the books are the subject that brings joy to the speaker."}, {"t": "los", "m": "the", "b": "el", "bm": "the (male)", "s": 1000, "e": 1120, "a": "/assets/ex-looking-for-work-w-los.1e426e93.mp3", "ba": "/assets/ex-looking-for-work-w-el.17d81074.mp3", "forms": [{"label": "Masc. sing.", "text": "el", "a": "/assets/ex-looking-for-work-w-el.17d81074.mp3"}, {"label": "Masc. plural", "text": "los", "a": "/assets/ex-looking-for-work-w-los.1e426e93.mp3"}], "ex": "In this sentence, \"los\" is a definite article in Spanish. It is used to specify a particular noun, which in this case is \"libros\" (books). The phrase \"los libros\" translates to \"the books\" in English, but in this context, it simply refers to books in general.\n\n\"Los\" is plural and masculine, agreeing with \"libros,\" which is also masculine and plural. This is why \"los\" is necessary here; it helps clarify that you are talking about books as a category rather than a specific set of books. \n\nSo, in \"Me encantan los libros,\" the article \"los\" plays a crucial role in indicating that the speaker loves books as a whole."}, {"t": "libros...", "m": "books", "b": "libro", "bm": "book", "s": 1188, "e": 1674, "a": "/assets/ex-looking-for-work-w-libros.d2dfae30.mp3", "ba": "/assets/ex-looking-for-work-w-libro.54ef5b13.mp3", "forms": [{"label": "Singular", "text": "libro", "a": "/assets/ex-looking-for-work-w-libro.54ef5b13.mp3"}, {"label": "Plural", "text": "libros", "a": "/assets/ex-looking-for-work-w-libros.d2dfae30.mp3"}], "ex": "In this sentence, \"libros\" is a noun in the plural form. It means \"books\" in English. The word is the subject of the sentence, which is why it appears after the article \"los,\" meaning \"the.\" Together, \"los libros\" translates to \"the books.\"\n\nThe sentence \"Me encantan los libros...\" translates to \"I love books...\" in English. The verb \"encantan\" is in the third person plural form, which agrees with \"libros.\" This is because the subject \"los libros\" is plural, so the verb must also be plural to match.\n\nIn summary, \"libros\" is a plural noun that serves as the subject of the sentence, indicating what is being loved."}]}]}, {"x": 0.5774999999999999, "y": 0.8304166666666666, "w": 0.20750000000000013, "h": 0.08399998982747403, "sentences": [{"es": "No por el momento...", "en": "Not at the moment...", "g": "The phrase uses 'No' at the beginning to express negation. 'por el momento' is an idiomatic expression meaning 'for the moment' or 'currently'.", "a": "/assets/ex-looking-for-work-b4-1.2ec015fd.mp3", "words": [{"t": "No", "m": "not", "b": "no", "bm": "no", "s": 0, "e": 398, "a": "/assets/ex-looking-for-work-w-no.f56f17d4.mp3", "ex": "In this sentence, \"No\" is an adverb that means \"not.\" It is used to negate the phrase that follows it, indicating that something is not the case at this time. Here, \"No\" is placed at the beginning of the sentence to emphasize the negation.\n\nThe phrase \"por el momento\" translates to \"at the moment,\" so when combined, \"No por el momento\" means \"Not at the moment.\" The \"No\" clearly signals that whatever is being discussed is currently not happening or not applicable. \n\nIn summary, \"No\" serves as a negation, setting the tone for the entire statement."}, {"t": "por", "m": "for", "b": "por", "bm": "for", "s": 478, "e": 718, "a": "/assets/ex-looking-for-work-w-por.b58ce57d.mp3", "ex": "In the sentence \"No por el momento...\", the word \"por\" is a preposition. It connects the phrase \"el momento\" (the moment) to the context of the sentence, indicating a reason or a time frame. \n\nIn English, \"por\" can often be translated as \"for,\" and here it suggests that something is not happening \"for the moment\" or \"at this time.\" It emphasizes that the situation may change later, but currently, it is not the case. \n\nSo, \"por\" is essential in conveying the timing aspect of the statement, helping to clarify that the negation applies specifically to the present moment."}, {"t": "el", "m": "the", "b": "el", "bm": "the (male)", "s": 771, "e": 877, "a": "/assets/ex-looking-for-work-w-el.17d81074.mp3", "forms": [{"label": "Masc. sing.", "text": "el", "a": "/assets/ex-looking-for-work-w-el.17d81074.mp3"}, {"label": "Masc. plural", "text": "los", "a": "/assets/ex-looking-for-work-w-los.1e426e93.mp3"}], "ex": "In this sentence, \"el\" is a definite article in Spanish, which translates to \"the\" in English. It is used to specify a particular noun that is understood in the context. Here, \"el\" is connected to \"momento,\" which means \"moment.\" \n\nThe phrase \"el momento\" translates to \"the moment,\" indicating a specific time frame. The use of \"el\" helps to clarify that the speaker is referring to a particular moment, emphasizing that it is not the right time for whatever is being discussed. \n\nSo, in summary, \"el\" serves to define \"momento\" and is essential for conveying the meaning of the sentence as it specifies which moment is being referenced."}, {"t": "momento...", "m": "moment", "b": "momento", "bm": "moment", "s": 977, "e": 1755, "a": "/assets/ex-looking-for-work-w-momento.2b52853a.mp3", "forms": [{"label": "Singular", "text": "momento", "a": "/assets/ex-looking-for-work-w-momento.2b52853a.mp3"}, {"label": "Plural", "text": "momentos", "a": "/assets/ex-looking-for-work-w-momentos.a4415261.mp3"}], "ex": "The word \"momento\" in this sentence is a noun, meaning \"moment.\" It is used here to refer to a specific point in time. The phrase \"por el momento\" translates to \"at the moment,\" indicating that something is true or applicable only for the current time.\n\nIn this context, \"momento\" is the object of the preposition \"por,\" which means \"for.\" The entire phrase \"por el momento\" expresses a temporary situation. So, the speaker is saying that whatever they are discussing is not happening right now, but it could change in the future. \n\nOverall, \"momento\" helps convey the idea of a fleeting time frame, emphasizing that the statement is relevant only in the present."}]}]}]}</script>
 </section>
+<div class="wrap visually-hidden"><p lang="es">Debo encontrar trabajo... — I must find work... No, lo siento... — No, I&#x27;m sorry... Me encantan los libros... — I love books... No por el momento... — Not at the moment...</p></div>
 <section class="wrap practice">
   <h3 class="display">Read the Spanish</h3>
   <ul class="transcript" lang="es">
@@ -393,30 +337,22 @@
 </section>
 <section class="wrap stage-wrap">
   <h3 class="display stage-head">Click on a bubble</h3>
-  <p class="stage-note">Every line is voiced &mdash; tap a bubble to listen, tap a word for its meaning.</p>
-  <div class="stage">
-    <img loading="lazy" decoding="async" src="/assets/practice-intermediate.2579e3d2.webp" width="640" height="960" alt="Black-and-white Spanish comic page showing a tense conversation between three men.">
-    <button class="hotspot" style="left:6.8%;top:21.5%;width:24.2%;height:13.0%" data-who="" data-es="Y tú los mantendrás a salvo." data-en="And you&rsquo;ll keep them safe." data-words='[{"t":"Y","m":"and","b":"y","bm":"and","a":"/assets/iw-y.813f73b1.mp3"},{"t":"tú","m":"you","b":"tú","bm":"you","a":"/assets/iw-tu.4764a6bb.mp3"},{"t":"los","m":"them","b":"el","bm":"the","a":"/assets/iw-los.6ca1efcb.mp3","ba":"/assets/iw-el.81e2cd31.mp3"},{"t":"mantendrás","m":"will keep","b":"mantener","bm":"to maintain","a":"/assets/iw-mantendras.97e9d15a.mp3","ba":"/assets/iw-mantener.a0da923a.mp3"},{"t":"a","m":"to","b":"a","bm":"to","a":"/assets/iw-a.8eecab6f.mp3"},{"t":"salvo.","m":"safe","b":"salvo","bm":"safe","a":"/assets/iw-salvo.f2fa46a7.mp3"}]' data-audio="/assets/ib1.2c886dbf.mp3" aria-label="Y tú los mantendrás a salvo. — tap to hear and translate"></button>
-    <button class="hotspot" style="left:24.3%;top:30.8%;width:25.0%;height:18.4%" data-who="" data-es="Y ayudarán a mantenernos a salvo..." data-en="And they&rsquo;ll help keep us safe..." data-words='[{"t":"Y","m":"and","b":"y","bm":"and","a":"/assets/iw-y.813f73b1.mp3"},{"t":"ayudarán","m":"they will help","b":"ayudar","bm":"to help","a":"/assets/iw-ayudaran.21ab53e3.mp3","ba":"/assets/iw-ayudar.2047fbeb.mp3"},{"t":"a","m":"to","b":"a","bm":"to","a":"/assets/iw-a.8eecab6f.mp3"},{"t":"mantenernos","m":"keep us","b":"mantener","bm":"to maintain","a":"/assets/iw-mantenernos.898119f0.mp3","ba":"/assets/iw-mantener.a0da923a.mp3"},{"t":"a","m":"to","b":"a","bm":"to","a":"/assets/iw-a.8eecab6f.mp3"},{"t":"salvo...","m":"safe","b":"salvo","bm":"safe","a":"/assets/iw-salvo.f2fa46a7.mp3"}]' data-audio="/assets/ib2.8716b26d.mp3" aria-label="Y ayudarán a mantenernos a salvo... — tap to hear and translate"></button>
-    <button class="hotspot" style="left:57.9%;top:22.6%;width:36.5%;height:13.0%" data-who="" data-es="Tiene razón. Por eso nos quedamos..." data-en="He&rsquo;s right. That&rsquo;s why we&rsquo;re staying..." data-words='[{"t":"Tiene","m":"he has","b":"tener","bm":"to have","a":"/assets/iw-tiene.c3a99bf9.mp3","ba":"/assets/iw-tener.e4a432be.mp3"},{"t":"razón.","m":"reason","b":"razón","bm":"reason","a":"/assets/iw-razon.e7afc492.mp3"},{"t":"Por","m":"for","b":"por","bm":"by","a":"/assets/iw-por.95487b6a.mp3"},{"t":"eso","m":"that","b":"eso","bm":"that","a":"/assets/iw-eso.a6a06714.mp3"},{"t":"nos","m":"us","b":"nos","bm":"us","a":"/assets/iw-nos.20a01724.mp3"},{"t":"quedamos...","m":"we stayed","b":"quedar","bm":"to stay","a":"/assets/iw-quedamos.5e1aaf68.mp3","ba":"/assets/iw-quedar.5b118d65.mp3"}]' data-audio="/assets/ib3.51490384.mp3" aria-label="Tiene razón. Por eso nos quedamos... — tap to hear and translate"></button>
-    <button class="hotspot" style="left:6.8%;top:70.3%;width:33.0%;height:11.6%" data-who="" data-es="¿Y cómo sugieres que hagamos eso?" data-en="And how do you suggest we do that?" data-words='[{"t":"¿Y","m":"and","b":"y","bm":"and","a":"/assets/iw-y.813f73b1.mp3"},{"t":"cómo","m":"how","b":"cómo","bm":"how","a":"/assets/iw-como.f0201ebf.mp3"},{"t":"sugieres","m":"you suggest","b":"sugerir","bm":"to suggest","a":"/assets/iw-sugieres.209f25dd.mp3","ba":"/assets/iw-sugerir.e9662fe4.mp3"},{"t":"que","m":"that","b":"que","bm":"that","a":"/assets/iw-que.e219eefa.mp3"},{"t":"hagamos","m":"let&#39;s do","b":"hacer","bm":"to do","a":"/assets/iw-hagamos.22cd4156.mp3","ba":"/assets/iw-hacer.018b4e53.mp3"},{"t":"eso?","m":"that","b":"eso","bm":"that","a":"/assets/iw-eso.a6a06714.mp3"}]' data-audio="/assets/ib4.b84fa0d9.mp3" aria-label="¿Y cómo sugieres que hagamos eso? — tap to hear and translate"></button>
-    <button class="hotspot" style="left:70.8%;top:65.9%;width:24.4%;height:20.2%" data-who="" data-es="Deja que yo me preocupe por los detalles." data-en="Let me worry about the details." data-words='[{"t":"Deja","m":"let","b":"dejar","bm":"to let","a":"/assets/iw-deja.1143a1b6.mp3","ba":"/assets/iw-dejar.a9b3638c.mp3"},{"t":"que","m":"that","b":"que","bm":"that","a":"/assets/iw-que.e219eefa.mp3"},{"t":"yo","m":"I","b":"yo","bm":"I","a":"/assets/iw-yo.7bf516f5.mp3"},{"t":"me","m":"me","b":"me","bm":"to me","a":"/assets/iw-me.3d1f2d3e.mp3"},{"t":"preocupe","m":"worry","b":"preocupar","bm":"to worry","a":"/assets/iw-preocupe.38ee07e5.mp3","ba":"/assets/iw-preocupar.e3b4fd25.mp3"},{"t":"por","m":"for","b":"por","bm":"by","a":"/assets/iw-por.95487b6a.mp3"},{"t":"los","m":"the","b":"el","bm":"the","a":"/assets/iw-los.6ca1efcb.mp3","ba":"/assets/iw-el.81e2cd31.mp3"},{"t":"detalles.","m":"details","b":"detalle","bm":"detail","a":"/assets/iw-detalles.20f9f877.mp3","ba":"/assets/iw-detalle.054fb67c.mp3"}]' data-audio="/assets/ib5.a4fa44c1.mp3" aria-label="Deja que yo me preocupe por los detalles. — tap to hear and translate"></button>
-    <div class="popup" hidden>
-      <button class="popup-x" aria-label="Close">✕</button>
-      <div class="popup-who label"></div>
-      <p class="popup-es" lang="es"></p>
-      <div class="word-card" hidden></div>
-      <div class="popup-row">
-        <button class="popup-play">▶︎&nbsp; Play</button>
-        <button class="popup-tr">Show translation</button>
-      </div>
-      <p class="popup-en" hidden></p>
-      <p class="popup-vocab" hidden></p>
-    </div>
+  <p class="stage-note">Every line is voiced — tap a bubble to listen, tap a word for its meaning.</p>
+  <div class="stage" data-ex="staying-safe">
+    <img loading="lazy" decoding="async" src="/assets/example-staying-safe.a3f1dcad.webp" width="640" height="960" alt="A page from UNA ALIANZA IMPROBABLE (EL SUPERVIVIENTE), an original Comigo Spanish comic.">
+    <button class="hotspot" data-i="0" style="left:6.8%;top:21.5%;width:24.2%;height:13.0%" aria-label="Y tú los mantendrás a salvo. — tap to hear and explore"></button>
+    <button class="hotspot" data-i="1" style="left:24.3%;top:30.8%;width:25.0%;height:18.4%" aria-label="Y ayudarán a mantenernos a salvo... — tap to hear and explore"></button>
+    <button class="hotspot" data-i="2" style="left:57.9%;top:22.6%;width:36.5%;height:13.0%" aria-label="Tiene razón. Por eso nos quedamos... — tap to hear and explore"></button>
+    <button class="hotspot" data-i="3" style="left:6.8%;top:70.3%;width:33.0%;height:11.6%" aria-label="¿Y cómo sugieres que hagamos eso? — tap to hear and explore"></button>
+    <button class="hotspot" data-i="4" style="left:70.8%;top:65.9%;width:24.4%;height:20.2%" aria-label="Deja que yo me preocupe por los detalles. — tap to hear and explore"></button>
+    <div class="popup" hidden><button class="popup-x" aria-label="Close">✕</button><div class="popup-body"></div></div>
+    <div class="ex-sheet" hidden><div class="sh-head"><b></b><button class="sh-done">Done</button></div><div class="sh-body"></div></div>
     <audio preload="none"></audio>
     <div class="hint">👆 Tap a speech bubble</div>
   </div>
+  <script type="application/json" class="ex-data">{"bubbles": [{"x": 0.08030303030303032, "y": 0.22979797979797978, "w": 0.21818181818181814, "h": 0.1, "sentences": [{"es": "Y tú los mantendrás a salvo.", "en": "And you will keep them safe.", "g": "Mantendrás is the future tense of mantener, indicating what 'you' will do; 'los' is a direct object pronoun referring to the humans.", "a": "/assets/ex-staying-safe-b1-1.2c886dbf.mp3", "words": [{"t": "Y", "m": "and", "b": "y", "bm": "and", "s": 0, "e": 336, "a": "/assets/ex-staying-safe-w-y.813f73b1.mp3", "ex": "The word \"y\" is a conjunction in this sentence. It means \"and\" in English and is used to connect ideas or clauses. In this case, it links the action of the previous statement (which we don't see here) to the action in this sentence: \"tú los mantendrás a salvo\" (you will keep them safe).\n\nBy using \"y,\" the speaker is emphasizing that there is an additional action or thought related to what has already been mentioned. It helps to create a flow in the conversation, making it clear that both ideas are part of the same context."}, {"t": "tú", "m": "you", "b": "tú", "bm": "you", "s": 357, "e": 400, "a": "/assets/ex-staying-safe-w-tu-1b40a5.4764a6bb.mp3", "ex": "In this sentence, \"tú\" is a subject pronoun. It refers directly to the person being addressed, meaning \"you\" in English. It indicates who is performing the action of the verb \"mantendrás,\" which means \"will keep.\"\n\nThe structure of the sentence is \"Y tú los mantendrás a salvo,\" where \"tú\" is essential because it specifies that the responsibility of keeping \"them\" safe falls on the person being spoken to. Without \"tú,\" the sentence would lack clarity about who is taking action.\n\nIn the present tense, the conjugation of the verb \"mantener\" (to keep) for \"tú\" is \"mantienes.\" Here’s a short conjugation table for \"mantener\":\n\n- yo mantengo (I keep)\n- tú mantienes (you keep)\n- él/ella/usted mantiene (he/she/you formal keeps)\n- nosotros/nosotras mantenemos (we keep)\n- ellos/ellas/ustedes mantienen (they/you all keep)\n\nSo, \"tú\" is crucial in this sentence to identify the subject and clarify who will keep \"them\" safe."}, {"t": "los", "m": "them", "b": "el", "bm": "the", "s": 480, "e": 720, "a": "/assets/ex-staying-safe-w-los.6ca1efcb.mp3", "ba": "/assets/ex-staying-safe-w-el.81e2cd31.mp3", "forms": [{"label": "Masc. sing.", "text": "el", "a": "/assets/ex-staying-safe-w-el.81e2cd31.mp3"}, {"label": "Fem. sing.", "text": "la", "a": "/assets/ex-staying-safe-w-la.14aec56c.mp3"}, {"label": "Masc. plural", "text": "los", "a": "/assets/ex-staying-safe-w-los.6ca1efcb.mp3"}, {"label": "Fem. plural", "text": "las", "a": "/assets/ex-staying-safe-w-las.2bf27ef6.mp3"}], "ex": "In this sentence, \"los\" is an object pronoun. It refers to a group of masculine plural nouns that have been previously mentioned or are understood in the context. In English, it translates to \"them.\"\n\nThe role of \"los\" is to replace the noun phrase that would indicate what is being kept safe. For example, if the context was about \"los niños\" (the children) or \"los secretos\" (the secrets), \"los\" would refer to those nouns. \n\nIn the sentence \"Y tú los mantendrás a salvo,\" \"los\" connects directly to the action of keeping safe, indicating that the subject \"tú\" (you) will perform this action on the unspecified group referred to by \"los.\""}, {"t": "mantendrás", "m": "will keep", "b": "mantener", "bm": "to maintain", "s": 760, "e": 1600, "a": "/assets/ex-staying-safe-w-mantendras-329fd1.97e9d15a.mp3", "ba": "/assets/ex-staying-safe-w-mantener.a0da923a.mp3", "forms": [{"label": "Present", "text": "mantengo", "a": "/assets/ex-staying-safe-w-mantengo.acfffeee.mp3"}, {"label": "Preterite", "text": "mantuve", "a": "/assets/ex-staying-safe-w-mantuve.53e9a73e.mp3"}, {"label": "Imperfect", "text": "mantenía", "a": "/assets/ex-staying-safe-w-mantenia-4fccff.2e4835d8.mp3"}, {"label": "Future", "text": "mantendré", "a": "/assets/ex-staying-safe-w-mantendre-74db3a.f762b002.mp3"}, {"label": "Conditional", "text": "mantendría", "a": "/assets/ex-staying-safe-w-mantendria-df4508.e7dec7ca.mp3"}, {"label": "Subjunctive", "text": "mantenga", "a": "/assets/ex-staying-safe-w-mantenga.8324e2e2.mp3"}, {"label": "Command", "text": "mantén", "a": "/assets/ex-staying-safe-w-manten-fdb952.aae13950.mp3"}, {"label": "Gerund", "text": "manteniendo", "a": "/assets/ex-staying-safe-w-manteniendo.ae19ed6b.mp3"}, {"label": "Past Participle", "text": "mantenido", "a": "/assets/ex-staying-safe-w-mantenido.517f12c0.mp3"}], "ex": "The word \"mantendrás\" is a verb form in the future tense. It comes from the infinitive \"mantener,\" which means \"to keep\" or \"to maintain.\" In this sentence, \"mantendrás\" is the second person singular form, referring to \"tú\" (you). \n\nHere’s a short present-tense conjugation for \"mantener\":\n- yo mantengo\n- tú mantienes\n- él/ella/usted mantiene\n- nosotros/nosotras mantenemos\n- ellos/ellas/ustedes mantienen\n\nIn the sentence \"Y tú los mantendrás a salvo,\" \"mantendrás\" indicates an action that the subject \"tú\" will perform in the future. The phrase \"los mantendrás\" means \"you will keep them,\" where \"los\" is the direct object pronoun referring to \"them.\" The whole sentence expresses a promise or assurance that the person being addressed will ensure the safety of \"them.\""}, {"t": "a", "m": "to", "b": "a", "bm": "to", "s": 1840, "e": 2080, "a": "/assets/ex-staying-safe-w-a.8eecab6f.mp3", "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"mantendrás\" (you will keep) to the adjective \"salvo\" (safe), indicating the state in which \"los\" (them) will be kept. \n\nThe phrase \"a salvo\" translates to \"safe\" in English, and \"a\" is necessary here to express the idea of keeping someone or something in a safe condition. Without \"a,\" the meaning would be incomplete. \n\nSo, in this context, \"a\" helps clarify how you will maintain the safety of \"los.\""}, {"t": "salvo.", "m": "safe", "b": "salvo", "bm": "safe", "s": 2160, "e": 2800, "a": "/assets/ex-staying-safe-w-salvo.f2fa46a7.mp3", "forms": [{"label": "Masc. sing.", "text": "salvo", "a": "/assets/ex-staying-safe-w-salvo.f2fa46a7.mp3"}, {"label": "Fem. sing.", "text": "salva", "a": "/assets/ex-staying-safe-w-salva.f9d59499.mp3"}, {"label": "Masc. plural", "text": "salvos", "a": "/assets/ex-staying-safe-w-salvos.221fb9c6.mp3"}, {"label": "Fem. plural", "text": "salvas", "a": "/assets/ex-staying-safe-w-salvas.740240db.mp3"}], "ex": "The word \"salvo\" in this sentence is an adjective meaning \"safe.\" It describes the state of \"los\" (them), which refers to whatever or whoever is being kept safe. In this context, \"salvo\" indicates that the action of keeping them will ensure their safety.\n\nThe sentence structure is \"tú los mantendrás a salvo,\" where \"tú\" is the subject (you), \"los\" is the direct object (them), \"mantendrás\" is the verb (you will keep), and \"a salvo\" is the phrase that describes the condition of \"los.\" \n\nSo, \"salvo\" is crucial here because it conveys the intended outcome of the action: that the subject will protect \"los\" from danger."}]}]}, {"x": 0.2545454545454546, "y": 0.32341291205752026, "w": 0.22575757575757577, "h": 0.15418427689506042, "sentences": [{"es": "Y ayudarán a mantenernos a salvo...", "en": "And they will help keep us safe...", "g": "Ayudarán is the future tense of ayudar; a mantenernos combines 'a' for 'to' plus the infinitive, and 'nos' is a pronoun for 'us'.", "a": "/assets/ex-staying-safe-b2-1.8716b26d.mp3", "words": [{"t": "Y", "m": "and", "b": "y", "bm": "and", "s": 0, "e": 260, "a": "/assets/ex-staying-safe-w-y.813f73b1.mp3", "ex": "The word \"y\" is a conjunction in this sentence. It translates to \"and\" in English and is used to connect ideas or phrases. In this case, \"y\" links the action of helping (\"ayudarán\") to whatever comes before it, indicating that there is an additional action or idea being presented.\n\nIn the sentence \"Y ayudarán a mantenernos a salvo...\", \"y\" introduces the idea that they will help, suggesting that this action is part of a larger context or list of actions. It emphasizes the continuation of thought, showing that there is more to say about what \"they\" will do."}, {"t": "ayudarán", "m": "they will help", "b": "ayudar", "bm": "to help", "s": 272, "e": 720, "a": "/assets/ex-staying-safe-w-ayudaran-11f3d4.21ab53e3.mp3", "ba": "/assets/ex-staying-safe-w-ayudar.2047fbeb.mp3", "forms": [{"label": "Present", "text": "ayudo", "a": "/assets/ex-staying-safe-w-ayudo.83810b09.mp3"}, {"label": "Preterite", "text": "ayudé", "a": "/assets/ex-staying-safe-w-ayude-8e488c.93e24458.mp3"}, {"label": "Imperfect", "text": "ayudaba", "a": "/assets/ex-staying-safe-w-ayudaba.1b88e65f.mp3"}, {"label": "Future", "text": "ayudaré", "a": "/assets/ex-staying-safe-w-ayudare-8fec11.6624ea27.mp3"}, {"label": "Conditional", "text": "ayudaría", "a": "/assets/ex-staying-safe-w-ayudaria-ca5a8f.782b2a36.mp3"}, {"label": "Subjunctive", "text": "ayude", "a": "/assets/ex-staying-safe-w-ayude.12ac4e60.mp3"}, {"label": "Command", "text": "ayuda", "a": "/assets/ex-staying-safe-w-ayuda.38983a4b.mp3"}, {"label": "Gerund", "text": "ayudando", "a": "/assets/ex-staying-safe-w-ayudando.7f3305b3.mp3"}, {"label": "Past Participle", "text": "ayudado", "a": "/assets/ex-staying-safe-w-ayudado.66118391.mp3"}], "ex": "The word \"ayudarán\" is a verb in the future tense, specifically the third-person plural form of the verb \"ayudar,\" which means \"to help.\" In this sentence, \"ayudarán\" translates to \"they will help.\" \n\nThe infinitive form is \"ayudar.\" Here’s a short present-tense conjugation table for \"ayudar\":\n\n- yo ayudo (I help)\n- tú ayudas (you help)\n- él/ella/usted ayuda (he/she/you help)\n- nosotros/nosotras ayudamos (we help)\n- ellos/ellas/ustedes ayudan (they/you all help)\n\nIn the sentence \"Y ayudarán a mantenernos a salvo...\", \"ayudarán\" indicates that a group of people or entities (referred to as \"they\") will provide assistance in keeping \"us\" (reflected in \"mantenernos\") safe. It emphasizes a future action that will benefit the speaker and others."}, {"t": "a", "m": "to", "b": "a", "bm": "to", "s": 1120, "e": 1520, "a": "/assets/ex-staying-safe-w-a.8eecab6f.mp3", "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"ayudarán\" (they will help) to the object \"mantenernos\" (to keep us). In Spanish, prepositions often indicate relationships between words, such as direction, purpose, or connection.\n\nHere, \"a\" is specifically used to introduce the infinitive verb \"mantener\" (to keep), forming the phrase \"ayudar a mantener\" (help to keep). This structure is common in Spanish, where the preposition \"a\" is used before an infinitive to indicate what the help is directed towards.\n\nSo, in this context, \"a\" plays a crucial role in linking the action of helping to the goal of keeping us safe."}, {"t": "mantenernos", "m": "keep us", "b": "mantener", "bm": "to maintain", "s": 1540, "e": 2240, "a": "/assets/ex-staying-safe-w-mantenernos.898119f0.mp3", "ba": "/assets/ex-staying-safe-w-mantener.a0da923a.mp3", "forms": [{"label": "Present", "text": "mantengo", "a": "/assets/ex-staying-safe-w-mantengo.acfffeee.mp3"}, {"label": "Preterite", "text": "mantuve", "a": "/assets/ex-staying-safe-w-mantuve.53e9a73e.mp3"}, {"label": "Imperfect", "text": "mantenía", "a": "/assets/ex-staying-safe-w-mantenia-4fccff.2e4835d8.mp3"}, {"label": "Future", "text": "mantendré", "a": "/assets/ex-staying-safe-w-mantendre-74db3a.f762b002.mp3"}, {"label": "Conditional", "text": "mantendría", "a": "/assets/ex-staying-safe-w-mantendria-df4508.e7dec7ca.mp3"}, {"label": "Subjunctive", "text": "mantenga", "a": "/assets/ex-staying-safe-w-mantenga.8324e2e2.mp3"}, {"label": "Command", "text": "mantén", "a": "/assets/ex-staying-safe-w-manten-fdb952.aae13950.mp3"}, {"label": "Gerund", "text": "manteniendo", "a": "/assets/ex-staying-safe-w-manteniendo.ae19ed6b.mp3"}, {"label": "Past Participle", "text": "mantenido", "a": "/assets/ex-staying-safe-w-mantenido.517f12c0.mp3"}], "ex": "The word \"mantenernos\" is a verb form in this sentence. It comes from the infinitive verb \"mantener,\" which means \"to keep\" or \"to maintain.\" In this context, \"mantenernos\" specifically means \"to keep us\" because it includes the reflexive pronoun \"nos,\" which refers to \"us.\"\n\nIn the present tense, \"mantener\" is conjugated as follows:\n- yo mantengo\n- tú mantienes\n- él/ella/usted mantiene\n- nosotros/nosotras mantenemos\n- ellos/ellas/ustedes mantienen\n\nHere, \"mantenernos\" is in the infinitive form but is used in a way that shows the action of keeping \"us\" safe. The phrase \"ayudarán a mantenernos\" translates to \"they will help keep us,\" indicating that \"they\" (the subject of the sentence) will assist in the action of keeping \"us\" safe. The reflexive pronoun \"nos\" connects the action directly to the people being kept safe, which is essential for understanding who is affected by the action."}, {"t": "a", "m": "to", "b": "a", "bm": "to", "s": 2400, "e": 2560, "a": "/assets/ex-staying-safe-w-a.8eecab6f.mp3", "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"ayudarán\" (they will help) to the infinitive \"mantener\" (to keep). The phrase \"ayudarán a mantener\" translates to \"will help to keep,\" showing the action of helping is directed towards the action of keeping.\n\nAdditionally, the second \"a\" in \"mantenernos a salvo\" connects \"mantenernos\" (to keep us) to \"salvo\" (safe). Here, \"a\" indicates the state or condition we are being kept in, which is \"safe.\" \n\nSo, in summary, \"a\" serves to link actions and clarify relationships between the verb and the following infinitive or adjective, making the sentence coherent and meaningful."}, {"t": "salvo...", "m": "safe", "b": "salvo", "bm": "safe", "s": 2620, "e": 5760, "a": "/assets/ex-staying-safe-w-salvo.f2fa46a7.mp3", "forms": [{"label": "Masc. sing.", "text": "salvo", "a": "/assets/ex-staying-safe-w-salvo.f2fa46a7.mp3"}, {"label": "Fem. sing.", "text": "salva", "a": "/assets/ex-staying-safe-w-salva.f9d59499.mp3"}, {"label": "Masc. plural", "text": "salvos", "a": "/assets/ex-staying-safe-w-salvos.221fb9c6.mp3"}, {"label": "Fem. plural", "text": "salvas", "a": "/assets/ex-staying-safe-w-salvas.740240db.mp3"}], "ex": "The word \"salvo\" in this sentence is an adjective meaning \"safe.\" It describes the state of being protected or unharmed. In the phrase \"a salvo,\" it functions as part of a prepositional phrase that indicates the condition of \"us\" (nosotros) after the action of keeping.\n\nIn this context, \"salvo\" is used to convey that the action of helping will result in \"us\" being in a safe state. The structure \"mantenernos a salvo\" translates to \"keep us safe,\" where \"mantener\" means \"to keep,\" and \"nos\" is the object pronoun referring to \"us.\" \n\nSo, \"salvo\" is there to specify the desired outcome of the help being provided. It emphasizes the importance of safety in the context of the sentence."}]}]}, {"x": 0.5909090909090909, "y": 0.24131312514796405, "w": 0.34090909090909083, "h": 0.1, "sentences": [{"es": "Tiene razón. Por eso nos quedamos...", "en": "He's right. That's why we stayed...", "g": "Tiene is the present tense of tener, used to express a current truth; por eso indicates reason, implying consequence for the action.", "a": "/assets/ex-staying-safe-b3-1.51490384.mp3", "words": [{"t": "Tiene", "m": "he has", "b": "tener", "bm": "to have", "s": 0, "e": 320, "a": "/assets/ex-staying-safe-w-tiene.c3a99bf9.mp3", "ba": "/assets/ex-staying-safe-w-tener.e4a432be.mp3", "forms": [{"label": "Present", "text": "tengo", "a": "/assets/ex-staying-safe-w-tengo.09792839.mp3"}, {"label": "Preterite", "text": "tuve", "a": "/assets/ex-staying-safe-w-tuve.c57aec16.mp3"}, {"label": "Imperfect", "text": "tenía", "a": "/assets/ex-staying-safe-w-tenia-1e955d.9824edf7.mp3"}, {"label": "Future", "text": "tendré", "a": "/assets/ex-staying-safe-w-tendre-6d4b25.e7e4d116.mp3"}, {"label": "Conditional", "text": "tendría", "a": "/assets/ex-staying-safe-w-tendria-cc46ce.5d14f613.mp3"}, {"label": "Subjunctive", "text": "tenga", "a": "/assets/ex-staying-safe-w-tenga.76da34be.mp3"}, {"label": "Command", "text": "ten", "a": "/assets/ex-staying-safe-w-ten.8ca12f84.mp3"}, {"label": "Gerund", "text": "teniendo", "a": "/assets/ex-staying-safe-w-teniendo.ea6bf626.mp3"}, {"label": "Past Participle", "text": "tenido", "a": "/assets/ex-staying-safe-w-tenido.a8f45d04.mp3"}], "ex": "The word \"tiene\" is a verb form in this sentence. It comes from the infinitive verb \"tener,\" which means \"to have.\" In this context, \"tiene\" is the third-person singular form in the present tense, used to express possession or a state of being. \n\nHere's a short conjugation table for \"tener\" in the present tense:\n\n- yo tengo\n- tú tienes\n- él/ella/usted tiene\n- nosotros/nosotras tenemos\n- ellos/ellas/ustedes tienen\n\nIn the sentence \"Tiene razón,\" \"tiene\" translates to \"he has\" or \"he's right,\" indicating that someone possesses the quality of being correct. This verb is essential here because it establishes the subject's correctness, leading to the conclusion in the following part of the sentence, \"Por eso nos quedamos...\" (\"That's why we stayed...\")."}, {"t": "razón.", "m": "reason", "b": "razón", "bm": "reason", "s": 420, "e": 1520, "a": "/assets/ex-staying-safe-w-razon-cd0a0b.e7afc492.mp3", "forms": [{"label": "Singular", "text": "razón", "a": "/assets/ex-staying-safe-w-razon-cd0a0b.e7afc492.mp3"}, {"label": "Plural", "text": "razones", "a": "/assets/ex-staying-safe-w-razones.c3643716.mp3"}], "ex": "In this sentence, \"razón\" is a noun meaning \"reason.\" It is used in the phrase \"Tiene razón,\" which translates to \"He’s right.\" Here, \"razón\" is the subject of the verb \"tiene,\" which is the third-person singular form of the verb \"tener\" (to have). \n\nThe infinitive is \"tener,\" and here’s a short present-tense conjugation table for it:\n\n- yo tengo\n- tú tienes\n- él/ella/usted tiene\n- nosotros/nosotras tenemos\n- ellos/ellas/ustedes tienen\n\nIn this context, \"razón\" indicates that someone has a valid point or justification for their opinion or statement. It emphasizes agreement with the person's perspective, which is why it appears in this sentence. The following part, \"Por eso nos quedamos,\" translates to \"That's why we stayed,\" linking the acknowledgment of being right to the action taken."}, {"t": "Por", "m": "for", "b": "por", "bm": "by", "s": 1536, "e": 1680, "a": "/assets/ex-staying-safe-w-por.95487b6a.mp3", "ex": "In this sentence, \"por\" is a preposition. It connects the reason for the action that follows. The phrase \"por eso\" translates to \"that's why,\" indicating the cause or justification for the action of staying.\n\nHere, \"por\" introduces the reason behind the decision to stay, which is implied to be related to the correctness of what was previously stated. It helps to clarify the relationship between the two parts of the conversation: \"Tiene razón\" (He's right) and \"nos quedamos\" (we stayed). \n\nSo, \"por\" is essential for linking the reason to the action, making the sentence coherent and meaningful."}, {"t": "eso", "m": "that", "b": "eso", "bm": "that", "s": 1760, "e": 2000, "a": "/assets/ex-staying-safe-w-eso.a6a06714.mp3", "forms": [{"label": "Singular", "text": "eso", "a": "/assets/ex-staying-safe-w-eso.a6a06714.mp3"}, {"label": "Plural", "text": "eso", "a": "/assets/ex-staying-safe-w-eso.a6a06714.mp3"}], "ex": "In this sentence, \"eso\" is a demonstrative pronoun that translates to \"that\" in English. It refers back to the idea or reason previously mentioned in the conversation, which is implied to be the reason for staying. \n\nThe phrase \"por eso\" means \"that's why,\" connecting the statement about having reason to the action of staying. It serves to clarify the cause or justification for the action that follows. In this context, \"eso\" helps to link the speaker's acknowledgment of the correctness of someone's statement to their decision to stay. \n\nSo, \"eso\" is functioning as a pronoun that points to a specific idea or reason, making the sentence cohesive and clear."}, {"t": "nos", "m": "us", "b": "nos", "bm": "us", "s": 2060, "e": 2240, "a": "/assets/ex-staying-safe-w-nos.20a01724.mp3", "ex": "In the sentence \"Tiene razón. Por eso nos quedamos...\", the word \"nos\" is a reflexive pronoun. It refers to the subject of the action, which in this case is \"we.\" The pronoun \"nos\" indicates that the action of staying is performed by the group that includes the speaker.\n\nThe verb in this sentence is \"quedamos,\" which comes from the infinitive \"quedarse.\" Here’s a short present-tense conjugation for \"quedarse\":\n\n- yo me quedo\n- tú te quedas\n- él/ella/usted se queda\n- nosotros/nosotras nos quedamos\n- ellos/ellas/ustedes se quedan\n\nIn this context, \"nos\" is essential because it shows that the action of staying is not just happening to someone else; it involves the speaker and their group. So, \"nos quedamos\" translates to \"we stayed,\" emphasizing that the speaker is part of the group that made the decision to stay."}, {"t": "quedamos...", "m": "we stayed", "b": "quedar", "bm": "to stay", "s": 2272, "e": 3680, "a": "/assets/ex-staying-safe-w-quedamos.5e1aaf68.mp3", "ba": "/assets/ex-staying-safe-w-quedar.5b118d65.mp3", "forms": [{"label": "Present", "text": "quedo", "a": "/assets/ex-staying-safe-w-quedo.59bba520.mp3"}, {"label": "Preterite", "text": "quedé", "a": "/assets/ex-staying-safe-w-quede-bff6bb.dc632ceb.mp3"}, {"label": "Imperfect", "text": "quedaba", "a": "/assets/ex-staying-safe-w-quedaba.78a422ab.mp3"}, {"label": "Future", "text": "quedaré", "a": "/assets/ex-staying-safe-w-quedare-c4021d.e33ed933.mp3"}, {"label": "Conditional", "text": "quedaría", "a": "/assets/ex-staying-safe-w-quedaria-099484.fe78bcf3.mp3"}, {"label": "Subjunctive", "text": "quede", "a": "/assets/ex-staying-safe-w-quede.7ac5828e.mp3"}, {"label": "Command", "text": "queda", "a": "/assets/ex-staying-safe-w-queda.cab03a18.mp3"}, {"label": "Gerund", "text": "quedando", "a": "/assets/ex-staying-safe-w-quedando.9ea40250.mp3"}, {"label": "Past Participle", "text": "quedado", "a": "/assets/ex-staying-safe-w-quedado.016625cd.mp3"}], "ex": "\"Quedamos\" is the first-person plural form of the verb \"quedar\" in the simple past tense (preterite). The infinitive \"quedar\" means \"to stay\" or \"to remain.\" In this sentence, \"quedamos\" translates to \"we stayed.\"\n\nHere’s a short conjugation table for \"quedar\" in the present tense:\n\n- yo quedo\n- tú quedas\n- él/ella/usted queda\n- nosotros/nosotras quedamos\n- vosotros/vosotras quedáis\n- ellos/ellas/ustedes quedan\n\nIn the sentence \"Por eso nos quedamos,\" the word \"quedamos\" indicates an action performed by the speaker and others included in \"nos.\" It shows that the group decided to stay, which connects back to the reason mentioned earlier in the conversation. The phrase \"Por eso\" (\"That's why\") sets up the context for their decision to stay, emphasizing the rationale behind it."}]}]}, {"x": 0.08030303030303029, "y": 0.7183838353012546, "w": 0.30606060606060603, "h": 0.08585858585858597, "sentences": [{"es": "¿Y cómo sugieres que hagamos eso?", "en": "And how do you suggest we do that? ", "g": "Sugieres is in the present tense, asking about a suggestion in the present; 'que' is used to introduce a subordinate clause.", "a": "/assets/ex-staying-safe-b4-1.b84fa0d9.mp3", "words": [{"t": "¿Y", "m": "and", "b": "y", "bm": "and", "s": 0, "e": 380, "a": "/assets/ex-staying-safe-w-y.813f73b1.mp3", "ex": "The word \"y\" in this sentence is a conjunction, which is a part of speech used to connect words, phrases, or clauses. In this case, \"y\" translates to \"and\" in English. It serves to link the question \"¿Cómo sugieres que hagamos eso?\" (How do you suggest we do that?) with whatever was previously mentioned in the conversation, implying that the speaker is continuing a thought or adding to a discussion.\n\nIn the context of the sentence, \"y\" helps to create a smooth transition between ideas, indicating that the speaker is building on what was said before. It emphasizes the connection between the previous statement and the current question, making the dialogue more cohesive."}, {"t": "cómo", "m": "how", "b": "cómo", "bm": "how", "s": 400, "e": 480, "a": "/assets/ex-staying-safe-w-como-d4d1ee.f0201ebf.mp3", "ex": "In this sentence, \"cómo\" is an adverb meaning \"how.\" It is used to ask for a manner or method regarding the suggestion being made. The phrase \"¿Y cómo sugieres...\" translates to \"And how do you suggest...\" indicating that the speaker is seeking clarification or details about the suggestion.\n\nAs an adverb, \"cómo\" does not change form and does not have a conjugation like verbs do. Its role here is to connect the question to the action of suggesting, specifically asking for the way in which the action should be done. This makes it essential for understanding the inquiry about the method of doing \"eso\" (that)."}, {"t": "sugieres", "m": "you suggest", "b": "sugerir", "bm": "to suggest", "s": 560, "e": 1280, "a": "/assets/ex-staying-safe-w-sugieres.209f25dd.mp3", "ba": "/assets/ex-staying-safe-w-sugerir.e9662fe4.mp3", "forms": [{"label": "Present", "text": "sugiero", "a": "/assets/ex-staying-safe-w-sugiero.fe46f1f3.mp3"}, {"label": "Preterite", "text": "sugerí", "a": "/assets/ex-staying-safe-w-sugeri-4f5358.fc6d2523.mp3"}, {"label": "Imperfect", "text": "sugería", "a": "/assets/ex-staying-safe-w-sugeria-a05ad3.37010379.mp3"}, {"label": "Future", "text": "sugeriré", "a": "/assets/ex-staying-safe-w-sugerire-e43385.78f49c25.mp3"}, {"label": "Conditional", "text": "sugeriría", "a": "/assets/ex-staying-safe-w-sugeriria-593b34.9911089c.mp3"}, {"label": "Subjunctive", "text": "sugiera", "a": "/assets/ex-staying-safe-w-sugiera.f69ee57b.mp3"}, {"label": "Command", "text": "sugiere", "a": "/assets/ex-staying-safe-w-sugiere.3b427d2e.mp3"}, {"label": "Gerund", "text": "sugiriendo", "a": "/assets/ex-staying-safe-w-sugiriendo.a9c3575d.mp3"}, {"label": "Past Participle", "text": "sugerido", "a": "/assets/ex-staying-safe-w-sugerido.147fe4fe.mp3"}], "ex": "The word \"sugieres\" is a verb form in this sentence. It comes from the infinitive \"sugerir,\" which means \"to suggest.\" In the present tense, the conjugation for \"sugerir\" is as follows:\n\n- yo sugiero\n- tú sugieres\n- él/ella/usted sugiere\n- nosotros/nosotras sugerimos\n- ellos/ellas/ustedes sugieren\n\nIn the sentence \"¿Y cómo sugieres que hagamos eso?\", \"sugieres\" is the second-person singular form (tú) of the verb, meaning \"you suggest.\" It indicates that the speaker is asking someone directly for their suggestion on how to do something.\n\nThe structure of the sentence shows that the speaker is inquiring about the other person's opinion or advice, as indicated by the phrase \"¿Y cómo sugieres...?\" This highlights the conversational tone and the request for input from the listener."}, {"t": "que", "m": "that", "b": "que", "bm": "that", "s": 1340, "e": 1520, "a": "/assets/ex-staying-safe-w-que.e219eefa.mp3", "ex": "In this sentence, \"que\" is a conjunction. It connects the main clause \"sugieres\" (you suggest) with the subordinate clause \"hagamos eso\" (we do that). This structure is used to express what is being suggested.\n\nThe word \"que\" is essential here because it introduces the idea or action that is being proposed. Without \"que,\" the sentence would be incomplete and wouldn't clearly convey the suggestion being made. \n\nSo, in summary, \"que\" serves to link the suggestion to the action in the sentence, making it clear that the speaker is asking how to carry out the suggestion."}, {"t": "hagamos", "m": "let's do", "b": "hacer", "bm": "to do", "s": 1600, "e": 2000, "a": "/assets/ex-staying-safe-w-hagamos.22cd4156.mp3", "ba": "/assets/ex-staying-safe-w-hacer.018b4e53.mp3", "forms": [{"label": "Present", "text": "hago", "a": "/assets/ex-staying-safe-w-hago.489f2426.mp3"}, {"label": "Preterite", "text": "hice", "a": "/assets/ex-staying-safe-w-hice.18e52df4.mp3"}, {"label": "Imperfect", "text": "hacía", "a": "/assets/ex-staying-safe-w-hacia-9239e5.4691cb3a.mp3"}, {"label": "Future", "text": "haré", "a": "/assets/ex-staying-safe-w-hare-0a2c6b.6bd9e152.mp3"}, {"label": "Conditional", "text": "haría", "a": "/assets/ex-staying-safe-w-haria-dcde3f.b09c5f0c.mp3"}, {"label": "Subjunctive", "text": "haga", "a": "/assets/ex-staying-safe-w-haga.947e58c6.mp3"}, {"label": "Command", "text": "haz", "a": "/assets/ex-staying-safe-w-haz.8f47bb7f.mp3"}, {"label": "Gerund", "text": "haciendo", "a": "/assets/ex-staying-safe-w-haciendo.4e6009c4.mp3"}, {"label": "Past Participle", "text": "hecho", "a": "/assets/ex-staying-safe-w-hecho.98fa206d.mp3"}], "ex": "The word \"hagamos\" is a verb form in this sentence. It is the first-person plural (nosotros) form of the verb \"hacer,\" which means \"to do\" or \"to make.\" In this context, \"hagamos\" translates to \"we do\" or \"let's do.\"\n\nIn the sentence \"¿Y cómo sugieres que hagamos eso?\" the speaker is asking for a suggestion on how to perform a certain action. The use of \"hagamos\" indicates that the action is intended to be done by the speaker and others included in the conversation. \n\nHere's a short present-tense conjugation of \"hacer\":\n- yo hago\n- tú haces\n- él/ella/usted hace\n- nosotros/nosotras hacemos\n- vosotros/vosotras hacéis\n- ellos/ellas/ustedes hacen\n\nSo, \"hagamos\" is specifically used here to express a collective action that the speaker is proposing."}, {"t": "eso?", "m": "that", "b": "eso", "bm": "that", "s": 2100, "e": 4080, "a": "/assets/ex-staying-safe-w-eso.a6a06714.mp3", "forms": [{"label": "Singular", "text": "eso", "a": "/assets/ex-staying-safe-w-eso.a6a06714.mp3"}, {"label": "Plural", "text": "eso", "a": "/assets/ex-staying-safe-w-eso.a6a06714.mp3"}], "ex": "In this sentence, \"eso\" is a demonstrative pronoun. It translates to \"that\" in English and refers to something previously mentioned or understood in the context of the conversation. \n\nThe structure of the sentence is asking for a suggestion about an action, so \"eso\" is used to point to the specific action or idea that the speaker is referring to. The phrase \"hagamos eso\" translates to \"we do that,\" where \"eso\" indicates the particular thing being suggested.\n\nIn summary, \"eso\" serves to clarify what is being discussed, making the communication more precise."}]}]}, {"x": 0.7196969696969696, "y": 0.6744444413618609, "w": 0.21969696969696972, "h": 0.17191918883660828, "sentences": [{"es": "Deja que yo me preocupe por los detalles.", "en": "Let me worry about the details.", "g": "Deja is in the imperative form, instructing someone; me is a reflexive pronoun indicating who is worried.", "a": "/assets/ex-staying-safe-b5-1.a4fa44c1.mp3", "words": [{"t": "Deja", "m": "let", "b": "dejar", "bm": "to let", "s": 0, "e": 400, "a": "/assets/ex-staying-safe-w-deja.1143a1b6.mp3", "ba": "/assets/ex-staying-safe-w-dejar.a9b3638c.mp3", "forms": [{"label": "Present", "text": "dejo", "a": "/assets/ex-staying-safe-w-dejo.d82e0e69.mp3"}, {"label": "Preterite", "text": "dejé", "a": "/assets/ex-staying-safe-w-deje-5f8c72.61116c57.mp3"}, {"label": "Imperfect", "text": "dejaba", "a": "/assets/ex-staying-safe-w-dejaba.f749e277.mp3"}, {"label": "Future", "text": "dejaré", "a": "/assets/ex-staying-safe-w-dejare-3e1927.e3c1d034.mp3"}, {"label": "Conditional", "text": "dejaría", "a": "/assets/ex-staying-safe-w-dejaria-d42241.3651d749.mp3"}, {"label": "Subjunctive", "text": "deje", "a": "/assets/ex-staying-safe-w-deje.35ff034a.mp3"}, {"label": "Command", "text": "deja", "a": "/assets/ex-staying-safe-w-deja.1143a1b6.mp3"}, {"label": "Gerund", "text": "dejando", "a": "/assets/ex-staying-safe-w-dejando.d6eb96e7.mp3"}, {"label": "Past Participle", "text": "dejado", "a": "/assets/ex-staying-safe-w-dejado.56370401.mp3"}], "ex": "The word \"deja\" is a verb in the present tense, specifically the second-person singular form of \"dejar,\" which means \"to let\" or \"to allow.\" In this sentence, \"deja\" is used as a command or request, meaning \"let\" or \"allow.\" It is addressing someone directly, asking them to permit the speaker to take care of something.\n\nHere's a short conjugation table for \"dejar\" in the present tense:\n\n- yo dejo\n- tú dejas\n- él/ella/usted deja\n- nosotros/nosotras dejamos\n- vosotros/vosotras dejáis\n- ellos/ellas/ustedes dejan\n\nIn the sentence \"Deja que yo me preocupe por los detalles,\" \"deja\" is crucial because it sets the tone for the speaker's request to the listener, asking them to allow the speaker to worry about the details. The phrase \"que yo me preocupe\" follows \"deja,\" indicating what the speaker wants to be permitted."}, {"t": "que", "m": "that", "b": "que", "bm": "that", "s": 460, "e": 640, "a": "/assets/ex-staying-safe-w-que.e219eefa.mp3", "ex": "In this sentence, \"que\" is a conjunction. It connects two clauses: \"Deja\" (Let) and \"yo me preocupe por los detalles\" (I worry about the details). Specifically, it introduces the subordinate clause that explains what you are allowing someone to do.\n\nThe phrase \"Deja que\" translates to \"Let\" in English, and \"que\" is necessary here to link the action of allowing to the action of worrying. Without \"que,\" the sentence would be incomplete and wouldn't convey the intended meaning. \n\nSo, in this context, \"que\" serves to connect the main action of allowing with the subordinate action of worrying, making the sentence flow smoothly."}, {"t": "yo", "m": "I", "b": "yo", "bm": "I", "s": 720, "e": 880, "a": "/assets/ex-staying-safe-w-yo.7bf516f5.mp3", "ex": "In this sentence, \"yo\" is a subject pronoun. It means \"I\" in English and is used to indicate who is performing the action of the verb. Here, \"yo\" is essential because it clarifies that the speaker is the one who will worry about the details.\n\nThe verb in this sentence is \"preocupe,\" which comes from the infinitive \"preocupar.\" In the present tense, the conjugation for \"yo\" is \"preocupo.\" So, the full action is that \"I worry\" about the details.\n\nOverall, \"yo\" is there to emphasize that the speaker wants to take responsibility for the details, making it clear who is involved in the action."}, {"t": "me", "m": "me", "b": "me", "bm": "to me", "s": 960, "e": 1120, "a": "/assets/ex-staying-safe-w-me.3d1f2d3e.mp3", "ex": "In this sentence, \"me\" is a reflexive pronoun. It refers back to the subject \"yo\" (I), indicating that the action of worrying is directed towards the speaker themselves. \n\nThe verb in this sentence is \"preocupe,\" which comes from the infinitive \"preocupar.\" Here’s a short present-tense conjugation for \"preocupar\" with the reflexive pronoun:\n\n- yo me preocupo (I worry)\n- tú te preocupas (you worry)\n- él/ella se preocupa (he/she worries)\n- nosotros/nosotras nos preocupamos (we worry)\n- ellos/ellas se preocupan (they worry)\n\nIn this context, \"me\" emphasizes that the speaker is taking responsibility for worrying about the details. The phrase \"deja que yo me preocupe\" translates to \"let me worry,\" highlighting the personal involvement in the action."}, {"t": "preocupe", "m": "worry", "b": "preocupar", "bm": "to worry", "s": 1160, "e": 1840, "a": "/assets/ex-staying-safe-w-preocupe.38ee07e5.mp3", "ba": "/assets/ex-staying-safe-w-preocupar.e3b4fd25.mp3", "forms": [{"label": "Present", "text": "preocupo", "a": "/assets/ex-staying-safe-w-preocupo.247f9996.mp3"}, {"label": "Preterite", "text": "preocupé", "a": "/assets/ex-staying-safe-w-preocupe-f4eb06.f88078b4.mp3"}, {"label": "Imperfect", "text": "preocupaba", "a": "/assets/ex-staying-safe-w-preocupaba.ef3333e1.mp3"}, {"label": "Future", "text": "preocuparé", "a": "/assets/ex-staying-safe-w-preocupare-a54ef5.a621a817.mp3"}, {"label": "Conditional", "text": "preocuparía", "a": "/assets/ex-staying-safe-w-preocuparia-872342.6a380294.mp3"}, {"label": "Subjunctive", "text": "preocupe", "a": "/assets/ex-staying-safe-w-preocupe.38ee07e5.mp3"}, {"label": "Command", "text": "preocupa", "a": "/assets/ex-staying-safe-w-preocupa.2550487b.mp3"}, {"label": "Gerund", "text": "preocupando", "a": "/assets/ex-staying-safe-w-preocupando.ce17caab.mp3"}, {"label": "Past Participle", "text": "preocupado", "a": "/assets/ex-staying-safe-w-preocupado.96db0377.mp3"}], "ex": "The word \"preocupe\" is a verb form in this sentence. It comes from the infinitive verb \"preocupar,\" which means \"to worry.\" In this context, \"preocupe\" is in the present subjunctive mood, used to express a wish or desire. \n\nThe conjugation for \"preocupar\" in the present subjunctive is as follows:\n- yo me preocupe\n- tú te preocupes\n- él/ella/usted se preocupe\n- nosotros/nosotras nos preocupemos\n- ellos/ellas/ustedes se preocupen\n\nIn the sentence \"Deja que yo me preocupe por los detalles,\" the phrase \"que yo me preocupe\" means \"that I worry.\" Here, \"preocupe\" indicates the speaker's desire to take responsibility for worrying about the details. The use of the subjunctive (\"preocupe\") is triggered by the phrase \"Deja que,\" which translates to \"Let.\" This structure shows that the speaker is asking for permission or expressing a wish."}, {"t": "por", "m": "for", "b": "por", "bm": "by", "s": 2060, "e": 2720, "a": "/assets/ex-staying-safe-w-por.95487b6a.mp3", "ex": "In the sentence \"Deja que yo me preocupe por los detalles,\" the word \"por\" is a preposition. It connects the verb \"preocupe\" (from the infinitive \"preocupar\") to the noun \"detalles.\" Here, \"por\" indicates the reason or cause for worrying, which is specifically \"los detalles\" (the details).\n\nIn English, we often use \"about\" in this context, but in Spanish, \"por\" is the correct preposition to express this relationship. It shows that the speaker is concerned regarding the details. \n\nSo, \"por\" is essential in this sentence because it clarifies what the speaker is worrying about, linking the action of worrying to the specific subject of concern."}, {"t": "los", "m": "the", "b": "el", "bm": "the", "s": 2760, "e": 2960, "a": "/assets/ex-staying-safe-w-los.6ca1efcb.mp3", "ba": "/assets/ex-staying-safe-w-el.81e2cd31.mp3", "forms": [{"label": "Masc. sing.", "text": "el", "a": "/assets/ex-staying-safe-w-el.81e2cd31.mp3"}, {"label": "Fem. sing.", "text": "la", "a": "/assets/ex-staying-safe-w-la.14aec56c.mp3"}, {"label": "Masc. plural", "text": "los", "a": "/assets/ex-staying-safe-w-los.6ca1efcb.mp3"}, {"label": "Fem. plural", "text": "las", "a": "/assets/ex-staying-safe-w-las.2bf27ef6.mp3"}], "ex": "In this sentence, \"los\" is a definite article in Spanish. It is used to specify and indicate that we are talking about particular details. In English, it translates to \"the,\" so \"los detalles\" means \"the details.\"\n\n\"Los\" is plural and masculine, which matches the noun \"detalles,\" also plural and masculine. This agreement in gender and number is important in Spanish grammar. The phrase \"los detalles\" refers to specific details that the speaker is willing to take responsibility for, as indicated by \"me preocupe por\" (let me worry about). \n\nSo, in summary, \"los\" helps to clarify which details are being discussed, making it clear that the speaker is referring to specific ones rather than details in general."}, {"t": "detalles.", "m": "details", "b": "detalle", "bm": "detail", "s": 3040, "e": 3840, "a": "/assets/ex-staying-safe-w-detalles.20f9f877.mp3", "ba": "/assets/ex-staying-safe-w-detalle.054fb67c.mp3", "forms": [{"label": "Singular", "text": "detalle", "a": "/assets/ex-staying-safe-w-detalle.054fb67c.mp3"}, {"label": "Plural", "text": "detalles", "a": "/assets/ex-staying-safe-w-detalles.20f9f877.mp3"}], "ex": "The word \"detalles\" is a noun in this sentence. It is in the plural form and means \"details\" in English. In the context of the sentence, \"los detalles\" refers to specific aspects or elements that the speaker is willing to take responsibility for.\n\nIn the sentence \"Deja que yo me preocupe por los detalles,\" the phrase \"por los detalles\" indicates what the speaker is concerned about. The definite article \"los\" specifies that these are particular details, suggesting that they are known or relevant to the situation at hand. \n\nOverall, \"detalles\" plays a crucial role in clarifying what the speaker is willing to worry about, making the sentence more specific and meaningful."}]}]}]}</script>
 </section>
+<div class="wrap visually-hidden"><p lang="es">Y tú los mantendrás a salvo. — And you will keep them safe. Y ayudarán a mantenernos a salvo... — And they will help keep us safe... Tiene razón. Por eso nos quedamos... — He&#x27;s right. That&#x27;s why we stayed... ¿Y cómo sugieres que hagamos eso? — And how do you suggest we do that?  Deja que yo me preocupe por los detalles. — Let me worry about the details.</p></div>
 <section class="wrap practice">
   <h3 class="display">Read the Spanish</h3>
   <ul class="transcript" lang="es">
@@ -464,18 +400,6 @@
 
 </section>
 
-<div class="divider"></div>
-
-<section class="wrap strip-head" style="text-align: center;">
-  <h2 class="display">What happens when you tap a bubble in Comigo</h2>
-</section>
-<section class="wrap clip-wrap">
-  <p>A 45-second look inside the app: hear the line, check the translation and grammar,
-     explore a single word, then carry on reading. &#128266; Sound on.</p>
-  <video src="/assets/bubble-reel.0148d1df.mp4" poster="/assets/bubble-reel-poster.11129081.webp" controls playsinline preload="none"
-         aria-label="Screen recording of the Comigo app: tapping a speech bubble, playing the line, revealing its translation and exploring a word."></video>
-</section>
-
 <section class="band">
   <div class="wrap">
     <h2 class="display">This is only one page of the story.</h2>
@@ -513,25 +437,163 @@
   </div>
 </footer>
 
+
+<style>
+  /* Comic example stage (shared): the real page with tappable bubbles. A tap
+     tints the bubble like the app, plays the line and opens the bubble card;
+     tapping a word opens its card with More (all forms) and Explain further. */
+  .stage-wrap { display: flex; flex-direction: column; align-items: center; padding: 22px 0 10px; }
+  .stage-head { font-size: 1.35rem; margin: 0 0 12px; }
+  .stage-note { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.88rem; margin: 0 0 14px; text-align: center; }
+  .stage {
+    position: relative; width: min(540px, 100%);
+    border: 3px solid var(--line); border-radius: 12px;
+    box-shadow: 6px 6px 0 var(--shadow); overflow: hidden;
+  }
+  .stage > img { width: 100%; height: auto; display: block; }
+  .hotspot { position: absolute; background: transparent; border: 0; border-radius: 50%; cursor: pointer; padding: 0; }
+  .hotspot.active-fallback { background: rgba(96, 220, 120, 0.42); border-radius: 12px; }
+  .bubble-glow { position: absolute; pointer-events: none; z-index: 2; }
+  .hint {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px;
+    background: rgba(22, 24, 46, 0.88); color: #FFFFFF; pointer-events: none;
+    font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.85rem;
+    padding: 8px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .popup {
+    position: absolute; left: 4%; width: 92%; z-index: 3; max-height: 62%; overflow-y: auto;
+    background: #F7F6FB; color: #16182E; border-radius: 20px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.6); padding: 14px 18px 16px;
+    font-family: system-ui, sans-serif;
+  }
+  .popup-x { position: absolute; top: 10px; right: 12px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: #E4E2EE; color: #55536B; cursor: pointer; font-size: 0.8rem; }
+  .ex-sent + .ex-sent { border-top: 1px solid #E2E0EC; margin-top: 12px; padding-top: 12px; }
+  .ex-chips { margin: 0 28px 8px 0; font-family: Charter, Georgia, serif; font-size: 1.18rem; font-weight: 700; }
+  .ex-chips .chip { display: inline-block; background: #FFFFFF; border: 1.5px solid #D9D6E6; border-radius: 10px; padding: 2px 10px 3px; margin: 0 6px 6px 0; cursor: pointer; }
+  .ex-chips .chip.sel { background: #3D7BFA; border-color: #3D7BFA; color: #FFFFFF; }
+  /* The word being spoken, as in the reader (solid #98F872). */
+  .ex-chips .chip.speaking { background: #98F872; border-color: #98F872; color: #16182E; }
+  .tap-tip {
+    display: inline-flex; align-items: center; gap: 6px; position: relative;
+    background: #6E40F0; color: #FFFFFF; font-weight: 700; font-size: 0.82rem;
+    padding: 6px 12px; border-radius: 999px; margin: 0 0 12px;
+    box-shadow: 0 4px 12px rgba(110, 64, 240, 0.35);
+    animation: tipBob 1.6s ease-in-out infinite;
+  }
+  .tap-tip::after {
+    content: ''; position: absolute; left: 22px; bottom: -6px;
+    border: 6px solid transparent; border-top-color: #6E40F0; border-bottom: 0;
+  }
+  @keyframes tipBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  @media (prefers-reduced-motion: reduce) { .tap-tip { animation: none; } }
+  .ex-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .ex-play { border: 0; background: #3D7BFA; color: #FFFFFF; font-weight: 700; font-size: 0.95rem; border-radius: 999px; padding: 8px 20px; cursor: pointer; }
+  .ex-link { border: 0; background: transparent; color: #3D7BFA; font-weight: 700; font-size: 0.9rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 8px 2px; }
+  .ex-en { margin: 10px 0 0; font-family: Charter, Georgia, serif; font-size: 1.02rem; }
+  .ex-grammar { margin: 8px 0 0; font-size: 0.9rem; color: #3B3950; white-space: pre-wrap; background: #EEEAFB; border-radius: 10px; padding: 10px 12px; }
+  .word-card { background: #FFFFFF; border: 1.5px solid #E2E0EC; border-radius: 14px; padding: 10px 14px 11px; margin: 0 0 12px; font-size: 0.95rem; }
+  .word-card .w-head { font-weight: 800; font-size: 1.05rem; }
+  .word-card .w-mean { color: #55536B; margin-top: 2px; }
+  .word-card .w-base { color: #55536B; font-size: 0.85rem; margin-top: 4px; }
+  .word-card .w-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid #EEEAF6; }
+  .word-card .w-more { border: 0; border-radius: 999px; padding: 6px 14px; font-weight: 700; cursor: pointer; background: #FFF1DC; color: #B45A00; }
+  .word-card .w-explain { border: 0; border-radius: 999px; padding: 6px 14px; font-weight: 700; cursor: pointer; background: #EFE8FF; color: #6E40F0; }
+  .wplay { border: 0; background: #EAF1FF; color: #3D7BFA; border-radius: 50%; width: 26px; height: 26px; cursor: pointer; margin-left: 8px; vertical-align: middle; }
+  .ex-sheet {
+    position: absolute; inset: 0; z-index: 5; background: #F7F6FB; color: #16182E;
+    display: flex; flex-direction: column; font-family: system-ui, sans-serif;
+  }
+  .ex-sheet[hidden], .popup[hidden], .word-card[hidden] { display: none; }
+  .ex-sheet .sh-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #E2E0EC; }
+  .ex-sheet .sh-head b { font-size: 1.15rem; }
+  .ex-sheet .sh-done { border: 0; background: transparent; color: #3D7BFA; font-weight: 700; font-size: 1rem; cursor: pointer; }
+  .ex-sheet .sh-body { overflow-y: auto; padding: 12px 16px 20px; }
+  .ex-sheet .sh-sec { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #8B88A6; margin: 14px 0 6px; }
+  .ex-sheet .sh-card { background: #FFFFFF; border-radius: 12px; padding: 10px 14px; }
+  .ex-sheet .sh-card.used { background: #E7F8E6; }
+  .ex-sheet .sh-big { font-size: 1.35rem; font-weight: 800; }
+  .ex-sheet .sh-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #F0EEF6; }
+  .ex-sheet .sh-row:last-child { border-bottom: 0; }
+  .ex-sheet .sh-row.used { background: #E7F8E6; border-radius: 8px; padding-left: 8px; padding-right: 8px; }
+  .ex-sheet .sh-label { width: 120px; flex: none; color: #55536B; font-size: 0.88rem; }
+  .ex-sheet .sh-text { flex: 1; }
+  .ex-sheet .sh-text.used { font-weight: 800; }
+  .ex-sheet .sh-explain { white-space: pre-wrap; line-height: 1.55; font-size: 0.98rem; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
 <script>
 (function () {
-  document.querySelectorAll('.stage').forEach(function (stage) {
+  function esc(t) {
+    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function bare(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''); }
+
+  // "Tap a word" tip: shown on each opened bubble until the reader taps a
+  // word on this page (shared by every comic on the page, remembered per
+  // page for the visit, so each page teaches it once; storage may be
+  // unavailable).
+  var tipKey = 'comigo-tap-tip:' + location.pathname.replace(/\.html$/, '');
+  var tipSeen = false;
+  try { tipSeen = sessionStorage.getItem(tipKey) === '1'; } catch (e) {}
+  function markTipSeen() {
+    tipSeen = true;
+    try { sessionStorage.setItem(tipKey, '1'); } catch (e) {}
+    document.querySelectorAll('.tap-tip').forEach(function (t) { t.remove(); });
+  }
+
+  document.querySelectorAll('.stage[data-ex]').forEach(function (stage) {
+    var dataEl = stage.parentNode.querySelector('script.ex-data');
+    var data = { bubbles: [] };
+    try { data = JSON.parse(dataEl.textContent); } catch (e) {}
     var img = stage.querySelector('img');
     var popup = stage.querySelector('.popup');
+    var body = popup.querySelector('.popup-body');
+    var sheet = stage.querySelector('.ex-sheet');
     var audio = stage.querySelector('audio');
     var hint = stage.querySelector('.hint');
-    var who = popup.querySelector('.popup-who'), es = popup.querySelector('.popup-es');
-    var card = popup.querySelector('.word-card');
-    var en = popup.querySelector('.popup-en'), vocab = popup.querySelector('.popup-vocab');
-    var tr = popup.querySelector('.popup-tr'), play = popup.querySelector('.popup-play');
-    var current = null, page = null, sentSrc = '';
+    var current = null, page = null;
 
-    function playSrc(src) {
+    // Line playback lights each word green while it's spoken, exactly like
+    // the reader: the word whose [start, end) window holds the playhead,
+    // none in the gaps, the last word once playback is past it. Word audio
+    // (chips, speakers) plays without a highlight.
+    var speaking = null, timer = 0;
+    function clearSpeaking() {
+      if (speaking) speaking.chips.forEach(function (c) { c.classList.remove('speaking'); });
+      speaking = null;
+      if (timer) clearInterval(timer); timer = 0;
+    }
+    function tick() {
+      if (!speaking || audio.paused) return;
+      var ms = audio.currentTime * 1000, words = speaking.words, idx = -1;
+      for (var i = 0; i < words.length; i++) {
+        var st = words[i].s; if (st == null) continue;
+        var en = words[i].e != null ? words[i].e : (words[i + 1] && words[i + 1].s != null ? words[i + 1].s : Infinity);
+        if (ms >= st && ms < en) { idx = i; break; }
+      }
+      var last = words[words.length - 1];
+      if (idx < 0 && last && last.s != null && ms >= last.s) idx = words.length - 1;
+      speaking.chips.forEach(function (c, i) { c.classList.toggle('speaking', i === idx); });
+    }
+    function playSrc(src, sentEl, words) {
+      clearSpeaking();
       if (!src) return;
       if (audio.getAttribute('src') !== src) audio.setAttribute('src', src);
       audio.currentTime = 0;
-      audio.play().catch(function () {});
+      if (sentEl && words && words.length) {
+        speaking = { chips: Array.prototype.slice.call(sentEl.querySelectorAll('.chip')), words: words };
+      }
+      // Poll every 50 ms, like the reader's timer (animation frames stop
+      // whenever the page isn't on screen).
+      audio.play().then(function () { if (speaking && !timer) timer = setInterval(tick, 50); }).catch(function () {});
     }
+    audio.addEventListener('ended', function () {
+      var next = speaking && speaking.next;
+      clearSpeaking();
+      if (next) next();
+    });
+    audio.addEventListener('pause', function () { if (audio.ended) return; if (speaking) speaking.chips.forEach(function (c) { c.classList.remove('speaking'); }); });
+
 
     // Same trick as the app's green bubbles: flood-fill the bubble's light
     // interior on the page bitmap, so the highlight matches the drawn shape
@@ -661,71 +723,145 @@
         img.addEventListener('load', function () { if (current === h) setActive(h, true); }, { once: true });
       }
     }
+    function closeSheet() { sheet.hidden = true; }
     function close() {
-      popup.hidden = true; audio.pause();
+      popup.hidden = true; closeSheet(); audio.pause();
       if (current) setActive(current, false);
       current = null;
     }
-    function esc(t) {
-      return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    function speaker(src, label) {
+      return src ? '<button class="wplay" data-snd="' + esc(src) + '" aria-label="' + esc(label) + '">🔊</button>' : '';
     }
-    function strip(t) { return String(t).toLowerCase().replace(/[^\wáéíóúñü]/g, ''); }
-    function showWord(w, chipEl) {
-      es.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('sel'); });
-      if (chipEl) chipEl.classList.add('sel');
-      var html = '<b>' + esc(strip(w.t) || w.t) + '</b> — ' + esc(w.m);
-      if (w.a) html += '<button class="wplay" data-snd="' + esc(w.a) + '" aria-label="Play word">🔊</button>';
-      if (w.b && strip(w.b) !== strip(w.t)) {
-        html += '<div class="base">Base form: <i>' + esc(w.b) + '</i> — ' + esc(w.bm);
-        if (w.ba) html += '<button class="wplay" data-snd="' + esc(w.ba) + '" aria-label="Play base form">🔊</button>';
-        html += '</div>';
+
+    // Word card: exactly the reader's popover — word, meaning, base form,
+    // then More (all forms) and Explain further.
+    function wordCard(sentEl, w) {
+      var card = sentEl.querySelector('.word-card');
+      var html = '<div class="w-head">' + esc(w.t) + speaker(w.a, 'Play word') + '</div>'
+        + '<div class="w-mean">' + esc(w.m) + '</div>';
+      if (w.b && bare(w.b) !== bare(w.t)) {
+        html += '<div class="w-base">Base form: <i>' + esc(w.b) + '</i>' + (w.bm ? ' — ' + esc(w.bm) : '') + speaker(w.ba, 'Play base form') + '</div>';
       }
+      var btns = '';
+      if (w.forms && w.forms.length) btns += '<button class="w-more">📖 More</button>';
+      if (w.ex) btns += '<button class="w-explain">✨ Explain further</button>';
+      if (btns) html += '<div class="w-btns">' + btns + '</div>';
       card.innerHTML = html;
       card.hidden = false;
+      placePopup();
+      var more = card.querySelector('.w-more'), expl = card.querySelector('.w-explain');
+      if (more) more.addEventListener('click', function () { openForms(w); });
+      if (expl) expl.addEventListener('click', function () { openExplain(w); });
       playSrc(w.a);
     }
-    card.addEventListener('click', function (ev) {
+
+    function openSheet(title, html) {
+      sheet.querySelector('.sh-head b').textContent = title;
+      sheet.querySelector('.sh-body').innerHTML = html;
+      sheet.hidden = false;
+      sheet.querySelector('.sh-body').scrollTop = 0;
+      stage.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    function openForms(w) {
+      var used = null;
+      (w.forms || []).forEach(function (f) { if (bare(f.text) === bare(w.t)) used = f; });
+      var html = '<div class="sh-sec">Base form</div><div class="sh-card"><span class="sh-big">' + esc(w.b || w.t) + '</span>'
+        + speaker(w.ba || w.a, 'Play base form') + '<div class="w-mean">' + esc(w.bm || w.m) + '</div></div>'
+        + '<div class="sh-sec">In this sentence</div><div class="sh-card used"><div style="color:#55536B;font-size:0.85rem">'
+        + esc(used ? used.label : 'Base form') + '</div><b>' + esc(w.t) + '</b>' + speaker(w.a, 'Play word')
+        + '<div class="w-mean">' + esc(w.m) + '</div></div>'
+        + '<div class="sh-sec">Forms</div><div class="sh-card">';
+      (w.forms || []).forEach(function (f) {
+        var isUsed = used === f;
+        html += '<div class="sh-row' + (isUsed ? ' used' : '') + '"><span class="sh-label">' + esc(f.label) + '</span>'
+          + '<span class="sh-text' + (isUsed ? ' used' : '') + '">' + esc(f.text) + '</span>' + speaker(f.a, 'Play ' + f.text) + '</div>';
+      });
+      openSheet(w.t.replace(/[^\p{L}\p{N}\s'-]/gu, ''), html + '</div>');
+    }
+    function openExplain(w) {
+      openSheet(w.t.replace(/[^\p{L}\p{N}\s'-]/gu, ''), '<div class="sh-explain">' + esc(w.ex) + '</div>');
+    }
+
+    // Open the card right next to the bubble that was tapped — below it for
+    // bubbles in the top half, above it for the bottom half — kept inside
+    // the comic, and scrolled into view so the reader never has to hunt for it.
+    function placePopup() {
+      if (!current || popup.hidden) return;
+      var sh = stage.clientHeight, ph = popup.offsetHeight;
+      var bt = parseFloat(current.style.top) / 100 * sh;
+      var bb = bt + parseFloat(current.style.height) / 100 * sh;
+      var top = (bt + bb) / 2 > sh / 2 ? bt - ph - 10 : bb + 10;
+      popup.style.top = Math.max(8, Math.min(sh - ph - 8, top)) + 'px';
+      popup.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function renderBubble(b) {
+      body.innerHTML = '';
+      if (!tipSeen && (b.sentences || []).some(function (s) { return s.words && s.words.length; })) {
+        var tip = document.createElement('div');
+        tip.className = 'tap-tip';
+        tip.textContent = '\uD83D\uDC46 Tap a word to see what it means';
+        body.appendChild(tip);
+      }
+      (b.sentences || []).forEach(function (s) {
+        var el = document.createElement('div');
+        el.className = 'ex-sent';
+        var chips = (s.words && s.words.length)
+          ? s.words.map(function (w, i) { return '<span class="chip" data-i="' + i + '">' + esc(w.t) + '</span>'; }).join('')
+          : esc(s.es);
+        el.innerHTML = '<p class="ex-chips" lang="es">' + chips + '</p>'
+          + '<div class="word-card" hidden></div>'
+          + '<div class="ex-row">' + (s.a ? '<button class="ex-play">▶︎&nbsp; Play</button>' : '')
+          + '<button class="ex-link ex-tr">Show translation</button>'
+          + (s.g ? '<button class="ex-link ex-gr">Explain grammar</button>' : '') + '</div>'
+          + '<p class="ex-en" hidden>' + esc(s.en) + '</p>'
+          + (s.g ? '<p class="ex-grammar" hidden>' + esc(s.g) + '</p>' : '');
+        el.querySelectorAll('.chip').forEach(function (c) {
+          c.addEventListener('click', function () {
+            body.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('sel'); });
+            body.querySelectorAll('.word-card').forEach(function (x) { if (x !== el.querySelector('.word-card')) x.hidden = true; });
+            c.classList.add('sel');
+            markTipSeen();
+            wordCard(el, s.words[+c.dataset.i]);
+          });
+        });
+        var play = el.querySelector('.ex-play');
+        if (play) play.addEventListener('click', function () { playSrc(s.a, el, s.words); });
+        var tr = el.querySelector('.ex-tr'), en = el.querySelector('.ex-en');
+        tr.addEventListener('click', function () { en.hidden = !en.hidden; tr.textContent = en.hidden ? 'Show translation' : 'Hide translation'; placePopup(); });
+        var gr = el.querySelector('.ex-gr'), gn = el.querySelector('.ex-grammar');
+        if (gr) gr.addEventListener('click', function () { gn.hidden = !gn.hidden; gr.textContent = gn.hidden ? 'Explain grammar' : 'Hide grammar'; placePopup(); });
+        body.appendChild(el);
+      });
+    }
+
+    stage.addEventListener('click', function (ev) {
       var b = ev.target.closest('.wplay');
-      if (b) playSrc(b.dataset.snd);
+      if (b) { ev.stopPropagation(); playSrc(b.dataset.snd); }
     });
     stage.querySelectorAll('.hotspot').forEach(function (h) {
       h.addEventListener('click', function () {
         if (hint) hint.style.display = 'none';
+        closeSheet();
         if (current) setActive(current, false);
         current = h; setActive(h, true);
-        who.textContent = h.dataset.who;
-        var words = [];
-        try { words = JSON.parse(h.dataset.words || '[]'); } catch (e) {}
-        if (words.length) {
-          es.innerHTML = words.map(function (w, i) {
-            return '<span class="chip" data-i="' + i + '">' + esc(w.t) + '</span>';
-          }).join('');
-          es.querySelectorAll('.chip').forEach(function (c) {
-            c.addEventListener('click', function () { showWord(words[+c.dataset.i], c); });
-          });
-        } else {
-          es.textContent = h.dataset.es;
-        }
-        card.hidden = true; card.innerHTML = '';
-        en.textContent = h.dataset.en; en.hidden = true;
-        vocab.innerHTML = h.dataset.vocab || ''; vocab.hidden = true;
-        tr.textContent = 'Show translation';
-        var top = parseFloat(h.style.top) > 50;
-        popup.classList.toggle('at-top', top);
-        popup.classList.toggle('at-bottom', !top);
+        var b = data.bubbles[+h.dataset.i] || { sentences: [] };
+        renderBubble(b);
         popup.hidden = false;
-        sentSrc = h.dataset.audio;
-        playSrc(sentSrc);
+        popup.scrollTop = 0;
+        placePopup();
+        // Play the bubble's lines one after another, each with its highlight.
+        var els = body.querySelectorAll('.ex-sent'), sents = b.sentences || [];
+        (function playFrom(k) {
+          if (k >= sents.length) return;
+          if (!sents[k].a) return playFrom(k + 1);
+          playSrc(sents[k].a, els[k], sents[k].words);
+          if (speaking) speaking.next = function () { playFrom(k + 1); };
+        })(0);
       });
     });
-    play.addEventListener('click', function () { playSrc(sentSrc); });
-    tr.addEventListener('click', function () {
-      var show = en.hidden;
-      en.hidden = !show;
-      vocab.hidden = !show || !vocab.innerHTML;
-      tr.textContent = show ? 'Hide translation' : 'Show translation';
-    });
     popup.querySelector('.popup-x').addEventListener('click', close);
+    sheet.querySelector('.sh-done').addEventListener('click', closeSheet);
   });
 })();
 </script>

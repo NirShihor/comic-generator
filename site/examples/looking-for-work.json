@@ -1,0 +1,469 @@
+{
+ "slug": "looking-for-work",
+ "label": "Looking for work",
+ "comic": "PRIMER TURNO",
+ "collection": "EL RESTAURANTE",
+ "image": "example-looking-for-work",
+ "width": 1024,
+ "height": 1536,
+ "publishedAt": "2026-09-25T14:38:39.405Z",
+ "bubbles": [
+  {
+   "x": 0.27,
+   "y": 0.01300000508626302,
+   "w": 0.2,
+   "h": 0.1,
+   "sentences": [
+    {
+     "es": "Debo encontrar trabajo...",
+     "en": "I must find work...",
+     "g": "'Debo' is the first-person singular present tense of 'deber', meaning 'I must'. It expresses obligation and is followed by the infinitive 'encontrar' which means 'to find'.",
+     "a": "{{AUD_ex-looking-for-work-b1-1}}",
+     "words": [
+      {
+       "t": "Debo",
+       "m": "I must",
+       "b": "deber",
+       "bm": "to must",
+       "s": 0,
+       "e": 396,
+       "a": "{{AUD_ex-looking-for-work-w-debo}}",
+       "ba": "{{AUD_ex-looking-for-work-w-deber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "debo",
+         "a": "{{AUD_ex-looking-for-work-w-debo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "debí",
+         "a": "{{AUD_ex-looking-for-work-w-debi-7f61f8}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "debía",
+         "a": "{{AUD_ex-looking-for-work-w-debia-9a1ae1}}"
+        },
+        {
+         "label": "Future",
+         "text": "deberé",
+         "a": "{{AUD_ex-looking-for-work-w-debere-2e203f}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "debería",
+         "a": "{{AUD_ex-looking-for-work-w-deberia-1bf823}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "deba",
+         "a": "{{AUD_ex-looking-for-work-w-deba}}"
+        },
+        {
+         "label": "Command",
+         "text": "debes",
+         "a": "{{AUD_ex-looking-for-work-w-debes}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "debiendo",
+         "a": "{{AUD_ex-looking-for-work-w-debiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "deber",
+         "a": "{{AUD_ex-looking-for-work-w-deber}}"
+        }
+       ],
+       "ex": "\"Debo\" is a verb in the present tense, specifically the first person singular form of the verb \"deber,\" which means \"to must\" or \"to have to.\" In this sentence, \"Debo\" translates to \"I must,\" indicating a necessity or obligation. \n\nHere's a short conjugation table for \"deber\" in the present tense:\n\n- yo debo\n- tú debes\n- él/ella/usted debe\n- nosotros/nosotras debemos\n- ellos/ellas/ustedes deben\n\nIn the sentence \"Debo encontrar trabajo,\" \"Debo\" sets the tone for the speaker's obligation to find work, emphasizing the urgency or importance of the action that follows."
+      },
+      {
+       "t": "encontrar",
+       "m": "to find",
+       "b": "encontrar",
+       "bm": "to find",
+       "s": 452,
+       "e": 956,
+       "a": "{{AUD_ex-looking-for-work-w-encontrar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "encuentro",
+         "a": "{{AUD_ex-looking-for-work-w-encuentro}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "encontré",
+         "a": "{{AUD_ex-looking-for-work-w-encontre-59d5eb}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "encontraba",
+         "a": "{{AUD_ex-looking-for-work-w-encontraba}}"
+        },
+        {
+         "label": "Future",
+         "text": "encontraré",
+         "a": "{{AUD_ex-looking-for-work-w-encontrare-8b7d35}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "encontraría",
+         "a": "{{AUD_ex-looking-for-work-w-encontraria-11e2ae}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "encuentre",
+         "a": "{{AUD_ex-looking-for-work-w-encuentre}}"
+        },
+        {
+         "label": "Command",
+         "text": "encuentra",
+         "a": "{{AUD_ex-looking-for-work-w-encuentra}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "encontrando",
+         "a": "{{AUD_ex-looking-for-work-w-encontrando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "encontrado",
+         "a": "{{AUD_ex-looking-for-work-w-encontrado}}"
+        }
+       ],
+       "ex": "The word \"encontrar\" is a verb in its infinitive form, meaning \"to find.\" In the sentence \"Debo encontrar trabajo,\" it functions as the main action that the subject must perform. The phrase \"Debo encontrar\" translates to \"I must find,\" indicating a necessity or obligation.\n\nIn the present tense, \"encontrar\" is conjugated as follows:\n\n- yo encuentro (I find)\n- tú encuentras (you find)\n- él/ella/usted encuentra (he/she/you find)\n- nosotros/nosotras encontramos (we find)\n- ellos/ellas/ustedes encuentran (they/you all find)\n\nHere, \"encontrar\" is essential because it expresses the action that the speaker needs to take, which is finding work. The sentence conveys a sense of urgency or importance regarding the task at hand."
+      },
+      {
+       "t": "trabajo...",
+       "m": "work",
+       "b": "trabajo",
+       "bm": "work",
+       "s": 1026,
+       "e": 2236,
+       "a": "{{AUD_ex-looking-for-work-w-trabajo}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "trabajo",
+         "a": "{{AUD_ex-looking-for-work-w-trabajo}}"
+        },
+        {
+         "label": "Plural",
+         "text": "trabajos",
+         "a": "{{AUD_ex-looking-for-work-w-trabajos}}"
+        }
+       ],
+       "ex": "The word \"trabajo\" in this sentence is a noun meaning \"work\" or \"job.\" It is the object of the verb \"encontrar,\" which means \"to find.\" In the context of the sentence, \"Debo encontrar trabajo,\" it indicates what the speaker needs to find.\n\nThe structure of the sentence shows that \"trabajo\" is essential because it completes the action of finding. The phrase translates to \"I must find work,\" where \"trabajo\" specifies what the speaker is looking for. \n\nIn summary, \"trabajo\" is a noun that plays the role of the direct object in the sentence, indicating the specific thing that the subject (implied \"yo\" or \"I\") must find."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.14,
+   "y": 0.46633333841959645,
+   "w": 0.1925,
+   "h": 0.08058331807454422,
+   "sentences": [
+    {
+     "es": "No, lo siento...",
+     "en": "No, I'm sorry...",
+     "g": "'Lo siento' is a fixed expression meaning 'I'm sorry'. 'Lo' is a pronoun referring to a situation that has been mentioned before.",
+     "a": "{{AUD_ex-looking-for-work-b2-1}}",
+     "words": [
+      {
+       "t": "No,",
+       "m": "no",
+       "b": "no",
+       "bm": "no",
+       "s": 0,
+       "e": 400,
+       "a": "{{AUD_ex-looking-for-work-w-no}}",
+       "ex": "In this sentence, \"No,\" is an adverb that means \"no\" or \"not.\" It is used to express a negative response or to deny something. Here, it appears at the beginning of the sentence, indicating a refusal or disagreement with what might have been said or implied before.\n\nThe phrase \"lo siento\" translates to \"I'm sorry,\" so \"No, lo siento...\" can be understood as a way of saying \"No, I'm sorry...\" in response to a question or statement. The \"No\" sets the tone for the speaker's reply, emphasizing that they are rejecting or negating whatever was previously mentioned."
+      },
+      {
+       "t": "lo",
+       "m": "it",
+       "b": "lo",
+       "bm": "it",
+       "s": 453,
+       "e": 559,
+       "a": "{{AUD_ex-looking-for-work-w-lo}}",
+       "ex": "In this sentence, \"lo\" is an object pronoun. It is used to refer to the situation or feeling of regret that the speaker is expressing. The phrase \"lo siento\" translates to \"I'm sorry,\" where \"lo\" helps to emphasize the sentiment being conveyed.\n\nThe verb here is \"sentir,\" which means \"to feel.\" In this case, \"siento\" is the first-person singular present tense form of \"sentir.\" Here’s a short conjugation table for \"sentir\":\n\n- yo siento\n- tú sientes\n- él/ella siente\n- nosotros/nosotras sentimos\n- ellos/ellas sienten\n\nSo, \"lo\" is there to connect the speaker's apology to the feeling they are expressing, making the phrase more complete."
+      },
+      {
+       "t": "siento...",
+       "m": "I feel",
+       "b": "sentir",
+       "bm": "to feel",
+       "s": 599,
+       "e": 1199,
+       "a": "{{AUD_ex-looking-for-work-w-siento}}",
+       "ba": "{{AUD_ex-looking-for-work-w-sentir}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "siento",
+         "a": "{{AUD_ex-looking-for-work-w-siento}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "sentí",
+         "a": "{{AUD_ex-looking-for-work-w-senti-50b593}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "sentía",
+         "a": "{{AUD_ex-looking-for-work-w-sentia-2a3865}}"
+        },
+        {
+         "label": "Future",
+         "text": "sentiré",
+         "a": "{{AUD_ex-looking-for-work-w-sentire-13bddd}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "sentiría",
+         "a": "{{AUD_ex-looking-for-work-w-sentiria-e15ea9}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sienta",
+         "a": "{{AUD_ex-looking-for-work-w-sienta}}"
+        },
+        {
+         "label": "Command",
+         "text": "siente",
+         "a": "{{AUD_ex-looking-for-work-w-siente}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "sintiendo",
+         "a": "{{AUD_ex-looking-for-work-w-sintiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sentido",
+         "a": "{{AUD_ex-looking-for-work-w-sentido}}"
+        }
+       ],
+       "ex": "The word \"siento\" is a verb form in this sentence. It comes from the infinitive verb \"sentir,\" which means \"to feel.\" In the present tense, \"sentir\" is conjugated as follows:\n\n- yo siento (I feel)\n- tú sientes (you feel)\n- él/ella siente (he/she feels)\n- nosotros/nosotras sentimos (we feel)\n- ellos/ellas sienten (they feel)\n\nIn the sentence \"No, lo siento...\", \"siento\" is the first-person singular form, meaning \"I feel.\" It expresses an apology or regret, so the phrase translates to \"I'm sorry.\" The \"lo\" in \"lo siento\" is an object pronoun that refers to the situation or thing the speaker is apologizing for, though it is not explicitly stated in this context. \n\nOverall, \"siento\" is crucial here as it conveys the speaker's feelings of remorse or regret."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.6049999999999999,
+   "y": 0.46375,
+   "w": 0.2675000000000002,
+   "h": 0.07499999999999996,
+   "sentences": [
+    {
+     "es": "Me encantan los libros...",
+     "en": "I love books...",
+     "g": "'Me encantan' is used to express love for something in the plural, with 'encantar' meaning 'to love' or 'to delight'. 'Los libros' means 'the books', which is a plural noun.",
+     "a": "{{AUD_ex-looking-for-work-b3-1}}",
+     "words": [
+      {
+       "t": "Me",
+       "m": "me",
+       "b": "me",
+       "bm": "me",
+       "s": 0,
+       "e": 160,
+       "a": "{{AUD_ex-looking-for-work-w-me}}",
+       "ex": "In this sentence, \"me\" is an object pronoun. It is used to indicate who is experiencing the action of loving. In English, we would say \"I love,\" but in Spanish, the structure requires the pronoun \"me\" to clarify that it is \"me\" who loves.\n\nThe verb here is \"encantan,\" which comes from the infinitive \"encantar.\" This verb means \"to love\" or \"to delight.\" In the present tense, it conjugates as follows:\n\n- yo encanto\n- tú encantas\n- él/ella/usted encanta\n- nosotros/nosotras encantamos\n- ellos/ellas/ustedes encantan\n\nIn this case, \"me\" connects to the subject of the sentence, which is implied as \"yo\" (I). The full meaning is that \"books\" (los libros) are delightful to \"me.\" So, \"me\" is essential to show who is feeling the love for the books."
+      },
+      {
+       "t": "encantan",
+       "m": "love",
+       "b": "encantar",
+       "bm": "to love",
+       "s": 260,
+       "e": 960,
+       "a": "{{AUD_ex-looking-for-work-w-encantan}}",
+       "ba": "{{AUD_ex-looking-for-work-w-encantar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "encanto",
+         "a": "{{AUD_ex-looking-for-work-w-encanto}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "encanté",
+         "a": "{{AUD_ex-looking-for-work-w-encante-d8d923}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "encantaba",
+         "a": "{{AUD_ex-looking-for-work-w-encantaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "encantaré",
+         "a": "{{AUD_ex-looking-for-work-w-encantare-a06f87}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "encantaría",
+         "a": "{{AUD_ex-looking-for-work-w-encantaria-ce401e}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "encante",
+         "a": "{{AUD_ex-looking-for-work-w-encante}}"
+        },
+        {
+         "label": "Command",
+         "text": "encanta",
+         "a": "{{AUD_ex-looking-for-work-w-encanta}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "encantando",
+         "a": "{{AUD_ex-looking-for-work-w-encantando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "encantado",
+         "a": "{{AUD_ex-looking-for-work-w-encantado}}"
+        }
+       ],
+       "ex": "The word \"encantan\" is a verb in the present tense. It comes from the infinitive \"encantar,\" which means \"to love\" or \"to delight.\" In this sentence, \"Me encantan los libros,\" it is conjugated in the third person plural form because it refers to \"los libros\" (the books), which is plural.\n\nHere's a short present-tense conjugation table for \"encantar\":\n\n- yo encanto\n- tú encantas\n- él/ella/usted encanta\n- nosotros/nosotras encantamos\n- vosotros/vosotras encantáis\n- ellos/ellas/ustedes encantan\n\nIn this context, \"encantan\" indicates that the speaker loves multiple books. The phrase \"Me encantan\" translates to \"I love\" in English, where \"me\" is an indirect object pronoun that indicates who is experiencing the love or delight. So, the structure shows that the books are the subject that brings joy to the speaker."
+      },
+      {
+       "t": "los",
+       "m": "the",
+       "b": "el",
+       "bm": "the (male)",
+       "s": 1000,
+       "e": 1120,
+       "a": "{{AUD_ex-looking-for-work-w-los}}",
+       "ba": "{{AUD_ex-looking-for-work-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-looking-for-work-w-el}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-looking-for-work-w-los}}"
+        }
+       ],
+       "ex": "In this sentence, \"los\" is a definite article in Spanish. It is used to specify a particular noun, which in this case is \"libros\" (books). The phrase \"los libros\" translates to \"the books\" in English, but in this context, it simply refers to books in general.\n\n\"Los\" is plural and masculine, agreeing with \"libros,\" which is also masculine and plural. This is why \"los\" is necessary here; it helps clarify that you are talking about books as a category rather than a specific set of books. \n\nSo, in \"Me encantan los libros,\" the article \"los\" plays a crucial role in indicating that the speaker loves books as a whole."
+      },
+      {
+       "t": "libros...",
+       "m": "books",
+       "b": "libro",
+       "bm": "book",
+       "s": 1188,
+       "e": 1674,
+       "a": "{{AUD_ex-looking-for-work-w-libros}}",
+       "ba": "{{AUD_ex-looking-for-work-w-libro}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "libro",
+         "a": "{{AUD_ex-looking-for-work-w-libro}}"
+        },
+        {
+         "label": "Plural",
+         "text": "libros",
+         "a": "{{AUD_ex-looking-for-work-w-libros}}"
+        }
+       ],
+       "ex": "In this sentence, \"libros\" is a noun in the plural form. It means \"books\" in English. The word is the subject of the sentence, which is why it appears after the article \"los,\" meaning \"the.\" Together, \"los libros\" translates to \"the books.\"\n\nThe sentence \"Me encantan los libros...\" translates to \"I love books...\" in English. The verb \"encantan\" is in the third person plural form, which agrees with \"libros.\" This is because the subject \"los libros\" is plural, so the verb must also be plural to match.\n\nIn summary, \"libros\" is a plural noun that serves as the subject of the sentence, indicating what is being loved."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.5774999999999999,
+   "y": 0.8304166666666666,
+   "w": 0.20750000000000013,
+   "h": 0.08399998982747403,
+   "sentences": [
+    {
+     "es": "No por el momento...",
+     "en": "Not at the moment...",
+     "g": "The phrase uses 'No' at the beginning to express negation. 'por el momento' is an idiomatic expression meaning 'for the moment' or 'currently'.",
+     "a": "{{AUD_ex-looking-for-work-b4-1}}",
+     "words": [
+      {
+       "t": "No",
+       "m": "not",
+       "b": "no",
+       "bm": "no",
+       "s": 0,
+       "e": 398,
+       "a": "{{AUD_ex-looking-for-work-w-no}}",
+       "ex": "In this sentence, \"No\" is an adverb that means \"not.\" It is used to negate the phrase that follows it, indicating that something is not the case at this time. Here, \"No\" is placed at the beginning of the sentence to emphasize the negation.\n\nThe phrase \"por el momento\" translates to \"at the moment,\" so when combined, \"No por el momento\" means \"Not at the moment.\" The \"No\" clearly signals that whatever is being discussed is currently not happening or not applicable. \n\nIn summary, \"No\" serves as a negation, setting the tone for the entire statement."
+      },
+      {
+       "t": "por",
+       "m": "for",
+       "b": "por",
+       "bm": "for",
+       "s": 478,
+       "e": 718,
+       "a": "{{AUD_ex-looking-for-work-w-por}}",
+       "ex": "In the sentence \"No por el momento...\", the word \"por\" is a preposition. It connects the phrase \"el momento\" (the moment) to the context of the sentence, indicating a reason or a time frame. \n\nIn English, \"por\" can often be translated as \"for,\" and here it suggests that something is not happening \"for the moment\" or \"at this time.\" It emphasizes that the situation may change later, but currently, it is not the case. \n\nSo, \"por\" is essential in conveying the timing aspect of the statement, helping to clarify that the negation applies specifically to the present moment."
+      },
+      {
+       "t": "el",
+       "m": "the",
+       "b": "el",
+       "bm": "the (male)",
+       "s": 771,
+       "e": 877,
+       "a": "{{AUD_ex-looking-for-work-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-looking-for-work-w-el}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-looking-for-work-w-los}}"
+        }
+       ],
+       "ex": "In this sentence, \"el\" is a definite article in Spanish, which translates to \"the\" in English. It is used to specify a particular noun that is understood in the context. Here, \"el\" is connected to \"momento,\" which means \"moment.\" \n\nThe phrase \"el momento\" translates to \"the moment,\" indicating a specific time frame. The use of \"el\" helps to clarify that the speaker is referring to a particular moment, emphasizing that it is not the right time for whatever is being discussed. \n\nSo, in summary, \"el\" serves to define \"momento\" and is essential for conveying the meaning of the sentence as it specifies which moment is being referenced."
+      },
+      {
+       "t": "momento...",
+       "m": "moment",
+       "b": "momento",
+       "bm": "moment",
+       "s": 977,
+       "e": 1755,
+       "a": "{{AUD_ex-looking-for-work-w-momento}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "momento",
+         "a": "{{AUD_ex-looking-for-work-w-momento}}"
+        },
+        {
+         "label": "Plural",
+         "text": "momentos",
+         "a": "{{AUD_ex-looking-for-work-w-momentos}}"
+        }
+       ],
+       "ex": "The word \"momento\" in this sentence is a noun, meaning \"moment.\" It is used here to refer to a specific point in time. The phrase \"por el momento\" translates to \"at the moment,\" indicating that something is true or applicable only for the current time.\n\nIn this context, \"momento\" is the object of the preposition \"por,\" which means \"for.\" The entire phrase \"por el momento\" expresses a temporary situation. So, the speaker is saying that whatever they are discussing is not happening right now, but it could change in the future. \n\nOverall, \"momento\" helps convey the idea of a fleeting time frame, emphasizing that the statement is relevant only in the present."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

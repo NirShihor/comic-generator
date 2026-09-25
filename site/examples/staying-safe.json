@@ -1,0 +1,983 @@
+{
+ "slug": "staying-safe",
+ "label": "Staying safe",
+ "comic": "UNA ALIANZA IMPROBABLE",
+ "collection": "EL SUPERVIVIENTE",
+ "image": "example-staying-safe",
+ "width": 1024,
+ "height": 1536,
+ "publishedAt": "2026-09-25T14:38:39.799Z",
+ "bubbles": [
+  {
+   "x": 0.08030303030303032,
+   "y": 0.22979797979797978,
+   "w": 0.21818181818181814,
+   "h": 0.1,
+   "sentences": [
+    {
+     "es": "Y tú los mantendrás a salvo.",
+     "en": "And you will keep them safe.",
+     "g": "Mantendrás is the future tense of mantener, indicating what 'you' will do; 'los' is a direct object pronoun referring to the humans.",
+     "a": "{{AUD_ex-staying-safe-b1-1}}",
+     "words": [
+      {
+       "t": "Y",
+       "m": "and",
+       "b": "y",
+       "bm": "and",
+       "s": 0,
+       "e": 336,
+       "a": "{{AUD_ex-staying-safe-w-y}}",
+       "ex": "The word \"y\" is a conjunction in this sentence. It means \"and\" in English and is used to connect ideas or clauses. In this case, it links the action of the previous statement (which we don't see here) to the action in this sentence: \"tú los mantendrás a salvo\" (you will keep them safe).\n\nBy using \"y,\" the speaker is emphasizing that there is an additional action or thought related to what has already been mentioned. It helps to create a flow in the conversation, making it clear that both ideas are part of the same context."
+      },
+      {
+       "t": "tú",
+       "m": "you",
+       "b": "tú",
+       "bm": "you",
+       "s": 357,
+       "e": 400,
+       "a": "{{AUD_ex-staying-safe-w-tu-1b40a5}}",
+       "ex": "In this sentence, \"tú\" is a subject pronoun. It refers directly to the person being addressed, meaning \"you\" in English. It indicates who is performing the action of the verb \"mantendrás,\" which means \"will keep.\"\n\nThe structure of the sentence is \"Y tú los mantendrás a salvo,\" where \"tú\" is essential because it specifies that the responsibility of keeping \"them\" safe falls on the person being spoken to. Without \"tú,\" the sentence would lack clarity about who is taking action.\n\nIn the present tense, the conjugation of the verb \"mantener\" (to keep) for \"tú\" is \"mantienes.\" Here’s a short conjugation table for \"mantener\":\n\n- yo mantengo (I keep)\n- tú mantienes (you keep)\n- él/ella/usted mantiene (he/she/you formal keeps)\n- nosotros/nosotras mantenemos (we keep)\n- ellos/ellas/ustedes mantienen (they/you all keep)\n\nSo, \"tú\" is crucial in this sentence to identify the subject and clarify who will keep \"them\" safe."
+      },
+      {
+       "t": "los",
+       "m": "them",
+       "b": "el",
+       "bm": "the",
+       "s": 480,
+       "e": 720,
+       "a": "{{AUD_ex-staying-safe-w-los}}",
+       "ba": "{{AUD_ex-staying-safe-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-staying-safe-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-staying-safe-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-staying-safe-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-staying-safe-w-las}}"
+        }
+       ],
+       "ex": "In this sentence, \"los\" is an object pronoun. It refers to a group of masculine plural nouns that have been previously mentioned or are understood in the context. In English, it translates to \"them.\"\n\nThe role of \"los\" is to replace the noun phrase that would indicate what is being kept safe. For example, if the context was about \"los niños\" (the children) or \"los secretos\" (the secrets), \"los\" would refer to those nouns. \n\nIn the sentence \"Y tú los mantendrás a salvo,\" \"los\" connects directly to the action of keeping safe, indicating that the subject \"tú\" (you) will perform this action on the unspecified group referred to by \"los.\""
+      },
+      {
+       "t": "mantendrás",
+       "m": "will keep",
+       "b": "mantener",
+       "bm": "to maintain",
+       "s": 760,
+       "e": 1600,
+       "a": "{{AUD_ex-staying-safe-w-mantendras-329fd1}}",
+       "ba": "{{AUD_ex-staying-safe-w-mantener}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "mantengo",
+         "a": "{{AUD_ex-staying-safe-w-mantengo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "mantuve",
+         "a": "{{AUD_ex-staying-safe-w-mantuve}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "mantenía",
+         "a": "{{AUD_ex-staying-safe-w-mantenia-4fccff}}"
+        },
+        {
+         "label": "Future",
+         "text": "mantendré",
+         "a": "{{AUD_ex-staying-safe-w-mantendre-74db3a}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "mantendría",
+         "a": "{{AUD_ex-staying-safe-w-mantendria-df4508}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "mantenga",
+         "a": "{{AUD_ex-staying-safe-w-mantenga}}"
+        },
+        {
+         "label": "Command",
+         "text": "mantén",
+         "a": "{{AUD_ex-staying-safe-w-manten-fdb952}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "manteniendo",
+         "a": "{{AUD_ex-staying-safe-w-manteniendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "mantenido",
+         "a": "{{AUD_ex-staying-safe-w-mantenido}}"
+        }
+       ],
+       "ex": "The word \"mantendrás\" is a verb form in the future tense. It comes from the infinitive \"mantener,\" which means \"to keep\" or \"to maintain.\" In this sentence, \"mantendrás\" is the second person singular form, referring to \"tú\" (you). \n\nHere’s a short present-tense conjugation for \"mantener\":\n- yo mantengo\n- tú mantienes\n- él/ella/usted mantiene\n- nosotros/nosotras mantenemos\n- ellos/ellas/ustedes mantienen\n\nIn the sentence \"Y tú los mantendrás a salvo,\" \"mantendrás\" indicates an action that the subject \"tú\" will perform in the future. The phrase \"los mantendrás\" means \"you will keep them,\" where \"los\" is the direct object pronoun referring to \"them.\" The whole sentence expresses a promise or assurance that the person being addressed will ensure the safety of \"them.\""
+      },
+      {
+       "t": "a",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 1840,
+       "e": 2080,
+       "a": "{{AUD_ex-staying-safe-w-a}}",
+       "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"mantendrás\" (you will keep) to the adjective \"salvo\" (safe), indicating the state in which \"los\" (them) will be kept. \n\nThe phrase \"a salvo\" translates to \"safe\" in English, and \"a\" is necessary here to express the idea of keeping someone or something in a safe condition. Without \"a,\" the meaning would be incomplete. \n\nSo, in this context, \"a\" helps clarify how you will maintain the safety of \"los.\""
+      },
+      {
+       "t": "salvo.",
+       "m": "safe",
+       "b": "salvo",
+       "bm": "safe",
+       "s": 2160,
+       "e": 2800,
+       "a": "{{AUD_ex-staying-safe-w-salvo}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "salvo",
+         "a": "{{AUD_ex-staying-safe-w-salvo}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "salva",
+         "a": "{{AUD_ex-staying-safe-w-salva}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "salvos",
+         "a": "{{AUD_ex-staying-safe-w-salvos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "salvas",
+         "a": "{{AUD_ex-staying-safe-w-salvas}}"
+        }
+       ],
+       "ex": "The word \"salvo\" in this sentence is an adjective meaning \"safe.\" It describes the state of \"los\" (them), which refers to whatever or whoever is being kept safe. In this context, \"salvo\" indicates that the action of keeping them will ensure their safety.\n\nThe sentence structure is \"tú los mantendrás a salvo,\" where \"tú\" is the subject (you), \"los\" is the direct object (them), \"mantendrás\" is the verb (you will keep), and \"a salvo\" is the phrase that describes the condition of \"los.\" \n\nSo, \"salvo\" is crucial here because it conveys the intended outcome of the action: that the subject will protect \"los\" from danger."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.2545454545454546,
+   "y": 0.32341291205752026,
+   "w": 0.22575757575757577,
+   "h": 0.15418427689506042,
+   "sentences": [
+    {
+     "es": "Y ayudarán a mantenernos a salvo...",
+     "en": "And they will help keep us safe...",
+     "g": "Ayudarán is the future tense of ayudar; a mantenernos combines 'a' for 'to' plus the infinitive, and 'nos' is a pronoun for 'us'.",
+     "a": "{{AUD_ex-staying-safe-b2-1}}",
+     "words": [
+      {
+       "t": "Y",
+       "m": "and",
+       "b": "y",
+       "bm": "and",
+       "s": 0,
+       "e": 260,
+       "a": "{{AUD_ex-staying-safe-w-y}}",
+       "ex": "The word \"y\" is a conjunction in this sentence. It translates to \"and\" in English and is used to connect ideas or phrases. In this case, \"y\" links the action of helping (\"ayudarán\") to whatever comes before it, indicating that there is an additional action or idea being presented.\n\nIn the sentence \"Y ayudarán a mantenernos a salvo...\", \"y\" introduces the idea that they will help, suggesting that this action is part of a larger context or list of actions. It emphasizes the continuation of thought, showing that there is more to say about what \"they\" will do."
+      },
+      {
+       "t": "ayudarán",
+       "m": "they will help",
+       "b": "ayudar",
+       "bm": "to help",
+       "s": 272,
+       "e": 720,
+       "a": "{{AUD_ex-staying-safe-w-ayudaran-11f3d4}}",
+       "ba": "{{AUD_ex-staying-safe-w-ayudar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "ayudo",
+         "a": "{{AUD_ex-staying-safe-w-ayudo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "ayudé",
+         "a": "{{AUD_ex-staying-safe-w-ayude-8e488c}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "ayudaba",
+         "a": "{{AUD_ex-staying-safe-w-ayudaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "ayudaré",
+         "a": "{{AUD_ex-staying-safe-w-ayudare-8fec11}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "ayudaría",
+         "a": "{{AUD_ex-staying-safe-w-ayudaria-ca5a8f}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "ayude",
+         "a": "{{AUD_ex-staying-safe-w-ayude}}"
+        },
+        {
+         "label": "Command",
+         "text": "ayuda",
+         "a": "{{AUD_ex-staying-safe-w-ayuda}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "ayudando",
+         "a": "{{AUD_ex-staying-safe-w-ayudando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "ayudado",
+         "a": "{{AUD_ex-staying-safe-w-ayudado}}"
+        }
+       ],
+       "ex": "The word \"ayudarán\" is a verb in the future tense, specifically the third-person plural form of the verb \"ayudar,\" which means \"to help.\" In this sentence, \"ayudarán\" translates to \"they will help.\" \n\nThe infinitive form is \"ayudar.\" Here’s a short present-tense conjugation table for \"ayudar\":\n\n- yo ayudo (I help)\n- tú ayudas (you help)\n- él/ella/usted ayuda (he/she/you help)\n- nosotros/nosotras ayudamos (we help)\n- ellos/ellas/ustedes ayudan (they/you all help)\n\nIn the sentence \"Y ayudarán a mantenernos a salvo...\", \"ayudarán\" indicates that a group of people or entities (referred to as \"they\") will provide assistance in keeping \"us\" (reflected in \"mantenernos\") safe. It emphasizes a future action that will benefit the speaker and others."
+      },
+      {
+       "t": "a",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 1120,
+       "e": 1520,
+       "a": "{{AUD_ex-staying-safe-w-a}}",
+       "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"ayudarán\" (they will help) to the object \"mantenernos\" (to keep us). In Spanish, prepositions often indicate relationships between words, such as direction, purpose, or connection.\n\nHere, \"a\" is specifically used to introduce the infinitive verb \"mantener\" (to keep), forming the phrase \"ayudar a mantener\" (help to keep). This structure is common in Spanish, where the preposition \"a\" is used before an infinitive to indicate what the help is directed towards.\n\nSo, in this context, \"a\" plays a crucial role in linking the action of helping to the goal of keeping us safe."
+      },
+      {
+       "t": "mantenernos",
+       "m": "keep us",
+       "b": "mantener",
+       "bm": "to maintain",
+       "s": 1540,
+       "e": 2240,
+       "a": "{{AUD_ex-staying-safe-w-mantenernos}}",
+       "ba": "{{AUD_ex-staying-safe-w-mantener}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "mantengo",
+         "a": "{{AUD_ex-staying-safe-w-mantengo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "mantuve",
+         "a": "{{AUD_ex-staying-safe-w-mantuve}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "mantenía",
+         "a": "{{AUD_ex-staying-safe-w-mantenia-4fccff}}"
+        },
+        {
+         "label": "Future",
+         "text": "mantendré",
+         "a": "{{AUD_ex-staying-safe-w-mantendre-74db3a}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "mantendría",
+         "a": "{{AUD_ex-staying-safe-w-mantendria-df4508}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "mantenga",
+         "a": "{{AUD_ex-staying-safe-w-mantenga}}"
+        },
+        {
+         "label": "Command",
+         "text": "mantén",
+         "a": "{{AUD_ex-staying-safe-w-manten-fdb952}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "manteniendo",
+         "a": "{{AUD_ex-staying-safe-w-manteniendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "mantenido",
+         "a": "{{AUD_ex-staying-safe-w-mantenido}}"
+        }
+       ],
+       "ex": "The word \"mantenernos\" is a verb form in this sentence. It comes from the infinitive verb \"mantener,\" which means \"to keep\" or \"to maintain.\" In this context, \"mantenernos\" specifically means \"to keep us\" because it includes the reflexive pronoun \"nos,\" which refers to \"us.\"\n\nIn the present tense, \"mantener\" is conjugated as follows:\n- yo mantengo\n- tú mantienes\n- él/ella/usted mantiene\n- nosotros/nosotras mantenemos\n- ellos/ellas/ustedes mantienen\n\nHere, \"mantenernos\" is in the infinitive form but is used in a way that shows the action of keeping \"us\" safe. The phrase \"ayudarán a mantenernos\" translates to \"they will help keep us,\" indicating that \"they\" (the subject of the sentence) will assist in the action of keeping \"us\" safe. The reflexive pronoun \"nos\" connects the action directly to the people being kept safe, which is essential for understanding who is affected by the action."
+      },
+      {
+       "t": "a",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 2400,
+       "e": 2560,
+       "a": "{{AUD_ex-staying-safe-w-a}}",
+       "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"ayudarán\" (they will help) to the infinitive \"mantener\" (to keep). The phrase \"ayudarán a mantener\" translates to \"will help to keep,\" showing the action of helping is directed towards the action of keeping.\n\nAdditionally, the second \"a\" in \"mantenernos a salvo\" connects \"mantenernos\" (to keep us) to \"salvo\" (safe). Here, \"a\" indicates the state or condition we are being kept in, which is \"safe.\" \n\nSo, in summary, \"a\" serves to link actions and clarify relationships between the verb and the following infinitive or adjective, making the sentence coherent and meaningful."
+      },
+      {
+       "t": "salvo...",
+       "m": "safe",
+       "b": "salvo",
+       "bm": "safe",
+       "s": 2620,
+       "e": 5760,
+       "a": "{{AUD_ex-staying-safe-w-salvo}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "salvo",
+         "a": "{{AUD_ex-staying-safe-w-salvo}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "salva",
+         "a": "{{AUD_ex-staying-safe-w-salva}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "salvos",
+         "a": "{{AUD_ex-staying-safe-w-salvos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "salvas",
+         "a": "{{AUD_ex-staying-safe-w-salvas}}"
+        }
+       ],
+       "ex": "The word \"salvo\" in this sentence is an adjective meaning \"safe.\" It describes the state of being protected or unharmed. In the phrase \"a salvo,\" it functions as part of a prepositional phrase that indicates the condition of \"us\" (nosotros) after the action of keeping.\n\nIn this context, \"salvo\" is used to convey that the action of helping will result in \"us\" being in a safe state. The structure \"mantenernos a salvo\" translates to \"keep us safe,\" where \"mantener\" means \"to keep,\" and \"nos\" is the object pronoun referring to \"us.\" \n\nSo, \"salvo\" is there to specify the desired outcome of the help being provided. It emphasizes the importance of safety in the context of the sentence."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.5909090909090909,
+   "y": 0.24131312514796405,
+   "w": 0.34090909090909083,
+   "h": 0.1,
+   "sentences": [
+    {
+     "es": "Tiene razón. Por eso nos quedamos...",
+     "en": "He's right. That's why we stayed...",
+     "g": "Tiene is the present tense of tener, used to express a current truth; por eso indicates reason, implying consequence for the action.",
+     "a": "{{AUD_ex-staying-safe-b3-1}}",
+     "words": [
+      {
+       "t": "Tiene",
+       "m": "he has",
+       "b": "tener",
+       "bm": "to have",
+       "s": 0,
+       "e": 320,
+       "a": "{{AUD_ex-staying-safe-w-tiene}}",
+       "ba": "{{AUD_ex-staying-safe-w-tener}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "tengo",
+         "a": "{{AUD_ex-staying-safe-w-tengo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "tuve",
+         "a": "{{AUD_ex-staying-safe-w-tuve}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "tenía",
+         "a": "{{AUD_ex-staying-safe-w-tenia-1e955d}}"
+        },
+        {
+         "label": "Future",
+         "text": "tendré",
+         "a": "{{AUD_ex-staying-safe-w-tendre-6d4b25}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "tendría",
+         "a": "{{AUD_ex-staying-safe-w-tendria-cc46ce}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "tenga",
+         "a": "{{AUD_ex-staying-safe-w-tenga}}"
+        },
+        {
+         "label": "Command",
+         "text": "ten",
+         "a": "{{AUD_ex-staying-safe-w-ten}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "teniendo",
+         "a": "{{AUD_ex-staying-safe-w-teniendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "tenido",
+         "a": "{{AUD_ex-staying-safe-w-tenido}}"
+        }
+       ],
+       "ex": "The word \"tiene\" is a verb form in this sentence. It comes from the infinitive verb \"tener,\" which means \"to have.\" In this context, \"tiene\" is the third-person singular form in the present tense, used to express possession or a state of being. \n\nHere's a short conjugation table for \"tener\" in the present tense:\n\n- yo tengo\n- tú tienes\n- él/ella/usted tiene\n- nosotros/nosotras tenemos\n- ellos/ellas/ustedes tienen\n\nIn the sentence \"Tiene razón,\" \"tiene\" translates to \"he has\" or \"he's right,\" indicating that someone possesses the quality of being correct. This verb is essential here because it establishes the subject's correctness, leading to the conclusion in the following part of the sentence, \"Por eso nos quedamos...\" (\"That's why we stayed...\")."
+      },
+      {
+       "t": "razón.",
+       "m": "reason",
+       "b": "razón",
+       "bm": "reason",
+       "s": 420,
+       "e": 1520,
+       "a": "{{AUD_ex-staying-safe-w-razon-cd0a0b}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "razón",
+         "a": "{{AUD_ex-staying-safe-w-razon-cd0a0b}}"
+        },
+        {
+         "label": "Plural",
+         "text": "razones",
+         "a": "{{AUD_ex-staying-safe-w-razones}}"
+        }
+       ],
+       "ex": "In this sentence, \"razón\" is a noun meaning \"reason.\" It is used in the phrase \"Tiene razón,\" which translates to \"He’s right.\" Here, \"razón\" is the subject of the verb \"tiene,\" which is the third-person singular form of the verb \"tener\" (to have). \n\nThe infinitive is \"tener,\" and here’s a short present-tense conjugation table for it:\n\n- yo tengo\n- tú tienes\n- él/ella/usted tiene\n- nosotros/nosotras tenemos\n- ellos/ellas/ustedes tienen\n\nIn this context, \"razón\" indicates that someone has a valid point or justification for their opinion or statement. It emphasizes agreement with the person's perspective, which is why it appears in this sentence. The following part, \"Por eso nos quedamos,\" translates to \"That's why we stayed,\" linking the acknowledgment of being right to the action taken."
+      },
+      {
+       "t": "Por",
+       "m": "for",
+       "b": "por",
+       "bm": "by",
+       "s": 1536,
+       "e": 1680,
+       "a": "{{AUD_ex-staying-safe-w-por}}",
+       "ex": "In this sentence, \"por\" is a preposition. It connects the reason for the action that follows. The phrase \"por eso\" translates to \"that's why,\" indicating the cause or justification for the action of staying.\n\nHere, \"por\" introduces the reason behind the decision to stay, which is implied to be related to the correctness of what was previously stated. It helps to clarify the relationship between the two parts of the conversation: \"Tiene razón\" (He's right) and \"nos quedamos\" (we stayed). \n\nSo, \"por\" is essential for linking the reason to the action, making the sentence coherent and meaningful."
+      },
+      {
+       "t": "eso",
+       "m": "that",
+       "b": "eso",
+       "bm": "that",
+       "s": 1760,
+       "e": 2000,
+       "a": "{{AUD_ex-staying-safe-w-eso}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "eso",
+         "a": "{{AUD_ex-staying-safe-w-eso}}"
+        },
+        {
+         "label": "Plural",
+         "text": "eso",
+         "a": "{{AUD_ex-staying-safe-w-eso}}"
+        }
+       ],
+       "ex": "In this sentence, \"eso\" is a demonstrative pronoun that translates to \"that\" in English. It refers back to the idea or reason previously mentioned in the conversation, which is implied to be the reason for staying. \n\nThe phrase \"por eso\" means \"that's why,\" connecting the statement about having reason to the action of staying. It serves to clarify the cause or justification for the action that follows. In this context, \"eso\" helps to link the speaker's acknowledgment of the correctness of someone's statement to their decision to stay. \n\nSo, \"eso\" is functioning as a pronoun that points to a specific idea or reason, making the sentence cohesive and clear."
+      },
+      {
+       "t": "nos",
+       "m": "us",
+       "b": "nos",
+       "bm": "us",
+       "s": 2060,
+       "e": 2240,
+       "a": "{{AUD_ex-staying-safe-w-nos}}",
+       "ex": "In the sentence \"Tiene razón. Por eso nos quedamos...\", the word \"nos\" is a reflexive pronoun. It refers to the subject of the action, which in this case is \"we.\" The pronoun \"nos\" indicates that the action of staying is performed by the group that includes the speaker.\n\nThe verb in this sentence is \"quedamos,\" which comes from the infinitive \"quedarse.\" Here’s a short present-tense conjugation for \"quedarse\":\n\n- yo me quedo\n- tú te quedas\n- él/ella/usted se queda\n- nosotros/nosotras nos quedamos\n- ellos/ellas/ustedes se quedan\n\nIn this context, \"nos\" is essential because it shows that the action of staying is not just happening to someone else; it involves the speaker and their group. So, \"nos quedamos\" translates to \"we stayed,\" emphasizing that the speaker is part of the group that made the decision to stay."
+      },
+      {
+       "t": "quedamos...",
+       "m": "we stayed",
+       "b": "quedar",
+       "bm": "to stay",
+       "s": 2272,
+       "e": 3680,
+       "a": "{{AUD_ex-staying-safe-w-quedamos}}",
+       "ba": "{{AUD_ex-staying-safe-w-quedar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "quedo",
+         "a": "{{AUD_ex-staying-safe-w-quedo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "quedé",
+         "a": "{{AUD_ex-staying-safe-w-quede-bff6bb}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "quedaba",
+         "a": "{{AUD_ex-staying-safe-w-quedaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "quedaré",
+         "a": "{{AUD_ex-staying-safe-w-quedare-c4021d}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "quedaría",
+         "a": "{{AUD_ex-staying-safe-w-quedaria-099484}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "quede",
+         "a": "{{AUD_ex-staying-safe-w-quede}}"
+        },
+        {
+         "label": "Command",
+         "text": "queda",
+         "a": "{{AUD_ex-staying-safe-w-queda}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "quedando",
+         "a": "{{AUD_ex-staying-safe-w-quedando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "quedado",
+         "a": "{{AUD_ex-staying-safe-w-quedado}}"
+        }
+       ],
+       "ex": "\"Quedamos\" is the first-person plural form of the verb \"quedar\" in the simple past tense (preterite). The infinitive \"quedar\" means \"to stay\" or \"to remain.\" In this sentence, \"quedamos\" translates to \"we stayed.\"\n\nHere’s a short conjugation table for \"quedar\" in the present tense:\n\n- yo quedo\n- tú quedas\n- él/ella/usted queda\n- nosotros/nosotras quedamos\n- vosotros/vosotras quedáis\n- ellos/ellas/ustedes quedan\n\nIn the sentence \"Por eso nos quedamos,\" the word \"quedamos\" indicates an action performed by the speaker and others included in \"nos.\" It shows that the group decided to stay, which connects back to the reason mentioned earlier in the conversation. The phrase \"Por eso\" (\"That's why\") sets up the context for their decision to stay, emphasizing the rationale behind it."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.08030303030303029,
+   "y": 0.7183838353012546,
+   "w": 0.30606060606060603,
+   "h": 0.08585858585858597,
+   "sentences": [
+    {
+     "es": "¿Y cómo sugieres que hagamos eso?",
+     "en": "And how do you suggest we do that? ",
+     "g": "Sugieres is in the present tense, asking about a suggestion in the present; 'que' is used to introduce a subordinate clause.",
+     "a": "{{AUD_ex-staying-safe-b4-1}}",
+     "words": [
+      {
+       "t": "¿Y",
+       "m": "and",
+       "b": "y",
+       "bm": "and",
+       "s": 0,
+       "e": 380,
+       "a": "{{AUD_ex-staying-safe-w-y}}",
+       "ex": "The word \"y\" in this sentence is a conjunction, which is a part of speech used to connect words, phrases, or clauses. In this case, \"y\" translates to \"and\" in English. It serves to link the question \"¿Cómo sugieres que hagamos eso?\" (How do you suggest we do that?) with whatever was previously mentioned in the conversation, implying that the speaker is continuing a thought or adding to a discussion.\n\nIn the context of the sentence, \"y\" helps to create a smooth transition between ideas, indicating that the speaker is building on what was said before. It emphasizes the connection between the previous statement and the current question, making the dialogue more cohesive."
+      },
+      {
+       "t": "cómo",
+       "m": "how",
+       "b": "cómo",
+       "bm": "how",
+       "s": 400,
+       "e": 480,
+       "a": "{{AUD_ex-staying-safe-w-como-d4d1ee}}",
+       "ex": "In this sentence, \"cómo\" is an adverb meaning \"how.\" It is used to ask for a manner or method regarding the suggestion being made. The phrase \"¿Y cómo sugieres...\" translates to \"And how do you suggest...\" indicating that the speaker is seeking clarification or details about the suggestion.\n\nAs an adverb, \"cómo\" does not change form and does not have a conjugation like verbs do. Its role here is to connect the question to the action of suggesting, specifically asking for the way in which the action should be done. This makes it essential for understanding the inquiry about the method of doing \"eso\" (that)."
+      },
+      {
+       "t": "sugieres",
+       "m": "you suggest",
+       "b": "sugerir",
+       "bm": "to suggest",
+       "s": 560,
+       "e": 1280,
+       "a": "{{AUD_ex-staying-safe-w-sugieres}}",
+       "ba": "{{AUD_ex-staying-safe-w-sugerir}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "sugiero",
+         "a": "{{AUD_ex-staying-safe-w-sugiero}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "sugerí",
+         "a": "{{AUD_ex-staying-safe-w-sugeri-4f5358}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "sugería",
+         "a": "{{AUD_ex-staying-safe-w-sugeria-a05ad3}}"
+        },
+        {
+         "label": "Future",
+         "text": "sugeriré",
+         "a": "{{AUD_ex-staying-safe-w-sugerire-e43385}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "sugeriría",
+         "a": "{{AUD_ex-staying-safe-w-sugeriria-593b34}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sugiera",
+         "a": "{{AUD_ex-staying-safe-w-sugiera}}"
+        },
+        {
+         "label": "Command",
+         "text": "sugiere",
+         "a": "{{AUD_ex-staying-safe-w-sugiere}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "sugiriendo",
+         "a": "{{AUD_ex-staying-safe-w-sugiriendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sugerido",
+         "a": "{{AUD_ex-staying-safe-w-sugerido}}"
+        }
+       ],
+       "ex": "The word \"sugieres\" is a verb form in this sentence. It comes from the infinitive \"sugerir,\" which means \"to suggest.\" In the present tense, the conjugation for \"sugerir\" is as follows:\n\n- yo sugiero\n- tú sugieres\n- él/ella/usted sugiere\n- nosotros/nosotras sugerimos\n- ellos/ellas/ustedes sugieren\n\nIn the sentence \"¿Y cómo sugieres que hagamos eso?\", \"sugieres\" is the second-person singular form (tú) of the verb, meaning \"you suggest.\" It indicates that the speaker is asking someone directly for their suggestion on how to do something.\n\nThe structure of the sentence shows that the speaker is inquiring about the other person's opinion or advice, as indicated by the phrase \"¿Y cómo sugieres...?\" This highlights the conversational tone and the request for input from the listener."
+      },
+      {
+       "t": "que",
+       "m": "that",
+       "b": "que",
+       "bm": "that",
+       "s": 1340,
+       "e": 1520,
+       "a": "{{AUD_ex-staying-safe-w-que}}",
+       "ex": "In this sentence, \"que\" is a conjunction. It connects the main clause \"sugieres\" (you suggest) with the subordinate clause \"hagamos eso\" (we do that). This structure is used to express what is being suggested.\n\nThe word \"que\" is essential here because it introduces the idea or action that is being proposed. Without \"que,\" the sentence would be incomplete and wouldn't clearly convey the suggestion being made. \n\nSo, in summary, \"que\" serves to link the suggestion to the action in the sentence, making it clear that the speaker is asking how to carry out the suggestion."
+      },
+      {
+       "t": "hagamos",
+       "m": "let's do",
+       "b": "hacer",
+       "bm": "to do",
+       "s": 1600,
+       "e": 2000,
+       "a": "{{AUD_ex-staying-safe-w-hagamos}}",
+       "ba": "{{AUD_ex-staying-safe-w-hacer}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "hago",
+         "a": "{{AUD_ex-staying-safe-w-hago}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "hice",
+         "a": "{{AUD_ex-staying-safe-w-hice}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "hacía",
+         "a": "{{AUD_ex-staying-safe-w-hacia-9239e5}}"
+        },
+        {
+         "label": "Future",
+         "text": "haré",
+         "a": "{{AUD_ex-staying-safe-w-hare-0a2c6b}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "haría",
+         "a": "{{AUD_ex-staying-safe-w-haria-dcde3f}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "haga",
+         "a": "{{AUD_ex-staying-safe-w-haga}}"
+        },
+        {
+         "label": "Command",
+         "text": "haz",
+         "a": "{{AUD_ex-staying-safe-w-haz}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "haciendo",
+         "a": "{{AUD_ex-staying-safe-w-haciendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "hecho",
+         "a": "{{AUD_ex-staying-safe-w-hecho}}"
+        }
+       ],
+       "ex": "The word \"hagamos\" is a verb form in this sentence. It is the first-person plural (nosotros) form of the verb \"hacer,\" which means \"to do\" or \"to make.\" In this context, \"hagamos\" translates to \"we do\" or \"let's do.\"\n\nIn the sentence \"¿Y cómo sugieres que hagamos eso?\" the speaker is asking for a suggestion on how to perform a certain action. The use of \"hagamos\" indicates that the action is intended to be done by the speaker and others included in the conversation. \n\nHere's a short present-tense conjugation of \"hacer\":\n- yo hago\n- tú haces\n- él/ella/usted hace\n- nosotros/nosotras hacemos\n- vosotros/vosotras hacéis\n- ellos/ellas/ustedes hacen\n\nSo, \"hagamos\" is specifically used here to express a collective action that the speaker is proposing."
+      },
+      {
+       "t": "eso?",
+       "m": "that",
+       "b": "eso",
+       "bm": "that",
+       "s": 2100,
+       "e": 4080,
+       "a": "{{AUD_ex-staying-safe-w-eso}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "eso",
+         "a": "{{AUD_ex-staying-safe-w-eso}}"
+        },
+        {
+         "label": "Plural",
+         "text": "eso",
+         "a": "{{AUD_ex-staying-safe-w-eso}}"
+        }
+       ],
+       "ex": "In this sentence, \"eso\" is a demonstrative pronoun. It translates to \"that\" in English and refers to something previously mentioned or understood in the context of the conversation. \n\nThe structure of the sentence is asking for a suggestion about an action, so \"eso\" is used to point to the specific action or idea that the speaker is referring to. The phrase \"hagamos eso\" translates to \"we do that,\" where \"eso\" indicates the particular thing being suggested.\n\nIn summary, \"eso\" serves to clarify what is being discussed, making the communication more precise."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.7196969696969696,
+   "y": 0.6744444413618609,
+   "w": 0.21969696969696972,
+   "h": 0.17191918883660828,
+   "sentences": [
+    {
+     "es": "Deja que yo me preocupe por los detalles.",
+     "en": "Let me worry about the details.",
+     "g": "Deja is in the imperative form, instructing someone; me is a reflexive pronoun indicating who is worried.",
+     "a": "{{AUD_ex-staying-safe-b5-1}}",
+     "words": [
+      {
+       "t": "Deja",
+       "m": "let",
+       "b": "dejar",
+       "bm": "to let",
+       "s": 0,
+       "e": 400,
+       "a": "{{AUD_ex-staying-safe-w-deja}}",
+       "ba": "{{AUD_ex-staying-safe-w-dejar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "dejo",
+         "a": "{{AUD_ex-staying-safe-w-dejo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "dejé",
+         "a": "{{AUD_ex-staying-safe-w-deje-5f8c72}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "dejaba",
+         "a": "{{AUD_ex-staying-safe-w-dejaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "dejaré",
+         "a": "{{AUD_ex-staying-safe-w-dejare-3e1927}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "dejaría",
+         "a": "{{AUD_ex-staying-safe-w-dejaria-d42241}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "deje",
+         "a": "{{AUD_ex-staying-safe-w-deje}}"
+        },
+        {
+         "label": "Command",
+         "text": "deja",
+         "a": "{{AUD_ex-staying-safe-w-deja}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "dejando",
+         "a": "{{AUD_ex-staying-safe-w-dejando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "dejado",
+         "a": "{{AUD_ex-staying-safe-w-dejado}}"
+        }
+       ],
+       "ex": "The word \"deja\" is a verb in the present tense, specifically the second-person singular form of \"dejar,\" which means \"to let\" or \"to allow.\" In this sentence, \"deja\" is used as a command or request, meaning \"let\" or \"allow.\" It is addressing someone directly, asking them to permit the speaker to take care of something.\n\nHere's a short conjugation table for \"dejar\" in the present tense:\n\n- yo dejo\n- tú dejas\n- él/ella/usted deja\n- nosotros/nosotras dejamos\n- vosotros/vosotras dejáis\n- ellos/ellas/ustedes dejan\n\nIn the sentence \"Deja que yo me preocupe por los detalles,\" \"deja\" is crucial because it sets the tone for the speaker's request to the listener, asking them to allow the speaker to worry about the details. The phrase \"que yo me preocupe\" follows \"deja,\" indicating what the speaker wants to be permitted."
+      },
+      {
+       "t": "que",
+       "m": "that",
+       "b": "que",
+       "bm": "that",
+       "s": 460,
+       "e": 640,
+       "a": "{{AUD_ex-staying-safe-w-que}}",
+       "ex": "In this sentence, \"que\" is a conjunction. It connects two clauses: \"Deja\" (Let) and \"yo me preocupe por los detalles\" (I worry about the details). Specifically, it introduces the subordinate clause that explains what you are allowing someone to do.\n\nThe phrase \"Deja que\" translates to \"Let\" in English, and \"que\" is necessary here to link the action of allowing to the action of worrying. Without \"que,\" the sentence would be incomplete and wouldn't convey the intended meaning. \n\nSo, in this context, \"que\" serves to connect the main action of allowing with the subordinate action of worrying, making the sentence flow smoothly."
+      },
+      {
+       "t": "yo",
+       "m": "I",
+       "b": "yo",
+       "bm": "I",
+       "s": 720,
+       "e": 880,
+       "a": "{{AUD_ex-staying-safe-w-yo}}",
+       "ex": "In this sentence, \"yo\" is a subject pronoun. It means \"I\" in English and is used to indicate who is performing the action of the verb. Here, \"yo\" is essential because it clarifies that the speaker is the one who will worry about the details.\n\nThe verb in this sentence is \"preocupe,\" which comes from the infinitive \"preocupar.\" In the present tense, the conjugation for \"yo\" is \"preocupo.\" So, the full action is that \"I worry\" about the details.\n\nOverall, \"yo\" is there to emphasize that the speaker wants to take responsibility for the details, making it clear who is involved in the action."
+      },
+      {
+       "t": "me",
+       "m": "me",
+       "b": "me",
+       "bm": "to me",
+       "s": 960,
+       "e": 1120,
+       "a": "{{AUD_ex-staying-safe-w-me}}",
+       "ex": "In this sentence, \"me\" is a reflexive pronoun. It refers back to the subject \"yo\" (I), indicating that the action of worrying is directed towards the speaker themselves. \n\nThe verb in this sentence is \"preocupe,\" which comes from the infinitive \"preocupar.\" Here’s a short present-tense conjugation for \"preocupar\" with the reflexive pronoun:\n\n- yo me preocupo (I worry)\n- tú te preocupas (you worry)\n- él/ella se preocupa (he/she worries)\n- nosotros/nosotras nos preocupamos (we worry)\n- ellos/ellas se preocupan (they worry)\n\nIn this context, \"me\" emphasizes that the speaker is taking responsibility for worrying about the details. The phrase \"deja que yo me preocupe\" translates to \"let me worry,\" highlighting the personal involvement in the action."
+      },
+      {
+       "t": "preocupe",
+       "m": "worry",
+       "b": "preocupar",
+       "bm": "to worry",
+       "s": 1160,
+       "e": 1840,
+       "a": "{{AUD_ex-staying-safe-w-preocupe}}",
+       "ba": "{{AUD_ex-staying-safe-w-preocupar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "preocupo",
+         "a": "{{AUD_ex-staying-safe-w-preocupo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "preocupé",
+         "a": "{{AUD_ex-staying-safe-w-preocupe-f4eb06}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "preocupaba",
+         "a": "{{AUD_ex-staying-safe-w-preocupaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "preocuparé",
+         "a": "{{AUD_ex-staying-safe-w-preocupare-a54ef5}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "preocuparía",
+         "a": "{{AUD_ex-staying-safe-w-preocuparia-872342}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "preocupe",
+         "a": "{{AUD_ex-staying-safe-w-preocupe}}"
+        },
+        {
+         "label": "Command",
+         "text": "preocupa",
+         "a": "{{AUD_ex-staying-safe-w-preocupa}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "preocupando",
+         "a": "{{AUD_ex-staying-safe-w-preocupando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "preocupado",
+         "a": "{{AUD_ex-staying-safe-w-preocupado}}"
+        }
+       ],
+       "ex": "The word \"preocupe\" is a verb form in this sentence. It comes from the infinitive verb \"preocupar,\" which means \"to worry.\" In this context, \"preocupe\" is in the present subjunctive mood, used to express a wish or desire. \n\nThe conjugation for \"preocupar\" in the present subjunctive is as follows:\n- yo me preocupe\n- tú te preocupes\n- él/ella/usted se preocupe\n- nosotros/nosotras nos preocupemos\n- ellos/ellas/ustedes se preocupen\n\nIn the sentence \"Deja que yo me preocupe por los detalles,\" the phrase \"que yo me preocupe\" means \"that I worry.\" Here, \"preocupe\" indicates the speaker's desire to take responsibility for worrying about the details. The use of the subjunctive (\"preocupe\") is triggered by the phrase \"Deja que,\" which translates to \"Let.\" This structure shows that the speaker is asking for permission or expressing a wish."
+      },
+      {
+       "t": "por",
+       "m": "for",
+       "b": "por",
+       "bm": "by",
+       "s": 2060,
+       "e": 2720,
+       "a": "{{AUD_ex-staying-safe-w-por}}",
+       "ex": "In the sentence \"Deja que yo me preocupe por los detalles,\" the word \"por\" is a preposition. It connects the verb \"preocupe\" (from the infinitive \"preocupar\") to the noun \"detalles.\" Here, \"por\" indicates the reason or cause for worrying, which is specifically \"los detalles\" (the details).\n\nIn English, we often use \"about\" in this context, but in Spanish, \"por\" is the correct preposition to express this relationship. It shows that the speaker is concerned regarding the details. \n\nSo, \"por\" is essential in this sentence because it clarifies what the speaker is worrying about, linking the action of worrying to the specific subject of concern."
+      },
+      {
+       "t": "los",
+       "m": "the",
+       "b": "el",
+       "bm": "the",
+       "s": 2760,
+       "e": 2960,
+       "a": "{{AUD_ex-staying-safe-w-los}}",
+       "ba": "{{AUD_ex-staying-safe-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-staying-safe-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-staying-safe-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-staying-safe-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-staying-safe-w-las}}"
+        }
+       ],
+       "ex": "In this sentence, \"los\" is a definite article in Spanish. It is used to specify and indicate that we are talking about particular details. In English, it translates to \"the,\" so \"los detalles\" means \"the details.\"\n\n\"Los\" is plural and masculine, which matches the noun \"detalles,\" also plural and masculine. This agreement in gender and number is important in Spanish grammar. The phrase \"los detalles\" refers to specific details that the speaker is willing to take responsibility for, as indicated by \"me preocupe por\" (let me worry about). \n\nSo, in summary, \"los\" helps to clarify which details are being discussed, making it clear that the speaker is referring to specific ones rather than details in general."
+      },
+      {
+       "t": "detalles.",
+       "m": "details",
+       "b": "detalle",
+       "bm": "detail",
+       "s": 3040,
+       "e": 3840,
+       "a": "{{AUD_ex-staying-safe-w-detalles}}",
+       "ba": "{{AUD_ex-staying-safe-w-detalle}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "detalle",
+         "a": "{{AUD_ex-staying-safe-w-detalle}}"
+        },
+        {
+         "label": "Plural",
+         "text": "detalles",
+         "a": "{{AUD_ex-staying-safe-w-detalles}}"
+        }
+       ],
+       "ex": "The word \"detalles\" is a noun in this sentence. It is in the plural form and means \"details\" in English. In the context of the sentence, \"los detalles\" refers to specific aspects or elements that the speaker is willing to take responsibility for.\n\nIn the sentence \"Deja que yo me preocupe por los detalles,\" the phrase \"por los detalles\" indicates what the speaker is concerned about. The definite article \"los\" specifies that these are particular details, suggesting that they are known or relevant to the situation at hand. \n\nOverall, \"detalles\" plays a crucial role in clarifying what the speaker is willing to worry about, making the sentence more specific and meaningful."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

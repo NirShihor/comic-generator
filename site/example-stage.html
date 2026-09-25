@@ -1,0 +1,427 @@
+<style>
+  /* Comic example stage (shared): the real page with tappable bubbles. A tap
+     tints the bubble like the app, plays the line and opens the bubble card;
+     tapping a word opens its card with More (all forms) and Explain further. */
+  .stage-wrap { display: flex; flex-direction: column; align-items: center; padding: 22px 0 10px; }
+  .stage-head { font-size: 1.35rem; margin: 0 0 12px; }
+  .stage-note { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.88rem; margin: 0 0 14px; text-align: center; }
+  .stage {
+    position: relative; width: min(540px, 100%);
+    border: 3px solid var(--line); border-radius: 12px;
+    box-shadow: 6px 6px 0 var(--shadow); overflow: hidden;
+  }
+  .stage > img { width: 100%; height: auto; display: block; }
+  .hotspot { position: absolute; background: transparent; border: 0; border-radius: 50%; cursor: pointer; padding: 0; }
+  .hotspot.active-fallback { background: rgba(96, 220, 120, 0.42); border-radius: 12px; }
+  .bubble-glow { position: absolute; pointer-events: none; z-index: 2; }
+  .hint {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px;
+    background: rgba(22, 24, 46, 0.88); color: #FFFFFF; pointer-events: none;
+    font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.85rem;
+    padding: 8px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .popup {
+    position: absolute; left: 4%; width: 92%; z-index: 3; max-height: 62%; overflow-y: auto;
+    background: #F7F6FB; color: #16182E; border-radius: 20px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.6); padding: 14px 18px 16px;
+    font-family: system-ui, sans-serif;
+  }
+  .popup-x { position: absolute; top: 10px; right: 12px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: #E4E2EE; color: #55536B; cursor: pointer; font-size: 0.8rem; }
+  .ex-sent + .ex-sent { border-top: 1px solid #E2E0EC; margin-top: 12px; padding-top: 12px; }
+  .ex-chips { margin: 0 28px 8px 0; font-family: Charter, Georgia, serif; font-size: 1.18rem; font-weight: 700; }
+  .ex-chips .chip { display: inline-block; background: #FFFFFF; border: 1.5px solid #D9D6E6; border-radius: 10px; padding: 2px 10px 3px; margin: 0 6px 6px 0; cursor: pointer; }
+  .ex-chips .chip.sel { background: #3D7BFA; border-color: #3D7BFA; color: #FFFFFF; }
+  /* The word being spoken, as in the reader (solid #98F872). */
+  .ex-chips .chip.speaking { background: #98F872; border-color: #98F872; color: #16182E; }
+  .tap-tip {
+    display: inline-flex; align-items: center; gap: 6px; position: relative;
+    background: #6E40F0; color: #FFFFFF; font-weight: 700; font-size: 0.82rem;
+    padding: 6px 12px; border-radius: 999px; margin: 0 0 12px;
+    box-shadow: 0 4px 12px rgba(110, 64, 240, 0.35);
+    animation: tipBob 1.6s ease-in-out infinite;
+  }
+  .tap-tip::after {
+    content: ''; position: absolute; left: 22px; bottom: -6px;
+    border: 6px solid transparent; border-top-color: #6E40F0; border-bottom: 0;
+  }
+  @keyframes tipBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  @media (prefers-reduced-motion: reduce) { .tap-tip { animation: none; } }
+  .ex-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .ex-play { border: 0; background: #3D7BFA; color: #FFFFFF; font-weight: 700; font-size: 0.95rem; border-radius: 999px; padding: 8px 20px; cursor: pointer; }
+  .ex-link { border: 0; background: transparent; color: #3D7BFA; font-weight: 700; font-size: 0.9rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 8px 2px; }
+  .ex-en { margin: 10px 0 0; font-family: Charter, Georgia, serif; font-size: 1.02rem; }
+  .ex-grammar { margin: 8px 0 0; font-size: 0.9rem; color: #3B3950; white-space: pre-wrap; background: #EEEAFB; border-radius: 10px; padding: 10px 12px; }
+  .word-card { background: #FFFFFF; border: 1.5px solid #E2E0EC; border-radius: 14px; padding: 10px 14px 11px; margin: 0 0 12px; font-size: 0.95rem; }
+  .word-card .w-head { font-weight: 800; font-size: 1.05rem; }
+  .word-card .w-mean { color: #55536B; margin-top: 2px; }
+  .word-card .w-base { color: #55536B; font-size: 0.85rem; margin-top: 4px; }
+  .word-card .w-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid #EEEAF6; }
+  .word-card .w-more { border: 0; border-radius: 999px; padding: 6px 14px; font-weight: 700; cursor: pointer; background: #FFF1DC; color: #B45A00; }
+  .word-card .w-explain { border: 0; border-radius: 999px; padding: 6px 14px; font-weight: 700; cursor: pointer; background: #EFE8FF; color: #6E40F0; }
+  .wplay { border: 0; background: #EAF1FF; color: #3D7BFA; border-radius: 50%; width: 26px; height: 26px; cursor: pointer; margin-left: 8px; vertical-align: middle; }
+  .ex-sheet {
+    position: absolute; inset: 0; z-index: 5; background: #F7F6FB; color: #16182E;
+    display: flex; flex-direction: column; font-family: system-ui, sans-serif;
+  }
+  .ex-sheet[hidden], .popup[hidden], .word-card[hidden] { display: none; }
+  .ex-sheet .sh-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #E2E0EC; }
+  .ex-sheet .sh-head b { font-size: 1.15rem; }
+  .ex-sheet .sh-done { border: 0; background: transparent; color: #3D7BFA; font-weight: 700; font-size: 1rem; cursor: pointer; }
+  .ex-sheet .sh-body { overflow-y: auto; padding: 12px 16px 20px; }
+  .ex-sheet .sh-sec { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #8B88A6; margin: 14px 0 6px; }
+  .ex-sheet .sh-card { background: #FFFFFF; border-radius: 12px; padding: 10px 14px; }
+  .ex-sheet .sh-card.used { background: #E7F8E6; }
+  .ex-sheet .sh-big { font-size: 1.35rem; font-weight: 800; }
+  .ex-sheet .sh-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #F0EEF6; }
+  .ex-sheet .sh-row:last-child { border-bottom: 0; }
+  .ex-sheet .sh-row.used { background: #E7F8E6; border-radius: 8px; padding-left: 8px; padding-right: 8px; }
+  .ex-sheet .sh-label { width: 120px; flex: none; color: #55536B; font-size: 0.88rem; }
+  .ex-sheet .sh-text { flex: 1; }
+  .ex-sheet .sh-text.used { font-weight: 800; }
+  .ex-sheet .sh-explain { white-space: pre-wrap; line-height: 1.55; font-size: 0.98rem; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+<script>
+(function () {
+  function esc(t) {
+    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function bare(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''); }
+
+  // "Tap a word" tip: shown on each opened bubble until the reader taps a
+  // word on this page (shared by every comic on the page, remembered per
+  // page for the visit, so each page teaches it once; storage may be
+  // unavailable).
+  var tipKey = 'comigo-tap-tip:' + location.pathname.replace(/\.html$/, '');
+  var tipSeen = false;
+  try { tipSeen = sessionStorage.getItem(tipKey) === '1'; } catch (e) {}
+  function markTipSeen() {
+    tipSeen = true;
+    try { sessionStorage.setItem(tipKey, '1'); } catch (e) {}
+    document.querySelectorAll('.tap-tip').forEach(function (t) { t.remove(); });
+  }
+
+  document.querySelectorAll('.stage[data-ex]').forEach(function (stage) {
+    var dataEl = stage.parentNode.querySelector('script.ex-data');
+    var data = { bubbles: [] };
+    try { data = JSON.parse(dataEl.textContent); } catch (e) {}
+    var img = stage.querySelector('img');
+    var popup = stage.querySelector('.popup');
+    var body = popup.querySelector('.popup-body');
+    var sheet = stage.querySelector('.ex-sheet');
+    var audio = stage.querySelector('audio');
+    var hint = stage.querySelector('.hint');
+    var current = null, page = null;
+
+    // Line playback lights each word green while it's spoken, exactly like
+    // the reader: the word whose [start, end) window holds the playhead,
+    // none in the gaps, the last word once playback is past it. Word audio
+    // (chips, speakers) plays without a highlight.
+    var speaking = null, timer = 0;
+    function clearSpeaking() {
+      if (speaking) speaking.chips.forEach(function (c) { c.classList.remove('speaking'); });
+      speaking = null;
+      if (timer) clearInterval(timer); timer = 0;
+    }
+    function tick() {
+      if (!speaking || audio.paused) return;
+      var ms = audio.currentTime * 1000, words = speaking.words, idx = -1;
+      for (var i = 0; i < words.length; i++) {
+        var st = words[i].s; if (st == null) continue;
+        var en = words[i].e != null ? words[i].e : (words[i + 1] && words[i + 1].s != null ? words[i + 1].s : Infinity);
+        if (ms >= st && ms < en) { idx = i; break; }
+      }
+      var last = words[words.length - 1];
+      if (idx < 0 && last && last.s != null && ms >= last.s) idx = words.length - 1;
+      speaking.chips.forEach(function (c, i) { c.classList.toggle('speaking', i === idx); });
+    }
+    function playSrc(src, sentEl, words) {
+      clearSpeaking();
+      if (!src) return;
+      if (audio.getAttribute('src') !== src) audio.setAttribute('src', src);
+      audio.currentTime = 0;
+      if (sentEl && words && words.length) {
+        speaking = { chips: Array.prototype.slice.call(sentEl.querySelectorAll('.chip')), words: words };
+      }
+      // Poll every 50 ms, like the reader's timer (animation frames stop
+      // whenever the page isn't on screen).
+      audio.play().then(function () { if (speaking && !timer) timer = setInterval(tick, 50); }).catch(function () {});
+    }
+    audio.addEventListener('ended', function () {
+      var next = speaking && speaking.next;
+      clearSpeaking();
+      if (next) next();
+    });
+    audio.addEventListener('pause', function () { if (audio.ended) return; if (speaking) speaking.chips.forEach(function (c) { c.classList.remove('speaking'); }); });
+
+
+    // Same trick as the app's green bubbles: flood-fill the bubble's light
+    // interior on the page bitmap, so the highlight matches the drawn shape
+    // exactly (dark outline stops the fill; the lettering stays crisp).
+    function pageData() {
+      if (page) return page;
+      if (!img.complete || !img.naturalWidth) return null;
+      try {
+        var cv = document.createElement('canvas');
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        var c = cv.getContext('2d', { willReadFrequently: true });
+        c.drawImage(img, 0, 0);
+        page = { d: c.getImageData(0, 0, cv.width, cv.height).data, W: cv.width, H: cv.height };
+      } catch (e) { page = { failed: true }; }
+      return page;
+    }
+    function highlightFor(h) {
+      if (h._glow !== undefined) return h._glow;
+      // Captions lettered straight onto the art have no bubble to fill.
+      if (h.dataset.caption !== undefined) { h._glow = null; return null; }
+      var p = pageData();
+      if (!p || p.failed) return undefined;
+      var W = p.W, H = p.H, d = p.d;
+      var rx = parseFloat(h.style.left) / 100 * W, ry = parseFloat(h.style.top) / 100 * H;
+      var rw = parseFloat(h.style.width) / 100 * W, rh = parseFloat(h.style.height) / 100 * H;
+      function light(i) { return d[i] > 205 && d[i + 1] > 195 && d[i + 2] > 160; }
+      var cxp = Math.round(rx + rw / 2), cyp = Math.round(ry + rh / 2);
+      var stepX = Math.max(1, Math.round(rw / 14)), stepY = Math.max(1, Math.round(rh / 14));
+      // A seed can land in a sealed pocket (inside a letter), so try several
+      // candidates. A fill that reaches the search-box edge is either a long
+      // tail (it ends once the box is wider) or a real leak (it never does),
+      // so widen the box and retry before giving up.
+      var fill = null, pads = [0.1, 0.6, 1.4];
+      for (var pi = 0; pi < pads.length && !fill; pi++) {
+        var pad = pads[pi];
+        var x0 = Math.max(0, Math.round(rx - rw * pad)), y0 = Math.max(0, Math.round(ry - rh * pad));
+        var x1 = Math.min(W - 1, Math.round(rx + rw * (1 + pad))), y1 = Math.min(H - 1, Math.round(ry + rh * (1 + pad)));
+        var visited = new Uint8Array(W * H);
+        var limit = (x1 - x0 + 1) * (y1 - y0 + 1);
+        for (var oy = 0; oy <= 6 && !fill; oy++) for (var sy = -1; sy <= 1 && !fill; sy += 2)
+          for (var ox = 0; ox <= 6 && !fill; ox++) for (var sx = -1; sx <= 1 && !fill; sx += 2) {
+            var px = cxp + sx * ox * stepX, py = cyp + sy * oy * stepY;
+            var c0 = py * W + px;
+            if (px < x0 || px > x1 || py < y0 || py > y1 || visited[c0] || !light(c0 * 4)) continue;
+            var f = [], edge = 0, stack = [c0];
+            while (stack.length) {
+              var q = stack.pop();
+              if (visited[q]) continue;
+              visited[q] = 1;
+              var qx = q % W, qy = (q / W) | 0;
+              if (qx < x0 || qx > x1 || qy < y0 || qy > y1) continue;
+              if (!light(q * 4)) continue;
+              f.push(q);
+              if (qx === x0 || qx === x1 || qy === y0 || qy === y1) edge++;
+              if (f.length > limit) break;
+              stack.push(q - 1, q + 1, q - W, q + W);
+            }
+            // A real bubble interior fills a good share of its tap area; tiny
+            // light patches (e.g. a caption lettered straight onto the art)
+            // aren't bubbles, and fall back to the plain tint.
+            if (f.length >= 0.15 * rw * rh && f.length <= limit && edge <= 6) fill = f;
+          }
+      }
+      if (!fill) { h._glow = null; return null; }
+      var bx0 = W, by0 = H, bx1 = 0, by1 = 0;
+      for (var k = 0; k < fill.length; k++) {
+        var fx = fill[k] % W, fy = (fill[k] / W) | 0;
+        if (fx < bx0) bx0 = fx; if (fx > bx1) bx1 = fx;
+        if (fy < by0) by0 = fy; if (fy > by1) by1 = fy;
+      }
+      // Letter counters (the enclosed white inside o, e, a...) belong to the
+      // bubble too: tint any light pocket fully enclosed in the fill's box.
+      var inFill = new Uint8Array(W * H);
+      for (var k3 = 0; k3 < fill.length; k3++) inFill[fill[k3]] = 1;
+      var checked = new Uint8Array(W * H);
+      for (var yy = by0; yy <= by1; yy++) for (var xx = bx0; xx <= bx1; xx++) {
+        var p0 = yy * W + xx;
+        if (checked[p0] || inFill[p0] || !light(p0 * 4)) continue;
+        var comp = [], touches = false, st = [p0];
+        while (st.length) {
+          var q3 = st.pop();
+          if (checked[q3] || inFill[q3]) continue;
+          var qx3 = q3 % W, qy3 = (q3 / W) | 0;
+          if (qx3 < bx0 || qx3 > bx1 || qy3 < by0 || qy3 > by1) { touches = true; continue; }
+          checked[q3] = 1;
+          if (!light(q3 * 4)) continue;
+          if (qx3 === bx0 || qx3 === bx1 || qy3 === by0 || qy3 === by1) touches = true;
+          comp.push(q3);
+          st.push(q3 - 1, q3 + 1, q3 - W, q3 + W);
+        }
+        if (!touches && comp.length && comp.length < fill.length * 0.35) {
+          for (var k4 = 0; k4 < comp.length; k4++) fill.push(comp[k4]);
+        }
+      }
+      var bw = bx1 - bx0 + 1, bh = by1 - by0 + 1;
+      var out = document.createElement('canvas');
+      out.width = bw; out.height = bh;
+      var oc = out.getContext('2d');
+      var od = oc.createImageData(bw, bh);
+      var G = [126, 205, 114], t = 0.55;
+      for (var k2 = 0; k2 < fill.length; k2++) {
+        var q2 = fill[k2], qx2 = q2 % W, qy2 = (q2 / W) | 0;
+        var si = q2 * 4, di = ((qy2 - by0) * bw + (qx2 - bx0)) * 4;
+        od.data[di] = d[si] * (1 - t) + G[0] * t;
+        od.data[di + 1] = d[si + 1] * (1 - t) + G[1] * t;
+        od.data[di + 2] = d[si + 2] * (1 - t) + G[2] * t;
+        od.data[di + 3] = 255;
+      }
+      oc.putImageData(od, 0, 0);
+      out.className = 'bubble-glow';
+      out.style.left = (bx0 / W * 100) + '%';
+      out.style.top = (by0 / H * 100) + '%';
+      out.style.width = (bw / W * 100) + '%';
+      out.style.height = (bh / H * 100) + '%';
+      out.hidden = true;
+      stage.appendChild(out);
+      h._glow = out;
+      return out;
+    }
+    function setActive(h, on) {
+      var glow = on ? highlightFor(h) : h._glow;
+      if (glow) { glow.hidden = !on; h.classList.remove('active-fallback'); }
+      else h.classList.toggle('active-fallback', !!on);
+      // Tapped before the page image finished loading: swap the plain tint
+      // for the exact highlight as soon as it arrives.
+      if (on && glow === undefined && !img.complete) {
+        img.addEventListener('load', function () { if (current === h) setActive(h, true); }, { once: true });
+      }
+    }
+    function closeSheet() { sheet.hidden = true; }
+    function close() {
+      popup.hidden = true; closeSheet(); audio.pause();
+      if (current) setActive(current, false);
+      current = null;
+    }
+    function speaker(src, label) {
+      return src ? '<button class="wplay" data-snd="' + esc(src) + '" aria-label="' + esc(label) + '">🔊</button>' : '';
+    }
+
+    // Word card: exactly the reader's popover — word, meaning, base form,
+    // then More (all forms) and Explain further.
+    function wordCard(sentEl, w) {
+      var card = sentEl.querySelector('.word-card');
+      var html = '<div class="w-head">' + esc(w.t) + speaker(w.a, 'Play word') + '</div>'
+        + '<div class="w-mean">' + esc(w.m) + '</div>';
+      if (w.b && bare(w.b) !== bare(w.t)) {
+        html += '<div class="w-base">Base form: <i>' + esc(w.b) + '</i>' + (w.bm ? ' — ' + esc(w.bm) : '') + speaker(w.ba, 'Play base form') + '</div>';
+      }
+      var btns = '';
+      if (w.forms && w.forms.length) btns += '<button class="w-more">📖 More</button>';
+      if (w.ex) btns += '<button class="w-explain">✨ Explain further</button>';
+      if (btns) html += '<div class="w-btns">' + btns + '</div>';
+      card.innerHTML = html;
+      card.hidden = false;
+      placePopup();
+      var more = card.querySelector('.w-more'), expl = card.querySelector('.w-explain');
+      if (more) more.addEventListener('click', function () { openForms(w); });
+      if (expl) expl.addEventListener('click', function () { openExplain(w); });
+      playSrc(w.a);
+    }
+
+    function openSheet(title, html) {
+      sheet.querySelector('.sh-head b').textContent = title;
+      sheet.querySelector('.sh-body').innerHTML = html;
+      sheet.hidden = false;
+      sheet.querySelector('.sh-body').scrollTop = 0;
+      stage.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    function openForms(w) {
+      var used = null;
+      (w.forms || []).forEach(function (f) { if (bare(f.text) === bare(w.t)) used = f; });
+      var html = '<div class="sh-sec">Base form</div><div class="sh-card"><span class="sh-big">' + esc(w.b || w.t) + '</span>'
+        + speaker(w.ba || w.a, 'Play base form') + '<div class="w-mean">' + esc(w.bm || w.m) + '</div></div>'
+        + '<div class="sh-sec">In this sentence</div><div class="sh-card used"><div style="color:#55536B;font-size:0.85rem">'
+        + esc(used ? used.label : 'Base form') + '</div><b>' + esc(w.t) + '</b>' + speaker(w.a, 'Play word')
+        + '<div class="w-mean">' + esc(w.m) + '</div></div>'
+        + '<div class="sh-sec">Forms</div><div class="sh-card">';
+      (w.forms || []).forEach(function (f) {
+        var isUsed = used === f;
+        html += '<div class="sh-row' + (isUsed ? ' used' : '') + '"><span class="sh-label">' + esc(f.label) + '</span>'
+          + '<span class="sh-text' + (isUsed ? ' used' : '') + '">' + esc(f.text) + '</span>' + speaker(f.a, 'Play ' + f.text) + '</div>';
+      });
+      openSheet(w.t.replace(/[^\p{L}\p{N}\s'-]/gu, ''), html + '</div>');
+    }
+    function openExplain(w) {
+      openSheet(w.t.replace(/[^\p{L}\p{N}\s'-]/gu, ''), '<div class="sh-explain">' + esc(w.ex) + '</div>');
+    }
+
+    // Open the card right next to the bubble that was tapped — below it for
+    // bubbles in the top half, above it for the bottom half — kept inside
+    // the comic, and scrolled into view so the reader never has to hunt for it.
+    function placePopup() {
+      if (!current || popup.hidden) return;
+      var sh = stage.clientHeight, ph = popup.offsetHeight;
+      var bt = parseFloat(current.style.top) / 100 * sh;
+      var bb = bt + parseFloat(current.style.height) / 100 * sh;
+      var top = (bt + bb) / 2 > sh / 2 ? bt - ph - 10 : bb + 10;
+      popup.style.top = Math.max(8, Math.min(sh - ph - 8, top)) + 'px';
+      popup.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function renderBubble(b) {
+      body.innerHTML = '';
+      if (!tipSeen && (b.sentences || []).some(function (s) { return s.words && s.words.length; })) {
+        var tip = document.createElement('div');
+        tip.className = 'tap-tip';
+        tip.textContent = '\uD83D\uDC46 Tap a word to see what it means';
+        body.appendChild(tip);
+      }
+      (b.sentences || []).forEach(function (s) {
+        var el = document.createElement('div');
+        el.className = 'ex-sent';
+        var chips = (s.words && s.words.length)
+          ? s.words.map(function (w, i) { return '<span class="chip" data-i="' + i + '">' + esc(w.t) + '</span>'; }).join('')
+          : esc(s.es);
+        el.innerHTML = '<p class="ex-chips" lang="es">' + chips + '</p>'
+          + '<div class="word-card" hidden></div>'
+          + '<div class="ex-row">' + (s.a ? '<button class="ex-play">▶︎&nbsp; Play</button>' : '')
+          + '<button class="ex-link ex-tr">Show translation</button>'
+          + (s.g ? '<button class="ex-link ex-gr">Explain grammar</button>' : '') + '</div>'
+          + '<p class="ex-en" hidden>' + esc(s.en) + '</p>'
+          + (s.g ? '<p class="ex-grammar" hidden>' + esc(s.g) + '</p>' : '');
+        el.querySelectorAll('.chip').forEach(function (c) {
+          c.addEventListener('click', function () {
+            body.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('sel'); });
+            body.querySelectorAll('.word-card').forEach(function (x) { if (x !== el.querySelector('.word-card')) x.hidden = true; });
+            c.classList.add('sel');
+            markTipSeen();
+            wordCard(el, s.words[+c.dataset.i]);
+          });
+        });
+        var play = el.querySelector('.ex-play');
+        if (play) play.addEventListener('click', function () { playSrc(s.a, el, s.words); });
+        var tr = el.querySelector('.ex-tr'), en = el.querySelector('.ex-en');
+        tr.addEventListener('click', function () { en.hidden = !en.hidden; tr.textContent = en.hidden ? 'Show translation' : 'Hide translation'; placePopup(); });
+        var gr = el.querySelector('.ex-gr'), gn = el.querySelector('.ex-grammar');
+        if (gr) gr.addEventListener('click', function () { gn.hidden = !gn.hidden; gr.textContent = gn.hidden ? 'Explain grammar' : 'Hide grammar'; placePopup(); });
+        body.appendChild(el);
+      });
+    }
+
+    stage.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.wplay');
+      if (b) { ev.stopPropagation(); playSrc(b.dataset.snd); }
+    });
+    stage.querySelectorAll('.hotspot').forEach(function (h) {
+      h.addEventListener('click', function () {
+        if (hint) hint.style.display = 'none';
+        closeSheet();
+        if (current) setActive(current, false);
+        current = h; setActive(h, true);
+        var b = data.bubbles[+h.dataset.i] || { sentences: [] };
+        renderBubble(b);
+        popup.hidden = false;
+        popup.scrollTop = 0;
+        placePopup();
+        // Play the bubble's lines one after another, each with its highlight.
+        var els = body.querySelectorAll('.ex-sent'), sents = b.sentences || [];
+        (function playFrom(k) {
+          if (k >= sents.length) return;
+          if (!sents[k].a) return playFrom(k + 1);
+          playSrc(sents[k].a, els[k], sents[k].words);
+          if (speaking) speaking.next = function () { playFrom(k + 1); };
+        })(0);
+      });
+    });
+    popup.querySelector('.popup-x').addEventListener('click', close);
+    sheet.querySelector('.sh-done').addEventListener('click', closeSheet);
+  });
+})();
+</script>

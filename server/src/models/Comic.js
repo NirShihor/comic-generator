@@ -17,7 +17,10 @@ const WordSchema = new mongoose.Schema({
   endTimeMs: Number,
   vocabQuiz: Boolean,
   manual: Boolean,
-  forms: [WordFormSchema]
+  forms: [WordFormSchema],
+  // "Explain further" text, generated once when an example page is
+  // published to comigo.net (the reader app asks the server live instead).
+  explanation: String
 }, { _id: false });
 
 // Grammar transformation (nested in Sentence)
@@ -223,6 +226,11 @@ const PageSchema = new mongoose.Schema({
   keyPhraseId: String,
   // Set on reel pages (comic.reelPages): marketing-only pages, never exported.
   reelLabel: String,
+  // Set on example pages (comic.examplePages): single pages published to
+  // comigo.net as interactive demos. Never exported to the reader.
+  exampleLabel: String,
+  exampleSlug: String,
+  examplePublishedAt: Date,
   // Last challenge reel built from this page (file in projects/<id>/marketing) and the settings used.
   reelVideo: String,
   reelSettings: mongoose.Schema.Types.Mixed,
@@ -385,6 +393,9 @@ const ComicSchema = new mongoose.Schema({
   // Reel pages: pages made for marketing reels (challenge reels etc.), edited
   // like any page but NEVER exported to the reader. Numbered from 2001.
   reelPages: [PageSchema],
+  // Example pages: interactive demo pages for comigo.net, edited like any
+  // page but NEVER exported to the reader. Numbered from 3001.
+  examplePages: [PageSchema],
   collectionId: String,
   collectionTitle: String,
   episodeNumber: Number,

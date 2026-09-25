@@ -4,7 +4,8 @@ as data URIs, producing a single self-contained site/index.html.
 
 Usage: python3 site/build.py
 """
-import hashlib, re, os, subprocess, sys
+import hashlib, json, re, os, subprocess, sys
+from html import escape as html_escape
 
 here = os.path.dirname(os.path.abspath(__file__))
 
@@ -85,8 +86,58 @@ def poster_repl(m):
         manifest[name] = process(name)
     return f'poster="{manifest[name][0]}"'
 
+# {{EXAMPLE:slug}} or {{EXAMPLE:slug|note}} -> an interactive comic stage built
+# from site/examples/<slug>.json (published from the generator's Marketing →
+# Examples tab). The shared styles/script (site/example-stage.html) are added
+# once per page that uses any example.
+def expand_examples(html):
+    used = False
+    def one(m):
+        nonlocal used
+        slug, note = m.group(1), (m.group(2) or '').strip()
+        p = os.path.join(here, 'examples', f'{slug}.json')
+        if not os.path.exists(p):
+            sys.exit(f'missing example: {slug} (publish it from Marketing → Examples)')
+        data = json.load(open(p))
+        used = True
+        e = lambda t: html_escape(str(t or ''), quote=True)
+        spots = []
+        for i, b in enumerate(data.get('bubbles', [])):
+            pad_x, pad_y = (0, 0) if b.get('caption') else (0.012, 0.015)
+            left, top = max(0, b['x'] - pad_x) * 100, max(0, b['y'] - pad_y) * 100
+            w, h = (b['w'] + 2 * pad_x) * 100, (b['h'] + 2 * pad_y) * 100
+            first = (b.get('sentences') or [{}])[0].get('es', '')
+            spots.append(f'    <button class="hotspot" data-i="{i}" style="left:{left:.1f}%;top:{top:.1f}%;width:{w:.1f}%;height:{h:.1f}%"'
+                         f'{" data-caption" if b.get("caption") else ""} aria-label="{e(first)} — tap to hear and explore"></button>')
+        alt = f"A page from {data.get('comic') or 'an original Comigo comic'}"
+        alt += f" ({data['collection']})" if data.get('collection') else ''
+        alt += ', an original Comigo Spanish comic.'
+        transcript = ' '.join(f"{s.get('es', '')} — {s.get('en', '')}"
+                              for b in data.get('bubbles', []) for s in b.get('sentences', []))
+        blob = json.dumps({'bubbles': data.get('bubbles', [])}, ensure_ascii=False).replace('</', '<\\/')
+        return (f'<section class="wrap stage-wrap">\n'
+                f'  <h3 class="display stage-head">Click on a bubble</h3>\n'
+                + (f'  <p class="stage-note">{e(note)}</p>\n' if note else '') +
+                f'  <div class="stage" data-ex="{e(slug)}">\n'
+                f'    <img loading="lazy" decoding="async" src="{{{{IMG_{data["image"]}}}}}" alt="{e(alt)}">\n'
+                + '\n'.join(spots) + '\n'
+                '    <div class="popup" hidden><button class="popup-x" aria-label="Close">✕</button><div class="popup-body"></div></div>\n'
+                '    <div class="ex-sheet" hidden><div class="sh-head"><b></b><button class="sh-done">Done</button></div><div class="sh-body"></div></div>\n'
+                '    <audio preload="none"></audio>\n'
+                '    <div class="hint">\U0001F446 Tap a speech bubble</div>\n'
+                '  </div>\n'
+                f'  <script type="application/json" class="ex-data">{blob}</script>\n'
+                '</section>\n'
+                f'<div class="wrap visually-hidden"><p lang="es">{e(transcript)}</p></div>')
+    html = re.sub(r'\{\{EXAMPLE:([\w-]+)(?:\|([^}]*))?\}\}', one, html)
+    return html, used
+
 def build(tmpl_name, out_name):
     html = open(os.path.join(here, tmpl_name)).read()
+    html, has_examples = expand_examples(html)
+    if has_examples:
+        # Shared stage styles/script: appended to the page body once.
+        html += '\n' + open(os.path.join(here, 'example-stage.html')).read()
     # Shared navigation: {{NAV}} pulls in site/nav.html, with the current
     # page's link marked (aria-current) so it can be styled subtly.
     if '{{NAV}}' in html:

@@ -1,0 +1,529 @@
+{
+ "slug": "a-small-town",
+ "label": "A small town",
+ "comic": "LA CARTA NEGRA",
+ "collection": "EL REY NEGRO",
+ "image": "example-a-small-town",
+ "width": 1024,
+ "height": 1536,
+ "publishedAt": "2026-09-25T14:38:39.592Z",
+ "bubbles": [
+  {
+   "x": 0.09999999999999976,
+   "y": 0.021499989827473948,
+   "w": 0.7750000000000001,
+   "h": 0.07,
+   "caption": true,
+   "sentences": [
+    {
+     "es": "Territorio de Nuevo México, 1883",
+     "en": "New Mexico Territory, 1883",
+     "g": "'Territorio de Nuevo México' is a proper noun and includes a time reference with '1883'. This structure indicates a specific place and time.",
+     "a": "{{AUD_ex-a-small-town-b1-1}}",
+     "words": [
+      {
+       "t": "Territorio",
+       "m": "territory",
+       "b": "territorio",
+       "bm": "territory",
+       "s": 0,
+       "e": 642,
+       "a": "{{AUD_ex-a-small-town-w-territorio}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "territorio",
+         "a": "{{AUD_ex-a-small-town-w-territorio}}"
+        },
+        {
+         "label": "Plural",
+         "text": "territorios",
+         "a": "{{AUD_ex-a-small-town-w-territorios}}"
+        }
+       ],
+       "ex": "The word \"territorio\" in this sentence is a noun. It means \"territory\" in English and refers to a defined area of land. In the phrase \"Territorio de Nuevo México,\" it indicates that we are talking about a specific region, which is New Mexico, during the year 1883.\n\nIn this context, \"territorio\" functions as the subject of the phrase, identifying what kind of area is being discussed. It is important because it sets the geographical and historical context for the information that follows. The use of \"territorio\" helps to clarify that we are not just talking about New Mexico in general, but specifically about its status as a territory during that time period."
+      },
+      {
+       "t": "de",
+       "m": "of",
+       "b": "de",
+       "bm": "of",
+       "s": 695,
+       "e": 801,
+       "a": "{{AUD_ex-a-small-town-w-de}}",
+       "ex": "In the sentence \"Territorio de Nuevo México, 1883,\" the word \"de\" is a preposition. It connects the noun \"Territorio\" (territory) with \"Nuevo México\" (New Mexico), indicating possession or a relationship between the two. In English, this translates to \"of,\" showing that the territory belongs to or is associated with New Mexico.\n\nSo, \"de\" helps clarify that we are talking about the territory specifically designated as New Mexico. Without \"de,\" the phrase would lose that important connection, making it unclear what territory is being referred to."
+      },
+      {
+       "t": "Nuevo",
+       "m": "new",
+       "b": "nuevo",
+       "bm": "new",
+       "s": 841,
+       "e": 1041,
+       "a": "{{AUD_ex-a-small-town-w-nuevo}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "nuevo",
+         "a": "{{AUD_ex-a-small-town-w-nuevo}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "nueva",
+         "a": "{{AUD_ex-a-small-town-w-nueva}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "nuevos",
+         "a": "{{AUD_ex-a-small-town-w-nuevos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "nuevas",
+         "a": "{{AUD_ex-a-small-town-w-nuevas}}"
+        }
+       ],
+       "ex": "In this sentence, \"nuevo\" is an adjective that means \"new.\" It describes the noun \"México,\" indicating that this territory is a recent or newly designated area. \n\nIn Spanish, adjectives like \"nuevo\" must agree in gender and number with the nouns they modify. Since \"México\" is masculine and singular, \"nuevo\" is also in its masculine singular form. If it were describing a feminine noun, it would change to \"nueva.\" \n\nSo, in \"Territorio de Nuevo México,\" the phrase translates to \"New Mexico Territory,\" where \"nuevo\" helps convey that this territory is newly established or recognized."
+      },
+      {
+       "t": "México,",
+       "m": "mexico",
+       "b": "méxico",
+       "bm": "mexico",
+       "s": 1121,
+       "e": 2081,
+       "a": "{{AUD_ex-a-small-town-w-mexico-bfd01f}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "México",
+         "a": "{{AUD_ex-a-small-town-w-mexico-bfd01f}}"
+        },
+        {
+         "label": "Plural",
+         "text": "Méxicos",
+         "a": "{{AUD_ex-a-small-town-w-mexicos-e9ffa2}}"
+        }
+       ],
+       "ex": "In this sentence, \"México\" is a proper noun and refers to the country of Mexico. It is part of the name \"Nuevo México,\" which translates to \"New Mexico\" in English. Here, \"México\" indicates the origin or connection of the territory to the country of Mexico.\n\nThe word \"Nuevo\" functions as an adjective meaning \"new,\" and together they form the name of the territory. The phrase \"Territorio de Nuevo México\" indicates that this area was designated as a territory associated with Mexico, emphasizing its historical context in 1883. \n\nSo, \"México\" is crucial here because it identifies the geographical and cultural link of the territory to the nation of Mexico."
+      },
+      {
+       "t": "1883",
+       "m": "1883",
+       "b": "1883",
+       "bm": "1883",
+       "s": 2161,
+       "e": 4000,
+       "a": "{{AUD_ex-a-small-town-w-1883}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "1883",
+         "a": "{{AUD_ex-a-small-town-w-1883}}"
+        },
+        {
+         "label": "Plural",
+         "text": "1883",
+         "a": "{{AUD_ex-a-small-town-w-1883}}"
+        }
+       ],
+       "ex": "In the sentence \"Territorio de Nuevo México, 1883,\" the word \"1883\" is a numerical expression that indicates a specific year. It serves as a temporal reference, providing context about when the events or conditions related to \"Territorio de Nuevo México\" are taking place.\n\nHere, \"1883\" functions as a noun, specifically a year, and it helps to situate the historical context of the New Mexico Territory. It tells the reader that the information or events being discussed are relevant to that particular year. This is important for understanding the timeline and significance of the territory during that period."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.010000000000000016,
+   "y": 0.0829166666666667,
+   "w": 0.17999999999999994,
+   "h": 0.14,
+   "sentences": [
+    {
+     "es": "Por fin... ya no queda mucho...",
+     "en": "At last... not far now...",
+     "g": "The phrase 'Por fin' means 'At last,' indicating that something has been awaited. 'Ya no queda mucho' uses 'queda' in the present tense to show that it's still ongoing.",
+     "a": "{{AUD_ex-a-small-town-b2-1}}",
+     "words": [
+      {
+       "t": "Por",
+       "m": "by/for",
+       "b": "por",
+       "bm": "by/for",
+       "s": 0,
+       "e": 159,
+       "a": "{{AUD_ex-a-small-town-w-por}}",
+       "ex": "In this sentence, \"por\" is a preposition. It is used to express a sense of time or a moment when something happens. Here, \"Por fin\" translates to \"At last,\" indicating that the speaker has been waiting for a significant moment or outcome, and it has finally arrived.\n\nThe phrase \"Por fin\" sets a tone of relief or anticipation, suggesting that the speaker is pleased that something they were looking forward to is happening. In this context, \"por\" connects the feeling of finally reaching a point after a wait."
+      },
+      {
+       "t": "fin...",
+       "m": "end",
+       "b": "fin",
+       "bm": "end",
+       "s": 279,
+       "e": 1278,
+       "a": "{{AUD_ex-a-small-town-w-fin}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "fin",
+         "a": "{{AUD_ex-a-small-town-w-fin}}"
+        },
+        {
+         "label": "Plural",
+         "text": "fines",
+         "a": "{{AUD_ex-a-small-town-w-fines}}"
+        }
+       ],
+       "ex": "The word \"fin\" in this sentence is a noun that means \"end\" or \"finish.\" In the phrase \"Por fin,\" it translates to \"At last\" or \"Finally,\" indicating a sense of relief or conclusion after a wait or effort.\n\nIn this context, \"fin\" is part of the expression \"por fin,\" which is commonly used to express that something has finally happened or that a long-awaited moment has arrived. It emphasizes the speaker's feelings about reaching a significant point, as seen in \"ya no queda mucho,\" meaning \"not far now.\" The use of \"fin\" here conveys a positive culmination of anticipation."
+      },
+      {
+       "t": "ya",
+       "m": "already",
+       "b": "ya",
+       "bm": "already",
+       "s": 1318,
+       "e": 1520,
+       "a": "{{AUD_ex-a-small-town-w-ya}}",
+       "ex": "In this sentence, \"ya\" is an adverb. It translates to \"already\" or \"now\" in English, and it indicates a change in state or situation. Here, it emphasizes that something has reached a certain point or conclusion. \n\nThe phrase \"ya no queda mucho\" translates to \"not far now,\" where \"ya\" signals that the time or distance has changed — it's no longer a long way to go. It adds a sense of relief or finality to the statement, suggesting that the end is near. \n\nOverall, \"ya\" plays a crucial role in conveying the speaker's feeling of progress and anticipation in this context."
+      },
+      {
+       "t": "no",
+       "m": "no/not",
+       "b": "no",
+       "bm": "no/not",
+       "s": 1547,
+       "e": 1601,
+       "a": "{{AUD_ex-a-small-town-w-no}}",
+       "ex": "In this sentence, \"no\" is an adverb that negates the phrase that follows it. It translates to \"not\" in English. Here, it modifies \"queda mucho,\" meaning \"there is much left.\" So, \"ya no queda mucho\" translates to \"there is not much left.\"\n\nThe role of \"no\" is to indicate the absence or negation of something. In this context, it emphasizes that the speaker feels that the remaining distance or effort is minimal. This use of \"no\" helps convey a sense of relief or optimism about nearing the end of a journey or task."
+      },
+      {
+       "t": "queda",
+       "m": "remains",
+       "b": "quedar",
+       "bm": "to stay",
+       "s": 1654,
+       "e": 1919,
+       "a": "{{AUD_ex-a-small-town-w-queda}}",
+       "ba": "{{AUD_ex-a-small-town-w-quedar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "quedo",
+         "a": "{{AUD_ex-a-small-town-w-quedo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "quedé",
+         "a": "{{AUD_ex-a-small-town-w-quede-bff6bb}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "quedaba",
+         "a": "{{AUD_ex-a-small-town-w-quedaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "quedaré",
+         "a": "{{AUD_ex-a-small-town-w-quedare-c4021d}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "quedaría",
+         "a": "{{AUD_ex-a-small-town-w-quedaria-099484}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "quede",
+         "a": "{{AUD_ex-a-small-town-w-quede}}"
+        },
+        {
+         "label": "Command",
+         "text": "queda",
+         "a": "{{AUD_ex-a-small-town-w-queda}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "quedando",
+         "a": "{{AUD_ex-a-small-town-w-quedando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "quedado",
+         "a": "{{AUD_ex-a-small-town-w-quedado}}"
+        }
+       ],
+       "ex": "The word \"queda\" in this sentence is a verb form. It comes from the infinitive \"quedar,\" which means \"to remain\" or \"to be left.\" In this context, \"queda\" is the third-person singular present tense form, indicating something that is still remaining.\n\nHere's a short conjugation table for \"quedar\" in the present tense:\n\n- yo quedo\n- tú quedas\n- él/ella/usted queda\n- nosotros/nosotras quedamos\n- ellos/ellas/ustedes quedan\n\nIn the sentence \"Por fin... ya no queda mucho...\", \"queda\" is used to express that there is not much left to do or to reach. The phrase \"ya no queda mucho\" translates to \"not far now,\" emphasizing that the remaining distance or time is minimal. This gives a sense of relief or anticipation, as it indicates that the end is near."
+      },
+      {
+       "t": "mucho...",
+       "m": "much/a lot",
+       "b": "mucho",
+       "bm": "much/a lot",
+       "s": 1999,
+       "e": 3040,
+       "a": "{{AUD_ex-a-small-town-w-mucho}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "mucho",
+         "a": "{{AUD_ex-a-small-town-w-mucho}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "mucha",
+         "a": "{{AUD_ex-a-small-town-w-mucha}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "muchos",
+         "a": "{{AUD_ex-a-small-town-w-muchos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "muchas",
+         "a": "{{AUD_ex-a-small-town-w-muchas}}"
+        }
+       ],
+       "ex": "In the sentence \"Por fin... ya no queda mucho...\", the word \"mucho\" is an adjective meaning \"much\" or \"a lot.\" Here, it describes the quantity of something that remains, which is implied to be time or distance. \n\nThe phrase \"ya no queda mucho\" translates to \"there is not much left.\" In this context, \"mucho\" modifies the noun that is understood to be \"tiempo\" (time) or \"distancia\" (distance), indicating that there is only a small amount remaining. \n\nAs an adjective, \"mucho\" agrees in number and gender with the noun it modifies, but in this case, it is used in a general sense without a specific noun following it. It conveys a sense of relief that the end is near, which is emphasized by the earlier phrase \"Por fin\" (At last)."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.032266392374048936,
+   "y": 0.3683843558537591,
+   "w": 0.17046721525190217,
+   "h": 0.11156462162581514,
+   "sentences": [
+    {
+     "es": "Puedo verlo...",
+     "en": "I can see it...",
+     "g": "'Puedo' is the present tense of 'poder,' meaning 'I can.' The infinitive 'verlo' means 'to see it,' indicating what the speaker can do.",
+     "a": "{{AUD_ex-a-small-town-b3-1}}",
+     "words": [
+      {
+       "t": "Puedo",
+       "m": "I can",
+       "b": "poder",
+       "bm": "to be able",
+       "s": 0,
+       "e": 241,
+       "a": "{{AUD_ex-a-small-town-w-puedo}}",
+       "ba": "{{AUD_ex-a-small-town-w-poder}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "puedo",
+         "a": "{{AUD_ex-a-small-town-w-puedo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "pude",
+         "a": "{{AUD_ex-a-small-town-w-pude}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "podía",
+         "a": "{{AUD_ex-a-small-town-w-podia-b0bdf7}}"
+        },
+        {
+         "label": "Future",
+         "text": "podré",
+         "a": "{{AUD_ex-a-small-town-w-podre-15a714}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "podría",
+         "a": "{{AUD_ex-a-small-town-w-podria-3e008c}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "pueda",
+         "a": "{{AUD_ex-a-small-town-w-pueda}}"
+        },
+        {
+         "label": "Command",
+         "text": "puede",
+         "a": "{{AUD_ex-a-small-town-w-puede}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "pudiendo",
+         "a": "{{AUD_ex-a-small-town-w-pudiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "podido",
+         "a": "{{AUD_ex-a-small-town-w-podido}}"
+        }
+       ],
+       "ex": "\"puedo\" is the first-person singular form of the verb \"poder,\" which means \"to be able to\" or \"can.\" In this sentence, \"Puedo verlo,\" it translates to \"I can see it.\" \n\nThe verb is conjugated in the present tense as follows:  \n- yo puedo  \n- tú puedes  \n- él/ella/usted puede  \n- nosotros/nosotras podemos  \n- ellos/ellas/ustedes pueden  \n\nIn this context, \"puedo\" indicates the speaker's ability or permission to see something. The sentence expresses a current capability, making it clear that the speaker is stating what they can do right now."
+      },
+      {
+       "t": "verlo...",
+       "m": "to see it",
+       "b": "ver",
+       "bm": "to see",
+       "s": 321,
+       "e": 1521,
+       "a": "{{AUD_ex-a-small-town-w-verlo}}",
+       "ba": "{{AUD_ex-a-small-town-w-ver}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "veo",
+         "a": "{{AUD_ex-a-small-town-w-veo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "vi",
+         "a": "{{AUD_ex-a-small-town-w-vi}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "veía",
+         "a": "{{AUD_ex-a-small-town-w-veia-614122}}"
+        },
+        {
+         "label": "Future",
+         "text": "veré",
+         "a": "{{AUD_ex-a-small-town-w-vere-26ad8d}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "vería",
+         "a": "{{AUD_ex-a-small-town-w-veria-ffc767}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "vea",
+         "a": "{{AUD_ex-a-small-town-w-vea}}"
+        },
+        {
+         "label": "Command",
+         "text": "ve",
+         "a": "{{AUD_ex-a-small-town-w-ve}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "viendo",
+         "a": "{{AUD_ex-a-small-town-w-viendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "visto",
+         "a": "{{AUD_ex-a-small-town-w-visto}}"
+        }
+       ],
+       "ex": "The word \"verlo\" is an infinitive verb form combined with an object pronoun. The infinitive is \"ver,\" which means \"to see.\" In this sentence, \"verlo\" translates to \"see it,\" where \"lo\" is the object pronoun referring to something specific that can be seen.\n\nIn the sentence \"Puedo verlo,\" the verb \"puedo\" (I can) indicates the ability to perform the action of seeing. The \"lo\" connects the action of seeing to the specific object being seen, making it clear that the speaker can see that particular thing. \n\nIn terms of conjugation, \"ver\" in the present tense is as follows:\n- yo veo (I see)\n- tú ves (you see)\n- él/ella/usted ve (he/she/you see)\n- nosotros/nosotras vemos (we see)\n- ellos/ellas/ustedes ven (they/you all see)\n\nSo, \"verlo\" is functioning as the action of seeing something specific, which is essential for understanding what the speaker is capable of doing."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.42999999999999994,
+   "y": 0.6602878686153529,
+   "w": 0.33999999999999997,
+   "h": 0.04166666666666652,
+   "sentences": [
+    {
+     "es": "Un pueblo pequeño...",
+     "en": "A small town...",
+     "g": "The article 'Un' means 'a' and is used for singular, masculine nouns. The adjective 'pequeño' follows the noun 'pueblo' to describe it.",
+     "a": "{{AUD_ex-a-small-town-b4-1}}",
+     "words": [
+      {
+       "t": "Un",
+       "m": "a",
+       "b": "un",
+       "bm": "a",
+       "s": 0,
+       "e": 80,
+       "a": "{{AUD_ex-a-small-town-w-un}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "un",
+         "a": "{{AUD_ex-a-small-town-w-un}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "una",
+         "a": "{{AUD_ex-a-small-town-w-una}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "unos",
+         "a": "{{AUD_ex-a-small-town-w-unos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "unas",
+         "a": "{{AUD_ex-a-small-town-w-unas}}"
+        }
+       ],
+       "ex": "The word \"un\" is an indefinite article in Spanish, which translates to \"a\" or \"an\" in English. In the sentence \"Un pueblo pequeño...\", \"un\" is used to introduce a noun, \"pueblo\" (town), indicating that it is one of many towns, not a specific one. \n\n\"Un\" is masculine singular, which matches the masculine noun \"pueblo.\" In Spanish, articles must agree in gender and number with the nouns they modify. Here, \"un\" helps specify that we are talking about \"a small town\" in general, rather than a particular one. \n\nSo, in this context, \"un\" serves to indicate that the speaker is referring to any small town, making it a key part of the sentence's meaning."
+      },
+      {
+       "t": "pueblo",
+       "m": "town",
+       "b": "pueblo",
+       "bm": "town",
+       "s": 149,
+       "e": 563,
+       "a": "{{AUD_ex-a-small-town-w-pueblo}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "pueblo",
+         "a": "{{AUD_ex-a-small-town-w-pueblo}}"
+        },
+        {
+         "label": "Plural",
+         "text": "pueblos",
+         "a": "{{AUD_ex-a-small-town-w-pueblos}}"
+        }
+       ],
+       "ex": "The word \"pueblo\" in this sentence is a noun meaning \"town\" or \"village.\" It is the subject of the phrase \"Un pueblo pequeño,\" which translates to \"A small town.\" \n\nIn Spanish, nouns have gender, and \"pueblo\" is masculine. Therefore, it uses the masculine article \"un\" (a) in this context. The adjective \"pequeño\" (small) also agrees in gender and number with \"pueblo,\" which is singular and masculine.\n\nSo, in this sentence, \"pueblo\" is essential because it identifies what is being described: a small town."
+      },
+      {
+       "t": "pequeño...",
+       "m": "small",
+       "b": "pequeño",
+       "bm": "small",
+       "s": 630,
+       "e": 1364,
+       "a": "{{AUD_ex-a-small-town-w-pequeno-7cd991}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "pequeño",
+         "a": "{{AUD_ex-a-small-town-w-pequeno-7cd991}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "pequeña",
+         "a": "{{AUD_ex-a-small-town-w-pequena-d95deb}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "pequeños",
+         "a": "{{AUD_ex-a-small-town-w-pequenos-1f71f4}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "pequeñas",
+         "a": "{{AUD_ex-a-small-town-w-pequenas-5e426f}}"
+        }
+       ],
+       "ex": "The word \"pequeño\" is an adjective in this sentence. It describes the noun \"pueblo,\" which means \"town.\" In Spanish, adjectives usually come after the noun they modify, but \"pequeño\" is placed before \"pueblo\" here to emphasize its size.\n\nIn this context, \"pequeño\" means \"small,\" indicating that the town is not large. It helps to give a clearer picture of what kind of town is being referred to. So, in the phrase \"Un pueblo pequeño,\" the adjective \"pequeño\" directly modifies \"pueblo,\" providing important information about it."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
