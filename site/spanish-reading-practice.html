@@ -529,13 +529,15 @@
   function bare(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''); }
 
   // "Tap a word" tip: shown on each opened bubble until the reader taps a
-  // word once (shared by every comic on the page, remembered for the visit;
-  // storage may be unavailable).
+  // word on this page (shared by every comic on the page, remembered per
+  // page for the visit, so each page teaches it once; storage may be
+  // unavailable).
+  var tipKey = 'comigo-tap-tip:' + location.pathname.replace(/\.html$/, '');
   var tipSeen = false;
-  try { tipSeen = sessionStorage.getItem('comigo-tap-tip') === '1'; } catch (e) {}
+  try { tipSeen = sessionStorage.getItem(tipKey) === '1'; } catch (e) {}
   function markTipSeen() {
     tipSeen = true;
-    try { sessionStorage.setItem('comigo-tap-tip', '1'); } catch (e) {}
+    try { sessionStorage.setItem(tipKey, '1'); } catch (e) {}
     document.querySelectorAll('.tap-tip').forEach(function (t) { t.remove(); });
   }
 
