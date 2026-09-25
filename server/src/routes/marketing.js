@@ -2706,6 +2706,7 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
     const meta = await require('sharp')(imgSrc).metadata();
     const data = {
       slug, label: page.exampleLabel || '', comic: comic.title || '', collection: comic.collectionTitle || '',
+      level: comic.level || '',
       image: `example-${slug}`, width: meta.width, height: meta.height,
       publishedAt: new Date().toISOString(),
       bubbles: out,

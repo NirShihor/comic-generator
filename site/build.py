@@ -132,8 +132,72 @@ def expand_examples(html):
     html = re.sub(r'\{\{EXAMPLE:([\w-]+)(?:\|([^}]*))?\}\}', one, html)
     return html, used
 
-def build(tmpl_name, out_name):
-    html = open(os.path.join(here, tmpl_name)).read()
+LEVELS = {'beginner': 0, 'intermediate': 1, 'advanced': 2}
+def load_examples():
+    d = os.path.join(here, 'examples')
+    items = [json.load(open(os.path.join(d, f))) for f in sorted(os.listdir(d)) if f.endswith('.json')]
+    return sorted(items, key=lambda x: (LEVELS.get(x.get('level'), 9), (x.get('label') or x['slug']).lower()))
+
+def sentence_case(t):
+    t = (t or '').strip()
+    return t[:1].upper() + t[1:].lower() if t.isupper() else t
+
+def page_label(x):
+    return x.get('label') or sentence_case(x.get('comic')) or x['slug']
+
+def source_line(x):
+    comic, coll = sentence_case(x.get('comic')), sentence_case(x.get('collection'))
+    return f'{comic} · {coll}' if comic and coll else comic or coll
+
+# {{EXAMPLE_LINKS}} or {{EXAMPLE_LINKS:slug-to-skip}} -> a grid of cards linking
+# to every published example's own page (/examples/<slug>).
+LINKS_CSS = """<style>
+  .ex-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 22px; padding: 18px 24px 6px; }
+  .ex-card {
+    display: flex; flex-direction: column; background: var(--card); color: var(--ink); text-decoration: none;
+    border: 3px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 6px 6px 0 var(--shadow);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ex-card:hover { transform: translate(2px, 2px); box-shadow: 4px 4px 0 var(--shadow); }
+  .ex-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; display: block; border-bottom: 3px solid var(--line); }
+  .ex-card .ex-card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .ex-card .label { color: var(--accent); }
+  .ex-card h3 { margin: 0; font-size: 1.3rem; }
+  .ex-card .ex-src { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); }
+  .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: 4px; }
+</style>
+"""
+def expand_links(html):
+    used = False
+    def one(m):
+        nonlocal used
+        skip = m.group(1)
+        e = lambda t: html_escape(str(t or ''), quote=True)
+        cards = []
+        for x in load_examples():
+            if x['slug'] == skip:
+                continue
+            lvl = (x.get('level') or '').capitalize()
+            cards.append(
+                f'  <a class="ex-card" href="/examples/{e(x["slug"])}">\n'
+                f'    <img loading="lazy" decoding="async" src="{{{{IMG_{x["image"]}}}}}" alt="">\n'
+                f'    <div class="ex-card-body">\n'
+                + (f'      <span class="label">{e(lvl)}</span>\n' if lvl else '') +
+                f'      <h3 class="display">{e(page_label(x))}</h3>\n'
+                + (f'      <span class="ex-src" lang="es">{e(source_line(x))}</span>\n' if source_line(x) else '') +
+                f'      <span class="ex-go">Read this page &rarr;</span>\n'
+                f'    </div>\n  </a>')
+        if not cards:
+            return ''
+        css = '' if used else LINKS_CSS
+        used = True
+        return css + '<section class="wrap ex-links">\n' + '\n'.join(cards) + '\n</section>'
+    return re.sub(r'\{\{EXAMPLE_LINKS(?::([\w-]+))?\}\}', one, html)
+
+def build(tmpl_name, out_name, html=None, nav_slug=None):
+    if html is None:
+        html = open(os.path.join(here, tmpl_name)).read()
+    html = expand_links(html)
     html, has_examples = expand_examples(html)
     if has_examples:
         # Shared stage styles/script: appended to the page body once.
@@ -142,7 +206,7 @@ def build(tmpl_name, out_name):
     # page's link marked (aria-current) so it can be styled subtly.
     if '{{NAV}}' in html:
         nav = open(os.path.join(here, 'nav.html')).read()
-        slug = out_name[:-len('.html')]
+        slug = nav_slug or out_name[:-len('.html')]
         nav = nav.replace(f'data-nav="{slug}"', f'data-nav="{slug}" aria-current="page"')
         html = html.replace('{{NAV}}', nav)
     out = re.sub(r'poster="\{\{IMG_([\w-]+)\}\}"', poster_repl, html)
@@ -177,6 +241,38 @@ def build(tmpl_name, out_name):
 # pages; new pages need only a template file (the sitemap picks them up too).
 for tmpl in sorted(f for f in os.listdir(here) if f.endswith('.template.html')):
     build(tmpl, tmpl.replace('.template.html', '.html'))
+
+# Every published example also gets its own page at /examples/<slug>, built
+# from site/example-page.html. Pages for examples no longer published are removed.
+ex_dir = os.path.join(here, 'examples')
+for f in os.listdir(ex_dir):
+    if f.endswith('.html') and not os.path.exists(os.path.join(ex_dir, f[:-5] + '.json')):
+        os.remove(os.path.join(ex_dir, f))
+page_tmpl = open(os.path.join(here, 'example-page.html')).read()
+for x in load_examples():
+    e = lambda t: html_escape(str(t or ''), quote=True)
+    label, level = page_label(x), (x.get('level') or '')
+    comic, coll = sentence_case(x.get('comic')), sentence_case(x.get('collection'))
+    src = f'<i lang="es">{e(comic)}</i>' + (f', from the <i lang="es">{e(coll)}</i> collection' if coll else '') if comic else ''
+    art = 'An' if level[:1].lower() in 'aeiou' and level else 'A'
+    intro = (f'{art} {e(level) + " " if level else ""}Spanish reading exercise: a real page from {src} &mdash; '
+             'an original Comigo comic, voiced line by line.' if src else
+             f'{art} {e(level) + " " if level else ""}Spanish reading exercise: a real page from an original Comigo comic, voiced line by line.')
+    desc = (f'Read "{label}", {art.lower()} {level + " " if level else ""}Spanish comic page'
+            + (f' from {comic}' if comic else '') +
+            '. Tap a bubble to hear every line, tap any word for its meaning, and check the English.')
+    lines = '\n'.join(
+        f'    <details><summary lang="es">{e(s_.get("es"))}</summary><p class="ans">{e(s_.get("en"))}</p></details>'
+        for b in x.get('bubbles', []) for s_ in b.get('sentences', []) if s_.get('es'))
+    vals = {
+        'PG_TITLE': e(f'{label} — {level.capitalize() + " " if level else ""}Spanish Reading Practice | Comigo'),
+        'PG_DESC': e(desc), 'PG_URL': f'https://comigo.net/examples/{x["slug"]}',
+        'PG_SLUG': x['slug'], 'PG_LABEL': e(label),
+        'PG_EYEBROW': e(f'{level.capitalize()} · Spanish reading practice' if level else 'Spanish reading practice'),
+        'PG_INTRO': intro, 'PG_LINES': lines,
+    }
+    html = re.sub(r'\{\{(PG_\w+)\}\}', lambda m: vals[m.group(1)], page_tmpl)
+    build('example-page.html', os.path.join('examples', x['slug'] + '.html'), html=html, nav_slug='spanish-reading-practice')
 
 total = sum(os.path.getsize(os.path.join(DIST, f)) for f in os.listdir(DIST))
 print(f'assets-dist: {len(os.listdir(DIST))} files, {total / 1024:.0f} KB')

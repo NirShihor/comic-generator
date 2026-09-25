@@ -1844,7 +1844,7 @@ function Examples() {
     setBusy(ex.pageId); setMsg('');
     try {
       const r = await api.post(`/marketing/examples/${ex.comicId}/${ex.pageId}/publish`, { slug });
-      setMsg(`Published "${ex.label}" as ${r.data.slug}: ${r.data.bubbles} bubbles, ${r.data.audioFiles} audio files, ${r.data.explained} new explanations. Embed it in a site page with ${r.data.embed}, then rebuild the site.`);
+      setMsg(`Published "${ex.label}" as ${r.data.slug}: ${r.data.bubbles} bubbles, ${r.data.audioFiles} audio files, ${r.data.explained} new explanations. It gets its own page at comigo.net/examples/${r.data.slug} (listed on Reading practice) once the site is rebuilt and deployed; ${r.data.embed} also embeds it inside another page.`);
       load();
     } catch (e) { setMsg(e.response?.data?.error || e.message); }
     finally { setBusy(''); }
@@ -1936,6 +1936,7 @@ function Examples() {
               <div style={{ fontSize: '0.78rem', color: ex.publishedAt ? '#7fd08a' : '#777' }}>
                 {ex.publishedAt ? `Published as ${ex.slug} · ${new Date(ex.publishedAt).toLocaleDateString()}` : 'Not published'}
               </div>
+              {ex.slug && <div style={{ fontSize: '0.78rem', color: '#999' }}>Page: comigo.net/examples/{ex.slug}</div>}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
                 <button className="btn btn-secondary" onClick={() => navigate(`/comic/${ex.comicId}/page/${ex.pageId}`)} style={{ padding: '0.3rem 0.8rem' }}>Edit</button>
                 <button className="btn btn-primary" disabled={busy === ex.pageId || ex.bubbles === 0} onClick={() => publish(ex)} style={{ padding: '0.3rem 0.8rem' }}>
