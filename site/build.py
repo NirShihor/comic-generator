@@ -89,8 +89,13 @@ def build(tmpl_name, out_name):
     head, sep, body = out.partition('</style>')
     if not sep:
         sys.exit(f'{tmpl_name} missing </style>')
+    # OpenAI conversion pixel — injected into every built page's head.
+    oai_pixel = ('<script>!function(w,d,s,u){if(w.oaiq)return;var q=function(){q.q.push(arguments)};q.q=[];'
+                 'w.oaiq=q;var j=d.createElement(s);j.async=1;j.src=u;var f=d.getElementsByTagName(s)[0];'
+                 'f.parentNode.insertBefore(j,f)}(window,document,"script","https://bzrcdn.openai.com/sdk/oaiq.min.js");'
+                 'oaiq("init",{pixelId:"TvYodr4Ct4JBQ2GkX5u1gK"});</script>')
     doc = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-           + head + sep + '\n</head>\n<body>' + body + '\n</body>\n</html>\n')
+           + head + sep + '\n' + oai_pixel + '\n</head>\n<body>' + body + '\n</body>\n</html>\n')
     open(os.path.join(here, out_name), 'w').write(doc)
     print(f'site/{out_name} written,', os.path.getsize(os.path.join(here, out_name)), 'bytes')
 
