@@ -6,7 +6,7 @@
  "image": "example-staying-safe",
  "width": 1024,
  "height": 1536,
- "publishedAt": "2026-09-25T14:11:55.694Z",
+ "publishedAt": "2026-09-25T14:38:39.799Z",
  "bubbles": [
   {
    "x": 0.08030303030303032,
@@ -25,6 +25,8 @@
        "m": "and",
        "b": "y",
        "bm": "and",
+       "s": 0,
+       "e": 336,
        "a": "{{AUD_ex-staying-safe-w-y}}",
        "ex": "The word \"y\" is a conjunction in this sentence. It means \"and\" in English and is used to connect ideas or clauses. In this case, it links the action of the previous statement (which we don't see here) to the action in this sentence: \"tú los mantendrás a salvo\" (you will keep them safe).\n\nBy using \"y,\" the speaker is emphasizing that there is an additional action or thought related to what has already been mentioned. It helps to create a flow in the conversation, making it clear that both ideas are part of the same context."
       },
@@ -33,6 +35,8 @@
        "m": "you",
        "b": "tú",
        "bm": "you",
+       "s": 357,
+       "e": 400,
        "a": "{{AUD_ex-staying-safe-w-tu-1b40a5}}",
        "ex": "In this sentence, \"tú\" is a subject pronoun. It refers directly to the person being addressed, meaning \"you\" in English. It indicates who is performing the action of the verb \"mantendrás,\" which means \"will keep.\"\n\nThe structure of the sentence is \"Y tú los mantendrás a salvo,\" where \"tú\" is essential because it specifies that the responsibility of keeping \"them\" safe falls on the person being spoken to. Without \"tú,\" the sentence would lack clarity about who is taking action.\n\nIn the present tense, the conjugation of the verb \"mantener\" (to keep) for \"tú\" is \"mantienes.\" Here’s a short conjugation table for \"mantener\":\n\n- yo mantengo (I keep)\n- tú mantienes (you keep)\n- él/ella/usted mantiene (he/she/you formal keeps)\n- nosotros/nosotras mantenemos (we keep)\n- ellos/ellas/ustedes mantienen (they/you all keep)\n\nSo, \"tú\" is crucial in this sentence to identify the subject and clarify who will keep \"them\" safe."
       },
@@ -41,6 +45,8 @@
        "m": "them",
        "b": "el",
        "bm": "the",
+       "s": 480,
+       "e": 720,
        "a": "{{AUD_ex-staying-safe-w-los}}",
        "ba": "{{AUD_ex-staying-safe-w-el}}",
        "forms": [
@@ -72,6 +78,8 @@
        "m": "will keep",
        "b": "mantener",
        "bm": "to maintain",
+       "s": 760,
+       "e": 1600,
        "a": "{{AUD_ex-staying-safe-w-mantendras-329fd1}}",
        "ba": "{{AUD_ex-staying-safe-w-mantener}}",
        "forms": [
@@ -128,6 +136,8 @@
        "m": "to",
        "b": "a",
        "bm": "to",
+       "s": 1840,
+       "e": 2080,
        "a": "{{AUD_ex-staying-safe-w-a}}",
        "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"mantendrás\" (you will keep) to the adjective \"salvo\" (safe), indicating the state in which \"los\" (them) will be kept. \n\nThe phrase \"a salvo\" translates to \"safe\" in English, and \"a\" is necessary here to express the idea of keeping someone or something in a safe condition. Without \"a,\" the meaning would be incomplete. \n\nSo, in this context, \"a\" helps clarify how you will maintain the safety of \"los.\""
       },
@@ -136,6 +146,8 @@
        "m": "safe",
        "b": "salvo",
        "bm": "safe",
+       "s": 2160,
+       "e": 2800,
        "a": "{{AUD_ex-staying-safe-w-salvo}}",
        "forms": [
         {
@@ -182,6 +194,8 @@
        "m": "and",
        "b": "y",
        "bm": "and",
+       "s": 0,
+       "e": 260,
        "a": "{{AUD_ex-staying-safe-w-y}}",
        "ex": "The word \"y\" is a conjunction in this sentence. It translates to \"and\" in English and is used to connect ideas or phrases. In this case, \"y\" links the action of helping (\"ayudarán\") to whatever comes before it, indicating that there is an additional action or idea being presented.\n\nIn the sentence \"Y ayudarán a mantenernos a salvo...\", \"y\" introduces the idea that they will help, suggesting that this action is part of a larger context or list of actions. It emphasizes the continuation of thought, showing that there is more to say about what \"they\" will do."
       },
@@ -190,6 +204,8 @@
        "m": "they will help",
        "b": "ayudar",
        "bm": "to help",
+       "s": 272,
+       "e": 720,
        "a": "{{AUD_ex-staying-safe-w-ayudaran-11f3d4}}",
        "ba": "{{AUD_ex-staying-safe-w-ayudar}}",
        "forms": [
@@ -246,6 +262,8 @@
        "m": "to",
        "b": "a",
        "bm": "to",
+       "s": 1120,
+       "e": 1520,
        "a": "{{AUD_ex-staying-safe-w-a}}",
        "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"ayudarán\" (they will help) to the object \"mantenernos\" (to keep us). In Spanish, prepositions often indicate relationships between words, such as direction, purpose, or connection.\n\nHere, \"a\" is specifically used to introduce the infinitive verb \"mantener\" (to keep), forming the phrase \"ayudar a mantener\" (help to keep). This structure is common in Spanish, where the preposition \"a\" is used before an infinitive to indicate what the help is directed towards.\n\nSo, in this context, \"a\" plays a crucial role in linking the action of helping to the goal of keeping us safe."
       },
@@ -254,6 +272,8 @@
        "m": "keep us",
        "b": "mantener",
        "bm": "to maintain",
+       "s": 1540,
+       "e": 2240,
        "a": "{{AUD_ex-staying-safe-w-mantenernos}}",
        "ba": "{{AUD_ex-staying-safe-w-mantener}}",
        "forms": [
@@ -310,6 +330,8 @@
        "m": "to",
        "b": "a",
        "bm": "to",
+       "s": 2400,
+       "e": 2560,
        "a": "{{AUD_ex-staying-safe-w-a}}",
        "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"ayudarán\" (they will help) to the infinitive \"mantener\" (to keep). The phrase \"ayudarán a mantener\" translates to \"will help to keep,\" showing the action of helping is directed towards the action of keeping.\n\nAdditionally, the second \"a\" in \"mantenernos a salvo\" connects \"mantenernos\" (to keep us) to \"salvo\" (safe). Here, \"a\" indicates the state or condition we are being kept in, which is \"safe.\" \n\nSo, in summary, \"a\" serves to link actions and clarify relationships between the verb and the following infinitive or adjective, making the sentence coherent and meaningful."
       },
@@ -318,6 +340,8 @@
        "m": "safe",
        "b": "salvo",
        "bm": "safe",
+       "s": 2620,
+       "e": 5760,
        "a": "{{AUD_ex-staying-safe-w-salvo}}",
        "forms": [
         {
@@ -364,6 +388,8 @@
        "m": "he has",
        "b": "tener",
        "bm": "to have",
+       "s": 0,
+       "e": 320,
        "a": "{{AUD_ex-staying-safe-w-tiene}}",
        "ba": "{{AUD_ex-staying-safe-w-tener}}",
        "forms": [
@@ -420,6 +446,8 @@
        "m": "reason",
        "b": "razón",
        "bm": "reason",
+       "s": 420,
+       "e": 1520,
        "a": "{{AUD_ex-staying-safe-w-razon-cd0a0b}}",
        "forms": [
         {
@@ -440,6 +468,8 @@
        "m": "for",
        "b": "por",
        "bm": "by",
+       "s": 1536,
+       "e": 1680,
        "a": "{{AUD_ex-staying-safe-w-por}}",
        "ex": "In this sentence, \"por\" is a preposition. It connects the reason for the action that follows. The phrase \"por eso\" translates to \"that's why,\" indicating the cause or justification for the action of staying.\n\nHere, \"por\" introduces the reason behind the decision to stay, which is implied to be related to the correctness of what was previously stated. It helps to clarify the relationship between the two parts of the conversation: \"Tiene razón\" (He's right) and \"nos quedamos\" (we stayed). \n\nSo, \"por\" is essential for linking the reason to the action, making the sentence coherent and meaningful."
       },
@@ -448,6 +478,8 @@
        "m": "that",
        "b": "eso",
        "bm": "that",
+       "s": 1760,
+       "e": 2000,
        "a": "{{AUD_ex-staying-safe-w-eso}}",
        "forms": [
         {
@@ -468,6 +500,8 @@
        "m": "us",
        "b": "nos",
        "bm": "us",
+       "s": 2060,
+       "e": 2240,
        "a": "{{AUD_ex-staying-safe-w-nos}}",
        "ex": "In the sentence \"Tiene razón. Por eso nos quedamos...\", the word \"nos\" is a reflexive pronoun. It refers to the subject of the action, which in this case is \"we.\" The pronoun \"nos\" indicates that the action of staying is performed by the group that includes the speaker.\n\nThe verb in this sentence is \"quedamos,\" which comes from the infinitive \"quedarse.\" Here’s a short present-tense conjugation for \"quedarse\":\n\n- yo me quedo\n- tú te quedas\n- él/ella/usted se queda\n- nosotros/nosotras nos quedamos\n- ellos/ellas/ustedes se quedan\n\nIn this context, \"nos\" is essential because it shows that the action of staying is not just happening to someone else; it involves the speaker and their group. So, \"nos quedamos\" translates to \"we stayed,\" emphasizing that the speaker is part of the group that made the decision to stay."
       },
@@ -476,6 +510,8 @@
        "m": "we stayed",
        "b": "quedar",
        "bm": "to stay",
+       "s": 2272,
+       "e": 3680,
        "a": "{{AUD_ex-staying-safe-w-quedamos}}",
        "ba": "{{AUD_ex-staying-safe-w-quedar}}",
        "forms": [
@@ -548,6 +584,8 @@
        "m": "and",
        "b": "y",
        "bm": "and",
+       "s": 0,
+       "e": 380,
        "a": "{{AUD_ex-staying-safe-w-y}}",
        "ex": "The word \"y\" in this sentence is a conjunction, which is a part of speech used to connect words, phrases, or clauses. In this case, \"y\" translates to \"and\" in English. It serves to link the question \"¿Cómo sugieres que hagamos eso?\" (How do you suggest we do that?) with whatever was previously mentioned in the conversation, implying that the speaker is continuing a thought or adding to a discussion.\n\nIn the context of the sentence, \"y\" helps to create a smooth transition between ideas, indicating that the speaker is building on what was said before. It emphasizes the connection between the previous statement and the current question, making the dialogue more cohesive."
       },
@@ -556,6 +594,8 @@
        "m": "how",
        "b": "cómo",
        "bm": "how",
+       "s": 400,
+       "e": 480,
        "a": "{{AUD_ex-staying-safe-w-como-d4d1ee}}",
        "ex": "In this sentence, \"cómo\" is an adverb meaning \"how.\" It is used to ask for a manner or method regarding the suggestion being made. The phrase \"¿Y cómo sugieres...\" translates to \"And how do you suggest...\" indicating that the speaker is seeking clarification or details about the suggestion.\n\nAs an adverb, \"cómo\" does not change form and does not have a conjugation like verbs do. Its role here is to connect the question to the action of suggesting, specifically asking for the way in which the action should be done. This makes it essential for understanding the inquiry about the method of doing \"eso\" (that)."
       },
@@ -564,6 +604,8 @@
        "m": "you suggest",
        "b": "sugerir",
        "bm": "to suggest",
+       "s": 560,
+       "e": 1280,
        "a": "{{AUD_ex-staying-safe-w-sugieres}}",
        "ba": "{{AUD_ex-staying-safe-w-sugerir}}",
        "forms": [
@@ -620,6 +662,8 @@
        "m": "that",
        "b": "que",
        "bm": "that",
+       "s": 1340,
+       "e": 1520,
        "a": "{{AUD_ex-staying-safe-w-que}}",
        "ex": "In this sentence, \"que\" is a conjunction. It connects the main clause \"sugieres\" (you suggest) with the subordinate clause \"hagamos eso\" (we do that). This structure is used to express what is being suggested.\n\nThe word \"que\" is essential here because it introduces the idea or action that is being proposed. Without \"que,\" the sentence would be incomplete and wouldn't clearly convey the suggestion being made. \n\nSo, in summary, \"que\" serves to link the suggestion to the action in the sentence, making it clear that the speaker is asking how to carry out the suggestion."
       },
@@ -628,6 +672,8 @@
        "m": "let's do",
        "b": "hacer",
        "bm": "to do",
+       "s": 1600,
+       "e": 2000,
        "a": "{{AUD_ex-staying-safe-w-hagamos}}",
        "ba": "{{AUD_ex-staying-safe-w-hacer}}",
        "forms": [
@@ -684,6 +730,8 @@
        "m": "that",
        "b": "eso",
        "bm": "that",
+       "s": 2100,
+       "e": 4080,
        "a": "{{AUD_ex-staying-safe-w-eso}}",
        "forms": [
         {
@@ -720,6 +768,8 @@
        "m": "let",
        "b": "dejar",
        "bm": "to let",
+       "s": 0,
+       "e": 400,
        "a": "{{AUD_ex-staying-safe-w-deja}}",
        "ba": "{{AUD_ex-staying-safe-w-dejar}}",
        "forms": [
@@ -776,6 +826,8 @@
        "m": "that",
        "b": "que",
        "bm": "that",
+       "s": 460,
+       "e": 640,
        "a": "{{AUD_ex-staying-safe-w-que}}",
        "ex": "In this sentence, \"que\" is a conjunction. It connects two clauses: \"Deja\" (Let) and \"yo me preocupe por los detalles\" (I worry about the details). Specifically, it introduces the subordinate clause that explains what you are allowing someone to do.\n\nThe phrase \"Deja que\" translates to \"Let\" in English, and \"que\" is necessary here to link the action of allowing to the action of worrying. Without \"que,\" the sentence would be incomplete and wouldn't convey the intended meaning. \n\nSo, in this context, \"que\" serves to connect the main action of allowing with the subordinate action of worrying, making the sentence flow smoothly."
       },
@@ -784,6 +836,8 @@
        "m": "I",
        "b": "yo",
        "bm": "I",
+       "s": 720,
+       "e": 880,
        "a": "{{AUD_ex-staying-safe-w-yo}}",
        "ex": "In this sentence, \"yo\" is a subject pronoun. It means \"I\" in English and is used to indicate who is performing the action of the verb. Here, \"yo\" is essential because it clarifies that the speaker is the one who will worry about the details.\n\nThe verb in this sentence is \"preocupe,\" which comes from the infinitive \"preocupar.\" In the present tense, the conjugation for \"yo\" is \"preocupo.\" So, the full action is that \"I worry\" about the details.\n\nOverall, \"yo\" is there to emphasize that the speaker wants to take responsibility for the details, making it clear who is involved in the action."
       },
@@ -792,6 +846,8 @@
        "m": "me",
        "b": "me",
        "bm": "to me",
+       "s": 960,
+       "e": 1120,
        "a": "{{AUD_ex-staying-safe-w-me}}",
        "ex": "In this sentence, \"me\" is a reflexive pronoun. It refers back to the subject \"yo\" (I), indicating that the action of worrying is directed towards the speaker themselves. \n\nThe verb in this sentence is \"preocupe,\" which comes from the infinitive \"preocupar.\" Here’s a short present-tense conjugation for \"preocupar\" with the reflexive pronoun:\n\n- yo me preocupo (I worry)\n- tú te preocupas (you worry)\n- él/ella se preocupa (he/she worries)\n- nosotros/nosotras nos preocupamos (we worry)\n- ellos/ellas se preocupan (they worry)\n\nIn this context, \"me\" emphasizes that the speaker is taking responsibility for worrying about the details. The phrase \"deja que yo me preocupe\" translates to \"let me worry,\" highlighting the personal involvement in the action."
       },
@@ -800,6 +856,8 @@
        "m": "worry",
        "b": "preocupar",
        "bm": "to worry",
+       "s": 1160,
+       "e": 1840,
        "a": "{{AUD_ex-staying-safe-w-preocupe}}",
        "ba": "{{AUD_ex-staying-safe-w-preocupar}}",
        "forms": [
@@ -856,6 +914,8 @@
        "m": "for",
        "b": "por",
        "bm": "by",
+       "s": 2060,
+       "e": 2720,
        "a": "{{AUD_ex-staying-safe-w-por}}",
        "ex": "In the sentence \"Deja que yo me preocupe por los detalles,\" the word \"por\" is a preposition. It connects the verb \"preocupe\" (from the infinitive \"preocupar\") to the noun \"detalles.\" Here, \"por\" indicates the reason or cause for worrying, which is specifically \"los detalles\" (the details).\n\nIn English, we often use \"about\" in this context, but in Spanish, \"por\" is the correct preposition to express this relationship. It shows that the speaker is concerned regarding the details. \n\nSo, \"por\" is essential in this sentence because it clarifies what the speaker is worrying about, linking the action of worrying to the specific subject of concern."
       },
@@ -864,6 +924,8 @@
        "m": "the",
        "b": "el",
        "bm": "the",
+       "s": 2760,
+       "e": 2960,
        "a": "{{AUD_ex-staying-safe-w-los}}",
        "ba": "{{AUD_ex-staying-safe-w-el}}",
        "forms": [
@@ -895,6 +957,8 @@
        "m": "details",
        "b": "detalle",
        "bm": "detail",
+       "s": 3040,
+       "e": 3840,
        "a": "{{AUD_ex-staying-safe-w-detalles}}",
        "ba": "{{AUD_ex-staying-safe-w-detalle}}",
        "forms": [

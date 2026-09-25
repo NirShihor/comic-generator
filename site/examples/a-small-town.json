@@ -6,7 +6,7 @@
  "image": "example-a-small-town",
  "width": 1024,
  "height": 1536,
- "publishedAt": "2026-09-25T14:11:55.505Z",
+ "publishedAt": "2026-09-25T14:38:39.592Z",
  "bubbles": [
   {
    "x": 0.09999999999999976,
@@ -26,6 +26,8 @@
        "m": "territory",
        "b": "territorio",
        "bm": "territory",
+       "s": 0,
+       "e": 642,
        "a": "{{AUD_ex-a-small-town-w-territorio}}",
        "forms": [
         {
@@ -46,6 +48,8 @@
        "m": "of",
        "b": "de",
        "bm": "of",
+       "s": 695,
+       "e": 801,
        "a": "{{AUD_ex-a-small-town-w-de}}",
        "ex": "In the sentence \"Territorio de Nuevo México, 1883,\" the word \"de\" is a preposition. It connects the noun \"Territorio\" (territory) with \"Nuevo México\" (New Mexico), indicating possession or a relationship between the two. In English, this translates to \"of,\" showing that the territory belongs to or is associated with New Mexico.\n\nSo, \"de\" helps clarify that we are talking about the territory specifically designated as New Mexico. Without \"de,\" the phrase would lose that important connection, making it unclear what territory is being referred to."
       },
@@ -54,6 +58,8 @@
        "m": "new",
        "b": "nuevo",
        "bm": "new",
+       "s": 841,
+       "e": 1041,
        "a": "{{AUD_ex-a-small-town-w-nuevo}}",
        "forms": [
         {
@@ -84,6 +90,8 @@
        "m": "mexico",
        "b": "méxico",
        "bm": "mexico",
+       "s": 1121,
+       "e": 2081,
        "a": "{{AUD_ex-a-small-town-w-mexico-bfd01f}}",
        "forms": [
         {
@@ -104,6 +112,8 @@
        "m": "1883",
        "b": "1883",
        "bm": "1883",
+       "s": 2161,
+       "e": 4000,
        "a": "{{AUD_ex-a-small-town-w-1883}}",
        "forms": [
         {
@@ -140,6 +150,8 @@
        "m": "by/for",
        "b": "por",
        "bm": "by/for",
+       "s": 0,
+       "e": 159,
        "a": "{{AUD_ex-a-small-town-w-por}}",
        "ex": "In this sentence, \"por\" is a preposition. It is used to express a sense of time or a moment when something happens. Here, \"Por fin\" translates to \"At last,\" indicating that the speaker has been waiting for a significant moment or outcome, and it has finally arrived.\n\nThe phrase \"Por fin\" sets a tone of relief or anticipation, suggesting that the speaker is pleased that something they were looking forward to is happening. In this context, \"por\" connects the feeling of finally reaching a point after a wait."
       },
@@ -148,6 +160,8 @@
        "m": "end",
        "b": "fin",
        "bm": "end",
+       "s": 279,
+       "e": 1278,
        "a": "{{AUD_ex-a-small-town-w-fin}}",
        "forms": [
         {
@@ -168,6 +182,8 @@
        "m": "already",
        "b": "ya",
        "bm": "already",
+       "s": 1318,
+       "e": 1520,
        "a": "{{AUD_ex-a-small-town-w-ya}}",
        "ex": "In this sentence, \"ya\" is an adverb. It translates to \"already\" or \"now\" in English, and it indicates a change in state or situation. Here, it emphasizes that something has reached a certain point or conclusion. \n\nThe phrase \"ya no queda mucho\" translates to \"not far now,\" where \"ya\" signals that the time or distance has changed — it's no longer a long way to go. It adds a sense of relief or finality to the statement, suggesting that the end is near. \n\nOverall, \"ya\" plays a crucial role in conveying the speaker's feeling of progress and anticipation in this context."
       },
@@ -176,6 +192,8 @@
        "m": "no/not",
        "b": "no",
        "bm": "no/not",
+       "s": 1547,
+       "e": 1601,
        "a": "{{AUD_ex-a-small-town-w-no}}",
        "ex": "In this sentence, \"no\" is an adverb that negates the phrase that follows it. It translates to \"not\" in English. Here, it modifies \"queda mucho,\" meaning \"there is much left.\" So, \"ya no queda mucho\" translates to \"there is not much left.\"\n\nThe role of \"no\" is to indicate the absence or negation of something. In this context, it emphasizes that the speaker feels that the remaining distance or effort is minimal. This use of \"no\" helps convey a sense of relief or optimism about nearing the end of a journey or task."
       },
@@ -184,6 +202,8 @@
        "m": "remains",
        "b": "quedar",
        "bm": "to stay",
+       "s": 1654,
+       "e": 1919,
        "a": "{{AUD_ex-a-small-town-w-queda}}",
        "ba": "{{AUD_ex-a-small-town-w-quedar}}",
        "forms": [
@@ -240,6 +260,8 @@
        "m": "much/a lot",
        "b": "mucho",
        "bm": "much/a lot",
+       "s": 1999,
+       "e": 3040,
        "a": "{{AUD_ex-a-small-town-w-mucho}}",
        "forms": [
         {
@@ -286,6 +308,8 @@
        "m": "I can",
        "b": "poder",
        "bm": "to be able",
+       "s": 0,
+       "e": 241,
        "a": "{{AUD_ex-a-small-town-w-puedo}}",
        "ba": "{{AUD_ex-a-small-town-w-poder}}",
        "forms": [
@@ -342,6 +366,8 @@
        "m": "to see it",
        "b": "ver",
        "bm": "to see",
+       "s": 321,
+       "e": 1521,
        "a": "{{AUD_ex-a-small-town-w-verlo}}",
        "ba": "{{AUD_ex-a-small-town-w-ver}}",
        "forms": [
@@ -414,6 +440,8 @@
        "m": "a",
        "b": "un",
        "bm": "a",
+       "s": 0,
+       "e": 80,
        "a": "{{AUD_ex-a-small-town-w-un}}",
        "forms": [
         {
@@ -444,6 +472,8 @@
        "m": "town",
        "b": "pueblo",
        "bm": "town",
+       "s": 149,
+       "e": 563,
        "a": "{{AUD_ex-a-small-town-w-pueblo}}",
        "forms": [
         {
@@ -464,6 +494,8 @@
        "m": "small",
        "b": "pequeño",
        "bm": "small",
+       "s": 630,
+       "e": 1364,
        "a": "{{AUD_ex-a-small-town-w-pequeno-7cd991}}",
        "forms": [
         {

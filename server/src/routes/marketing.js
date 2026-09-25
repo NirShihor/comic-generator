@@ -2668,6 +2668,9 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
           const ba = await wordAudio(w.baseForm || w.text);
           words.push({
             t: shown || '', m: w.meaning || '', b: w.baseForm || '', bm: w.baseMeaning || '',
+            // When the word is spoken in the line's audio (ms) — drives the
+            // reader-style green highlight that follows playback.
+            ...(w.startTimeMs != null && { s: w.startTimeMs }), ...(w.endTimeMs != null && { e: w.endTimeMs }),
             ...(a && { a }), ...(ba && ba !== a && { ba }),
             ...(forms.length && { forms }),
             ...(w.explanation && { ex: w.explanation }),

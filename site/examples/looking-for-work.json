@@ -6,7 +6,7 @@
  "image": "example-looking-for-work",
  "width": 1024,
  "height": 1536,
- "publishedAt": "2026-09-25T14:11:55.323Z",
+ "publishedAt": "2026-09-25T14:38:39.405Z",
  "bubbles": [
   {
    "x": 0.27,
@@ -25,6 +25,8 @@
        "m": "I must",
        "b": "deber",
        "bm": "to must",
+       "s": 0,
+       "e": 396,
        "a": "{{AUD_ex-looking-for-work-w-debo}}",
        "ba": "{{AUD_ex-looking-for-work-w-deber}}",
        "forms": [
@@ -81,6 +83,8 @@
        "m": "to find",
        "b": "encontrar",
        "bm": "to find",
+       "s": 452,
+       "e": 956,
        "a": "{{AUD_ex-looking-for-work-w-encontrar}}",
        "forms": [
         {
@@ -136,6 +140,8 @@
        "m": "work",
        "b": "trabajo",
        "bm": "work",
+       "s": 1026,
+       "e": 2236,
        "a": "{{AUD_ex-looking-for-work-w-trabajo}}",
        "forms": [
         {
@@ -172,6 +178,8 @@
        "m": "no",
        "b": "no",
        "bm": "no",
+       "s": 0,
+       "e": 400,
        "a": "{{AUD_ex-looking-for-work-w-no}}",
        "ex": "In this sentence, \"No,\" is an adverb that means \"no\" or \"not.\" It is used to express a negative response or to deny something. Here, it appears at the beginning of the sentence, indicating a refusal or disagreement with what might have been said or implied before.\n\nThe phrase \"lo siento\" translates to \"I'm sorry,\" so \"No, lo siento...\" can be understood as a way of saying \"No, I'm sorry...\" in response to a question or statement. The \"No\" sets the tone for the speaker's reply, emphasizing that they are rejecting or negating whatever was previously mentioned."
       },
@@ -180,6 +188,8 @@
        "m": "it",
        "b": "lo",
        "bm": "it",
+       "s": 453,
+       "e": 559,
        "a": "{{AUD_ex-looking-for-work-w-lo}}",
        "ex": "In this sentence, \"lo\" is an object pronoun. It is used to refer to the situation or feeling of regret that the speaker is expressing. The phrase \"lo siento\" translates to \"I'm sorry,\" where \"lo\" helps to emphasize the sentiment being conveyed.\n\nThe verb here is \"sentir,\" which means \"to feel.\" In this case, \"siento\" is the first-person singular present tense form of \"sentir.\" Here’s a short conjugation table for \"sentir\":\n\n- yo siento\n- tú sientes\n- él/ella siente\n- nosotros/nosotras sentimos\n- ellos/ellas sienten\n\nSo, \"lo\" is there to connect the speaker's apology to the feeling they are expressing, making the phrase more complete."
       },
@@ -188,6 +198,8 @@
        "m": "I feel",
        "b": "sentir",
        "bm": "to feel",
+       "s": 599,
+       "e": 1199,
        "a": "{{AUD_ex-looking-for-work-w-siento}}",
        "ba": "{{AUD_ex-looking-for-work-w-sentir}}",
        "forms": [
@@ -260,6 +272,8 @@
        "m": "me",
        "b": "me",
        "bm": "me",
+       "s": 0,
+       "e": 160,
        "a": "{{AUD_ex-looking-for-work-w-me}}",
        "ex": "In this sentence, \"me\" is an object pronoun. It is used to indicate who is experiencing the action of loving. In English, we would say \"I love,\" but in Spanish, the structure requires the pronoun \"me\" to clarify that it is \"me\" who loves.\n\nThe verb here is \"encantan,\" which comes from the infinitive \"encantar.\" This verb means \"to love\" or \"to delight.\" In the present tense, it conjugates as follows:\n\n- yo encanto\n- tú encantas\n- él/ella/usted encanta\n- nosotros/nosotras encantamos\n- ellos/ellas/ustedes encantan\n\nIn this case, \"me\" connects to the subject of the sentence, which is implied as \"yo\" (I). The full meaning is that \"books\" (los libros) are delightful to \"me.\" So, \"me\" is essential to show who is feeling the love for the books."
       },
@@ -268,6 +282,8 @@
        "m": "love",
        "b": "encantar",
        "bm": "to love",
+       "s": 260,
+       "e": 960,
        "a": "{{AUD_ex-looking-for-work-w-encantan}}",
        "ba": "{{AUD_ex-looking-for-work-w-encantar}}",
        "forms": [
@@ -324,6 +340,8 @@
        "m": "the",
        "b": "el",
        "bm": "the (male)",
+       "s": 1000,
+       "e": 1120,
        "a": "{{AUD_ex-looking-for-work-w-los}}",
        "ba": "{{AUD_ex-looking-for-work-w-el}}",
        "forms": [
@@ -345,6 +363,8 @@
        "m": "books",
        "b": "libro",
        "bm": "book",
+       "s": 1188,
+       "e": 1674,
        "a": "{{AUD_ex-looking-for-work-w-libros}}",
        "ba": "{{AUD_ex-looking-for-work-w-libro}}",
        "forms": [
@@ -382,6 +402,8 @@
        "m": "not",
        "b": "no",
        "bm": "no",
+       "s": 0,
+       "e": 398,
        "a": "{{AUD_ex-looking-for-work-w-no}}",
        "ex": "In this sentence, \"No\" is an adverb that means \"not.\" It is used to negate the phrase that follows it, indicating that something is not the case at this time. Here, \"No\" is placed at the beginning of the sentence to emphasize the negation.\n\nThe phrase \"por el momento\" translates to \"at the moment,\" so when combined, \"No por el momento\" means \"Not at the moment.\" The \"No\" clearly signals that whatever is being discussed is currently not happening or not applicable. \n\nIn summary, \"No\" serves as a negation, setting the tone for the entire statement."
       },
@@ -390,6 +412,8 @@
        "m": "for",
        "b": "por",
        "bm": "for",
+       "s": 478,
+       "e": 718,
        "a": "{{AUD_ex-looking-for-work-w-por}}",
        "ex": "In the sentence \"No por el momento...\", the word \"por\" is a preposition. It connects the phrase \"el momento\" (the moment) to the context of the sentence, indicating a reason or a time frame. \n\nIn English, \"por\" can often be translated as \"for,\" and here it suggests that something is not happening \"for the moment\" or \"at this time.\" It emphasizes that the situation may change later, but currently, it is not the case. \n\nSo, \"por\" is essential in conveying the timing aspect of the statement, helping to clarify that the negation applies specifically to the present moment."
       },
@@ -398,6 +422,8 @@
        "m": "the",
        "b": "el",
        "bm": "the (male)",
+       "s": 771,
+       "e": 877,
        "a": "{{AUD_ex-looking-for-work-w-el}}",
        "forms": [
         {
@@ -418,6 +444,8 @@
        "m": "moment",
        "b": "momento",
        "bm": "moment",
+       "s": 977,
+       "e": 1755,
        "a": "{{AUD_ex-looking-for-work-w-momento}}",
        "forms": [
         {

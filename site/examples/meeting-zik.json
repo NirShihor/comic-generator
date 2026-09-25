@@ -6,7 +6,7 @@
  "image": "example-meeting-zik",
  "width": 1024,
  "height": 1536,
- "publishedAt": "2026-09-25T14:11:55.125Z",
+ "publishedAt": "2026-09-25T14:38:39.174Z",
  "bubbles": [
   {
    "x": 0.4499999999999999,
@@ -25,6 +25,8 @@
        "m": "I am",
        "b": "ser",
        "bm": "to be",
+       "s": 0,
+       "e": 316,
        "a": "{{AUD_ex-meeting-zik-w-soy}}",
        "ba": "{{AUD_ex-meeting-zik-w-ser}}",
        "forms": [
@@ -81,6 +83,8 @@
        "m": "a",
        "b": "uno",
        "bm": "a",
+       "s": 396,
+       "e": 636,
        "a": "{{AUD_ex-meeting-zik-w-una}}",
        "ba": "{{AUD_ex-meeting-zik-w-uno}}",
        "forms": [
@@ -112,6 +116,8 @@
        "m": "girl",
        "b": "chica",
        "bm": "girl",
+       "s": 716,
+       "e": 1276,
        "a": "{{AUD_ex-meeting-zik-w-chica}}",
        "forms": [
         {
@@ -158,6 +164,8 @@
        "m": "I am",
        "b": "ser",
        "bm": "to be",
+       "s": 0,
+       "e": 160,
        "a": "{{AUD_ex-meeting-zik-w-soy}}",
        "ba": "{{AUD_ex-meeting-zik-w-ser}}",
        "forms": [
@@ -214,6 +222,8 @@
        "m": "Mia",
        "b": "",
        "bm": "mine",
+       "s": 240,
+       "e": 1040,
        "a": "{{AUD_ex-meeting-zik-w-mia-b05737}}",
        "forms": [
         {
@@ -260,6 +270,8 @@
        "m": "my",
        "b": "mi",
        "bm": "my",
+       "s": 0,
+       "e": 160,
        "a": "{{AUD_ex-meeting-zik-w-mi}}",
        "forms": [
         {
@@ -290,6 +302,8 @@
        "m": "name",
        "b": "nombre",
        "bm": "name",
+       "s": 251,
+       "e": 797,
        "a": "{{AUD_ex-meeting-zik-w-nombre}}",
        "forms": [
         {
@@ -310,6 +324,8 @@
        "m": "is",
        "b": "ser",
        "bm": "to be",
+       "s": 1010,
+       "e": 1436,
        "a": "{{AUD_ex-meeting-zik-w-es}}",
        "ba": "{{AUD_ex-meeting-zik-w-ser}}",
        "forms": [
@@ -366,6 +382,8 @@
        "m": "mine",
        "b": "mío",
        "bm": "mine",
+       "s": 1716,
+       "e": 2396,
        "a": "{{AUD_ex-meeting-zik-w-mia-b05737}}",
        "ba": "{{AUD_ex-meeting-zik-w-mio-e7da11}}",
        "forms": [
@@ -413,6 +431,8 @@
        "m": "me",
        "b": "me",
        "bm": "me",
+       "s": 0,
+       "e": 160,
        "a": "{{AUD_ex-meeting-zik-w-me}}",
        "ex": "In the sentence \"Me llamo Zik,\" the word \"me\" is a reflexive pronoun. It refers back to the subject of the sentence, which is implied to be \"yo\" (I). In this context, \"me\" indicates that the action of the verb is being done to oneself.\n\nThe verb here is \"llamar,\" which means \"to call.\" The infinitive form is \"llamar,\" and in the present tense, it conjugates as follows:\n\n- yo llamo\n- tú llamas\n- él/ella/usted llama\n- nosotros/nosotras llamamos\n- ellos/ellas/ustedes llaman\n\nIn this case, \"me\" is used with the reflexive form \"me llamo,\" meaning \"I call myself.\" So, the sentence translates to \"I call myself Zik,\" which is a common way to say \"My name is Zik\" in Spanish. The reflexive pronoun \"me\" is essential here to convey that you are identifying yourself by that name."
       },
@@ -421,6 +441,8 @@
        "m": "I call",
        "b": "llamar",
        "bm": "to call",
+       "s": 213,
+       "e": 559,
        "a": "{{AUD_ex-meeting-zik-w-llamo}}",
        "ba": "{{AUD_ex-meeting-zik-w-llamar}}",
        "forms": [
@@ -513,6 +535,8 @@
        "m": "bad",
        "b": "mal",
        "bm": "bad",
+       "s": 0,
+       "e": 714,
        "a": "{{AUD_ex-meeting-zik-w-mal}}",
        "forms": [
         {
@@ -559,6 +583,8 @@
        "m": "very",
        "b": "muy",
        "bm": "very",
+       "s": 0,
+       "e": 476,
        "a": "{{AUD_ex-meeting-zik-w-muy}}",
        "ex": "The word \"muy\" is an adverb in this sentence. Its role is to modify the adjective \"mal,\" which means \"bad.\" In Spanish, adverbs like \"muy\" are used to intensify or enhance the meaning of adjectives or other adverbs.\n\nIn the phrase \"muy mal,\" \"muy\" translates to \"very\" in English, indicating a high degree of badness. So, together, \"muy mal\" means \"very bad.\" This construction is common in Spanish to express strong feelings or conditions. \n\nOverall, \"muy\" is essential here because it emphasizes just how bad the situation is being described."
       },
@@ -567,6 +593,8 @@
        "m": "bad",
        "b": "mal",
        "bm": "bad",
+       "s": 696,
+       "e": 1515,
        "a": "{{AUD_ex-meeting-zik-w-mal}}",
        "forms": [
         {
