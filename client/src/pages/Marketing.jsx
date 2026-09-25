@@ -1869,8 +1869,21 @@ function Examples() {
         Explanations are generated once at publish time and saved.
       </p>
 
+      <div style={{ border: '1px solid #5a4a99', background: '#1d1733', borderRadius: 10, padding: 14, marginBottom: 14, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ fontWeight: 700 }}>From scratch: an example comic</div>
+          <div style={{ fontSize: '0.85rem', color: '#aaa', marginTop: 4 }}>
+            A comic with every tool — studio, style images, characters, voices, page generation — that is never
+            published to the app. Each of its pages shows up here, ready to publish.
+          </div>
+        </div>
+        <button className="btn btn-primary" onClick={() => navigate('/?newExample=1')} style={{ padding: '0.5rem 1.1rem' }}>
+          📖 New example comic →
+        </button>
+      </div>
+
       <div style={{ border: '1px solid #444', borderRadius: 10, padding: 14, marginBottom: 20 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>New example</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Or a single page, copied from an existing comic</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, minWidth: 260 }}>
             <option value="">Choose a comic…</option>
@@ -1912,7 +1925,10 @@ function Examples() {
                 ? <img src={ex.image} alt="" style={{ width: '100%', borderRadius: 6, border: '1px solid #333' }} />
                 : <div style={{ aspectRatio: '2 / 3', background: '#1a1332', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>No art yet</div>}
               <div style={{ fontWeight: 700 }}>{ex.label}</div>
-              <div style={{ fontSize: '0.78rem', color: '#999' }}>{ex.comicTitle}{ex.collectionTitle ? ` — ${ex.collectionTitle}` : ''}</div>
+              <div style={{ fontSize: '0.78rem', color: '#999' }}>
+                {ex.isExampleComic && <span style={{ color: '#b69cff' }}>📖 Example comic · </span>}
+                {ex.comicTitle}{ex.collectionTitle ? ` — ${ex.collectionTitle}` : ''}
+              </div>
               <div style={{ fontSize: '0.78rem', color: '#999' }}>
                 {ex.bubbles} bubble{ex.bubbles === 1 ? '' : 's'}
                 {ex.missingAudio > 0 && <span style={{ color: '#f0b04a' }}> · {ex.missingAudio} without audio</span>}
@@ -1929,7 +1945,9 @@ function Examples() {
                   <button className="btn btn-secondary" title="Copy the embed code for a site template"
                           onClick={() => navigator.clipboard.writeText(`{{EXAMPLE:${ex.slug}}}`)} style={{ padding: '0.3rem 0.8rem' }}>Copy embed</button>
                 )}
-                <button className="btn btn-secondary" disabled={busy === ex.pageId} onClick={() => remove(ex)} style={{ padding: '0.3rem 0.8rem', color: '#f88' }}>Delete</button>
+                {ex.kind === 'comic'
+                  ? <button className="btn btn-secondary" title="Add, remove and reorder its pages in the comic itself" onClick={() => navigate(`/comic/${ex.comicId}`)} style={{ padding: '0.3rem 0.8rem' }}>Open comic</button>
+                  : <button className="btn btn-secondary" disabled={busy === ex.pageId} onClick={() => remove(ex)} style={{ padding: '0.3rem 0.8rem', color: '#f88' }}>Delete</button>}
               </div>
             </div>
           ))}

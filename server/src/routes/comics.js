@@ -360,6 +360,7 @@ router.post('/', async (req, res) => {
     const comic = new Comic({
       id: comicId,
       title: req.body.title || 'Untitled Comic',
+      ...(req.body.isExample ? { isExample: true } : {}),
       titleEn: req.body.titleEn || '',
       description: req.body.description || '',
       level: req.body.level || 'beginner',
@@ -395,6 +396,12 @@ router.put('/:id', async (req, res) => {
   try {
     const updateData = { ...req.body };
     delete updateData.id; // Don't allow changing the id
+    // Example comics never go to the reader app.
+    if (updateData.published === true) {
+      const target = await Comic.findOne({ id: req.params.id }, { isExample: 1 }).lean();
+      if (target?.isExample) return res.status(400).json({ error: 'Example comics are not published to the app — publish their pages to comigo.net from Marketing → Examples.' });
+    }
+    delete updateData.isExample; // set once, at creation
 
     // Strip voices from page/cover saves — voices should only be updated
     // from the dedicated Voices tab (when voices is the primary payload).
@@ -945,6 +952,9 @@ router.post('/:id/export-full', async (req, res) => {
     let comic = await Comic.findOne({ id: req.params.id });
     if (!comic) {
       return res.status(404).json({ error: 'Comic not found' });
+    }
+    if (comic.isExample) {
+      return res.status(400).json({ error: 'Example comics are not exported to the app.' });
     }
 
     // Ensure every sentence has a grammar explanation before baking the
@@ -1715,6 +1725,11 @@ router.post('/:id/upload-bundle', bundleUpload.single('bundle'), async (req, res
     return res.status(400).json({ error: 'Invalid comic id' });
   }
   if (!req.file) return res.status(400).json({ error: 'No bundle uploaded (expected field "bundle")' });
+  const target = await Comic.findOne({ id }, { isExample: 1 }).lean().catch(() => null);
+  if (target?.isExample) {
+    await fs.unlink(req.file.path).catch(() => {});
+    return res.status(400).json({ error: 'Example comics are not uploaded to the app.' });
+  }
 
   const tarPath = req.file.path;
   try {

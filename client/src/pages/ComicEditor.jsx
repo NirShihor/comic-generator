@@ -2061,6 +2061,12 @@ function ComicEditor() {
             )}
           </div>
           <h1>{comic.title}</h1>
+          {comic.isExample && (
+            <div style={{ display: 'inline-flex', gap: '0.6rem', alignItems: 'center', background: '#f3eeff', border: '1px solid #cbb8ff', color: '#5a3fc0', borderRadius: '6px', padding: '0.3rem 0.7rem', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+              📖 Example comic — never published to the app; each page can be published to comigo.net.
+              <Link to="/marketing?tab=examples" style={{ color: '#6E40F0', fontWeight: 600 }}>Marketing → Examples</Link>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => navigator.clipboard?.writeText(id)}
@@ -3365,7 +3371,15 @@ function ComicEditor() {
             This will generate the comic.json file and copy all images (master pages and panel crops).
           </p>
 
-          {/* Publish Toggle */}
+          {comic.isExample ? (
+            <div style={{ background: '#f3eeff', border: '1px solid #cbb8ff', borderRadius: '8px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, color: '#5a3fc0' }}>Example comic — not for the Reader app</h3>
+              <p style={{ color: '#666', fontSize: '0.9rem', margin: '0.4rem 0 0' }}>
+                Example comics are never published or exported to the app. Publish their pages to comigo.net as
+                interactive examples from <Link to="/marketing?tab=examples">Marketing → Examples</Link>.
+              </p>
+            </div>
+          ) : (
           <div style={{
             background: comic.published ? '#d4edda' : '#f8f9fa',
             border: `1px solid ${comic.published ? '#c3e6cb' : '#ddd'}`,
@@ -3406,6 +3420,7 @@ function ComicEditor() {
               {comic.published ? 'Unpublish' : 'Publish'}
             </button>
           </div>
+          )}
 
           {/* Image generation agent */}
           <div style={{ background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '8px', padding: '1.5rem', marginBottom: '1.5rem' }}>

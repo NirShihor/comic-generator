@@ -2532,15 +2532,22 @@ const SITE_DIR = path.join(__dirname, '../../../site');
 // GET /api/marketing/examples — every example page across all comics.
 router.get('/examples', async (req, res) => {
   try {
-    const comics = await Comic.find({ 'examplePages.0': { $exists: true } },
-      { id: 1, title: 1, collectionTitle: 1, examplePages: 1 }).lean();
+    // One-off example pages (copied into any comic) and every page of an
+    // example comic (made from scratch with the full comic toolkit).
+    const comics = await Comic.find({ $or: [{ 'examplePages.0': { $exists: true } }, { isExample: true }] },
+      { id: 1, title: 1, collectionTitle: 1, examplePages: 1, isExample: 1, pages: 1 }).lean();
     const examples = [];
     for (const c of comics) {
-      for (const p of c.examplePages || []) {
+      const own = (c.examplePages || []).map(p => ({ p, kind: 'example' }));
+      const fromComic = c.isExample
+        ? [...(c.pages || [])].sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0)).map(p => ({ p, kind: 'comic' }))
+        : [];
+      for (const { p, kind } of [...fromComic, ...own]) {
         const bubbles = (p.bubbles || []).filter(b => (b.sentences || []).some(s => (s.text || '').trim()));
         examples.push({
           comicId: c.id, comicTitle: c.title, collectionTitle: c.collectionTitle || '',
-          pageId: p.id, label: p.exampleLabel || 'Example', pageNumber: p.pageNumber,
+          pageId: p.id, kind, isExampleComic: !!c.isExample,
+          label: p.exampleLabel || (kind === 'comic' ? `Page ${p.pageNumber}` : 'Example'), pageNumber: p.pageNumber,
           image: (p.bakedImage || p.masterImage || '').split('?')[0],
           bubbles: bubbles.length,
           missingAudio: bubbles.filter(b => (b.sentences || []).some(s => (s.text || '').trim() && !s.audioUrl)).length,
@@ -2566,12 +2573,17 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
     const fsSync = require('fs');
     const comic = await Comic.findOne({ id: req.params.comicId });
     if (!comic) return res.status(404).json({ error: 'Comic not found' });
-    const idx = (comic.examplePages || []).findIndex(p => p.id === req.params.pageId);
+    let list = 'examplePages';
+    let idx = (comic.examplePages || []).findIndex(p => p.id === req.params.pageId);
+    if (idx < 0 && comic.isExample) {
+      list = 'pages';
+      idx = (comic.pages || []).findIndex(p => p.id === req.params.pageId);
+    }
     if (idx < 0) return res.status(404).json({ error: 'Example page not found' });
-    const page = comic.examplePages[idx];
+    const page = comic[list][idx];
     const slugify = t => String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50);
-    const slug = slugify(req.body.slug || page.exampleSlug || page.exampleLabel) || `example-${page.pageNumber}`;
+    const slug = slugify(req.body.slug || page.exampleSlug || page.exampleLabel || (list === 'pages' ? `${comic.title} ${page.pageNumber}` : '')) || `example-${page.pageNumber}`;
     const ascii = t => String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '') || 'x';
     const projectDir = path.join(PROJECTS_DIR, comic.id);
 
@@ -2703,7 +2715,7 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
 
     page.exampleSlug = slug;
     page.examplePublishedAt = new Date();
-    await Comic.updateOne({ id: comic.id }, { $set: { [`examplePages.${idx}`]: page.toObject ? page.toObject() : page } });
+    await Comic.updateOne({ id: comic.id }, { $set: { [`${list}.${idx}`]: page.toObject ? page.toObject() : page } });
     res.json({ slug, bubbles: out.length, audioFiles: copied.size, explained, embed: `{{EXAMPLE:${slug}}}` });
   } catch (error) {
     console.error('Example publish error:', error.message);
