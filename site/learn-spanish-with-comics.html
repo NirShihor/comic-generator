@@ -465,8 +465,6 @@
     box-shadow: 0 12px 34px rgba(0, 0, 0, 0.6); padding: 14px 18px 16px;
     font-family: system-ui, sans-serif;
   }
-  .popup.at-bottom { bottom: 3%; }
-  .popup.at-top { top: 3%; }
   .popup-x { position: absolute; top: 10px; right: 12px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: #E4E2EE; color: #55536B; cursor: pointer; font-size: 0.8rem; }
   .ex-sent + .ex-sent { border-top: 1px solid #E2E0EC; margin-top: 12px; padding-top: 12px; }
   .ex-chips { margin: 0 28px 8px 0; font-family: Charter, Georgia, serif; font-size: 1.18rem; font-weight: 700; }
@@ -686,6 +684,7 @@
       if (btns) html += '<div class="w-btns">' + btns + '</div>';
       card.innerHTML = html;
       card.hidden = false;
+      placePopup();
       var more = card.querySelector('.w-more'), expl = card.querySelector('.w-explain');
       if (more) more.addEventListener('click', function () { openForms(w); });
       if (expl) expl.addEventListener('click', function () { openExplain(w); });
@@ -697,6 +696,7 @@
       sheet.querySelector('.sh-body').innerHTML = html;
       sheet.hidden = false;
       sheet.querySelector('.sh-body').scrollTop = 0;
+      stage.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
     function openForms(w) {
       var used = null;
@@ -716,6 +716,19 @@
     }
     function openExplain(w) {
       openSheet(w.t.replace(/[^\p{L}\p{N}\s'-]/gu, ''), '<div class="sh-explain">' + esc(w.ex) + '</div>');
+    }
+
+    // Open the card right next to the bubble that was tapped — below it for
+    // bubbles in the top half, above it for the bottom half — kept inside
+    // the comic, and scrolled into view so the reader never has to hunt for it.
+    function placePopup() {
+      if (!current || popup.hidden) return;
+      var sh = stage.clientHeight, ph = popup.offsetHeight;
+      var bt = parseFloat(current.style.top) / 100 * sh;
+      var bb = bt + parseFloat(current.style.height) / 100 * sh;
+      var top = (bt + bb) / 2 > sh / 2 ? bt - ph - 10 : bb + 10;
+      popup.style.top = Math.max(8, Math.min(sh - ph - 8, top)) + 'px';
+      popup.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
     function renderBubble(b) {
@@ -744,9 +757,9 @@
         var play = el.querySelector('.ex-play');
         if (play) play.addEventListener('click', function () { playSrc(s.a); });
         var tr = el.querySelector('.ex-tr'), en = el.querySelector('.ex-en');
-        tr.addEventListener('click', function () { en.hidden = !en.hidden; tr.textContent = en.hidden ? 'Show translation' : 'Hide translation'; });
+        tr.addEventListener('click', function () { en.hidden = !en.hidden; tr.textContent = en.hidden ? 'Show translation' : 'Hide translation'; placePopup(); });
         var gr = el.querySelector('.ex-gr'), gn = el.querySelector('.ex-grammar');
-        if (gr) gr.addEventListener('click', function () { gn.hidden = !gn.hidden; gr.textContent = gn.hidden ? 'Explain grammar' : 'Hide grammar'; });
+        if (gr) gr.addEventListener('click', function () { gn.hidden = !gn.hidden; gr.textContent = gn.hidden ? 'Explain grammar' : 'Hide grammar'; placePopup(); });
         body.appendChild(el);
       });
     }
@@ -763,11 +776,9 @@
         current = h; setActive(h, true);
         var b = data.bubbles[+h.dataset.i] || { sentences: [] };
         renderBubble(b);
-        var top = parseFloat(h.style.top) > 50;
-        popup.classList.toggle('at-top', top);
-        popup.classList.toggle('at-bottom', !top);
         popup.hidden = false;
         popup.scrollTop = 0;
+        placePopup();
         var first = (b.sentences || [])[0];
         playSrc(first && first.a);
       });
