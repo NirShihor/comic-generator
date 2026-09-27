@@ -22,6 +22,7 @@ RUN cd server && npm install --omit=dev
 
 # Copy server source code
 COPY server/src/ ./server/src/
+COPY server/certs/ ./server/certs/
 
 # Copy built client from stage 1
 COPY --from=client-build /app/client/dist ./client/dist
