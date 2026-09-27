@@ -529,6 +529,41 @@ router.get('/collection-thumbnail/:collectionId', async (req, res) => {
 
 // POST /api/reader/explain — a short, contextual grammar explanation of a Spanish
 // word AS USED in its sentence. Uses a cheap model. Body: { word, sentence, translation }.
+// Purchase attribution (opt-in analytics only): which anonymous analytics ID
+// a purchase's appAccountToken belongs to, so subscription events reported by
+// Apple can be attributed. The app registers it only after the user opts into
+// analytics and deletes it on opt-out. No personal data is accepted.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+router.post('/purchase-attribution', rateLimit('attribution', 30, 10 * 60 * 1000), async (req, res) => {
+  const { token, distinctId, accessModel } = req.body || {};
+  const t = String(token || '').toLowerCase();
+  if (!UUID_RE.test(t) || typeof distinctId !== 'string' || !/^[A-Za-z0-9-]{1,100}$/.test(distinctId)
+      || (accessModel != null && !['legacy', 'new_model'].includes(accessModel))) {
+    return res.status(400).json({ error: 'invalid attribution' });
+  }
+  try {
+    const { processor } = require('../services/appStoreServer');
+    await processor.registerMapping({ token: t, distinctId, accessModel });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('purchase-attribution error:', error.message);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
+router.delete('/purchase-attribution/:token', rateLimit('attribution', 30, 10 * 60 * 1000), async (req, res) => {
+  const t = String(req.params.token || '').toLowerCase();
+  if (!UUID_RE.test(t)) return res.status(400).json({ error: 'invalid token' });
+  try {
+    const { processor } = require('../services/appStoreServer');
+    await processor.deleteMapping(t);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('purchase-attribution delete error:', error.message);
+    res.status(500).json({ error: 'failed' });
+  }
+});
+
 router.post('/explain', rateLimit('explain', 60, 10 * 60 * 1000), async (req, res) => {
   try {
     const { word, sentence, translation } = req.body || {};

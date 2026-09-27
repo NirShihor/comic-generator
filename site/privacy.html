@@ -42,10 +42,10 @@
 <main>
   <a class="home" href="/">← comigo.net</a>
   <h1>Privacy Policy</h1>
-  <p class="date">Effective 1 September 2026 · Comigo for iOS</p>
+  <p class="date">Effective [RELEASE DATE] · Comigo for iOS</p>
 
   <p>Comigo is made by an independent developer. The app is designed to work
-  without user accounts, without advertising, and without third-party tracking.
+  without user accounts, without advertising, and without cross-app tracking.
   This page explains the small amount of data that is processed to make the
   app's features work, and nothing here will try to surprise you.</p>
 
@@ -53,7 +53,7 @@
   <ul>
     <li>No user accounts — we don't know who you are.</li>
     <li>No advertising and no ad networks.</li>
-    <li>No analytics or tracking SDKs in the app.</li>
+    <li>No tracking across other companies' apps or websites, and no advertising identifier.</li>
     <li>No sale or sharing of personal data with data brokers — ever.</li>
   </ul>
 
@@ -61,10 +61,12 @@
   <p>When you use a speaking exercise, the app records your answer and sends
   that audio clip over an encrypted connection to our server, which forwards it
   to OpenAI's transcription service to turn your speech into text so the app
-  can assess your Spanish. The audio is processed and discarded: we do not
-  store your recordings on our server, and OpenAI does not use data submitted
-  through its API to train its models. The temporary recording on your device
-  is deleted after processing.</p>
+  can assess your Spanish. The audio is processed and discarded: our server
+  holds it only in memory while the request is handled and never stores it,
+  OpenAI's transcription service does not retain it, and OpenAI does not use
+  data submitted through its API to train its models. The recording is not
+  linked to any identifier, and the temporary copy on your device is deleted
+  after processing.</p>
   <p>Microphone access is optional — if you decline it or switch speaking
   exercises off, everything else in Comigo (reading, listening, silent
   practice) works normally.</p>
@@ -73,6 +75,51 @@
   <p>When you tap a word or sentence for an explanation, the text of that
   sentence is sent to our server and on to OpenAI to generate the explanation.
   This text comes from the comics themselves, not from anything you've written.</p>
+
+  <h2>Usage analytics — only if you allow it</h2>
+  <p>When you first use Comigo, the app asks whether you'd like to share usage
+  statistics. Nothing is collected unless you choose <strong>Allow analytics</strong>;
+  if you choose <strong>No thanks</strong>, the app never starts its analytics
+  service and nothing is sent. Every part of Comigo works the same either way.
+  You can change your answer at any time in Settings → Privacy → Share usage
+  analytics.</p>
+  <p>If you allow it, the app sends usage statistics to PostHog, our analytics
+  provider, which stores them in the EU. Each statistic is a named action (such
+  as "comic page viewed" or "audio played") with details like the comic, the page
+  number, the practice mode, whether you're on the free plan, a trial or a
+  subscription, your app version, your iPhone or iPad's operating system version
+  and whether it's a phone or a tablet.</p>
+  <p>These statistics are linked to a random identifier created by the app on
+  your device, not to your name, email address, Apple ID or any advertising
+  identifier. They never include your voice, your spoken or written answers,
+  anything you type, or the text of the comics. Your IP address is not stored and
+  is not used to work out your location. The statistics are used only to
+  understand how Comigo is used and to improve it — never for advertising, never
+  combined with data from other companies, and never sold. We rely on your
+  consent for this, and you can withdraw it at any time in Settings.</p>
+  <p><strong>Subscriptions.</strong> If you've allowed analytics and you start a
+  trial or subscription, the app attaches a random purchase code to it. Apple
+  tells our server when that subscription renews, converts from a trial, is
+  cancelled, expires or is refunded, and the code lets us count those events
+  under the same random identifier. Apple does not share your identity with us,
+  and we never learn your Apple ID, name or payment details. If you turn
+  analytics off, the link between the purchase code and your identifier is
+  deleted from our server and no further subscription statistics are recorded
+  for you.</p>
+  <p><strong>How long it's kept.</strong> PostHog keeps usage statistics for up
+  to 7 years under our current plan. We review at least once a year how much of
+  this data we still need, and we reduce or delete analytics data once it is no
+  longer needed to understand and improve Comigo. Because these statistics are
+  linked only to a random identifier and not to who you are, we generally can't
+  pick out one person's records; turning analytics off stops any further
+  collection straight away.</p>
+  <p>The record on our own server that links a purchase code to your random
+  identifier is kept only while analytics is on. It is deleted immediately if you
+  turn analytics off. Otherwise it is kept while your subscription is active,
+  because each renewal or other change Apple reports needs it, and it is deleted
+  automatically 12 months after the last such subscription activity. Our records
+  of the subscription notifications themselves are deleted automatically after
+  12 months.</p>
 
   <h2>What stays on your device</h2>
   <p>Your reading progress, practice scores, vocabulary, notebook entries and
@@ -90,12 +137,15 @@
     <li><strong>OpenAI</strong> — speech transcription and language explanations, as described above.</li>
     <li><strong>Fly.io</strong> — hosts our server.</li>
     <li><strong>Tigris</strong> — delivers comic downloads (content files only).</li>
+    <li><strong>PostHog</strong> — usage analytics, only if you allow it (EU data storage).</li>
+    <li><strong>Apple</strong> — processes App Store purchases and notifies our server of subscription changes, as described above.</li>
   </ul>
   <p>Each receives only what is needed to perform its function.</p>
 
   <h2>Children</h2>
-  <p>Comigo is intended for adults and older teenagers. It collects no
-  personal information from anyone, including children.</p>
+  <p>Comigo is intended for adults and older teenagers. It does not ask for
+  names, email addresses or any other information that identifies you, and does
+  not knowingly collect personal information from children.</p>
 
   <h2>Changes</h2>
   <p>If this policy changes, the updated version will be published at this
