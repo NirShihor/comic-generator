@@ -8,7 +8,7 @@
  "image": "example-in-the-room-1",
  "width": 1024,
  "height": 1536,
- "publishedAt": "2026-09-28T09:56:53.953Z",
+ "publishedAt": "2026-09-28T20:55:06.415Z",
  "bubbles": [
   {
    "x": 0.27575757575757576,
@@ -19,24 +19,40 @@
     {
      "es": "Mamá, mamá...",
      "en": "Mum, mum...",
+     "g": "The repetition of 'mamá' adds emphasis and urgency, making it sound more affectionate or desperate.",
      "a": "{{AUD_ex-in-the-room-1-b1-1}}",
      "words": [
       {
        "t": "Mamá,",
        "m": "mum",
        "b": "mamá",
-       "bm": "",
+       "bm": "mum",
        "s": 0,
        "e": 1040,
+       "a": "{{AUD_ex-in-the-room-1-w-mama-d3fe7a}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "mamá",
+         "a": "{{AUD_ex-in-the-room-1-w-mama-d3fe7a}}"
+        },
+        {
+         "label": "Plural",
+         "text": "mamás",
+         "a": "{{AUD_ex-in-the-room-1-w-mamas-a8fe71}}"
+        }
+       ],
        "ex": "In this sentence, \"mamá\" is a noun that means \"mum\" or \"mom\" in English. It is in the vocative case, which is used when directly addressing someone. Here, the repetition of \"mamá\" emphasizes urgency or excitement, as if the speaker is calling out to their mother.\n\nSince \"mamá\" is a noun, it functions as the subject of the address. It shows a personal connection and affection between the speaker and their mother. The sentence captures a moment of interaction, highlighting the importance of the mother in the context."
       },
       {
        "t": "mamá...",
        "m": "not applicable",
        "b": "mamáfade",
-       "bm": "",
+       "bm": "not applicable",
        "s": 1100,
        "e": 1760,
+       "a": "{{AUD_ex-in-the-room-1-w-mama-d3fe7a}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-mamafade-542e3f}}",
        "ex": "In this sentence, \"mamáfade\" is a playful or affectionate term that combines \"mamá\" (which means \"mum\" or \"mom\") with a suffix that suggests an endearing or exaggerated form. It is likely used to convey a sense of urgency or excitement, as indicated by the repetition of \"mamá.\"\n\nThe word \"mamá\" itself is a noun, specifically a feminine singular noun, referring to one's mother. In the context of the sentence, it serves as a direct address, indicating that the speaker is calling out to their mother. The repetition emphasizes the speaker's eagerness or need for attention.\n\nOverall, \"mamáfade\" enhances the emotional tone of the sentence, making it more expressive and engaging."
       }
      ]
@@ -52,24 +68,75 @@
     {
      "es": "¿Qué pasa?",
      "en": "What's wrong? ",
+     "g": "¿Qué pasa? uses the present tense to ask about a current situation or event.",
      "a": "{{AUD_ex-in-the-room-1-b2-1}}",
      "words": [
       {
        "t": "¿Qué",
        "m": "what",
        "b": "qué",
-       "bm": "",
+       "bm": "what",
        "s": 0,
        "e": 320,
+       "a": "{{AUD_ex-in-the-room-1-w-que-668150}}",
        "ex": "In the sentence \"¿Qué pasa?\", the word \"qué\" is an interrogative pronoun. It translates to \"what\" in English and is used to ask for information or clarification. Here, it is asking about the situation or the reason behind something, which is indicated by \"pasa\" (happens).\n\n\"Qué\" is essential in forming the question, as it directly inquires about the subject of concern. The structure \"¿Qué pasa?\" can be understood as \"What is happening?\" or \"What's wrong?\" in English, showing that the speaker is seeking to understand a situation or issue. \n\nIn summary, \"qué\" serves as the key word that prompts the inquiry, making it a crucial part of the question."
       },
       {
        "t": "pasa?",
        "m": "happens",
        "b": "pasar",
-       "bm": "",
+       "bm": "to happen",
        "s": 400,
        "e": 1600,
+       "a": "{{AUD_ex-in-the-room-1-w-pasa}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-pasar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": " paso",
+         "a": "{{AUD_ex-in-the-room-1-w-paso}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "pasé",
+         "a": "{{AUD_ex-in-the-room-1-w-pase-558645}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "pasaba",
+         "a": "{{AUD_ex-in-the-room-1-w-pasaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "pasaré",
+         "a": "{{AUD_ex-in-the-room-1-w-pasare-e3925e}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "pasaría",
+         "a": "{{AUD_ex-in-the-room-1-w-pasaria-481564}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "pase",
+         "a": "{{AUD_ex-in-the-room-1-w-pase}}"
+        },
+        {
+         "label": "Command",
+         "text": "pasa",
+         "a": "{{AUD_ex-in-the-room-1-w-pasa}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "pasando",
+         "a": "{{AUD_ex-in-the-room-1-w-pasando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "pasado",
+         "a": "{{AUD_ex-in-the-room-1-w-pasado}}"
+        }
+       ],
        "ex": "The word \"pasa\" is a verb in this sentence. It is the third person singular form of the verb \"pasar,\" which means \"to happen\" or \"to pass.\" In this context, \"pasa\" translates to \"is happening\" or \"is going on.\"\n\nIn the present tense, the conjugation of \"pasar\" looks like this:\n\n- yo paso\n- tú pasas\n- él/ella/usted pasa\n- nosotros/nosotras pasamos\n- ellos/ellas/ustedes pasan\n\nIn the sentence \"¿Qué pasa?\", \"pasa\" is asking about what is happening or what is wrong. The word \"qué\" means \"what,\" so together they form a question about the current situation. This makes it a common way to inquire about someone's well-being or to check if there is an issue."
       }
      ]
@@ -85,33 +152,119 @@
     {
      "es": "Vi un fantasma...",
      "en": "I saw a ghost...",
+     "g": "Vi is the preterite form of ver, indicating a completed action that happened in the past.",
      "a": "{{AUD_ex-in-the-room-1-b3-1}}",
      "words": [
       {
        "t": "Vi",
        "m": "I saw",
        "b": "ver",
-       "bm": "",
+       "bm": "to see",
        "s": 0,
        "e": 240,
+       "a": "{{AUD_ex-in-the-room-1-w-vi}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-ver}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "veo",
+         "a": "{{AUD_ex-in-the-room-1-w-veo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "vi",
+         "a": "{{AUD_ex-in-the-room-1-w-vi}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "veía",
+         "a": "{{AUD_ex-in-the-room-1-w-veia-614122}}"
+        },
+        {
+         "label": "Future",
+         "text": "veré",
+         "a": "{{AUD_ex-in-the-room-1-w-vere-26ad8d}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "vería",
+         "a": "{{AUD_ex-in-the-room-1-w-veria-ffc767}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "vea",
+         "a": "{{AUD_ex-in-the-room-1-w-vea}}"
+        },
+        {
+         "label": "Command",
+         "text": "ve",
+         "a": "{{AUD_ex-in-the-room-1-w-ve}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "viendo",
+         "a": "{{AUD_ex-in-the-room-1-w-viendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "visto",
+         "a": "{{AUD_ex-in-the-room-1-w-visto}}"
+        }
+       ],
        "ex": "The word \"vi\" is the first-person singular form of the verb \"ver,\" which means \"to see.\" In this sentence, \"Vi un fantasma,\" it translates to \"I saw.\" \n\nHere's a short present-tense conjugation table for \"ver\":\n\n- yo veo (I see)\n- tú ves (you see)\n- él/ella/usted ve (he/she/you see)\n- nosotros/nosotras vemos (we see)\n- ellos/ellas/ustedes ven (they/you all see)\n\nIn this context, \"vi\" indicates that the speaker is talking about a completed action in the past — specifically, the moment they saw a ghost. The use of \"vi\" shows that this experience is personal and directly relates to the speaker."
       },
       {
        "t": "un",
        "m": "a",
        "b": "un",
-       "bm": "",
+       "bm": "a",
        "s": 267,
        "e": 320,
+       "a": "{{AUD_ex-in-the-room-1-w-un}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "un",
+         "a": "{{AUD_ex-in-the-room-1-w-un}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "una",
+         "a": "{{AUD_ex-in-the-room-1-w-una}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "unos",
+         "a": "{{AUD_ex-in-the-room-1-w-unos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "unas",
+         "a": "{{AUD_ex-in-the-room-1-w-unas}}"
+        }
+       ],
        "ex": "In this sentence, \"un\" is an indefinite article. It is used to refer to a singular, masculine noun, which in this case is \"fantasma\" (ghost). The article \"un\" indicates that the speaker saw one ghost, but it does not specify which ghost.\n\nIn Spanish, articles like \"un\" help to clarify whether we are talking about something specific or something general. Here, \"Vi un fantasma\" translates to \"I saw a ghost,\" suggesting that it could be any ghost, not a particular one. \n\nSo, \"un\" is essential in this sentence to convey that the speaker encountered one unspecified ghost."
       },
       {
        "t": "fantasma...",
        "m": "ghost",
        "b": "fantasma",
-       "bm": "",
+       "bm": "ghost",
        "s": 416,
        "e": 1600,
+       "a": "{{AUD_ex-in-the-room-1-w-fantasma}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "fantasma",
+         "a": "{{AUD_ex-in-the-room-1-w-fantasma}}"
+        },
+        {
+         "label": "Plural",
+         "text": "fantasmas",
+         "a": "{{AUD_ex-in-the-room-1-w-fantasmas}}"
+        }
+       ],
        "ex": "The word \"fantasma\" in the sentence \"Vi un fantasma...\" is a noun. It translates to \"ghost\" in English. In this context, \"fantasma\" is the direct object of the verb \"vi,\" which means \"I saw.\" \n\nThe structure of the sentence is straightforward: \"Vi\" (I saw) is the verb, and \"un fantasma\" (a ghost) is what was seen. The article \"un\" indicates that it is an indefinite noun, meaning it refers to any ghost, not a specific one. \n\nSo, \"fantasma\" plays a crucial role as the thing being perceived in the action of seeing."
       }
      ]
@@ -127,42 +280,109 @@
     {
      "es": "¿Fantasmas? No hay fantasmas.",
      "en": "Ghosts? There are no ghosts.",
+     "g": "No hay is a negative construction meaning 'there are not'; it uses the present tense to indicate a current state.",
      "a": "{{AUD_ex-in-the-room-1-b4-1}}",
      "words": [
       {
        "t": "¿Fantasmas?",
        "m": "ghosts",
        "b": "fantasma",
-       "bm": "",
+       "bm": "ghost",
        "s": 0,
        "e": 1400,
+       "a": "{{AUD_ex-in-the-room-1-w-fantasmas}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-fantasma}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "fantasma",
+         "a": "{{AUD_ex-in-the-room-1-w-fantasma}}"
+        },
+        {
+         "label": "Plural",
+         "text": "fantasmas",
+         "a": "{{AUD_ex-in-the-room-1-w-fantasmas}}"
+        }
+       ],
        "ex": "The word \"fantasmas\" is a noun in the plural form. It means \"ghosts\" in English. In the sentence \"¿Fantasmas? No hay fantasmas,\" it serves as the subject of both parts of the sentence. \n\nIn the first part, \"¿Fantasmas?\" is a question asking if there are ghosts. The second part, \"No hay fantasmas,\" translates to \"There are no ghosts,\" where \"fantasmas\" is again the subject of the sentence, indicating that ghosts do not exist in this context.\n\nThe use of \"fantasmas\" here emphasizes the topic of the conversation, which is about the existence of ghosts. The repetition of the word reinforces the idea that the speaker is addressing the concept of ghosts directly."
       },
       {
        "t": "No",
        "m": "no",
        "b": "no",
-       "bm": "",
+       "bm": "no",
        "s": 1780,
        "e": 2240,
+       "a": "{{AUD_ex-in-the-room-1-w-no}}",
        "ex": "In this sentence, \"no\" is an adverb that negates the statement that follows it. It translates to \"no\" in English and is used to indicate the absence of something. Here, it appears in the phrase \"No hay fantasmas,\" which means \"There are no ghosts.\"\n\nThe structure of the sentence is straightforward: \"No\" comes before the verb \"hay,\" which is the third person singular form of the verb \"haber,\" meaning \"to be\" or \"there is/are.\" In the present tense, \"haber\" is conjugated as follows: \n\n- yo he\n- tú has\n- él/ella/usted ha\n- nosotros/nosotras hemos\n- ellos/ellas/ustedes han\n\nSo, \"no\" is essential here to convey that ghosts do not exist, making the sentence clear and direct."
       },
       {
        "t": "hay",
        "m": "there are",
        "b": "haber",
-       "bm": "",
+       "bm": "to have",
        "s": 2280,
        "e": 2400,
+       "a": "{{AUD_ex-in-the-room-1-w-hay}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-haber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "he",
+         "a": "{{AUD_ex-in-the-room-1-w-he}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "hube",
+         "a": "{{AUD_ex-in-the-room-1-w-hube}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "había",
+         "a": "{{AUD_ex-in-the-room-1-w-habia-58fad7}}"
+        },
+        {
+         "label": "Future",
+         "text": "habré",
+         "a": "{{AUD_ex-in-the-room-1-w-habre-808e51}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "habría",
+         "a": "{{AUD_ex-in-the-room-1-w-habria-795b6b}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "haya",
+         "a": "{{AUD_ex-in-the-room-1-w-haya}}"
+        },
+        {
+         "label": "Command",
+         "text": "hay",
+         "a": "{{AUD_ex-in-the-room-1-w-hay}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "habiendo",
+         "a": "{{AUD_ex-in-the-room-1-w-habiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "habido",
+         "a": "{{AUD_ex-in-the-room-1-w-habido}}"
+        }
+       ],
        "ex": "The word \"hay\" is a verb form in this sentence. It is the third person singular present tense of the verb \"haber,\" which means \"to have\" or \"there is/are.\" In this context, \"hay\" is used to indicate the existence of something. \n\nIn the sentence \"¿Fantasmas? No hay fantasmas,\" \"hay\" translates to \"there are.\" It is used to express that ghosts do not exist, as indicated by \"No hay fantasmas,\" meaning \"There are no ghosts.\"\n\nHere’s a quick present-tense conjugation of \"haber\":\n- yo he\n- tú has\n- él/ella/usted ha\n- nosotros/nosotras hemos\n- ellos/ellas/ustedes han\n\nSo, in this case, \"hay\" serves to negate the existence of ghosts in a straightforward way."
       },
       {
        "t": "fantasmas.",
        "m": "not applicable",
        "b": "fantasmafade",
-       "bm": "",
+       "bm": "not applicable",
        "s": 2480,
        "e": 3360,
+       "a": "{{AUD_ex-in-the-room-1-w-fantasmas}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-fantasmafade}}",
        "ex": "The word \"fantasmasfade\" seems to be a typographical error or a combination of \"fantasmas\" and \"fade.\" In the sentence \"¿Fantasmas? No hay fantasmas,\" the correct word is \"fantasmas,\" which means \"ghosts.\" \n\nIn this context, \"fantasmas\" is a noun in the plural form. It refers to the subject of the question and the statement: \"ghosts.\" The sentence is asking about the existence of ghosts and then stating that there are none, using \"No hay fantasmas,\" which translates to \"There are no ghosts.\"\n\nThe structure of the sentence emphasizes the absence of ghosts, making \"fantasmas\" central to the meaning. It is important because it directly answers the question posed."
       }
      ]
@@ -178,33 +398,108 @@
     {
      "es": "Sí, los hay...",
      "en": "Yes, there are...",
+     "g": "Sí, los hay uses 'los' as a pronoun to refer to known plural items, and 'hay' means 'there are'.",
      "a": "{{AUD_ex-in-the-room-1-b5-1}}",
      "words": [
       {
        "t": "Sí,",
        "m": "yes",
        "b": "sí",
-       "bm": "",
+       "bm": "yes",
        "s": 0,
        "e": 880,
+       "a": "{{AUD_ex-in-the-room-1-w-si-50e076}}",
        "ex": "The word \"sí\" in this sentence is an adverb meaning \"yes.\" It is used to affirm or confirm something. In this context, it responds positively to a question or statement, indicating agreement or acknowledgment.\n\nIn the sentence \"Sí, los hay...\", \"sí\" stands alone at the beginning, emphasizing the affirmation. It sets a positive tone for the rest of the sentence, which translates to \"there are\" in English, suggesting that the speaker is confirming the existence of something previously mentioned. \n\nOverall, \"sí\" plays a crucial role in expressing agreement and is a common way to respond affirmatively in Spanish conversations."
       },
       {
        "t": "los",
        "m": "the (masculine plural)",
        "b": "el",
-       "bm": "",
+       "bm": "the (masculine singular)",
        "s": 960,
        "e": 1200,
+       "a": "{{AUD_ex-in-the-room-1-w-los}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-in-the-room-1-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-in-the-room-1-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-in-the-room-1-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-in-the-room-1-w-las}}"
+        }
+       ],
        "ex": "In this sentence, \"los\" is a definite article in Spanish. It is used to refer to a specific group of things that are known or understood in the context. In English, it translates to \"the.\" \n\nHere, \"los\" is connected to an implied noun that is plural. The phrase \"los hay\" translates to \"there are (the ones)\" in English, indicating that the speaker is affirming the existence of certain items or people that have already been mentioned or are understood in the conversation.\n\nSo, \"los\" serves to specify and emphasize that these particular things exist. It helps to clarify what is being talked about, even if the noun itself is not explicitly stated in this sentence."
       },
       {
        "t": "hay...",
        "m": "there are",
        "b": "haber",
-       "bm": "",
+       "bm": "to have",
        "s": 1300,
        "e": 1840,
+       "a": "{{AUD_ex-in-the-room-1-w-hay}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-haber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "he",
+         "a": "{{AUD_ex-in-the-room-1-w-he}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "hube",
+         "a": "{{AUD_ex-in-the-room-1-w-hube}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "había",
+         "a": "{{AUD_ex-in-the-room-1-w-habia-58fad7}}"
+        },
+        {
+         "label": "Future",
+         "text": "habré",
+         "a": "{{AUD_ex-in-the-room-1-w-habre-808e51}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "habría",
+         "a": "{{AUD_ex-in-the-room-1-w-habria-795b6b}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "haya",
+         "a": "{{AUD_ex-in-the-room-1-w-haya}}"
+        },
+        {
+         "label": "Command",
+         "text": "hay",
+         "a": "{{AUD_ex-in-the-room-1-w-hay}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "habiendo",
+         "a": "{{AUD_ex-in-the-room-1-w-habiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "habido",
+         "a": "{{AUD_ex-in-the-room-1-w-habido}}"
+        }
+       ],
        "ex": "The word \"hayfade\" seems to be a typo or misinterpretation of \"hay.\" In the sentence \"Sí, los hay...\" the word \"hay\" is a form of the verb \"haber,\" which means \"to have\" or \"there is/are.\" \n\nIn this context, \"hay\" is used to indicate existence or presence. The phrase \"los hay\" translates to \"there are (them),\" referring to something previously mentioned in the conversation. \n\nHere's a short conjugation table for \"haber\" in the present tense:\n\n- yo he\n- tú has\n- él/ella/usted ha\n- nosotros/nosotras hemos\n- ellos/ellas/ustedes han\n\nIn summary, \"hay\" serves as a key verb in this sentence to affirm the existence of something, making it an essential part of the response."
       }
      ]
@@ -220,33 +515,71 @@
     {
      "es": "En el armario...",
      "en": "In the closet...",
+     "g": "En el armario means 'In the closet', with 'en' indicating location.",
      "a": "{{AUD_ex-in-the-room-1-b6-1}}",
      "words": [
       {
        "t": "En",
        "m": "in",
        "b": "en",
-       "bm": "",
+       "bm": "in",
        "s": 0,
        "e": 160,
+       "a": "{{AUD_ex-in-the-room-1-w-en}}",
        "ex": "The word \"en\" is a preposition in this sentence. It translates to \"in\" in English and is used to indicate location. In the phrase \"En el armario,\" \"en\" connects the location \"el armario\" (the closet) to whatever action or context is being described in the comic.\n\nIn Spanish, prepositions like \"en\" help to establish relationships between different elements in a sentence. Here, it tells us where something is located, setting the scene for what might happen next in the story. So, \"en\" is essential for understanding that the action or subject is situated \"in the closet.\""
       },
       {
        "t": "el",
        "m": "the",
        "b": "el",
-       "bm": "",
+       "bm": "the (masculine singular)",
        "s": 213,
        "e": 320,
+       "a": "{{AUD_ex-in-the-room-1-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-in-the-room-1-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-in-the-room-1-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-in-the-room-1-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-in-the-room-1-w-las}}"
+        }
+       ],
        "ex": "In this sentence, \"el\" is a definite article in Spanish. It translates to \"the\" in English and is used to specify a particular noun. Here, \"el\" is modifying \"armario,\" which means \"closet.\" \n\nThe phrase \"en el armario\" translates to \"in the closet,\" indicating a specific location. The article \"el\" is necessary to show that we are talking about a particular closet rather than any closet. \n\nIn summary, \"el\" helps clarify which armario we are referring to, making the sentence more precise."
       },
       {
        "t": "armario...",
        "m": "closet",
        "b": "armario",
-       "bm": "",
+       "bm": "closet",
        "s": 380,
        "e": 1280,
+       "a": "{{AUD_ex-in-the-room-1-w-armario}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "armario",
+         "a": "{{AUD_ex-in-the-room-1-w-armario}}"
+        },
+        {
+         "label": "Plural",
+         "text": "armarios",
+         "a": "{{AUD_ex-in-the-room-1-w-armarios}}"
+        }
+       ],
        "ex": "The word \"armario\" is a noun in this sentence. It means \"closet\" in English. In the phrase \"En el armario,\" \"armario\" is the object of the preposition \"en,\" which means \"in.\" \n\nThe article \"el\" before \"armario\" indicates that it is a specific closet, making the phrase translate to \"in the closet.\" The use of \"armario\" here helps to specify the location where something is happening or where something is stored."
       }
      ]
@@ -262,33 +595,50 @@
     {
      "es": "Debajo del escritorio...",
      "en": "Under the desk...",
+     "g": "Debajo del escritorio uses 'debajo' meaning 'under', which describes the position of something.",
      "a": "{{AUD_ex-in-the-room-1-b7-1}}",
      "words": [
       {
        "t": "Debajo",
        "m": "under",
        "b": "debajo",
-       "bm": "",
+       "bm": "under",
        "s": 0,
        "e": 480,
+       "a": "{{AUD_ex-in-the-room-1-w-debajo}}",
        "ex": "\"Debajo\" is an adverb in this sentence, meaning \"under.\" It describes the location of something in relation to another object. In the phrase \"debajo del escritorio,\" it indicates that whatever is being referred to is positioned beneath the desk.\n\nThe full phrase translates to \"under the desk,\" where \"debajo\" specifies the exact place. It's important because it helps the reader visualize where something is located in the comic. In this context, it connects the action or object to the desk, making it clear that the position is underneath it."
       },
       {
        "t": "del",
        "m": "of the",
        "b": "de",
-       "bm": "",
+       "bm": "of",
        "s": 520,
        "e": 640,
+       "a": "{{AUD_ex-in-the-room-1-w-del}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-de}}",
        "ex": "The word \"del\" is a contraction of the preposition \"de\" and the definite article \"el.\" In this sentence, \"del\" serves to indicate possession or location, connecting the preposition \"de\" (meaning \"of\" or \"from\") with the article \"el\" (meaning \"the\"). \n\nIn the phrase \"debajo del escritorio,\" \"del\" specifies that we are talking about \"the desk.\" It helps to clarify that something is located \"under the desk.\" Without \"del,\" the sentence would be incomplete, as it wouldn't specify which desk we are referring to. \n\nSo, \"del\" is essential here to provide a clear and specific location in the context of the sentence."
       },
       {
        "t": "escritorio...",
        "m": "desk",
        "b": "escritorio",
-       "bm": "",
+       "bm": "desk",
        "s": 709,
        "e": 2080,
+       "a": "{{AUD_ex-in-the-room-1-w-escritorio}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "escritorio",
+         "a": "{{AUD_ex-in-the-room-1-w-escritorio}}"
+        },
+        {
+         "label": "Plural",
+         "text": "escritorios",
+         "a": "{{AUD_ex-in-the-room-1-w-escritorios}}"
+        }
+       ],
        "ex": "The word \"escritorio\" is a noun in this sentence. It means \"desk\" in English. In the phrase \"Debajo del escritorio,\" it functions as the object of the preposition \"debajo,\" which means \"under.\" \n\nThe complete phrase translates to \"Under the desk,\" indicating a location. The article \"el\" (the) is used here to specify that it is a particular desk, making it \"el escritorio.\" \n\nSo, \"escritorio\" is essential in this sentence because it tells us what is being referred to in relation to the position indicated by \"debajo.\""
       }
      ]
@@ -304,42 +654,59 @@
     {
      "es": "Debajo de mi cama...",
      "en": "Under my bed...",
+     "g": "Debajo de mi cama has 'de' indicating possession, meaning 'of my bed'.",
      "a": "{{AUD_ex-in-the-room-1-b8-1}}",
      "words": [
       {
        "t": "Debajo",
        "m": "under",
        "b": "debajo",
-       "bm": "",
+       "bm": "under",
        "s": 0,
        "e": 560,
+       "a": "{{AUD_ex-in-the-room-1-w-debajo}}",
        "ex": "\"Debajo\" is an adverb in this sentence, meaning \"under.\" It indicates the location of something relative to another object, which in this case is \"mi cama\" (my bed). \n\nIn the phrase \"debajo de mi cama,\" \"debajo\" tells us where something is positioned. The preposition \"de\" connects \"debajo\" to \"mi cama,\" specifying that whatever is being referred to is located under the bed. \n\nSo, \"debajo\" plays a crucial role in describing the spatial relationship in the sentence."
       },
       {
        "t": "de",
        "m": "of",
        "b": "de",
-       "bm": "",
+       "bm": "of",
        "s": 587,
        "e": 640,
+       "a": "{{AUD_ex-in-the-room-1-w-de}}",
        "ex": "The word \"de\" in the sentence \"Debajo de mi cama...\" is a preposition. It connects the phrase \"debajo\" (under) with \"mi cama\" (my bed), indicating the relationship of location. In this context, \"de\" translates to \"of\" or \"under\" in English, helping to specify where something is located.\n\nHere, \"de\" is essential because it clarifies that the position being described is specifically \"under my bed.\" Without \"de,\" the sentence would lack the necessary connection to indicate what is beneath. It shows possession, as in \"my bed,\" linking the bed to the speaker."
       },
       {
        "t": "mi",
        "m": "my",
        "b": "mi",
-       "bm": "",
+       "bm": "my",
        "s": 720,
        "e": 880,
+       "a": "{{AUD_ex-in-the-room-1-w-mi}}",
        "ex": "The word \"mi\" is a possessive adjective in this sentence. It translates to \"my\" in English and indicates ownership. In the phrase \"Debajo de mi cama,\" \"mi\" shows that the bed belongs to the speaker.\n\nIn Spanish, possessive adjectives agree in gender and number with the noun they modify. Here, \"cama\" (bed) is a feminine singular noun, and \"mi\" is used correctly to match it. The full phrase means \"Under my bed,\" clearly indicating where something is located in relation to the speaker. \n\nSo, \"mi\" connects the speaker to the noun \"cama,\" emphasizing that it is their bed."
       },
       {
        "t": "cama...",
        "m": "bed",
        "b": "cama",
-       "bm": "",
+       "bm": "bed",
        "s": 920,
        "e": 1604,
+       "a": "{{AUD_ex-in-the-room-1-w-cama}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "cama",
+         "a": "{{AUD_ex-in-the-room-1-w-cama}}"
+        },
+        {
+         "label": "Plural",
+         "text": "camas",
+         "a": "{{AUD_ex-in-the-room-1-w-camas}}"
+        }
+       ],
        "ex": "The word \"cama\" in this sentence is a noun meaning \"bed.\" It is part of the phrase \"debajo de mi cama,\" which translates to \"under my bed.\" \n\nIn this context, \"cama\" is functioning as the subject of the prepositional phrase \"debajo de.\" The phrase indicates a location, specifying where something is situated. The possessive adjective \"mi\" (my) modifies \"cama,\" showing that the bed belongs to the speaker.\n\nSo, \"cama\" is a feminine singular noun, and it is essential here to convey the specific place being referred to in the sentence."
       }
      ]
@@ -355,42 +722,82 @@
     {
      "es": "¡Y detrás del sofá!",
      "en": "And behind the sofa!",
+     "g": "¡Y detrás del sofá! uses 'detrás' for 'behind', and the exclamation adds excitement or urgency.",
      "a": "{{AUD_ex-in-the-room-1-b9-1}}",
      "words": [
       {
        "t": "¡Y",
        "m": "and",
        "b": "y",
-       "bm": "",
+       "bm": "and",
        "s": 0,
        "e": 160,
+       "a": "{{AUD_ex-in-the-room-1-w-y}}",
        "ex": "The word \"y\" is a conjunction in this sentence, which means \"and\" in English. Its role is to connect ideas or phrases. In this case, \"y\" is used to add information about the location of something, indicating that there is more to say about what is happening.\n\nIn the sentence \"¡Y detrás del sofá!\", \"y\" introduces the phrase \"detrás del sofá\" (behind the sofa) as an additional detail. It suggests that there is something significant happening not just in one place, but also in another location, which is behind the sofa. This connection helps to build suspense or excitement in the context of the comic."
       },
       {
        "t": "detrás",
        "m": "behind",
        "b": "detrás",
-       "bm": "",
+       "bm": "behind",
        "s": 224,
        "e": 560,
+       "a": "{{AUD_ex-in-the-room-1-w-detras-e838a5}}",
        "ex": "The word \"detrás\" is an adverb in this sentence. It means \"behind\" and indicates the location of something in relation to the sofa. In the sentence \"¡Y detrás del sofá!\", it tells us where something is positioned.\n\nThe phrase \"del sofá\" is a contraction of \"de\" (of) and \"el\" (the), which together mean \"of the sofa.\" So, \"detrás del sofá\" translates to \"behind the sofa.\" Here, \"detrás\" connects the location to the object, providing important context for understanding where something is."
       },
       {
        "t": "del",
        "m": "of the",
        "b": "de + el",
-       "bm": "",
+       "bm": "of the",
        "s": 600,
        "e": 720,
+       "a": "{{AUD_ex-in-the-room-1-w-del}}",
+       "ba": "{{AUD_ex-in-the-room-1-w-deel-90c4cd}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "del",
+         "a": "{{AUD_ex-in-the-room-1-w-del}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "de la",
+         "a": "{{AUD_ex-in-the-room-1-w-dela-2d1b9a}}"
+        },
+        {
+         "label": "Masc. plural.",
+         "text": "de los",
+         "a": "{{AUD_ex-in-the-room-1-w-delos-fd7508}}"
+        },
+        {
+         "label": "Fem. plural.",
+         "text": "de las",
+         "a": "{{AUD_ex-in-the-room-1-w-delas-f9c1c7}}"
+        }
+       ],
        "ex": "The word \"del\" is a contraction of the preposition \"de\" and the article \"el.\" In this sentence, \"del\" means \"of the\" or \"from the,\" and it connects the location \"detrás\" (behind) to the noun \"sofá\" (sofa). \n\nIn the phrase \"detrás del sofá,\" \"del\" specifies that something is located behind the specific sofa mentioned. It helps to indicate possession or relationship, showing that the sofa is the reference point for the location. \n\nSo, in this context, \"del\" plays an important role in clarifying where something is located in relation to the sofa."
       },
       {
        "t": "sofá!",
        "m": "sofa",
        "b": "sofá",
-       "bm": "",
+       "bm": "sofa",
        "s": 780,
        "e": 1283,
+       "a": "{{AUD_ex-in-the-room-1-w-sofa-e356ef}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "sofá",
+         "a": "{{AUD_ex-in-the-room-1-w-sofa-e356ef}}"
+        },
+        {
+         "label": "Plural",
+         "text": "sofás",
+         "a": "{{AUD_ex-in-the-room-1-w-sofas-0e5eae}}"
+        }
+       ],
        "ex": "The word \"sofáfade\" appears to be a playful or creative variation of \"sofá,\" which means \"sofa\" in Spanish. In this sentence, \"sofá\" is a noun and serves as the subject of the prepositional phrase \"detrás del sofá,\" meaning \"behind the sofa.\"\n\nIn this context, \"sofá\" is functioning as the object of the preposition \"detrás\" (behind), indicating location. The phrase as a whole tells us where something is located, emphasizing that it is behind the sofa. \n\nSo, while \"sofáfade\" isn't a standard word, it seems to be a fun twist on \"sofá,\" and its role in the sentence is to indicate the specific piece of furniture being referenced."
       }
      ]
