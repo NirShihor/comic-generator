@@ -149,6 +149,29 @@ def source_line(x):
     comic, coll = sentence_case(x.get('comic')), sentence_case(x.get('collection'))
     return f'{comic} · {coll}' if comic and coll else comic or coll
 
+# A title with an English version shows the Spanish first and fades to the
+# English every 2 seconds (page headings and example cards, all in step).
+ALT_TITLE = """<style>
+  .alt-title { display: grid; }
+  .alt-title > span { grid-area: 1 / 1; transition: opacity 0.45s ease; }
+  .alt-title > .alt-en { opacity: 0; }
+  .alt-title.show-en > .alt-es { opacity: 0; }
+  .alt-title.show-en > .alt-en { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .alt-title > span { transition: none; } }
+</style>
+<script>
+  setInterval(function () {
+    document.querySelectorAll('.alt-title').forEach(function (t) { t.classList.toggle('show-en'); });
+  }, 2000);
+</script>
+"""
+def alt_title(tag, es, en):
+    e = lambda t: html_escape(str(t or ''), quote=True)
+    if not en:
+        return f'<{tag} class="display">{e(es)}</{tag}>'
+    return (f'<{tag} class="display alt-title"><span class="alt-es" lang="es">{e(es)}</span>'
+            f'<span class="alt-en" lang="en" aria-hidden="true">{e(en)}</span></{tag}>')
+
 # {{EXAMPLE_LINKS}} or {{EXAMPLE_LINKS:slug-to-skip}} -> a grid of cards linking
 # to every published example's own page (/examples/<slug>).
 LINKS_CSS = """<style>
@@ -183,7 +206,7 @@ def expand_links(html):
                 f'    <img loading="lazy" decoding="async" src="{{{{IMG_{x["image"]}}}}}" alt="">\n'
                 f'    <div class="ex-card-body">\n'
                 + (f'      <span class="label">{e(lvl)}</span>\n' if lvl else '') +
-                f'      <h3 class="display">{e(page_label(x))}</h3>\n'
+                f'      {alt_title("h3", page_label(x), x.get("labelEn"))}\n'
                 + (f'      <span class="ex-src" lang="es">{e(source_line(x))}</span>\n' if source_line(x) else '') +
                 f'      <span class="ex-go">Read this page &rarr;</span>\n'
                 f'    </div>\n  </a>')
@@ -202,6 +225,8 @@ def build(tmpl_name, out_name, html=None, nav_slug=None):
     if has_examples:
         # Shared stage styles/script: appended to the page body once.
         html += '\n' + open(os.path.join(here, 'example-stage.html')).read()
+    if 'class="display alt-title"' in html:
+        html += '\n' + ALT_TITLE
     # Shared navigation: {{NAV}} pulls in site/nav.html, with the current
     # page's link marked (aria-current) so it can be styled subtly.
     if '{{NAV}}' in html:
@@ -261,15 +286,17 @@ for x in load_examples():
     desc = (f'Read "{label}", {art.lower()} {level + " " if level else ""}Spanish comic page'
             + (f' from {comic}' if comic else '') +
             '. Tap a bubble to hear every line, tap any word for its meaning, and check the English.')
-    lines = '\n'.join(
-        f'    <details><summary lang="es">{e(s_.get("es"))}</summary><p class="ans">{e(s_.get("en"))}</p></details>'
-        for b in x.get('bubbles', []) for s_ in b.get('sentences', []) if s_.get('es'))
+    # Optional hand-written extras (comprehension questions, vocab) for this
+    # page live in site/example-extras/<slug>.html.
+    extra_path = os.path.join(here, 'example-extras', x['slug'] + '.html')
+    extra = open(extra_path).read() if os.path.exists(extra_path) else ''
     vals = {
         'PG_TITLE': e(f'{label} — {level.capitalize() + " " if level else ""}Spanish Reading Practice | Comigo'),
         'PG_DESC': e(desc), 'PG_URL': f'https://comigo.net/examples/{x["slug"]}',
         'PG_SLUG': x['slug'], 'PG_LABEL': e(label),
+        'PG_H1': alt_title('h1', label, x.get('labelEn')),
         'PG_EYEBROW': e(f'{level.capitalize()} · Spanish reading practice' if level else 'Spanish reading practice'),
-        'PG_INTRO': intro, 'PG_LINES': lines,
+        'PG_INTRO': intro, 'PG_EXTRA': extra,
     }
     html = re.sub(r'\{\{(PG_\w+)\}\}', lambda m: vals[m.group(1)], page_tmpl)
     build('example-page.html', os.path.join('examples', x['slug'] + '.html'), html=html, nav_slug='spanish-reading-practice')

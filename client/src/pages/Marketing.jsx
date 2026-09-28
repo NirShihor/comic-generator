@@ -1937,6 +1937,7 @@ function Examples() {
                 {ex.publishedAt ? `Published as ${ex.slug} · ${new Date(ex.publishedAt).toLocaleDateString()}` : 'Not published'}
               </div>
               {ex.slug && <div style={{ fontSize: '0.78rem', color: '#999' }}>Page: comigo.net/examples/{ex.slug}</div>}
+              <ExampleTitleEditor ex={ex} />
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
                 <button className="btn btn-secondary" onClick={() => navigate(`/comic/${ex.comicId}/page/${ex.pageId}`)} style={{ padding: '0.3rem 0.8rem' }}>Edit</button>
                 <button className="btn btn-primary" disabled={busy === ex.pageId || ex.bubbles === 0} onClick={() => publish(ex)} style={{ padding: '0.3rem 0.8rem' }}>
@@ -1952,6 +1953,39 @@ function Examples() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Site title for a published example: Spanish, plus an optional English title
+// that the page heading alternates with. Saved now; shown after Republish.
+function ExampleTitleEditor({ ex }) {
+  const [title, setTitle] = useState(ex.title || '');
+  const [titleEn, setTitleEn] = useState(ex.titleEn || '');
+  const [state, setState] = useState('');
+  const dirty = title !== (ex.title || '') || titleEn !== (ex.titleEn || '');
+  const input = { padding: '0.3rem 0.5rem', borderRadius: 5, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.8rem', width: '100%', boxSizing: 'border-box' };
+  const save = async () => {
+    setState('saving');
+    try {
+      await api.put(`/marketing/examples/${ex.comicId}/${ex.pageId}/title`, { title, titleEn });
+      ex.title = title; ex.titleEn = titleEn;
+      setState('saved');
+    } catch (e) {
+      setState('error');
+    }
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <input value={title} onChange={e => { setTitle(e.target.value); setState(''); }} placeholder={`Site title (default: ${ex.comicTitle || 'comic name'})`} style={input} />
+      <input value={titleEn} onChange={e => { setTitleEn(e.target.value); setState(''); }} placeholder="English title (heading alternates, optional)" style={input} />
+      {(dirty || state) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem' }}>
+          {dirty && <button className="btn btn-secondary" disabled={state === 'saving'} onClick={save} style={{ padding: '0.2rem 0.7rem', fontSize: '0.75rem' }}>{state === 'saving' ? 'Saving…' : 'Save titles'}</button>}
+          {state === 'saved' && !dirty && <span style={{ color: '#7fd08a' }}>Saved — Republish to update the site</span>}
+          {state === 'error' && <span style={{ color: '#f07a7a' }}>Couldn't save</span>}
         </div>
       )}
     </div>

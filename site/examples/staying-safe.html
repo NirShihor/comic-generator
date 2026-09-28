@@ -2,21 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Staying safe — Intermediate Spanish Reading Practice | Comigo</title>
+<title>Mantenerse a salvo — Intermediate Spanish Reading Practice | Comigo</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Read &quot;Staying safe&quot;, an intermediate Spanish comic page from Una alianza improbable. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
+<meta name="description" content="Read &quot;Mantenerse a salvo&quot;, an intermediate Spanish comic page from Una alianza improbable. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
 <link rel="canonical" href="https://comigo.net/examples/staying-safe">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Comigo">
-<meta property="og:title" content="Staying safe — Intermediate Spanish Reading Practice | Comigo">
-<meta property="og:description" content="Read &quot;Staying safe&quot;, an intermediate Spanish comic page from Una alianza improbable. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
+<meta property="og:title" content="Mantenerse a salvo — Intermediate Spanish Reading Practice | Comigo">
+<meta property="og:description" content="Read &quot;Mantenerse a salvo&quot;, an intermediate Spanish comic page from Una alianza improbable. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
 <meta property="og:url" content="https://comigo.net/examples/staying-safe">
 <meta property="og:image" content="https://comigo.net/og-image.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Staying safe — Intermediate Spanish Reading Practice | Comigo">
-<meta name="twitter:description" content="Read &quot;Staying safe&quot;, an intermediate Spanish comic page from Una alianza improbable. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
+<meta name="twitter:title" content="Mantenerse a salvo — Intermediate Spanish Reading Practice | Comigo">
+<meta name="twitter:description" content="Read &quot;Mantenerse a salvo&quot;, an intermediate Spanish comic page from Una alianza improbable. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
 <meta name="twitter:image" content="https://comigo.net/og-image.jpg">
 <link rel="icon" type="image/png" sizes="196x196" href="/favicon.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
@@ -71,24 +71,40 @@
   .hero-min { padding: 18px 24px 8px; }
   .hero-min .eyebrow { color: var(--accent); display: block; margin-bottom: 12px; }
   .hero-min h1 { margin: 0 0 16px; font-size: clamp(1.9rem, 4vw, 2.7rem); }
+  /* Spanish / English title, alternating every 2s (stacked in one grid cell
+     so the heading doesn't jump). */
   .hero-min p { max-width: 62ch; margin: 0 0 12px; font-size: 1.06rem; }
   .strip-head { padding: 34px 24px 6px; }
   .strip-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
   .strip-head .eyebrow { color: var(--accent); display: block; margin-bottom: 10px; }
   .strip-head p { margin: 10px 0 0; color: var(--muted); max-width: 62ch; }
   .practice { padding: 4px 24px 0; }
-  .practice h3 { font-size: 1.35rem; margin: 30px 0 6px; }
-  .practice .hint-line { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.9rem; margin: 0 0 12px; }
+  .practice h3 { font-size: 1.35rem; margin: 30px 0 12px; }
   .qa { display: flex; flex-direction: column; gap: 10px; max-width: 66ch; }
   .qa details {
     background: var(--card); border: 3px solid var(--line); border-radius: 12px;
     padding: 12px 16px; box-shadow: 4px 4px 0 var(--shadow);
   }
-  .qa summary { cursor: pointer; font-weight: 700; font-size: 1.08rem; list-style: none; }
+  .qa summary { cursor: pointer; font-weight: 700; font-size: 1.02rem; list-style: none; }
   .qa summary::-webkit-details-marker { display: none; }
   .qa summary::before { content: "\25B8\FE0E  "; color: var(--accent); }
   .qa details[open] summary::before { content: "\25BE\FE0E  "; }
-  .qa .ans { margin: 8px 0 0; color: var(--muted); font-size: 1rem; }
+  .qa .ans { margin: 10px 0 0; color: var(--muted); font-size: 1rem; }
+  .qa .ans b { color: var(--ink); }
+  .vocab-chips { display: flex; flex-wrap: wrap; gap: 10px; max-width: 70ch; }
+  .vchip {
+    background: var(--card); border: 2.5px solid var(--line); border-radius: 999px;
+    padding: 7px 16px; font-size: 0.95rem; font-family: system-ui, sans-serif;
+  }
+  .vchip b { font-family: Charter, Georgia, serif; font-size: 1.02rem; }
+  .vchip span { color: var(--muted); }
+  .gcall {
+    background: var(--deep); color: #FFFFFF; border: 3px solid var(--line); border-radius: 22px;
+    padding: 20px 24px; box-shadow: 6px 6px 0 var(--shadow); max-width: 560px; margin: 28px 0 6px;
+  }
+  .gcall .label { color: #FFD23F; display: block; margin-bottom: 8px; }
+  .gcall p { margin: 0 0 10px; font-size: 1rem; }
+  .gcall .gx { font-family: system-ui, sans-serif; font-size: 0.98rem; background: rgba(0,0,0,0.22); border-radius: 12px; padding: 10px 14px; margin: 0; }
   .stage-note { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.88rem; margin: 0 0 14px; text-align: center; }
   @media (max-width: 800px) {
     .wrap { padding-left: 34px; padding-right: 34px; }
@@ -192,12 +208,12 @@
 
 
 <nav class="wrap crumbs" aria-label="Breadcrumb">
-  <a href="/spanish-reading-practice">Reading practice</a> &rsaquo; <span aria-current="page">Staying safe</span>
+  <a href="/spanish-reading-practice">Reading practice</a> &rsaquo; <span aria-current="page">Mantenerse a salvo</span>
 </nav>
 
 <section class="wrap hero-min">
   <span class="label eyebrow">Intermediate · Spanish reading practice</span>
-  <h1 class="display">Staying safe</h1>
+  <h1 class="display alt-title"><span class="alt-es" lang="es">Mantenerse a salvo</span><span class="alt-en" lang="en" aria-hidden="true">Staying safe</span></h1>
   <p>An intermediate Spanish reading exercise: a real page from <i lang="es">Una alianza improbable</i>, from the <i lang="es">El superviviente</i> collection &mdash; an original Comigo comic, voiced line by line.</p>
   <p>
     Look at the whole page first &mdash; who is there and what is happening? Then read the
@@ -225,16 +241,43 @@
 <div class="wrap visually-hidden"><p lang="es">Y tú los mantendrás a salvo. — And you will keep them safe. Y ayudarán a mantenernos a salvo... — And they will help keep us safe... Tiene razón. Por eso nos quedamos... — He&#x27;s right. That&#x27;s why we stayed... ¿Y cómo sugieres que hagamos eso? — And how do you suggest we do that?  Deja que yo me preocupe por los detalles. — Let me worry about the details.</p></div>
 
 <section class="wrap practice">
-  <h3 class="display">Read the Spanish</h3>
-  <p class="hint-line">Try each line on your own first, then tap it for the English.</p>
-  <div class="qa">
-    <details><summary lang="es">Y tú los mantendrás a salvo.</summary><p class="ans">And you will keep them safe.</p></details>
-    <details><summary lang="es">Y ayudarán a mantenernos a salvo...</summary><p class="ans">And they will help keep us safe...</p></details>
-    <details><summary lang="es">Tiene razón. Por eso nos quedamos...</summary><p class="ans">He&#x27;s right. That&#x27;s why we stayed...</p></details>
-    <details><summary lang="es">¿Y cómo sugieres que hagamos eso?</summary><p class="ans">And how do you suggest we do that? </p></details>
-    <details><summary lang="es">Deja que yo me preocupe por los detalles.</summary><p class="ans">Let me worry about the details.</p></details>
+  <h3 class="display">How much did you understand?</h3>
+  <div class="qa" lang="es">
+    <details><summary>1. &iquest;Qu&eacute; har&aacute;n para mantenerse a salvo?</summary><p class="ans"><b>Se ayudar&aacute;n unos a otros</b> &mdash; &laquo;Y ayudar&aacute;n a mantenernos a salvo...&raquo;</p></details>
+    <details><summary>2. &iquest;Por qu&eacute; deciden quedarse?</summary><p class="ans"><b>Porque creen que tiene raz&oacute;n</b> &mdash; &laquo;Tiene raz&oacute;n. Por eso nos quedamos...&raquo;</p></details>
+    <details><summary>3. &iquest;Qui&eacute;n se ocupar&aacute; de los detalles?</summary><p class="ans"><b>El hombre que dice: &laquo;Deja que yo me preocupe por los detalles.&raquo;</b></p></details>
+    <details><summary>4. &iquest;Parece que todos est&aacute;n de acuerdo con el plan?</summary><p class="ans"><b>No del todo</b> &mdash; uno de ellos todav&iacute;a pregunta: &laquo;&iquest;Y c&oacute;mo sugieres que hagamos eso?&raquo;</p></details>
   </div>
+
+  <h3 class="display">Need some help?</h3>
+  <div class="vocab-chips">
+    <span class="vchip"><b lang="es">mantener a salvo</b> <span>&mdash; to keep safe</span></span>
+    <span class="vchip"><b lang="es">mantenernos a salvo</b> <span>&mdash; to keep us safe</span></span>
+    <span class="vchip"><b lang="es">tener raz&oacute;n</b> <span>&mdash; to be right</span></span>
+    <span class="vchip"><b lang="es">por eso</b> <span>&mdash; that&rsquo;s why / for that reason</span></span>
+    <span class="vchip"><b lang="es">quedarse</b> <span>&mdash; to stay</span></span>
+    <span class="vchip"><b lang="es">sugerir</b> <span>&mdash; to suggest</span></span>
+    <span class="vchip"><b lang="es">deja que yo...</b> <span>&mdash; let me...</span></span>
+    <span class="vchip"><b lang="es">preocuparse por</b> <span>&mdash; to worry about</span></span>
+    <span class="vchip"><b lang="es">los detalles</b> <span>&mdash; the details</span></span>
+  </div>
+
+  <div class="gcall">
+    <span class="label">Why &ldquo;hagamos&rdquo;?</span>
+    <p>
+      In <i lang="es">&ldquo;&iquest;C&oacute;mo sugieres que hagamos eso?&rdquo;</i>, <i lang="es">hagamos</i> comes from
+      <i lang="es">hacer</i>. After expressions such as <i lang="es">sugerir que</i>, Spanish commonly uses
+      the subjunctive when talking about a suggested action.
+    </p>
+    <p class="gx">
+      <b lang="es">hacer &rarr; hagamos</b><br>
+      <span lang="es">&iquest;C&oacute;mo sugieres que hagamos eso?</span><br>
+      <i>How do you suggest we do that?</i>
+    </p>
+  </div>
+
 </section>
+
 
 <section class="band">
   <div class="wrap">
@@ -271,20 +314,11 @@
   .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: 4px; }
 </style>
 <section class="wrap ex-links">
-  <a class="ex-card" href="/examples/a-small-town">
-    <img loading="lazy" decoding="async" src="/assets/example-a-small-town.11ff2274.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="label">Beginner</span>
-      <h3 class="display">A small town</h3>
-      <span class="ex-src" lang="es">La carta negra · El rey negro</span>
-      <span class="ex-go">Read this page &rarr;</span>
-    </div>
-  </a>
   <a class="ex-card" href="/examples/looking-for-work">
     <img loading="lazy" decoding="async" src="/assets/example-looking-for-work.309e36d0.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="label">Beginner</span>
-      <h3 class="display">Looking for work</h3>
+      <h3 class="display alt-title"><span class="alt-es" lang="es">Buscando trabajo</span><span class="alt-en" lang="en" aria-hidden="true">Looking for work</span></h3>
       <span class="ex-src" lang="es">Primer turno · El restaurante</span>
       <span class="ex-go">Read this page &rarr;</span>
     </div>
@@ -293,8 +327,26 @@
     <img loading="lazy" decoding="async" src="/assets/example-meeting-zik.c67392d4.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="label">Beginner</span>
-      <h3 class="display">Meeting Zik</h3>
+      <h3 class="display alt-title"><span class="alt-es" lang="es">Conociendo a Zik</span><span class="alt-en" lang="en" aria-hidden="true">Meeting Zik</span></h3>
       <span class="ex-src" lang="es">La llegada · El visitante</span>
+      <span class="ex-go">Read this page &rarr;</span>
+    </div>
+  </a>
+  <a class="ex-card" href="/examples/in-the-room-1">
+    <img loading="lazy" decoding="async" src="/assets/example-in-the-room-1.f89d7639.webp" width="640" height="960" alt="">
+    <div class="ex-card-body">
+      <span class="label">Beginner</span>
+      <h3 class="display alt-title"><span class="alt-es" lang="es">En la habitación</span><span class="alt-en" lang="en" aria-hidden="true">In the room</span></h3>
+      <span class="ex-src" lang="es">Leer el ambiente</span>
+      <span class="ex-go">Read this page &rarr;</span>
+    </div>
+  </a>
+  <a class="ex-card" href="/examples/a-small-town">
+    <img loading="lazy" decoding="async" src="/assets/example-a-small-town.11ff2274.webp" width="640" height="960" alt="">
+    <div class="ex-card-body">
+      <span class="label">Beginner</span>
+      <h3 class="display alt-title"><span class="alt-es" lang="es">Un pueblo pequeño</span><span class="alt-en" lang="en" aria-hidden="true">A small town</span></h3>
+      <span class="ex-src" lang="es">La carta negra · El rey negro</span>
       <span class="ex-go">Read this page &rarr;</span>
     </div>
   </a>
@@ -770,6 +822,20 @@
     sheet.querySelector('.sh-done').addEventListener('click', closeSheet);
   });
 })();
+</script>
+
+<style>
+  .alt-title { display: grid; }
+  .alt-title > span { grid-area: 1 / 1; transition: opacity 0.45s ease; }
+  .alt-title > .alt-en { opacity: 0; }
+  .alt-title.show-en > .alt-es { opacity: 0; }
+  .alt-title.show-en > .alt-en { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .alt-title > span { transition: none; } }
+</style>
+<script>
+  setInterval(function () {
+    document.querySelectorAll('.alt-title').forEach(function (t) { t.classList.toggle('show-en'); });
+  }, 2000);
 </script>
 
 </body>

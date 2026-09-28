@@ -2548,6 +2548,7 @@ router.get('/examples', async (req, res) => {
           comicId: c.id, comicTitle: c.title, collectionTitle: c.collectionTitle || '',
           pageId: p.id, kind, isExampleComic: !!c.isExample,
           label: p.exampleLabel || (kind === 'comic' ? `Page ${p.pageNumber}` : 'Example'), pageNumber: p.pageNumber,
+          title: p.exampleTitle || p.exampleLabel || '', titleEn: p.exampleTitleEn || '',
           image: (p.bakedImage || p.masterImage || '').split('?')[0],
           bubbles: bubbles.length,
           missingAudio: bubbles.filter(b => (b.sentences || []).some(s => (s.text || '').trim() && !s.audioUrl)).length,
@@ -2566,6 +2567,30 @@ router.get('/examples', async (req, res) => {
 // to site/audio/ex-<slug>-*.mp3 and the bubble data to
 // site/examples/<slug>.json. A site page embeds it with {{EXAMPLE:<slug>}}.
 // Missing "Explain further" texts are generated and saved on the words.
+// PUT /api/marketing/examples/:comicId/:pageId/title — the example's site
+// title (Spanish) and optional English title. Takes effect on the next Publish.
+router.put('/examples/:comicId/:pageId/title', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    let list = 'examplePages';
+    let idx = (comic.examplePages || []).findIndex(p => p.id === req.params.pageId);
+    if (idx < 0 && comic.isExample) {
+      list = 'pages';
+      idx = (comic.pages || []).findIndex(p => p.id === req.params.pageId);
+    }
+    if (idx < 0) return res.status(404).json({ error: 'Example page not found' });
+    const clean = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    await Comic.updateOne({ id: comic.id }, { $set: {
+      [`${list}.${idx}.exampleTitle`]: clean(req.body.title),
+      [`${list}.${idx}.exampleTitleEn`]: clean(req.body.titleEn),
+    } });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
   try {
     const { sanitizeWordForFilename } = require('../services/readerFormat');
@@ -2705,7 +2730,7 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
 
     const meta = await require('sharp')(imgSrc).metadata();
     const data = {
-      slug, label: page.exampleLabel || '', comic: comic.title || '', collection: comic.collectionTitle || '',
+      slug, label: page.exampleTitle || page.exampleLabel || '', labelEn: page.exampleTitleEn || '', comic: comic.title || '', collection: comic.collectionTitle || '',
       level: comic.level || '',
       image: `example-${slug}`, width: meta.width, height: meta.height,
       publishedAt: new Date().toISOString(),
