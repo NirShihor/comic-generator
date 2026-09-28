@@ -287,6 +287,10 @@ function ComicEditor() {
   const [styleSheetPrompt, setStyleSheetPrompt] = useState('');
   const [styleSheetProvider, setStyleSheetProvider] = useState('gemini');
   const [styleSheetQuality, setStyleSheetQuality] = useState('high'); // OpenAI: 'high' | 'medium'
+  // 'simple': the brief goes straight to the model with the original reference files.
+  // 'planned': the fixed comic wording + a GPT rewrite of the brief before drawing.
+  const [styleSheetPipeline, setStyleSheetPipeline] = useState('simple');
+  const [styleSheetImageModel, setStyleSheetImageModel] = useState('gpt-image-2'); // OpenAI image model
   const [styleSheetAspect, setStyleSheetAspect] = useState('landscape');
   const [styleSheetGenerating, setStyleSheetGenerating] = useState(false);
   const [styleSheetGallery, setStyleSheetGallery] = useState([]);
@@ -1401,6 +1405,23 @@ function ComicEditor() {
     return `${lead}\n\nScene: ${userPrompt.trim()}\n\n${layout}${negTail}${styleDetail}`;
   };
 
+  // The 'simple' brief: lets the references define the style instead of fixed
+  // style wording, the extracted style text and the negatives.
+  const buildSimpleStyleSheetPrompt = (mode, userPrompt) => {
+    const layout = mode === 'location'
+      ? 'Create a location reference sheet: a wide establishing view, an alternate angle, and a close detail. Keep the location consistent across views.'
+      : "Create a character turnaround sheet: front, three-quarter, side and back views at matching scale, plus two expression close-ups. Keep the character's identity and clothing consistent.";
+    return `Draw the requested subject using the attached images as visual style references.
+Match their line quality, shape simplification, shading, color application,
+and degree of finish. Preserve visible irregularities and selective detail.
+Use the references for drawing style; do not copy their subjects or scenes.
+
+${layout}
+
+User brief:
+${userPrompt.trim()}`;
+  };
+
   const styleSheetGenerate = async () => {
     if (!styleSheetPrompt.trim() || styleSheetGenerating) return;
     const refs = settings.styleSheetImages || [];
@@ -1413,19 +1434,26 @@ function ComicEditor() {
     setStyleSheetGenerating(true);
     try {
       const response = await api.post('/images/generate-stylesheet', {
-        prompt: buildStyleSheetPrompt(styleSheetMode, styleSheetPrompt),
+        prompt: styleSheetPipeline === 'simple'
+          ? buildSimpleStyleSheetPrompt(styleSheetMode, styleSheetPrompt)
+          : buildStyleSheetPrompt(styleSheetMode, styleSheetPrompt),
         provider: styleSheetProvider,
         aspectRatio: styleSheetAspect,
         referenceImages: refs.map(r => r.path),
-        openaiQuality: styleSheetQuality
+        openaiQuality: styleSheetQuality,
+        pipeline: styleSheetPipeline,
+        imageModel: styleSheetImageModel
       }, { timeout: 600000, signal: controller.signal });
       const newItem = {
         path: response.data.path,
         prompt: styleSheetPrompt,
         promptSent: response.data.promptSent,
+        revisedPrompt: response.data.revisedPrompt,
         refsLoaded: response.data.refsLoaded,
         mode: styleSheetMode,
         provider: styleSheetProvider,
+        pipeline: styleSheetPipeline,
+        imageModel: response.data.imageModel,
         aspect: styleSheetAspect,
         timestamp: Date.now()
       };
@@ -1445,8 +1473,8 @@ function ComicEditor() {
     styleSheetAbortRef.current?.abort();
   };
 
-  // Refine an existing generated sheet: the sheet itself is the only reference,
-  // and the prompt demands an exact reproduction except for the instruction.
+  // Refine an existing generated sheet: the sheet is the image to EDIT (not a style
+  // reference), and the prompt demands an exact reproduction except for the instruction.
   const styleSheetRefine = async (item) => {
     const instruction = (styleSheetRefineTexts[item.path] || '').trim();
     if (!instruction || styleSheetGenerating) return;
@@ -1454,21 +1482,26 @@ function ComicEditor() {
     styleSheetAbortRef.current = controller;
     setStyleSheetGenerating(true);
     try {
-      const refinePrompt = `REFINEMENT of an existing reference sheet. The attached image IS the current sheet. Reproduce it EXACTLY — same subject, same layout, same panels and poses, same art style, same colours — changing ONLY the following:\n${instruction}\nDo not redesign anything else. Do not change the layout.`;
+      const refinePrompt = `Image 1 is the existing reference sheet to edit. Preserve its subjects, layout, panels, poses, art style, colours and all details except the requested change.\nRequested change: ${instruction}\nDo not redesign anything else. Do not change the layout.`;
       const response = await api.post('/images/generate-stylesheet', {
         prompt: refinePrompt,
         provider: styleSheetProvider,
         aspectRatio: item.aspect || styleSheetAspect,
         referenceImages: [item.path],
-        openaiQuality: styleSheetQuality
+        openaiQuality: styleSheetQuality,
+        refine: true,
+        imageModel: styleSheetImageModel
       }, { timeout: 600000, signal: controller.signal });
       const newItem = {
         path: response.data.path,
         prompt: `[Refine] ${instruction}`,
         promptSent: response.data.promptSent,
+        revisedPrompt: response.data.revisedPrompt,
         refsLoaded: response.data.refsLoaded,
         mode: item.mode,
         provider: styleSheetProvider,
+        pipeline: 'refine',
+        imageModel: response.data.imageModel,
         aspect: item.aspect || styleSheetAspect,
         timestamp: Date.now()
       };
@@ -5467,6 +5500,18 @@ function ComicEditor() {
                   <button className={`btn btn-sm ${styleSheetQuality === 'medium' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetQuality('medium')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Medium (~4x cheaper)</button>
                 </div>
               )}
+              {styleSheetProvider === 'openai' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span style={{ fontSize: '0.85rem', color: '#666', marginRight: '0.25rem' }}>Model:</span>
+                  <button className={`btn btn-sm ${styleSheetImageModel === 'gpt-image-2' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetImageModel('gpt-image-2')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>gpt-image-2</button>
+                  <button className={`btn btn-sm ${styleSheetImageModel === 'gpt-image-2.5-sunburst' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetImageModel('gpt-image-2.5-sunburst')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>2.5 sunburst</button>
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} title="Simple: your brief goes to the model as written, with the original reference files. Planned: fixed comic wording, and (ChatGPT) a GPT rewrite of the brief before drawing.">
+                <span style={{ fontSize: '0.85rem', color: '#666', marginRight: '0.25rem' }}>Prompt:</span>
+                <button className={`btn btn-sm ${styleSheetPipeline === 'simple' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetPipeline('simple')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Simple</button>
+                <button className={`btn btn-sm ${styleSheetPipeline === 'planned' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetPipeline('planned')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Planned</button>
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                 <span style={{ fontSize: '0.85rem', color: '#666', marginRight: '0.25rem' }}>Aspect:</span>
                 <button className={`btn btn-sm ${styleSheetAspect === 'landscape' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStyleSheetAspect('landscape')} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>Landscape</button>
@@ -5515,7 +5560,7 @@ function ComicEditor() {
                         style={{ width: '100%', borderRadius: '6px', cursor: 'pointer', display: 'block' }}
                       />
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase' }}>{item.mode} · {item.provider}{typeof item.refsLoaded === 'number' ? ` · ${item.refsLoaded} ref(s) sent` : ''}</span>
+                        <span style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase' }}>{item.mode} · {item.provider}{item.imageModel ? ` · ${item.imageModel}` : ''}{item.pipeline ? ` · ${item.pipeline}` : ''}{typeof item.refsLoaded === 'number' ? ` · ${item.refsLoaded} ref(s) sent` : ''}</span>
                         <button onClick={() => styleSheetSaveAsCharacter(item)} className="btn btn-primary btn-sm" style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}>Save as Character</button>
                         <button onClick={() => styleSheetSaveToStyleBible(item)} className="btn btn-secondary btn-sm" style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}>Add to Style Bible</button>
                         <button onClick={() => styleSheetDownload(item)} className="btn btn-secondary btn-sm" style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}>Download</button>
@@ -5546,6 +5591,12 @@ function ComicEditor() {
                         <details style={{ marginTop: '0.4rem' }}>
                           <summary style={{ cursor: 'pointer', fontSize: '0.72rem', color: '#888' }}>Prompt sent to model</summary>
                           <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.7rem', color: '#aaa', background: '#11111a', padding: '0.5rem', borderRadius: '6px', marginTop: '0.3rem', maxHeight: '200px', overflow: 'auto' }}>{item.promptSent}</pre>
+                        </details>
+                      )}
+                      {item.revisedPrompt && (
+                        <details style={{ marginTop: '0.3rem' }}>
+                          <summary style={{ cursor: 'pointer', fontSize: '0.72rem', color: '#888' }}>Revised prompt (what the image model drew from)</summary>
+                          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.7rem', color: '#aaa', background: '#11111a', padding: '0.5rem', borderRadius: '6px', marginTop: '0.3rem', maxHeight: '200px', overflow: 'auto' }}>{item.revisedPrompt}</pre>
                         </details>
                       )}
                     </div>
