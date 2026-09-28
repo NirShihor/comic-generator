@@ -151,10 +151,29 @@ function cornersToTapZone(corners) {
   };
 }
 
+// Remove audio tags like [sighs] or [fade out] from a sequence of words.
+// ElevenLabs' word timings split text at spaces, so a two-word tag written
+// against a word ("mamá...[fade out]") arrives as "mamá...[fade" + "out]";
+// the bracket state therefore carries across words. An unclosed "[" drops
+// everything after it. Returns each word with its tag parts removed ('' =
+// nothing left).
+function removeAudioTagPieces(words) {
+  let inTag = false;
+  return words.map(w => {
+    let out = '';
+    for (const ch of (w || '')) {
+      if (inTag) { if (ch === ']') inTag = false; continue; }
+      if (ch === '[') { inTag = true; continue; }
+      out += ch;
+    }
+    return out.trim();
+  });
+}
+
 // Strip audio enhancement tags like [sighs], [pause], [ominous, slowly] and quotation marks from text
 function stripAudioTags(text) {
   if (!text) return text;
-  return text.replace(/\[[^\]]+\]/g, '').replace(/["]/g, '').replace(/\s+/g, ' ').trim();
+  return removeAudioTagPieces([text])[0].replace(/["]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 // Check if a line exists between two adjacent cells
@@ -938,10 +957,11 @@ function PageEditor({ isCover = false }) {
       const normWord = (s) => (s || '').toLowerCase().replace(/[.,!?;:"""''¿¡…\[\]]/g, '').trim();
       const cleanWord = (s) => (s || '').replace(/[.,!?;:"""''¿¡…\[\]]+/g, '').trim();
       const audioTagWords = new Set(['slowly', 'whispering', 'shouting', 'frightened', 'surprised', 'amazed', 'hopeful', 'worried', 'excited', 'pause', 'sighs', 'laughs', 'cries', 'gasps', 'whispers', 'shouts', 'sad', 'angry', 'happy', 'fearful', 'fearfully', 'very', 'emphasise', 'emphasize', 'emphasised', 'emphasized', 'fade', 'fades', 'fading', 'assertive', 'assertively', 'pleading', 'pleads', 'loud', 'loudly']);
-      const stripTags = (w) => w.replace(/\[.*?\]/g, '').trim();
-      const isAudioTag = (w) => { const cleaned = stripTags(w); return !cleaned || audioTagWords.has(normWord(cleaned)); };
-      const allWords = timestamps.filter(t => !isAudioTag(t.word)).map(t => {
-        t = { ...t, word: stripTags(t.word) || t.word };
+      const untagged = removeAudioTagPieces(timestamps.map(t => t.word));
+      const allWords = timestamps
+        .map((t, i) => ({ ...t, word: untagged[i] }))
+        .filter(t => t.word && !audioTagWords.has(normWord(t.word)))
+        .map(t => {
         const normalised = normWord(t.word);
         const existing = existingWords.find(w => normWord(w.text) === normalised);
         return {
