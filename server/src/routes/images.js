@@ -10,8 +10,9 @@ const sharp = require('sharp');
 const { GoogleGenAI } = require('@google/genai');
 // OpenAI image model used for every ChatGPT-provider image call in this file.
 // Tried gpt-image-2.5-sunburst on 2026-09-10 — it drifted photorealistic and lost the
-// hand-drawn comic look, so reverted the same day. gpt-image-2.5-flare untested.
-const OPENAI_IMAGE_MODEL = 'gpt-image-2';
+// hand-drawn comic look, so reverted the same day. Back on sunburst from 2026-09-28
+// for a second trial; revert to 'gpt-image-2' if pages drift again. gpt-image-2.5-flare untested.
+const OPENAI_IMAGE_MODEL = 'gpt-image-2.5-sunburst';
 
 // Generate image using Gemini API
 async function generateWithGemini(prompt, styleRefPaths = [], linkedRefPaths = [], isAngleChange = false, aspectRatio = 'square', annotationsMap = {}, hasMasterStyleImage = false) {
@@ -924,15 +925,27 @@ router.post('/generate-studio', (req, res) => {
 // reasons about it before drawing (far stronger style adherence than images.edit,
 // and it won't collapse to a photo for real place names). Gemini already reasons
 // over refs natively, so it keeps its normal path.
+//
+// OpenAI pipelines:
+//   planned — GPT first rewrites the brief into a short in-style prompt, then draws
+//             (references downscaled to 1024px JPEG).
+//   simple  — the brief goes straight to the image tool with the original reference
+//             files; no rewrite. For comparing against `planned`.
+// refine: the single reference IS the sheet to edit (action "edit"); never a
+// style-only reference, never rewritten.
+const STYLESHEET_IMAGE_MODELS = ['gpt-image-2', 'gpt-image-2.5-sunburst'];
 router.post('/generate-stylesheet', (req, res) => {
   withKeepAlive(res, async () => {
-    const { prompt, provider = 'openai', aspectRatio = 'landscape', referenceImages, openaiQuality = 'high' } = req.body;
+    const { prompt, provider = 'openai', aspectRatio = 'landscape', referenceImages, openaiQuality = 'high',
+            pipeline = 'planned', refine = false } = req.body;
     if (!prompt) return { error: 'Prompt is required.' };
+    const imageModel = STYLESHEET_IMAGE_MODELS.includes(req.body.imageModel) ? req.body.imageModel : OPENAI_IMAGE_MODEL;
 
     const styleRefs = referenceImages || [];
     let buffer;
     let refsLoaded = 0;
     let promptSent = prompt;
+    let revisedPrompt = null;
 
     let size = '1024x1024';
     if (aspectRatio === 'portrait') size = '1024x1536';
@@ -951,25 +964,40 @@ router.post('/generate-stylesheet', (req, res) => {
     } else {
       if (!process.env.OPENAI_API_KEY) return { error: 'OpenAI API key not configured.' };
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const direct = refine || pipeline === 'simple';
 
-      // Attach style references as input_image so the model can study them.
+      // Attach the references as input_image so the model can study them: the
+      // original files for the direct paths, a 1024px JPEG for the planned one.
       const refImageParts = [];
       for (const imgPath of styleRefs) {
         try {
           const full = path.join(__dirname, '../..', imgPath);
           await fs.access(full);
-          const buf = await sharp(full).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
-          refImageParts.push({ type: 'input_image', image_url: `data:image/jpeg;base64,${buf.toString('base64')}` });
+          let dataUrl;
+          if (direct) {
+            const ext = path.extname(full).toLowerCase();
+            const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : 'image/png';
+            dataUrl = `data:${mime};base64,${(await fs.readFile(full)).toString('base64')}`;
+          } else {
+            const buf = await sharp(full).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+            dataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
+          }
+          refImageParts.push({ type: 'input_image', image_url: dataUrl });
           refsLoaded++;
         } catch (err) {
           console.log(`Style sheet ref not found, skipping: ${imgPath}`);
         }
       }
 
-      // STEP 1 — GPT studies the reference and writes a TIGHT, front-loaded in-style
-      // prompt. Image models weight the earliest tokens hardest and dilute long lists,
-      // so we force: medium first, ~6-8 descriptors, scene last, no real place names.
-      const planInstruction = `${refsLoaded > 0 ? `The attached image${refsLoaded > 1 ? 's are a' : ' is a'} STYLE REFERENCE — study its art style (medium, line work, shading, colour palette, level of stylization).\n\n` : ''}Write ONE TIGHT image-generation prompt (TARGET 60-90 words, never longer). Image models weight the earliest words most and ignore long adjective lists, so order and brevity matter more than completeness. Structure it EXACTLY:
+      const toolQuality = openaiQuality === 'medium' ? 'medium' : 'high';
+      let genInstruction;
+      if (direct) {
+        genInstruction = prompt;
+      } else {
+        // STEP 1 — GPT studies the reference and writes a TIGHT, front-loaded in-style
+        // prompt. Image models weight the earliest tokens hardest and dilute long lists,
+        // so we force: medium first, ~6-8 descriptors, scene last, no real place names.
+        const planInstruction = `${refsLoaded > 0 ? `The attached image${refsLoaded > 1 ? 's are a' : ' is a'} STYLE REFERENCE — study its art style (medium, line work, shading, colour palette, level of stylization).\n\n` : ''}Write ONE TIGHT image-generation prompt (TARGET 60-90 words, never longer). Image models weight the earliest words most and ignore long adjective lists, so order and brevity matter more than completeness. Structure it EXACTLY:
 1. OPEN with the medium and a concrete style anchor, stating it is NOT a photograph — e.g. "Korean webtoon / slice-of-life manga comic panel, hand-drawn cel-shaded illustration, NOT a photograph, NOT 3D".
 2. Then ONLY the 6-8 highest-signal style descriptors (linework, shading, palette, lighting, finish). Drop everything else.
 3. END with the scene/subject, described by concrete GEOMETRY and materials — NEVER a real place name (a real toponym pulls hard toward photographic training data). Preserve the requested reference-sheet layout (multiple views/angles on one plain-background sheet).
@@ -978,27 +1006,30 @@ Output ONLY the prompt text — no preamble, no commentary.
 Brief to compress and reorder:
 ${prompt}`;
 
-      console.log(`Style sheet step 1 (plan): refsLoaded=${refsLoaded}`);
-      const planResp = await openai.responses.create({
-        model: 'gpt-5.5',
-        input: [{ role: 'user', content: [...refImageParts, { type: 'input_text', text: planInstruction }] }]
-      });
-      const plan = (planResp.output_text || '').trim() || prompt;
+        console.log(`Style sheet step 1 (plan): refsLoaded=${refsLoaded}`);
+        const planResp = await openai.responses.create({
+          model: 'gpt-5.5',
+          input: [{ role: 'user', content: [...refImageParts, { type: 'input_text', text: planInstruction }] }]
+        });
+        const plan = (planResp.output_text || '').trim() || prompt;
 
-      // STEP 2 — feed that prompt back (with the reference) to actually generate.
-      const hardClose = `\n\nABSOLUTE REQUIREMENT: a flat, hand-drawn ILLUSTRATION in the reference's comic/illustrated style — NOT a photograph, NOT photorealistic, NOT a 3D render.`;
-      const genInstruction = `${refsLoaded > 0 ? 'Use the attached image only as a STYLE REFERENCE for the look (copy none of its content). ' : ''}Generate an image from the following prompt:\n\n${plan}${hardClose}`;
+        // STEP 2 — feed that prompt back (with the reference) to actually generate.
+        const hardClose = `\n\nABSOLUTE REQUIREMENT: a flat, hand-drawn ILLUSTRATION in the reference's comic/illustrated style — NOT a photograph, NOT photorealistic, NOT a 3D render.`;
+        genInstruction = `${refsLoaded > 0 ? 'Use the attached image only as a STYLE REFERENCE for the look (copy none of its content). ' : ''}Generate an image from the following prompt:\n\n${plan}${hardClose}`;
+      }
       promptSent = genInstruction;
 
-      const toolQuality = openaiQuality === 'medium' ? 'medium' : 'high';
-      console.log(`Style sheet step 2 (generate): planLen=${plan.length}, quality=${toolQuality}`);
+      console.log(`Style sheet generate: pipeline=${refine ? 'refine' : pipeline}, model=${imageModel}, quality=${toolQuality}, refsLoaded=${refsLoaded}`);
       const response = await openai.responses.create({
         model: 'gpt-5.5',
         input: [{ role: 'user', content: [...refImageParts, { type: 'input_text', text: genInstruction }] }],
-        tools: [{ type: 'image_generation', model: OPENAI_IMAGE_MODEL, quality: toolQuality, size }]
+        tools: [{ type: 'image_generation', model: imageModel, quality: toolQuality, size,
+                  ...(direct ? { action: refine ? 'edit' : 'generate' } : {}) }],
+        ...(direct ? { tool_choice: { type: 'image_generation' } } : {})
       });
       const imageOutput = response.output.find(o => o.type === 'image_generation_call');
       if (!imageOutput || !imageOutput.result) throw new Error('Responses API returned no image');
+      revisedPrompt = imageOutput.revised_prompt || null;
       buffer = Buffer.from(imageOutput.result, 'base64');
     }
 
@@ -1009,7 +1040,8 @@ ${prompt}`;
     await fs.writeFile(filePath, buffer);
 
     console.log(`Style sheet generated: ${filename} (provider=${provider}, refsLoaded=${refsLoaded})`);
-    return { filename, path: `/uploads/${filename}`, promptSent, refsLoaded, provider };
+    return { filename, path: `/uploads/${filename}`, promptSent, revisedPrompt, refsLoaded, provider,
+             imageModel: provider === 'openai' ? imageModel : null };
   });
 });
 
