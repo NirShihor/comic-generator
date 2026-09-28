@@ -229,6 +229,11 @@ const PageSchema = new mongoose.Schema({
   // Set on example pages (comic.examplePages): single pages published to
   // comigo.net as interactive demos. Never exported to the reader.
   exampleLabel: String,
+  // Site title for a published example (overrides exampleLabel on comigo.net)
+  // and an optional English title the page heading alternates with. Separate
+  // from exampleLabel, which also marks a page as a standalone example.
+  exampleTitle: String,
+  exampleTitleEn: String,
   exampleSlug: String,
   examplePublishedAt: Date,
   // Last challenge reel built from this page (file in projects/<id>/marketing) and the settings used.

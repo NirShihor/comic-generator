@@ -2,21 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Meeting Zik — Beginner Spanish Reading Practice | Comigo</title>
+<title>Conociendo a Zik — Beginner Spanish Reading Practice | Comigo</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Read &quot;Meeting Zik&quot;, a beginner Spanish comic page from La llegada. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
+<meta name="description" content="Read &quot;Conociendo a Zik&quot;, a beginner Spanish comic page from La llegada. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
 <link rel="canonical" href="https://comigo.net/examples/meeting-zik">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Comigo">
-<meta property="og:title" content="Meeting Zik — Beginner Spanish Reading Practice | Comigo">
-<meta property="og:description" content="Read &quot;Meeting Zik&quot;, a beginner Spanish comic page from La llegada. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
+<meta property="og:title" content="Conociendo a Zik — Beginner Spanish Reading Practice | Comigo">
+<meta property="og:description" content="Read &quot;Conociendo a Zik&quot;, a beginner Spanish comic page from La llegada. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
 <meta property="og:url" content="https://comigo.net/examples/meeting-zik">
 <meta property="og:image" content="https://comigo.net/og-image.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Meeting Zik — Beginner Spanish Reading Practice | Comigo">
-<meta name="twitter:description" content="Read &quot;Meeting Zik&quot;, a beginner Spanish comic page from La llegada. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
+<meta name="twitter:title" content="Conociendo a Zik — Beginner Spanish Reading Practice | Comigo">
+<meta name="twitter:description" content="Read &quot;Conociendo a Zik&quot;, a beginner Spanish comic page from La llegada. Tap a bubble to hear every line, tap any word for its meaning, and check the English.">
 <meta name="twitter:image" content="https://comigo.net/og-image.jpg">
 <link rel="icon" type="image/png" sizes="196x196" href="/favicon.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
@@ -71,24 +71,40 @@
   .hero-min { padding: 18px 24px 8px; }
   .hero-min .eyebrow { color: var(--accent); display: block; margin-bottom: 12px; }
   .hero-min h1 { margin: 0 0 16px; font-size: clamp(1.9rem, 4vw, 2.7rem); }
+  /* Spanish / English title, alternating every 2s (stacked in one grid cell
+     so the heading doesn't jump). */
   .hero-min p { max-width: 62ch; margin: 0 0 12px; font-size: 1.06rem; }
   .strip-head { padding: 34px 24px 6px; }
   .strip-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
   .strip-head .eyebrow { color: var(--accent); display: block; margin-bottom: 10px; }
   .strip-head p { margin: 10px 0 0; color: var(--muted); max-width: 62ch; }
   .practice { padding: 4px 24px 0; }
-  .practice h3 { font-size: 1.35rem; margin: 30px 0 6px; }
-  .practice .hint-line { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.9rem; margin: 0 0 12px; }
+  .practice h3 { font-size: 1.35rem; margin: 30px 0 12px; }
   .qa { display: flex; flex-direction: column; gap: 10px; max-width: 66ch; }
   .qa details {
     background: var(--card); border: 3px solid var(--line); border-radius: 12px;
     padding: 12px 16px; box-shadow: 4px 4px 0 var(--shadow);
   }
-  .qa summary { cursor: pointer; font-weight: 700; font-size: 1.08rem; list-style: none; }
+  .qa summary { cursor: pointer; font-weight: 700; font-size: 1.02rem; list-style: none; }
   .qa summary::-webkit-details-marker { display: none; }
   .qa summary::before { content: "\25B8\FE0E  "; color: var(--accent); }
   .qa details[open] summary::before { content: "\25BE\FE0E  "; }
-  .qa .ans { margin: 8px 0 0; color: var(--muted); font-size: 1rem; }
+  .qa .ans { margin: 10px 0 0; color: var(--muted); font-size: 1rem; }
+  .qa .ans b { color: var(--ink); }
+  .vocab-chips { display: flex; flex-wrap: wrap; gap: 10px; max-width: 70ch; }
+  .vchip {
+    background: var(--card); border: 2.5px solid var(--line); border-radius: 999px;
+    padding: 7px 16px; font-size: 0.95rem; font-family: system-ui, sans-serif;
+  }
+  .vchip b { font-family: Charter, Georgia, serif; font-size: 1.02rem; }
+  .vchip span { color: var(--muted); }
+  .gcall {
+    background: var(--deep); color: #FFFFFF; border: 3px solid var(--line); border-radius: 22px;
+    padding: 20px 24px; box-shadow: 6px 6px 0 var(--shadow); max-width: 560px; margin: 28px 0 6px;
+  }
+  .gcall .label { color: #FFD23F; display: block; margin-bottom: 8px; }
+  .gcall p { margin: 0 0 10px; font-size: 1rem; }
+  .gcall .gx { font-family: system-ui, sans-serif; font-size: 0.98rem; background: rgba(0,0,0,0.22); border-radius: 12px; padding: 10px 14px; margin: 0; }
   .stage-note { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.88rem; margin: 0 0 14px; text-align: center; }
   @media (max-width: 800px) {
     .wrap { padding-left: 34px; padding-right: 34px; }
@@ -192,12 +208,12 @@
 
 
 <nav class="wrap crumbs" aria-label="Breadcrumb">
-  <a href="/spanish-reading-practice">Reading practice</a> &rsaquo; <span aria-current="page">Meeting Zik</span>
+  <a href="/spanish-reading-practice">Reading practice</a> &rsaquo; <span aria-current="page">Conociendo a Zik</span>
 </nav>
 
 <section class="wrap hero-min">
   <span class="label eyebrow">Beginner · Spanish reading practice</span>
-  <h1 class="display">Meeting Zik</h1>
+  <h1 class="display alt-title"><span class="alt-es" lang="es">Conociendo a Zik</span><span class="alt-en" lang="en" aria-hidden="true">Meeting Zik</span></h1>
   <p>A beginner Spanish reading exercise: a real page from <i lang="es">La llegada</i>, from the <i lang="es">El visitante</i> collection &mdash; an original Comigo comic, voiced line by line.</p>
   <p>
     Look at the whole page first &mdash; who is there and what is happening? Then read the
@@ -225,18 +241,7 @@
 </section>
 <div class="wrap visually-hidden"><p lang="es">Soy una chica — I am a girl. Soy Mía. — I am Mía. Mi nombre es Mía. — My name is Mía. Me llamo Zik. — My name is Zik. Mal… — Bad… Muy mal... — Very bad...</p></div>
 
-<section class="wrap practice">
-  <h3 class="display">Read the Spanish</h3>
-  <p class="hint-line">Try each line on your own first, then tap it for the English.</p>
-  <div class="qa">
-    <details><summary lang="es">Soy una chica</summary><p class="ans">I am a girl.</p></details>
-    <details><summary lang="es">Soy Mía.</summary><p class="ans">I am Mía.</p></details>
-    <details><summary lang="es">Mi nombre es Mía.</summary><p class="ans">My name is Mía.</p></details>
-    <details><summary lang="es">Me llamo Zik.</summary><p class="ans">My name is Zik.</p></details>
-    <details><summary lang="es">Mal…</summary><p class="ans">Bad…</p></details>
-    <details><summary lang="es">Muy mal...</summary><p class="ans">Very bad...</p></details>
-  </div>
-</section>
+
 
 <section class="band">
   <div class="wrap">
@@ -273,21 +278,30 @@
   .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: 4px; }
 </style>
 <section class="wrap ex-links">
-  <a class="ex-card" href="/examples/a-small-town">
-    <img loading="lazy" decoding="async" src="/assets/example-a-small-town.11ff2274.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="label">Beginner</span>
-      <h3 class="display">A small town</h3>
-      <span class="ex-src" lang="es">La carta negra · El rey negro</span>
-      <span class="ex-go">Read this page &rarr;</span>
-    </div>
-  </a>
   <a class="ex-card" href="/examples/looking-for-work">
     <img loading="lazy" decoding="async" src="/assets/example-looking-for-work.309e36d0.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="label">Beginner</span>
-      <h3 class="display">Looking for work</h3>
+      <h3 class="display alt-title"><span class="alt-es" lang="es">Buscando trabajo</span><span class="alt-en" lang="en" aria-hidden="true">Looking for work</span></h3>
       <span class="ex-src" lang="es">Primer turno · El restaurante</span>
+      <span class="ex-go">Read this page &rarr;</span>
+    </div>
+  </a>
+  <a class="ex-card" href="/examples/in-the-room-1">
+    <img loading="lazy" decoding="async" src="/assets/example-in-the-room-1.f89d7639.webp" width="640" height="960" alt="">
+    <div class="ex-card-body">
+      <span class="label">Beginner</span>
+      <h3 class="display alt-title"><span class="alt-es" lang="es">En la habitación</span><span class="alt-en" lang="en" aria-hidden="true">In the room</span></h3>
+      <span class="ex-src" lang="es">Leer el ambiente</span>
+      <span class="ex-go">Read this page &rarr;</span>
+    </div>
+  </a>
+  <a class="ex-card" href="/examples/a-small-town">
+    <img loading="lazy" decoding="async" src="/assets/example-a-small-town.11ff2274.webp" width="640" height="960" alt="">
+    <div class="ex-card-body">
+      <span class="label">Beginner</span>
+      <h3 class="display alt-title"><span class="alt-es" lang="es">Un pueblo pequeño</span><span class="alt-en" lang="en" aria-hidden="true">A small town</span></h3>
+      <span class="ex-src" lang="es">La carta negra · El rey negro</span>
       <span class="ex-go">Read this page &rarr;</span>
     </div>
   </a>
@@ -295,7 +309,7 @@
     <img loading="lazy" decoding="async" src="/assets/example-staying-safe.a3f1dcad.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="label">Intermediate</span>
-      <h3 class="display">Staying safe</h3>
+      <h3 class="display alt-title"><span class="alt-es" lang="es">Mantenerse a salvo</span><span class="alt-en" lang="en" aria-hidden="true">Staying safe</span></h3>
       <span class="ex-src" lang="es">Una alianza improbable · El superviviente</span>
       <span class="ex-go">Read this page &rarr;</span>
     </div>
@@ -772,6 +786,20 @@
     sheet.querySelector('.sh-done').addEventListener('click', closeSheet);
   });
 })();
+</script>
+
+<style>
+  .alt-title { display: grid; }
+  .alt-title > span { grid-area: 1 / 1; transition: opacity 0.45s ease; }
+  .alt-title > .alt-en { opacity: 0; }
+  .alt-title.show-en > .alt-es { opacity: 0; }
+  .alt-title.show-en > .alt-en { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .alt-title > span { transition: none; } }
+</style>
+<script>
+  setInterval(function () {
+    document.querySelectorAll('.alt-title').forEach(function (t) { t.classList.toggle('show-en'); });
+  }, 2000);
 </script>
 
 </body>
