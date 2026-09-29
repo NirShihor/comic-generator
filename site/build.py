@@ -450,5 +450,41 @@ for x in examples:
     if missing:
         print(f'WARNING: {x["slug"]} has no {", ".join(missing)} (set it in Marketing → Examples, then republish)')
 
+# IndexNow manifest: every public URL with a fingerprint of the content that
+# makes it what it is. After a deploy, the server submits the URLs whose
+# fingerprint changed, appeared or disappeared since its last submission
+# (server/src/services/indexNow.js). Fingerprints follow CONTENT, not markup:
+# a layout/CSS change or a new "related" card doesn't resubmit every page.
+#   - template pages: the template's text; the hub also its exercise cards
+#   - privacy: the file itself
+#   - exercises: the published JSON (minus publishedAt) and any hand-written extras
+#   - redirected old URLs: "redirect:<target>", so a new or re-pointed redirect
+#     gets its old URL submitted once
+def fingerprint(*parts):
+    return hashlib.sha256('\x00'.join(parts).encode()).hexdigest()[:16]
+index_manifest = {}
+for tmpl in sorted(f for f in os.listdir(here) if f.endswith('.template.html')):
+    name = tmpl.replace('.template.html', '')
+    text = open(os.path.join(here, tmpl)).read()
+    parts = [text]
+    if '{{EXAMPLE_LINKS}}' in text:
+        parts.append(json.dumps([{k: x.get(k) for k in ('slug', 'label', 'labelEn', 'summary', 'level')} for x in examples],
+                                sort_keys=True, ensure_ascii=False))
+    index_manifest[SITE_URL + ('/' if name == 'index' else '/' + name)] = fingerprint(*parts)
+index_manifest[SITE_URL + '/privacy'] = fingerprint(open(os.path.join(here, 'privacy.html')).read())
+for x in examples:
+    content = {k: v for k, v in x.items() if k != 'publishedAt'}
+    extra_path = os.path.join(here, 'example-extras', x['slug'] + '.html')
+    index_manifest[SITE_URL + ex_url(x['slug'])] = fingerprint(
+        json.dumps(content, sort_keys=True, ensure_ascii=False),
+        open(extra_path).read() if os.path.exists(extra_path) else '')
+redirects_path = os.path.join(here, 'redirects.json')
+for old, target in (json.load(open(redirects_path)).items() if os.path.exists(redirects_path) else []):
+    index_manifest[SITE_URL + old] = 'redirect:' + target
+with open(os.path.join(here, 'indexnow-manifest.json'), 'w') as fh:
+    json.dump(dict(sorted(index_manifest.items())), fh, indent=1)
+    fh.write('\n')
+print(f'site/indexnow-manifest.json written, {len(index_manifest)} URLs')
+
 total = sum(os.path.getsize(os.path.join(DIST, f)) for f in os.listdir(DIST))
 print(f'assets-dist: {len(os.listdir(DIST))} files, {total / 1024:.0f} KB')

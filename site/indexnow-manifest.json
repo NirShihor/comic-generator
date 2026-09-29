@@ -1,0 +1,21 @@
+{
+ "https://comigo.net/": "d4f139834f447a73",
+ "https://comigo.net/examples/a-small-town": "redirect:/spanish-reading-practice/a-small-town",
+ "https://comigo.net/examples/in-the-room-1": "redirect:/spanish-reading-practice/where-are-the-ghosts",
+ "https://comigo.net/examples/looking-for-work": "redirect:/spanish-reading-practice/looking-for-work",
+ "https://comigo.net/examples/meeting-zik": "redirect:/spanish-reading-practice/meeting-zik",
+ "https://comigo.net/examples/ordering-at-the-restaurant": "redirect:/spanish-reading-practice/ordering-at-a-restaurant",
+ "https://comigo.net/examples/staying-safe": "redirect:/spanish-reading-practice/staying-safe",
+ "https://comigo.net/learn-spanish-with-comics": "0b6ac45f38332ace",
+ "https://comigo.net/privacy": "ceea111f1ae042f3",
+ "https://comigo.net/spanish-reading-practice": "7ec06542cc42435c",
+ "https://comigo.net/spanish-reading-practice/a-small-town": "8132d3387b25b06d",
+ "https://comigo.net/spanish-reading-practice/in-the-room-1": "redirect:/spanish-reading-practice/where-are-the-ghosts",
+ "https://comigo.net/spanish-reading-practice/looking-for-work": "413635370d8807f5",
+ "https://comigo.net/spanish-reading-practice/meeting-zik": "f191e666be84de44",
+ "https://comigo.net/spanish-reading-practice/ordering-at-a-restaurant": "ab0a8571c9f1653a",
+ "https://comigo.net/spanish-reading-practice/ordering-at-the-restaurant": "redirect:/spanish-reading-practice/ordering-at-a-restaurant",
+ "https://comigo.net/spanish-reading-practice/staying-safe": "45d11ea9da0edcfa",
+ "https://comigo.net/spanish-reading-practice/where-are-the-ghosts": "a03c217706e5c957",
+ "https://comigo.net/visual-learning-language": "a310fa5b7a6b13a2"
+}
