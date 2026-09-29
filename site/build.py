@@ -231,7 +231,6 @@ LINKS_CSS = """<style>
   .ex-card .ex-card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
   .ex-card .label { color: var(--accent); }
   .ex-card .ex-title { margin: 0; font-size: 1.3rem; }
-  .ex-card .ex-sum { margin: 2px 0 0; font-size: 0.95rem; line-height: 1.45; }
   .ex-card .ex-src { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); }
   .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: auto; padding-top: 4px; }
 </style>
@@ -245,7 +244,6 @@ def ex_card(x, htag):
             f'    <div class="ex-card-body">\n'
             + (f'      <span class="label">{e(lvl)}</span>\n' if lvl else '') +
             f'      {title}\n'
-            + (f'      <p class="ex-sum">{e(x["summary"])}</p>\n' if x.get('summary') else '')
             + (f'      <span class="ex-src" lang="es">{e(source_line(x))}</span>\n' if source_line(x) else '') +
             f'      <span class="ex-go">Read and listen &rarr;</span>\n'
             f'    </div>\n  </a>')
@@ -455,7 +453,7 @@ for x in examples:
 # fingerprint changed, appeared or disappeared since its last submission
 # (server/src/services/indexNow.js). Fingerprints follow CONTENT, not markup:
 # a layout/CSS change or a new "related" card doesn't resubmit every page.
-#   - template pages: the template's text; the hub also its exercise cards
+#   - template pages: the template's text; the hub also what its exercise cards show
 #   - privacy: the file itself
 #   - exercises: the published JSON (minus publishedAt) and any hand-written extras
 #   - redirected old URLs: "redirect:<target>", so a new or re-pointed redirect
@@ -468,7 +466,7 @@ for tmpl in sorted(f for f in os.listdir(here) if f.endswith('.template.html')):
     text = open(os.path.join(here, tmpl)).read()
     parts = [text]
     if '{{EXAMPLE_LINKS}}' in text:
-        parts.append(json.dumps([{k: x.get(k) for k in ('slug', 'label', 'labelEn', 'summary', 'level')} for x in examples],
+        parts.append(json.dumps([{k: x.get(k) for k in ('slug', 'label', 'labelEn', 'level', 'comic', 'collection')} for x in examples],
                                 sort_keys=True, ensure_ascii=False))
     index_manifest[SITE_URL + ('/' if name == 'index' else '/' + name)] = fingerprint(*parts)
 index_manifest[SITE_URL + '/privacy'] = fingerprint(open(os.path.join(here, 'privacy.html')).read())
