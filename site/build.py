@@ -455,7 +455,8 @@ for x in examples:
 # a layout/CSS change or a new "related" card doesn't resubmit every page.
 #   - template pages: the template's text; the hub also what its exercise cards show
 #   - privacy: the file itself
-#   - exercises: the published JSON (minus publishedAt) and any hand-written extras
+#   - exercises: the published JSON (minus publishedAt and panel boxes) and any
+#     hand-written extras
 #   - redirected old URLs: "redirect:<target>", so a new or re-pointed redirect
 #     gets its old URL submitted once
 def fingerprint(*parts):
@@ -471,7 +472,10 @@ for tmpl in sorted(f for f in os.listdir(here) if f.endswith('.template.html')):
     index_manifest[SITE_URL + ('/' if name == 'index' else '/' + name)] = fingerprint(*parts)
 index_manifest[SITE_URL + '/privacy'] = fingerprint(open(os.path.join(here, 'privacy.html')).read())
 for x in examples:
+    # Not content: when it was published, and each bubble's panel box (only
+    # used to place the popup).
     content = {k: v for k, v in x.items() if k != 'publishedAt'}
+    content['bubbles'] = [{k: v for k, v in b.items() if k != 'panel'} for b in x.get('bubbles', [])]
     extra_path = os.path.join(here, 'example-extras', x['slug'] + '.html')
     index_manifest[SITE_URL + ex_url(x['slug'])] = fingerprint(
         json.dumps(content, sort_keys=True, ensure_ascii=False),

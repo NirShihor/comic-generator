@@ -2673,25 +2673,10 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
     // orderIndex is a PAGE-WIDE position (the editor's badge number) — that
     // bubble is lifted out and re-inserted there.
     const geo = (a, b) => (Math.abs((a.y || 0) - (b.y || 0)) < 0.02 ? (a.x || 0) - (b.x || 0) : (a.y || 0) - (b.y || 0));
-    // Same owner rule as the reader export: floating panels win when the
-    // centre is inside more than one (a full-page base panel holds them all),
-    // otherwise the nearest panel centre.
-    const eligible = (page.panels || []).filter(p => !p.skipInReader);
-    const priority = [...eligible].sort((a, b) => (b.floating ? 1 : 0) - (a.floating ? 1 : 0));
-    const panelOf = (b) => {
-      const cx = (b.x || 0) + (b.width || 0) / 2, cy = (b.y || 0) + (b.height || 0) / 2;
-      const inside = p => { const t = p.tapZone || { x: 0, y: 0, width: 1, height: 1 }; return cx >= t.x && cx < t.x + t.width && cy >= t.y && cy < t.y + t.height; };
-      let owner = priority.find(inside);
-      if (!owner) {
-        let bestD = Infinity;
-        for (const p of eligible) {
-          const t = p.tapZone || { x: 0, y: 0, width: 1, height: 1 };
-          const d = (cx - (t.x + t.width / 2)) ** 2 + (cy - (t.y + t.height / 2)) ** 2;
-          if (d < bestD) { bestD = d; owner = p; }
-        }
-      }
-      return owner ? (owner.panelOrder || 0) : 0;
-    };
+    // Same owner rule as the reader export (services/examplePanels).
+    const { panelOwner, panelBox } = require('../services/examplePanels');
+    const ownerOf = panelOwner(page);
+    const panelOf = (b) => { const owner = ownerOf(b); return owner ? (owner.panelOrder || 0) : 0; };
     const autoOrder = (page.bubbles || [])
       .filter(b => !b.hidden && b.type !== 'image' && (b.sentences || []).some(s => (s.text || '').trim()))
       .sort((a, b) => panelOf(a) - panelOf(b) || geo(a, b));
@@ -2747,8 +2732,11 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
           words,
         });
       }
+      const panel = panelBox(ownerOf(b));
       out.push({
         x: b.x || 0, y: b.y || 0, w: b.width || 0, h: b.height || 0,
+        // The bubble's panel (tap zone), so the site places its popup away from it.
+        ...(panel && { panel }),
         ...(b.type === 'narration' && { caption: true }),
         sentences,
       });
