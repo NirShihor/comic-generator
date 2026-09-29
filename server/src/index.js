@@ -31,6 +31,9 @@ require('./services/dbBackup').startDailyBackups();
 const SITE_DIR = path.join(__dirname, '../../site');
 // Pieces site/build.py assembles pages from — never pages themselves.
 const SITE_PARTIALS = new Set(['nav', 'example-page', 'example-stage']);
+// IndexNow ownership key (site/indexnow/<key>.txt), served at /<key>.txt.
+const indexNow = require('./services/indexNow');
+const indexNowKeyFile = indexNow.keyFileHandler(SITE_DIR);
 // site/redirects.json ({ "/old/path": "/new/path" }), re-read when it changes
 // (Publish adds an entry when an example is renamed).
 let siteRedirectCache = { mtime: 0, map: {} };
@@ -101,6 +104,7 @@ app.use((req, res, next) => {
       }
       return res.status(404).end();
     }
+    if (req.path.endsWith('.txt') && req.path !== '/robots.txt') return indexNowKeyFile(req, res, () => res.status(404).end());
     if (req.path === '/robots.txt') {
       res.set('Cache-Control', 'public, max-age=86400');
       return res.sendFile(path.join(SITE_DIR, 'robots.txt'));
@@ -199,6 +203,10 @@ app.get('*', (req, res) => {
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// After a deploy: submit comigo.net pages added/changed/removed since the last
+// submission to IndexNow (production only; failures are only logged).
+indexNow.scheduleAfterDeploy({ siteDir: SITE_DIR });
 
 // Increase server timeout to 10 minutes for long-running image generation requests
 server.timeout = 600000;

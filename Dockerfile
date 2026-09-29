@@ -32,6 +32,8 @@ COPY site/index.html site/learn-spanish-with-comics.html site/visual-learning-la
 COPY site/assets-dist ./site/assets-dist
 COPY site/examples/*.html ./site/examples/
 COPY site/redirects.json ./site/
+COPY site/indexnow-manifest.json ./site/
+COPY site/indexnow ./site/indexnow
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh ./
