@@ -11,7 +11,7 @@
  "image": "example-buying-clothes",
  "width": 1024,
  "height": 1536,
- "publishedAt": "2026-09-29T15:39:00.386Z",
+ "publishedAt": "2026-09-29T15:54:22.872Z",
  "bubbles": [
   {
    "x": 0.22727272727272718,
@@ -477,122 +477,6 @@
    ]
   },
   {
-   "x": 0.11363636363636363,
-   "y": 0.8661616161616162,
-   "w": 0.1636363636363637,
-   "h": 0.08383838383838371,
-   "sentences": [
-    {
-     "es": "Oh, es buena...",
-     "en": "Oh, she's good...",
-     "a": "{{AUD_ex-buying-clothes-b6-1}}",
-     "words": [
-      {
-       "t": "Oh,",
-       "m": "oh",
-       "b": "oh",
-       "bm": "exclamation",
-       "s": 0,
-       "e": 480,
-       "a": "{{AUD_ex-buying-clothes-w-oh}}",
-       "ex": "In this sentence, \"oh\" is an interjection. It expresses a sudden realization or reaction, similar to how it is used in English. It adds an emotional tone to the statement, indicating surprise or acknowledgment.\n\nThe phrase \"Oh, es buena...\" translates to \"Oh, she's good...\" in English, where \"oh\" sets the context for what follows. It shows that the speaker is responding to something they just learned or observed about the person being referred to."
-      },
-      {
-       "t": "es",
-       "m": "she's",
-       "b": "ser",
-       "bm": "to be",
-       "s": 600,
-       "e": 1120,
-       "a": "{{AUD_ex-buying-clothes-w-es}}",
-       "ba": "{{AUD_ex-buying-clothes-w-ser}}",
-       "forms": [
-        {
-         "label": "Present",
-         "text": "soy",
-         "a": "{{AUD_ex-buying-clothes-w-soy}}"
-        },
-        {
-         "label": "Preterite",
-         "text": "fui",
-         "a": "{{AUD_ex-buying-clothes-w-fui}}"
-        },
-        {
-         "label": "Imperfect",
-         "text": "era",
-         "a": "{{AUD_ex-buying-clothes-w-era}}"
-        },
-        {
-         "label": "Future",
-         "text": "seré",
-         "a": "{{AUD_ex-buying-clothes-w-sere-7ef6bb}}"
-        },
-        {
-         "label": "Conditional",
-         "text": "sería",
-         "a": "{{AUD_ex-buying-clothes-w-seria-d04c57}}"
-        },
-        {
-         "label": "Subjunctive",
-         "text": "sea",
-         "a": "{{AUD_ex-buying-clothes-w-sea}}"
-        },
-        {
-         "label": "Command",
-         "text": "sé",
-         "a": "{{AUD_ex-buying-clothes-w-se-edf401}}"
-        },
-        {
-         "label": "Gerund",
-         "text": "siendo",
-         "a": "{{AUD_ex-buying-clothes-w-siendo}}"
-        },
-        {
-         "label": "Past Participle",
-         "text": "sido",
-         "a": "{{AUD_ex-buying-clothes-w-sido}}"
-        }
-       ],
-       "ex": "The word \"es\" is a verb form in this sentence. It is the third person singular present tense form of the verb \"ser,\" which means \"to be.\" In this context, \"es\" translates to \"is\" in English.\n\nThe sentence \"Oh, es buena...\" conveys a statement about someone's quality or characteristic. Here, \"es\" connects the subject (implied \"ella\" or \"she\") to the adjective \"buena,\" meaning \"good.\" So, it indicates that the person being referred to possesses the quality of being good.\n\nIn summary, \"es\" serves as a linking verb that helps describe the subject's state or quality in the sentence."
-      },
-      {
-       "t": "buena...",
-       "m": "good",
-       "b": "bueno",
-       "bm": "good",
-       "s": 1187,
-       "e": 1680,
-       "a": "{{AUD_ex-buying-clothes-w-buena}}",
-       "ba": "{{AUD_ex-buying-clothes-w-bueno}}",
-       "forms": [
-        {
-         "label": "Masc. sing.",
-         "text": "bueno",
-         "a": "{{AUD_ex-buying-clothes-w-bueno}}"
-        },
-        {
-         "label": "Fem. sing.",
-         "text": "buena",
-         "a": "{{AUD_ex-buying-clothes-w-buena}}"
-        },
-        {
-         "label": "Masc. plural",
-         "text": "buenos",
-         "a": "{{AUD_ex-buying-clothes-w-buenos}}"
-        },
-        {
-         "label": "Fem. plural",
-         "text": "buenas",
-         "a": "{{AUD_ex-buying-clothes-w-buenas}}"
-        }
-       ],
-       "ex": "The word \"buena\" in this sentence is an adjective. It describes the subject, which is implied to be a feminine noun, likely a person or character. In Spanish, adjectives must agree in gender and number with the nouns they modify. Since \"buena\" is feminine and singular, it fits with the implied subject \"ella\" (she).\n\nIn the sentence \"Oh, es buena...\", \"buena\" is used to express a positive quality about the subject. The phrase translates to \"Oh, she's good...\", indicating that the speaker is commenting on her abilities or character in a favorable way. \n\nOverall, \"buena\" serves to convey admiration or approval, making it an important part of the speaker's expression."
-      }
-     ]
-    }
-   ]
-  },
-  {
    "x": 0.47878787878787876,
    "y": 0.8489898989898991,
    "w": 0.2954545454545454,
@@ -601,7 +485,7 @@
     {
      "es": "Sí, ¿lo tiene en una talla más pequeña?",
      "en": "Yes - do you have this in a size smaller? ",
-     "a": "{{AUD_ex-buying-clothes-b7-1}}",
+     "a": "{{AUD_ex-buying-clothes-b6-1}}",
      "words": [
       {
        "t": "Sí,",
@@ -788,6 +672,122 @@
         }
        ],
        "ex": "The word \"pequeña\" is an adjective in this sentence. It describes the noun \"talla,\" which means \"size.\" In Spanish, adjectives usually agree in gender and number with the nouns they modify. Since \"talla\" is a feminine singular noun, \"pequeña\" is also in the feminine singular form.\n\nIn the sentence \"Sí, ¿lo tiene en una talla más pequeña?\", \"pequeña\" is used to indicate that the size being requested is smaller than the current one. The phrase \"una talla más pequeña\" translates to \"a size smaller,\" where \"más\" means \"more\" and is used to compare sizes. Thus, \"pequeña\" helps convey the idea of a reduced size."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.11363636363636363,
+   "y": 0.8661616161616162,
+   "w": 0.1636363636363637,
+   "h": 0.08383838383838371,
+   "sentences": [
+    {
+     "es": "Oh, es buena...",
+     "en": "Oh, she's good...",
+     "a": "{{AUD_ex-buying-clothes-b7-1}}",
+     "words": [
+      {
+       "t": "Oh,",
+       "m": "oh",
+       "b": "oh",
+       "bm": "exclamation",
+       "s": 0,
+       "e": 480,
+       "a": "{{AUD_ex-buying-clothes-w-oh}}",
+       "ex": "In this sentence, \"oh\" is an interjection. It expresses a sudden realization or reaction, similar to how it is used in English. It adds an emotional tone to the statement, indicating surprise or acknowledgment.\n\nThe phrase \"Oh, es buena...\" translates to \"Oh, she's good...\" in English, where \"oh\" sets the context for what follows. It shows that the speaker is responding to something they just learned or observed about the person being referred to."
+      },
+      {
+       "t": "es",
+       "m": "she's",
+       "b": "ser",
+       "bm": "to be",
+       "s": 600,
+       "e": 1120,
+       "a": "{{AUD_ex-buying-clothes-w-es}}",
+       "ba": "{{AUD_ex-buying-clothes-w-ser}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "soy",
+         "a": "{{AUD_ex-buying-clothes-w-soy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "fui",
+         "a": "{{AUD_ex-buying-clothes-w-fui}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "era",
+         "a": "{{AUD_ex-buying-clothes-w-era}}"
+        },
+        {
+         "label": "Future",
+         "text": "seré",
+         "a": "{{AUD_ex-buying-clothes-w-sere-7ef6bb}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "sería",
+         "a": "{{AUD_ex-buying-clothes-w-seria-d04c57}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sea",
+         "a": "{{AUD_ex-buying-clothes-w-sea}}"
+        },
+        {
+         "label": "Command",
+         "text": "sé",
+         "a": "{{AUD_ex-buying-clothes-w-se-edf401}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "siendo",
+         "a": "{{AUD_ex-buying-clothes-w-siendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sido",
+         "a": "{{AUD_ex-buying-clothes-w-sido}}"
+        }
+       ],
+       "ex": "The word \"es\" is a verb form in this sentence. It is the third person singular present tense form of the verb \"ser,\" which means \"to be.\" In this context, \"es\" translates to \"is\" in English.\n\nThe sentence \"Oh, es buena...\" conveys a statement about someone's quality or characteristic. Here, \"es\" connects the subject (implied \"ella\" or \"she\") to the adjective \"buena,\" meaning \"good.\" So, it indicates that the person being referred to possesses the quality of being good.\n\nIn summary, \"es\" serves as a linking verb that helps describe the subject's state or quality in the sentence."
+      },
+      {
+       "t": "buena...",
+       "m": "good",
+       "b": "bueno",
+       "bm": "good",
+       "s": 1187,
+       "e": 1680,
+       "a": "{{AUD_ex-buying-clothes-w-buena}}",
+       "ba": "{{AUD_ex-buying-clothes-w-bueno}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "bueno",
+         "a": "{{AUD_ex-buying-clothes-w-bueno}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "buena",
+         "a": "{{AUD_ex-buying-clothes-w-buena}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "buenos",
+         "a": "{{AUD_ex-buying-clothes-w-buenos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "buenas",
+         "a": "{{AUD_ex-buying-clothes-w-buenas}}"
+        }
+       ],
+       "ex": "The word \"buena\" in this sentence is an adjective. It describes the subject, which is implied to be a feminine noun, likely a person or character. In Spanish, adjectives must agree in gender and number with the nouns they modify. Since \"buena\" is feminine and singular, it fits with the implied subject \"ella\" (she).\n\nIn the sentence \"Oh, es buena...\", \"buena\" is used to express a positive quality about the subject. The phrase translates to \"Oh, she's good...\", indicating that the speaker is commenting on her abilities or character in a favorable way. \n\nOverall, \"buena\" serves to convey admiration or approval, making it an important part of the speaker's expression."
       }
      ]
     }
