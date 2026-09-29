@@ -86,11 +86,43 @@ def poster_repl(m):
         manifest[name] = process(name)
     return f'poster="{manifest[name][0]}"'
 
+# Every published example has its own page at EX_BASE/<slug> (canonical URL,
+# sitemap entry and all internal links use this; the server serves the same path
+# from site/examples/<slug>.html). Old URLs 301 via site/redirects.json.
+SITE_URL = 'https://comigo.net'
+EX_BASE = '/spanish-reading-practice'
+def ex_url(slug):
+    return f'{EX_BASE}/{slug}'
+
+# {{OGIMG_name}} -> og:image / twitter:image tags for a site/assets image, as a
+# 1200x630 JPEG cut from the top of the page (link previews: LinkedIn and
+# others don't show WebP).
+og_manifest = {}
+def og_repl(m):
+    name = m.group(1)
+    if name not in og_manifest:
+        src = next((os.path.join(here, 'assets', f'{name}.{x}') for x in ('jpg', 'png')
+                    if os.path.exists(os.path.join(here, 'assets', f'{name}.{x}'))), None)
+        if not src:
+            sys.exit(f'missing asset: {name}')
+        tmp = os.path.join(DIST, f'.{name}.og.jpg')
+        r = subprocess.run(['node', os.path.join(here, 'img-webp.js'), src, tmp, 'og'], capture_output=True, text=True)
+        if r.returncode:
+            sys.exit(f'og image failed for {name}: {r.stderr.strip()}')
+        w, h = r.stdout.split()[0].split('x')
+        data = open(tmp, 'rb').read(); os.remove(tmp)
+        fname = f'{name}-og.{hashlib.md5(data).hexdigest()[:8]}.jpg'
+        open(os.path.join(DIST, fname), 'wb').write(data)
+        og_manifest[name] = (f'{SITE_URL}/assets/{fname}', w, h)
+    url, w, h = og_manifest[name]
+    return (f'<meta property="og:image" content="{url}">\n<meta property="og:image:width" content="{w}">\n'
+            f'<meta property="og:image:height" content="{h}">\n<meta name="twitter:image" content="{url}">')
+
 # {{EXAMPLE:slug}} or {{EXAMPLE:slug|note}} -> an interactive comic stage built
 # from site/examples/<slug>.json (published from the generator's Marketing →
 # Examples tab). The shared styles/script (site/example-stage.html) are added
 # once per page that uses any example.
-def expand_examples(html):
+def expand_examples(html, own_slug=None):
     used = False
     def one(m):
         nonlocal used
@@ -109,17 +141,24 @@ def expand_examples(html):
             first = (b.get('sentences') or [{}])[0].get('es', '')
             spots.append(f'    <button class="hotspot" data-i="{i}" style="left:{left:.1f}%;top:{top:.1f}%;width:{w:.1f}%;height:{h:.1f}%"'
                          f'{" data-caption" if b.get("caption") else ""} aria-label="{e(first)} — tap to hear and explore"></button>')
-        alt = f"A page from {data.get('comic') or 'an original Comigo comic'}"
-        alt += f" ({data['collection']})" if data.get('collection') else ''
-        alt += ', an original Comigo Spanish comic.'
-        transcript = ' '.join(f"{s.get('es', '')} — {s.get('en', '')}"
-                              for b in data.get('bubbles', []) for s in b.get('sentences', []))
+        # On the example's own page the comic is the main content (loaded
+        # eagerly: it is the largest thing above the fold); embedded in another
+        # page it loads lazily and links to that page.
+        own = slug == own_slug
+        comic, coll = sentence_case(data.get('comic')), sentence_case(data.get('collection'))
+        alt = data.get('imageAlt') or (f"A page from {comic or 'an original Comigo comic'}"
+                                       + (f" ({coll})" if coll else '') + ', an original Comigo Spanish comic.')
         blob = json.dumps({'bubbles': data.get('bubbles', [])}, ensure_ascii=False).replace('</', '<\\/')
+        htag = 'h2' if own else 'h3'
+        load = 'fetchpriority="high" decoding="async"' if own else 'loading="lazy" decoding="async"'
+        link = ('' if own else
+                f'<p class="wrap stage-link"><a href="{ex_url(slug)}">Read &ldquo;{e(page_label(data))}&rdquo; as a full '
+                'exercise, with the transcript, vocabulary and translation &rarr;</a></p>\n')
         return (f'<section class="wrap stage-wrap">\n'
-                f'  <h3 class="display stage-head">Click on a bubble</h3>\n'
+                f'  <{htag} class="display stage-head">Click on a bubble</{htag}>\n'
                 + (f'  <p class="stage-note">{e(note)}</p>\n' if note else '') +
                 f'  <div class="stage" data-ex="{e(slug)}">\n'
-                f'    <img loading="lazy" decoding="async" src="{{{{IMG_{data["image"]}}}}}" alt="{e(alt)}">\n'
+                f'    <img {load} src="{{{{IMG_{data["image"]}}}}}" alt="{e(alt)}">\n'
                 + '\n'.join(spots) + '\n'
                 '    <div class="popup" hidden><button class="popup-x" aria-label="Close">✕</button><div class="popup-body"></div></div>\n'
                 '    <div class="ex-sheet" hidden><div class="sh-head"><b></b><button class="sh-done">Done</button></div><div class="sh-body"></div></div>\n'
@@ -127,8 +166,7 @@ def expand_examples(html):
                 '    <div class="hint">\U0001F446 Tap a speech bubble</div>\n'
                 '  </div>\n'
                 f'  <script type="application/json" class="ex-data">{blob}</script>\n'
-                '</section>\n'
-                f'<div class="wrap visually-hidden"><p lang="es">{e(transcript)}</p></div>')
+                '</section>\n' + link)
     html = re.sub(r'\{\{EXAMPLE:([\w-]+)(?:\|([^}]*))?\}\}', one, html)
     return html, used
 
@@ -169,63 +207,92 @@ def alt_title(tag, es, en):
     e = lambda t: html_escape(str(t or ''), quote=True)
     if not en:
         return f'<{tag} class="display">{e(es)}</{tag}>'
-    return (f'<{tag} class="display alt-title"><span class="alt-es" lang="es">{e(es)}</span>'
+    # The space between the spans isn't rendered (grid items) but keeps the two
+    # titles apart in the page text ("Un pueblo pequeño A small town").
+    return (f'<{tag} class="display alt-title"><span class="alt-es" lang="es">{e(es)}</span> '
             f'<span class="alt-en" lang="en" aria-hidden="true">{e(en)}</span></{tag}>')
 
-# {{EXAMPLE_LINKS}} or {{EXAMPLE_LINKS:slug-to-skip}} -> a grid of cards linking
-# to every published example's own page (/examples/<slug>).
+# {{EXAMPLE_LINKS}} -> the Reading practice library: a card for every published
+# example, grouped by level once there is more than one level.
+# {{EXAMPLE_LINKS:slug}} -> up to RELATED_MAX cards for an example's own page:
+# the same collection first, then the same level, then the rest.
+RELATED_MAX = 6
 LINKS_CSS = """<style>
   .ex-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 22px; padding: 18px 24px 6px; }
+  .ex-level { padding: 26px 24px 0; }
+  .ex-level-head { margin: 0; font-size: 1.5rem; color: var(--accent); }
   .ex-card {
     display: flex; flex-direction: column; background: var(--card); color: var(--ink); text-decoration: none;
     border: 3px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 6px 6px 0 var(--shadow);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
   .ex-card:hover { transform: translate(2px, 2px); box-shadow: 4px 4px 0 var(--shadow); }
-  .ex-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; display: block; border-bottom: 3px solid var(--line); }
-  .ex-card .ex-card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .ex-card img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; display: block; border-bottom: 3px solid var(--line); }
+  .ex-card .ex-card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
   .ex-card .label { color: var(--accent); }
-  .ex-card h3 { margin: 0; font-size: 1.3rem; }
+  .ex-card .ex-title { margin: 0; font-size: 1.3rem; }
+  .ex-card .ex-sum { margin: 2px 0 0; font-size: 0.95rem; line-height: 1.45; }
   .ex-card .ex-src { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); }
-  .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: 4px; }
+  .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: auto; padding-top: 4px; }
 </style>
 """
+def ex_card(x, htag):
+    e = lambda t: html_escape(str(t or ''), quote=True)
+    lvl = (x.get('level') or '').capitalize()
+    title = alt_title(htag, page_label(x), x.get('labelEn')).replace('class="display', 'class="display ex-title', 1)
+    return (f'  <a class="ex-card" href="{ex_url(e(x["slug"]))}">\n'
+            f'    <img loading="lazy" decoding="async" src="{{{{IMG_{x["image"]}}}}}" alt="">\n'
+            f'    <div class="ex-card-body">\n'
+            + (f'      <span class="label">{e(lvl)}</span>\n' if lvl else '') +
+            f'      {title}\n'
+            + (f'      <p class="ex-sum">{e(x["summary"])}</p>\n' if x.get('summary') else '')
+            + (f'      <span class="ex-src" lang="es">{e(source_line(x))}</span>\n' if source_line(x) else '') +
+            f'      <span class="ex-go">Read and listen &rarr;</span>\n'
+            f'    </div>\n  </a>')
+
+def related(slug, items):
+    me = next((x for x in items if x['slug'] == slug), {})
+    others = [x for x in items if x['slug'] != slug]
+    rank = lambda x: (0 if me.get('collection') and x.get('collection') == me.get('collection') else
+                      1 if x.get('level') == me.get('level') else 2)
+    return sorted(others, key=rank)[:RELATED_MAX]      # stable: library order within each rank
+
 def expand_links(html):
     used = False
     def one(m):
         nonlocal used
-        skip = m.group(1)
-        e = lambda t: html_escape(str(t or ''), quote=True)
-        cards = []
-        for x in load_examples():
-            if x['slug'] == skip:
-                continue
-            lvl = (x.get('level') or '').capitalize()
-            cards.append(
-                f'  <a class="ex-card" href="/examples/{e(x["slug"])}">\n'
-                f'    <img loading="lazy" decoding="async" src="{{{{IMG_{x["image"]}}}}}" alt="">\n'
-                f'    <div class="ex-card-body">\n'
-                + (f'      <span class="label">{e(lvl)}</span>\n' if lvl else '') +
-                f'      {alt_title("h3", page_label(x), x.get("labelEn"))}\n'
-                + (f'      <span class="ex-src" lang="es">{e(source_line(x))}</span>\n' if source_line(x) else '') +
-                f'      <span class="ex-go">Read this page &rarr;</span>\n'
-                f'    </div>\n  </a>')
-        if not cards:
+        slug = m.group(1)
+        items = load_examples()
+        if slug:
+            body = '<section class="wrap ex-links">\n' + '\n'.join(ex_card(x, 'h3') for x in related(slug, items)) + '\n</section>'
+        else:
+            levels = []
+            for x in items:
+                if (x.get('level') or '') not in levels: levels.append(x.get('level') or '')
+            if len(levels) > 1:
+                body = ''.join(
+                    f'<div class="wrap ex-level" id="level-{lv or "other"}"><h3 class="display ex-level-head">{(lv or "Other").capitalize()}</h3></div>\n'
+                    '<section class="wrap ex-links">\n'
+                    + '\n'.join(ex_card(x, 'h4') for x in items if (x.get('level') or '') == lv) + '\n</section>\n'
+                    for lv in levels)
+            else:
+                body = '<section class="wrap ex-links">\n' + '\n'.join(ex_card(x, 'h3') for x in items) + '\n</section>'
+        if not items:
             return ''
         css = '' if used else LINKS_CSS
         used = True
-        return css + '<section class="wrap ex-links">\n' + '\n'.join(cards) + '\n</section>'
+        return css + body
     return re.sub(r'\{\{EXAMPLE_LINKS(?::([\w-]+))?\}\}', one, html)
 
-def build(tmpl_name, out_name, html=None, nav_slug=None):
+def build(tmpl_name, out_name, html=None, nav_slug=None, own_slug=None):
     if html is None:
         html = open(os.path.join(here, tmpl_name)).read()
     html = expand_links(html)
-    html, has_examples = expand_examples(html)
+    html, has_examples = expand_examples(html, own_slug)
     if has_examples:
         # Shared stage styles/script: appended to the page body once.
         html += '\n' + open(os.path.join(here, 'example-stage.html')).read()
-    if 'class="display alt-title"' in html:
+    if re.search(r'class="[^"]*\balt-title\b', html):
         html += '\n' + ALT_TITLE
     # Shared navigation: {{NAV}} pulls in site/nav.html, with the current
     # page's link marked (aria-current) so it can be styled subtly.
@@ -234,6 +301,7 @@ def build(tmpl_name, out_name, html=None, nav_slug=None):
         slug = nav_slug or out_name[:-len('.html')]
         nav = nav.replace(f'data-nav="{slug}"', f'data-nav="{slug}" aria-current="page"')
         html = html.replace('{{NAV}}', nav)
+    html = re.sub(r'\{\{OGIMG_([\w-]+)\}\}', og_repl, html)
     out = re.sub(r'poster="\{\{IMG_([\w-]+)\}\}"', poster_repl, html)
     out = re.sub(r'src="\{\{IMG_([\w-]+)\}\}"', repl, out)
     out = re.sub(r'\{\{AUD_([\w-]+)\}\}', aud_repl, out)
@@ -267,39 +335,120 @@ def build(tmpl_name, out_name, html=None, nav_slug=None):
 for tmpl in sorted(f for f in os.listdir(here) if f.endswith('.template.html')):
     build(tmpl, tmpl.replace('.template.html', '.html'))
 
-# Every published example also gets its own page at /examples/<slug>, built
-# from site/example-page.html. Pages for examples no longer published are removed.
+# Every published example also gets its own page at EX_BASE/<slug>, built from
+# site/example-page.html. Pages for examples no longer published are removed.
+# Its text comes from the example's JSON (published from the generator's
+# Marketing → Examples): titles, summary and image description are entered once
+# there; the transcript, vocabulary and language notes come from the comic.
 ex_dir = os.path.join(here, 'examples')
 for f in os.listdir(ex_dir):
     if f.endswith('.html') and not os.path.exists(os.path.join(ex_dir, f[:-5] + '.json')):
         os.remove(os.path.join(ex_dir, f))
+
+# Function words left out of the "Words on this page" list.
+STOP = set('a al ante con de del el ella en es la las lo los me mi mis no nos o para por que se su sus te tu tus un una unos unas y yo tú él'.split())
+
+def seo_title(x):
+    level = (x.get('level') or '').capitalize()
+    base = x.get('seoTitle') or f"{x.get('labelEn') or page_label(x)}: {level + ' ' if level else ''}Spanish Reading Practice"
+    return f'{base} | Comigo'
+
+def seo_desc(x):
+    if x.get('summary'):
+        return x['summary']
+    first = [s.get('es') for b in x.get('bubbles', []) for s in b.get('sentences', []) if s.get('es')][:2]
+    return (f"A {x.get('level') or ''} Spanish comic page to read and listen to: "
+            + ' '.join(f'«{t}»' for t in first) + ' Every line voiced, with translations.').replace('  ', ' ')
+
+def study_section(x):
+    e = lambda t: html_escape(str(t or ''), quote=True)
+    sents = [s for b in x.get('bubbles', []) for s in b.get('sentences', []) if s.get('es')]
+    if not sents:
+        return ''
+    lines = '\n'.join(f'      <li><span class="es" lang="es">{e(s["es"])}</span>'
+                      + (f'<span class="en">{e(s["en"])}</span>' if s.get('en') else '') + '</li>' for s in sents)
+    seen, vocab = set(), []
+    for s in sents:
+        for w in s.get('words', []):
+            shown = re.sub(r'[^\w\s\'-]', '', w.get('t') or '').strip()
+            key = (w.get('b') or shown).lower()
+            if not shown or not w.get('m') or key in seen or shown.lower() in STOP:
+                continue
+            seen.add(key)
+            base = w.get('b') if w.get('b') and w.get('b').lower() != shown.lower() else ''
+            vocab.append(f'      <li><b lang="es">{e(shown)}</b>'
+                         + (f' <span class="base">(<span lang="es">{e(base)}</span>)</span>' if base else '')
+                         + f' &mdash; {e(w["m"])}</li>')
+    notes = [s for s in sents if s.get('g')]
+    out = ['<section class="wrap study">',
+           '  <h2 class="display">Study the Spanish</h2>',
+           '  <p class="hint-line">Everything on the page as text: open a section when you want it.</p>',
+           '  <details class="study-block">',
+           '    <summary><h3>Transcript and translation</h3></summary>',
+           '    <ol class="lines">', lines, '    </ol>',
+           '  </details>']
+    if vocab:
+        out += ['  <details class="study-block">',
+                '    <summary><h3>Words on this page</h3></summary>',
+                '    <ul class="vocab">', '\n'.join(vocab), '    </ul>',
+                '  </details>']
+    if notes:
+        out += ['  <details class="study-block">',
+                '    <summary><h3>Language notes</h3></summary>',
+                '    <ul class="notes">',
+                '\n'.join(f'      <li><span class="es" lang="es">{e(s["es"])}</span><span class="note">{e(s["g"])}</span></li>' for s in notes),
+                '    </ul>',
+                '  </details>']
+    out.append('</section>')
+    return '\n'.join(out) + '\n'
+
 page_tmpl = open(os.path.join(here, 'example-page.html')).read()
-for x in load_examples():
+examples = load_examples()
+for x in examples:
     e = lambda t: html_escape(str(t or ''), quote=True)
     label, level = page_label(x), (x.get('level') or '')
     comic, coll = sentence_case(x.get('comic')), sentence_case(x.get('collection'))
-    src = f'<i lang="es">{e(comic)}</i>' + (f', from the <i lang="es">{e(coll)}</i> collection' if coll else '') if comic else ''
-    art = 'An' if level[:1].lower() in 'aeiou' and level else 'A'
-    intro = (f'{art} {e(level) + " " if level else ""}Spanish reading exercise: a real page from {src} &mdash; '
-             'an original Comigo comic, voiced line by line.' if src else
-             f'{art} {e(level) + " " if level else ""}Spanish reading exercise: a real page from an original Comigo comic, voiced line by line.')
-    desc = (f'Read "{label}", {art.lower()} {level + " " if level else ""}Spanish comic page'
-            + (f' from {comic}' if comic else '') +
-            '. Tap a bubble to hear every line, tap any word for its meaning, and check the English.')
+    src = (f'A page from <i lang="es">{e(comic)}</i>' + (f', in the <i lang="es">{e(coll)}</i> collection' if coll else '')
+           + ' &mdash; an original Comigo comic, voiced line by line.') if comic else 'A page from an original Comigo comic, voiced line by line.'
+    intro = (f'<p>{e(x["summary"])}</p>\n  <p class="src">{src}</p>' if x.get('summary') else f'<p>{src}</p>')
+    url = SITE_URL + ex_url(x['slug'])
+    crumbs = json.dumps({
+        '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+        'itemListElement': [
+            {'@type': 'ListItem', 'position': 1, 'name': 'Home', 'item': SITE_URL + '/'},
+            {'@type': 'ListItem', 'position': 2, 'name': 'Spanish reading practice', 'item': SITE_URL + '/spanish-reading-practice'},
+            {'@type': 'ListItem', 'position': 3, 'name': label, 'item': url},
+        ]}, ensure_ascii=False, indent=1)
     # Optional hand-written extras (comprehension questions, vocab) for this
     # page live in site/example-extras/<slug>.html.
     extra_path = os.path.join(here, 'example-extras', x['slug'] + '.html')
     extra = open(extra_path).read() if os.path.exists(extra_path) else ''
     vals = {
-        'PG_TITLE': e(f'{label} — {level.capitalize() + " " if level else ""}Spanish Reading Practice | Comigo'),
-        'PG_DESC': e(desc), 'PG_URL': f'https://comigo.net/examples/{x["slug"]}',
+        'PG_TITLE': e(seo_title(x)), 'PG_DESC': e(seo_desc(x)), 'PG_URL': url,
+        'PG_OG_IMAGE': f'{{{{OGIMG_{x["image"]}}}}}',
+        'PG_BREADCRUMB_LD': f'<script type="application/ld+json">\n{crumbs}\n</script>',
         'PG_SLUG': x['slug'], 'PG_LABEL': e(label),
         'PG_H1': alt_title('h1', label, x.get('labelEn')),
         'PG_EYEBROW': e(f'{level.capitalize()} · Spanish reading practice' if level else 'Spanish reading practice'),
-        'PG_INTRO': intro, 'PG_EXTRA': extra,
+        'PG_INTRO': intro, 'PG_STUDY': study_section(x), 'PG_EXTRA': extra,
     }
     html = re.sub(r'\{\{(PG_\w+)\}\}', lambda m: vals[m.group(1)], page_tmpl)
-    build('example-page.html', os.path.join('examples', x['slug'] + '.html'), html=html, nav_slug='spanish-reading-practice')
+    build('example-page.html', os.path.join('examples', x['slug'] + '.html'), html=html,
+          nav_slug='spanish-reading-practice', own_slug=x['slug'])
+
+# SEO checks: every example page needs its own title and description, and the
+# summary / image description that make them useful (Marketing → Examples).
+for field, fn in (('title', seo_title), ('description', seo_desc)):
+    seen = {}
+    for x in examples:
+        seen.setdefault(fn(x), []).append(x['slug'])
+    for v, slugs in seen.items():
+        if len(slugs) > 1:
+            print(f'WARNING: duplicate {field} on {", ".join(slugs)}: {v}')
+for x in examples:
+    missing = [k for k in ('summary', 'imageAlt', 'labelEn') if not x.get(k)]
+    if missing:
+        print(f'WARNING: {x["slug"]} has no {", ".join(missing)} (set it in Marketing → Examples, then republish)')
 
 total = sum(os.path.getsize(os.path.join(DIST, f)) for f in os.listdir(DIST))
 print(f'assets-dist: {len(os.listdir(DIST))} files, {total / 1024:.0f} KB')

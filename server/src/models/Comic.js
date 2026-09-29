@@ -234,6 +234,12 @@ const PageSchema = new mongoose.Schema({
   // from exampleLabel, which also marks a page as a standalone example.
   exampleTitle: String,
   exampleTitleEn: String,
+  // Site metadata for the example's page on comigo.net (Marketing → Examples):
+  // a search-result title, a one/two-sentence summary (meta description, hub
+  // card, page intro) and a description of the comic page for its alt text.
+  exampleSeoTitle: String,
+  exampleSummary: String,
+  exampleImageAlt: String,
   exampleSlug: String,
   examplePublishedAt: Date,
   // Last challenge reel built from this page (file in projects/<id>/marketing) and the settings used.

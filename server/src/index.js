@@ -29,9 +29,26 @@ require('./services/dbBackup').startDailyBackups();
 // page (and privacy policy) and nothing else — no auth gate, no app routes.
 // The generator app remains exactly as-is on its own hostnames.
 const SITE_DIR = path.join(__dirname, '../../site');
+// Pieces site/build.py assembles pages from — never pages themselves.
+const SITE_PARTIALS = new Set(['nav', 'example-page', 'example-stage']);
+// site/redirects.json ({ "/old/path": "/new/path" }), re-read when it changes
+// (Publish adds an entry when an example is renamed).
+let siteRedirectCache = { mtime: 0, map: {} };
+function siteRedirects() {
+  try {
+    const f = path.join(SITE_DIR, 'redirects.json');
+    const mtime = require('fs').statSync(f).mtimeMs;
+    if (mtime !== siteRedirectCache.mtime) siteRedirectCache = { mtime, map: JSON.parse(require('fs').readFileSync(f, 'utf8')) };
+  } catch { siteRedirectCache = { mtime: 0, map: {} }; }
+  return siteRedirectCache.map;
+}
 app.use((req, res, next) => {
   const host = (req.headers.host || '').toLowerCase().split(':')[0];
-  if (host === 'comigo.net' || host === 'www.comigo.net') {
+  if (host === 'www.comigo.net') {
+    // One hostname for the site: www redirects to the canonical comigo.net.
+    return res.redirect(301, `https://comigo.net${req.originalUrl}`);
+  }
+  if (host === 'comigo.net') {
     if (req.path === '/privacy' || req.path === '/privacy.html') {
       res.set('Cache-Control', 'no-store');
       return res.sendFile(path.join(SITE_DIR, 'privacy.html'));
@@ -39,18 +56,27 @@ app.use((req, res, next) => {
     // SEO/content pages: any site/<name>.html is served at its extensionless
     // URL (and at the .html spelling) — new pages need no server change.
     const pageMatch = req.path.match(/^\/([\w-]+?)(?:\.html)?$/);
-    if (pageMatch && pageMatch[1] !== 'index' && !pageMatch[1].includes('template')) {
+    if (pageMatch && pageMatch[1] !== 'index' && !pageMatch[1].includes('template') && !SITE_PARTIALS.has(pageMatch[1])) {
       const pageFile = path.join(SITE_DIR, `${pageMatch[1]}.html`);
       if (require('fs').existsSync(pageFile)) {
         res.set('Cache-Control', 'no-store');
         return res.sendFile(pageFile);
       }
     }
-    // Published example pages (built by site/build.py): /examples/<slug>.
-    const exMatch = req.path.match(/^\/examples\/([\w-]+?)(?:\.html)?$/);
+    // Old URLs (site/redirects.json, e.g. the first /examples/<slug> pages and
+    // renamed exercises): a permanent redirect straight to the current page.
+    const redirectTo = siteRedirects()[req.path.replace(/\.html$/, '')];
+    if (redirectTo) {
+      const qs = req.originalUrl.slice(req.path.length);
+      return res.redirect(301, `https://comigo.net${redirectTo}${qs}`);
+    }
+    // Reading exercises (built by site/build.py into site/examples/<slug>.html)
+    // live at /spanish-reading-practice/<slug>; the .html spelling redirects.
+    const exMatch = req.path.match(/^\/spanish-reading-practice\/([\w-]+?)(\.html)?$/);
     if (exMatch) {
       const exFile = path.join(SITE_DIR, 'examples', `${exMatch[1]}.html`);
       if (require('fs').existsSync(exFile)) {
+        if (exMatch[2]) return res.redirect(301, `https://comigo.net/spanish-reading-practice/${exMatch[1]}`);
         res.set('Cache-Control', 'no-store');
         return res.sendFile(exFile);
       }
@@ -83,7 +109,8 @@ app.use((req, res, next) => {
       // Built from the .html files actually in site/, so new public pages are
       // picked up automatically. index.html is the homepage.
       const fsSync = require('fs');
-      const entries = fsSync.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && !f.includes('.template.')).map(f => {
+      const entries = fsSync.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && !f.includes('.template.')
+        && !SITE_PARTIALS.has(f.replace(/\.html$/, ''))).map(f => {
         // Extensionless canonical URLs (the server serves both spellings).
         const loc = f === 'index.html' ? 'https://comigo.net/' : `https://comigo.net/${f.replace(/\.html$/, '')}`;
         const lastmod = fsSync.statSync(path.join(SITE_DIR, f)).mtime.toISOString().slice(0, 10);
@@ -92,8 +119,14 @@ app.use((req, res, next) => {
       const exDir = path.join(SITE_DIR, 'examples');
       if (fsSync.existsSync(exDir)) {
         for (const f of fsSync.readdirSync(exDir).filter(f => f.endsWith('.html')).sort()) {
-          const lastmod = fsSync.statSync(path.join(exDir, f)).mtime.toISOString().slice(0, 10);
-          entries.push(`  <url><loc>https://comigo.net/examples/${f.replace(/\.html$/, '')}</loc><lastmod>${lastmod}</lastmod></url>`);
+          // lastmod = when the example was last published (every build rewrites
+          // the HTML, so the file date says nothing about the content).
+          let lastmod = fsSync.statSync(path.join(exDir, f)).mtime.toISOString().slice(0, 10);
+          try {
+            const pub = JSON.parse(fsSync.readFileSync(path.join(exDir, f.replace(/\.html$/, '.json')), 'utf8')).publishedAt;
+            if (pub) lastmod = pub.slice(0, 10);
+          } catch {}
+          entries.push(`  <url><loc>https://comigo.net/spanish-reading-practice/${f.replace(/\.html$/, '')}</loc><lastmod>${lastmod}</lastmod></url>`);
         }
       }
       res.set('Cache-Control', 'public, max-age=3600');
@@ -113,7 +146,10 @@ app.use((req, res, next) => {
     // no-store: mobile Safari clung to multi-MB cached copies through
     // deploys, making site updates invisible on phones.
     res.set('Cache-Control', 'no-store');
-    return res.sendFile(path.join(SITE_DIR, 'index.html'));
+    // Anything else is not a page: a real 404 (visitors still see the
+    // homepage), so mistyped or old URLs aren't indexed as copies of it.
+    const isHome = req.path === '/' || req.path === '/index.html';
+    return res.status(isHome ? 200 : 404).sendFile(path.join(SITE_DIR, 'index.html'));
   }
   next();
 });

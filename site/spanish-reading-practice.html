@@ -215,75 +215,89 @@
 </section>
 <style>
   .ex-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 22px; padding: 18px 24px 6px; }
+  .ex-level { padding: 26px 24px 0; }
+  .ex-level-head { margin: 0; font-size: 1.5rem; color: var(--accent); }
   .ex-card {
     display: flex; flex-direction: column; background: var(--card); color: var(--ink); text-decoration: none;
     border: 3px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 6px 6px 0 var(--shadow);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
   .ex-card:hover { transform: translate(2px, 2px); box-shadow: 4px 4px 0 var(--shadow); }
-  .ex-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; display: block; border-bottom: 3px solid var(--line); }
-  .ex-card .ex-card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .ex-card img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; display: block; border-bottom: 3px solid var(--line); }
+  .ex-card .ex-card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
   .ex-card .label { color: var(--accent); }
-  .ex-card h3 { margin: 0; font-size: 1.3rem; }
+  .ex-card .ex-title { margin: 0; font-size: 1.3rem; }
+  .ex-card .ex-sum { margin: 2px 0 0; font-size: 0.95rem; line-height: 1.45; }
   .ex-card .ex-src { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); }
-  .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: 4px; }
+  .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: auto; padding-top: 4px; }
 </style>
+<div class="wrap ex-level" id="level-beginner"><h3 class="display ex-level-head">Beginner</h3></div>
 <section class="wrap ex-links">
-  <a class="ex-card" href="/examples/looking-for-work">
+  <a class="ex-card" href="/spanish-reading-practice/looking-for-work">
     <img loading="lazy" decoding="async" src="/assets/example-looking-for-work.309e36d0.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="label">Beginner</span>
-      <h3 class="display alt-title"><span class="alt-es" lang="es">Buscando trabajo</span><span class="alt-en" lang="en" aria-hidden="true">Looking for work</span></h3>
+      <h4 class="display ex-title alt-title"><span class="alt-es" lang="es">Buscando trabajo</span> <span class="alt-en" lang="en" aria-hidden="true">Looking for work</span></h4>
+      <p class="ex-sum">A teenager walks down a street of cafés and shops looking for a job. Short everyday lines (debo, lo siento, me encantan, por el momento), voiced and explained word by word.</p>
       <span class="ex-src" lang="es">Primer turno · El restaurante</span>
-      <span class="ex-go">Read this page &rarr;</span>
+      <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
-  <a class="ex-card" href="/examples/meeting-zik">
+  <a class="ex-card" href="/spanish-reading-practice/meeting-zik">
     <img loading="lazy" decoding="async" src="/assets/example-meeting-zik.c67392d4.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="label">Beginner</span>
-      <h3 class="display alt-title"><span class="alt-es" lang="es">Conociendo a Zik</span><span class="alt-en" lang="en" aria-hidden="true">Meeting Zik</span></h3>
+      <h4 class="display ex-title alt-title"><span class="alt-es" lang="es">Conociendo a Zik</span> <span class="alt-en" lang="en" aria-hidden="true">Meeting Zik</span></h4>
+      <p class="ex-sum">At night a girl meets a small alien beside his crashed spaceship. Practise introducing yourself (soy, me llamo, mi nombre es) and saying how you feel.</p>
       <span class="ex-src" lang="es">La llegada · El visitante</span>
-      <span class="ex-go">Read this page &rarr;</span>
+      <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
-  <a class="ex-card" href="/examples/in-the-room-1">
-    <img loading="lazy" decoding="async" src="/assets/example-in-the-room-1.f89d7639.webp" width="640" height="960" alt="">
+  <a class="ex-card" href="/spanish-reading-practice/where-are-the-ghosts">
+    <img loading="lazy" decoding="async" src="/assets/example-where-are-the-ghosts.f89d7639.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="label">Beginner</span>
-      <h3 class="display alt-title"><span class="alt-es" lang="es">En la habitación</span><span class="alt-en" lang="en" aria-hidden="true">In the room</span></h3>
+      <h4 class="display ex-title alt-title"><span class="alt-es" lang="es">En la habitación</span> <span class="alt-en" lang="en" aria-hidden="true">In the room</span></h4>
+      <p class="ex-sum">At night a frightened girl tells her mum where she saw ghosts. Practise short questions and place phrases: en el armario, debajo del escritorio, debajo de mi cama, detrás del sofá.</p>
       <span class="ex-src" lang="es">Leer el ambiente</span>
-      <span class="ex-go">Read this page &rarr;</span>
+      <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
-  <a class="ex-card" href="/examples/ordering-at-the-restaurant">
-    <img loading="lazy" decoding="async" src="/assets/example-ordering-at-the-restaurant.3cf23298.webp" width="640" height="960" alt="">
+  <a class="ex-card" href="/spanish-reading-practice/ordering-at-a-restaurant">
+    <img loading="lazy" decoding="async" src="/assets/example-ordering-at-a-restaurant.3cf23298.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="label">Beginner</span>
-      <h3 class="display alt-title"><span class="alt-es" lang="es">Pedir en el restaurante</span><span class="alt-en" lang="en" aria-hidden="true">Ordering at the restaurant</span></h3>
+      <h4 class="display ex-title alt-title"><span class="alt-es" lang="es">Pedir en el restaurante</span> <span class="alt-en" lang="en" aria-hidden="true">Ordering at the restaurant</span></h4>
+      <p class="ex-sum">Two friends order drinks and food at a diner and the waitress brings it. Practise ordering in Spanish: para mí, por favor, voy a comer, aquí tienes.</p>
       <span class="ex-src" lang="es">Pedir en el restaurante</span>
-      <span class="ex-go">Read this page &rarr;</span>
+      <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
-  <a class="ex-card" href="/examples/a-small-town">
+  <a class="ex-card" href="/spanish-reading-practice/a-small-town">
     <img loading="lazy" decoding="async" src="/assets/example-a-small-town.11ff2274.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="label">Beginner</span>
-      <h3 class="display alt-title"><span class="alt-es" lang="es">Un pueblo pequeño</span><span class="alt-en" lang="en" aria-hidden="true">A small town</span></h3>
+      <h4 class="display ex-title alt-title"><span class="alt-es" lang="es">Un pueblo pequeño</span> <span class="alt-en" lang="en" aria-hidden="true">A small town</span></h4>
+      <p class="ex-sum">A lone rider crosses the desert and reaches a small town. Four short lines, a caption and three thoughts, with simple verbs like poder and ver, each voiced and translated.</p>
       <span class="ex-src" lang="es">La carta negra · El rey negro</span>
-      <span class="ex-go">Read this page &rarr;</span>
-    </div>
-  </a>
-  <a class="ex-card" href="/examples/staying-safe">
-    <img loading="lazy" decoding="async" src="/assets/example-staying-safe.a3f1dcad.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="label">Intermediate</span>
-      <h3 class="display alt-title"><span class="alt-es" lang="es">Mantenerse a salvo</span><span class="alt-en" lang="en" aria-hidden="true">Staying safe</span></h3>
-      <span class="ex-src" lang="es">Una alianza improbable · El superviviente</span>
-      <span class="ex-go">Read this page &rarr;</span>
+      <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
 </section>
+<div class="wrap ex-level" id="level-intermediate"><h3 class="display ex-level-head">Intermediate</h3></div>
+<section class="wrap ex-links">
+  <a class="ex-card" href="/spanish-reading-practice/staying-safe">
+    <img loading="lazy" decoding="async" src="/assets/example-staying-safe.a3f1dcad.webp" width="640" height="960" alt="">
+    <div class="ex-card-body">
+      <span class="label">Intermediate</span>
+      <h4 class="display ex-title alt-title"><span class="alt-es" lang="es">Mantenerse a salvo</span> <span class="alt-en" lang="en" aria-hidden="true">Staying safe</span></h4>
+      <p class="ex-sum">Survivors in a dark hideout argue over a plan to stay together and keep each other safe. Longer lines with the future tense and the subjunctive (hagamos), plus comprehension questions.</p>
+      <span class="ex-src" lang="es">Una alianza improbable · El superviviente</span>
+      <span class="ex-go">Read and listen &rarr;</span>
+    </div>
+  </a>
+</section>
+
 
 <section class="band">
   <div class="wrap">

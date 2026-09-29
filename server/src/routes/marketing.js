@@ -2549,6 +2549,7 @@ router.get('/examples', async (req, res) => {
           pageId: p.id, kind, isExampleComic: !!c.isExample,
           label: p.exampleLabel || (kind === 'comic' ? `Page ${p.pageNumber}` : 'Example'), pageNumber: p.pageNumber,
           title: p.exampleTitle || p.exampleLabel || '', titleEn: p.exampleTitleEn || '',
+          seoTitle: p.exampleSeoTitle || '', summary: p.exampleSummary || '', imageAlt: p.exampleImageAlt || '',
           image: (p.bakedImage || p.masterImage || '').split('?')[0],
           bubbles: bubbles.length,
           missingAudio: bubbles.filter(b => (b.sentences || []).some(s => (s.text || '').trim() && !s.audioUrl)).length,
@@ -2580,16 +2581,35 @@ router.put('/examples/:comicId/:pageId/title', async (req, res) => {
       idx = (comic.pages || []).findIndex(p => p.id === req.params.pageId);
     }
     if (idx < 0) return res.status(404).json({ error: 'Example page not found' });
-    const clean = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 80);
-    await Comic.updateOne({ id: comic.id }, { $set: {
-      [`${list}.${idx}.exampleTitle`]: clean(req.body.title),
-      [`${list}.${idx}.exampleTitleEn`]: clean(req.body.titleEn),
-    } });
+    const clean = (v, max) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, max);
+    // Only the fields sent are changed.
+    const fields = { title: ['exampleTitle', 80], titleEn: ['exampleTitleEn', 80], seoTitle: ['exampleSeoTitle', 90],
+                     summary: ['exampleSummary', 320], imageAlt: ['exampleImageAlt', 400] };
+    const set = {};
+    for (const [k, [field, max]] of Object.entries(fields)) {
+      if (k in req.body) set[`${list}.${idx}.${field}`] = clean(req.body[k], max);
+    }
+    await Comic.updateOne({ id: comic.id }, { $set: set });
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Example pages live at comigo.net/spanish-reading-practice/<slug> (site/build.py
+// EX_BASE). Old URLs 301 to their current one via site/redirects.json
+// ({ "/old/path": "/new/path" }); adding one also re-points any entry that led
+// to the old path, so there are never redirect chains.
+const EXAMPLE_URL_BASE = '/spanish-reading-practice';
+async function addSiteRedirect(from, to) {
+  const file = path.join(SITE_DIR, 'redirects.json');
+  let map = {};
+  try { map = JSON.parse(await fs.readFile(file, 'utf8')); } catch {}
+  for (const k of Object.keys(map)) if (map[k] === from) map[k] = to;
+  map[from] = to;
+  delete map[to];
+  await fs.writeFile(file, JSON.stringify(map, null, 2) + '\n');
+}
 
 router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
   try {
@@ -2647,9 +2667,11 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
       return copyAudio(`words/${key}`, `ex-${slug}-w-${tag}`);
     };
 
-    // Bubbles in the reader's order: by owning panel (the panel whose tap zone
-    // holds the bubble's centre, else the nearest), then top to bottom and
-    // left to right within it; a manual orderIndex wins inside its panel.
+    // Bubbles in the reader's order (as readerFormat stamps readingOrder): by
+    // owning panel (the panel whose tap zone holds the bubble's centre, else
+    // the nearest), then top to bottom and left to right within it; a manual
+    // orderIndex is a PAGE-WIDE position (the editor's badge number) — that
+    // bubble is lifted out and re-inserted there.
     const geo = (a, b) => (Math.abs((a.y || 0) - (b.y || 0)) < 0.02 ? (a.x || 0) - (b.x || 0) : (a.y || 0) - (b.y || 0));
     // Same owner rule as the reader export: floating panels win when the
     // centre is inside more than one (a full-page base panel holds them all),
@@ -2670,9 +2692,13 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
       }
       return owner ? (owner.panelOrder || 0) : 0;
     };
-    const bubbles = (page.bubbles || [])
+    const autoOrder = (page.bubbles || [])
       .filter(b => !b.hidden && b.type !== 'image' && (b.sentences || []).some(s => (s.text || '').trim()))
-      .sort((a, b) => panelOf(a) - panelOf(b) || (a.orderIndex ?? 1e9) - (b.orderIndex ?? 1e9) || geo(a, b));
+      .sort((a, b) => panelOf(a) - panelOf(b) || geo(a, b));
+    const bubbles = autoOrder.filter(b => b.orderIndex == null);
+    for (const m of autoOrder.filter(b => b.orderIndex != null).sort((a, b) => a.orderIndex - b.orderIndex)) {
+      bubbles.splice(Math.min(Math.max(m.orderIndex - 1, 0), bubbles.length), 0, m);
+    }
 
     const out = [];
     let explained = 0, n = 0;
@@ -2730,7 +2756,8 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
 
     const meta = await require('sharp')(imgSrc).metadata();
     const data = {
-      slug, label: page.exampleTitle || page.exampleLabel || '', labelEn: page.exampleTitleEn || '', comic: comic.title || '', collection: comic.collectionTitle || '',
+      slug, label: page.exampleTitle || page.exampleLabel || '', labelEn: page.exampleTitleEn || '',
+      seoTitle: page.exampleSeoTitle || '', summary: page.exampleSummary || '', imageAlt: page.exampleImageAlt || '', comic: comic.title || '', collection: comic.collectionTitle || '',
       level: comic.level || '',
       image: `example-${slug}`, width: meta.width, height: meta.height,
       publishedAt: new Date().toISOString(),
@@ -2738,6 +2765,16 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
     };
     await fs.mkdir(path.join(SITE_DIR, 'examples'), { recursive: true });
     await fs.writeFile(path.join(SITE_DIR, 'examples', `${slug}.json`), JSON.stringify(data, null, 1));
+
+    // Renamed (published under a new slug): drop the old slug's files and
+    // 301 its URL to the new one (site/redirects.json, read by the server).
+    const oldSlug = page.exampleSlug;
+    if (oldSlug && oldSlug !== slug) {
+      await fs.rm(path.join(SITE_DIR, 'examples', `${oldSlug}.json`), { force: true });
+      for (const x of ['png', 'jpg']) await fs.rm(path.join(assetsDir, `example-${oldSlug}.${x}`), { force: true });
+      for (const f of await fs.readdir(audioOut)) if (f.startsWith(`ex-${oldSlug}-`)) await fs.rm(path.join(audioOut, f));
+      await addSiteRedirect(`${EXAMPLE_URL_BASE}/${oldSlug}`, `${EXAMPLE_URL_BASE}/${slug}`);
+    }
 
     page.exampleSlug = slug;
     page.examplePublishedAt = new Date();
