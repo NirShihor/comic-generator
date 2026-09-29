@@ -1844,7 +1844,7 @@ function Examples() {
     setBusy(ex.pageId); setMsg('');
     try {
       const r = await api.post(`/marketing/examples/${ex.comicId}/${ex.pageId}/publish`, { slug });
-      setMsg(`Published "${ex.label}" as ${r.data.slug}: ${r.data.bubbles} bubbles, ${r.data.audioFiles} audio files, ${r.data.explained} new explanations. It gets its own page at comigo.net/examples/${r.data.slug} (listed on Reading practice) once the site is rebuilt and deployed; ${r.data.embed} also embeds it inside another page.`);
+      setMsg(`Published "${ex.label}" as ${r.data.slug}: ${r.data.bubbles} bubbles, ${r.data.audioFiles} audio files, ${r.data.explained} new explanations. It gets its own page at comigo.net/spanish-reading-practice/${r.data.slug} (listed on Reading practice) once the site is rebuilt and deployed; ${r.data.embed} also embeds it inside another page.`);
       load();
     } catch (e) { setMsg(e.response?.data?.error || e.message); }
     finally { setBusy(''); }
@@ -1936,7 +1936,7 @@ function Examples() {
               <div style={{ fontSize: '0.78rem', color: ex.publishedAt ? '#7fd08a' : '#777' }}>
                 {ex.publishedAt ? `Published as ${ex.slug} · ${new Date(ex.publishedAt).toLocaleDateString()}` : 'Not published'}
               </div>
-              {ex.slug && <div style={{ fontSize: '0.78rem', color: '#999' }}>Page: comigo.net/examples/{ex.slug}</div>}
+              {ex.slug && <div style={{ fontSize: '0.78rem', color: '#999' }}>Page: comigo.net/spanish-reading-practice/{ex.slug}</div>}
               <ExampleTitleEditor ex={ex} />
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
                 <button className="btn btn-secondary" onClick={() => navigate(`/comic/${ex.comicId}/page/${ex.pageId}`)} style={{ padding: '0.3rem 0.8rem' }}>Edit</button>
@@ -1961,29 +1961,44 @@ function Examples() {
 
 // Site title for a published example: Spanish, plus an optional English title
 // that the page heading alternates with. Saved now; shown after Republish.
+// The example's site metadata: the page heading (Spanish, optionally alternating
+// with English) and what search engines and the Reading practice card show.
+const EXAMPLE_META_FIELDS = [
+  ['title', 'Site title in Spanish (default: comic name)'],
+  ['titleEn', 'English title (heading alternates, optional)'],
+  ['seoTitle', 'Search title, e.g. "Ordering at a Restaurant: Beginner Spanish Reading Practice" (default: English title + level)'],
+  ['summary', 'Summary: 1–2 sentences on what the learner reads and practises (search description, card, page intro)', 'area'],
+  ['imageAlt', 'Image description: what happens on the comic page, for screen readers and search (alt text)', 'area'],
+];
 function ExampleTitleEditor({ ex }) {
-  const [title, setTitle] = useState(ex.title || '');
-  const [titleEn, setTitleEn] = useState(ex.titleEn || '');
+  const initial = () => Object.fromEntries(EXAMPLE_META_FIELDS.map(([k]) => [k, ex[k] || '']));
+  const [vals, setVals] = useState(initial);
   const [state, setState] = useState('');
-  const dirty = title !== (ex.title || '') || titleEn !== (ex.titleEn || '');
-  const input = { padding: '0.3rem 0.5rem', borderRadius: 5, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.8rem', width: '100%', boxSizing: 'border-box' };
+  const dirty = EXAMPLE_META_FIELDS.some(([k]) => vals[k] !== (ex[k] || ''));
+  const input = { padding: '0.3rem 0.5rem', borderRadius: 5, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.8rem', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' };
   const save = async () => {
     setState('saving');
     try {
-      await api.put(`/marketing/examples/${ex.comicId}/${ex.pageId}/title`, { title, titleEn });
-      ex.title = title; ex.titleEn = titleEn;
+      await api.put(`/marketing/examples/${ex.comicId}/${ex.pageId}/title`, vals);
+      Object.assign(ex, vals);
       setState('saved');
     } catch (e) {
       setState('error');
     }
   };
+  const missing = !vals.summary.trim() || !vals.imageAlt.trim();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <input value={title} onChange={e => { setTitle(e.target.value); setState(''); }} placeholder={`Site title (default: ${ex.comicTitle || 'comic name'})`} style={input} />
-      <input value={titleEn} onChange={e => { setTitleEn(e.target.value); setState(''); }} placeholder="English title (heading alternates, optional)" style={input} />
+      {EXAMPLE_META_FIELDS.map(([k, placeholder, kind]) => {
+        const onChange = e => { setVals(v => ({ ...v, [k]: e.target.value })); setState(''); };
+        return kind === 'area'
+          ? <textarea key={k} value={vals[k]} onChange={onChange} placeholder={placeholder} rows={2} style={{ ...input, resize: 'vertical' }} />
+          : <input key={k} value={vals[k]} onChange={onChange} placeholder={placeholder} style={input} />;
+      })}
+      {missing && !dirty && <span style={{ fontSize: '0.72rem', color: '#e0b25a' }}>Add a summary and image description before publishing — the site page uses them.</span>}
       {(dirty || state) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem' }}>
-          {dirty && <button className="btn btn-secondary" disabled={state === 'saving'} onClick={save} style={{ padding: '0.2rem 0.7rem', fontSize: '0.75rem' }}>{state === 'saving' ? 'Saving…' : 'Save titles'}</button>}
+          {dirty && <button className="btn btn-secondary" disabled={state === 'saving'} onClick={save} style={{ padding: '0.2rem 0.7rem', fontSize: '0.75rem' }}>{state === 'saving' ? 'Saving…' : 'Save'}</button>}
           {state === 'saved' && !dirty && <span style={{ color: '#7fd08a' }}>Saved — Republish to update the site</span>}
           {state === 'error' && <span style={{ color: '#f07a7a' }}>Couldn't save</span>}
         </div>

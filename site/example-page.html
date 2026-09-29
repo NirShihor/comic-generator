@@ -7,13 +7,11 @@
 <meta property="og:title" content="{{PG_TITLE}}">
 <meta property="og:description" content="{{PG_DESC}}">
 <meta property="og:url" content="{{PG_URL}}">
-<meta property="og:image" content="https://comigo.net/og-image.jpg">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+{{PG_OG_IMAGE}}
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{PG_TITLE}}">
 <meta name="twitter:description" content="{{PG_DESC}}">
-<meta name="twitter:image" content="https://comigo.net/og-image.jpg">
+{{PG_BREADCRUMB_LD}}
 <link rel="icon" type="image/png" sizes="196x196" href="/favicon.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -101,6 +99,22 @@
   .gcall .label { color: #FFD23F; display: block; margin-bottom: 8px; }
   .gcall p { margin: 0 0 10px; font-size: 1rem; }
   .gcall .gx { font-family: system-ui, sans-serif; font-size: 0.98rem; background: rgba(0,0,0,0.22); border-radius: 12px; padding: 10px 14px; margin: 0; }
+  .hero-min .src { color: var(--muted); font-size: 1rem; }
+  /* Study the Spanish: the page's text (transcript, words, notes), collapsed by default */
+  .study { padding: 8px 24px 0; }
+  .study h2 { font-size: clamp(1.4rem, 3vw, 1.9rem); margin: 30px 0 6px; }
+  .study .hint-line { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.9rem; margin: 0 0 12px; }
+  .study-block { background: var(--card); border: 3px solid var(--line); border-radius: 12px; padding: 12px 16px; box-shadow: 4px 4px 0 var(--shadow); max-width: 70ch; margin: 0 0 12px; }
+  .study-block summary { cursor: pointer; list-style: none; }
+  .study-block summary::-webkit-details-marker { display: none; }
+  .study-block summary h3 { display: inline; font-size: 1.08rem; margin: 0; }
+  .study-block summary::before { content: "\25B8\FE0E  "; color: var(--accent); }
+  .study-block[open] summary::before { content: "\25BE\FE0E  "; }
+  .study-block ol, .study-block ul { margin: 12px 0 4px; padding-left: 1.3em; display: flex; flex-direction: column; gap: 9px; }
+  .study-block .es { display: block; font-weight: 700; }
+  .study-block .en, .study-block .note { display: block; color: var(--muted); }
+  .study-block .vocab { list-style: none; padding-left: 0; }
+  .study-block .base { color: var(--muted); }
   .stage-note { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.88rem; margin: 0 0 14px; text-align: center; }
   @media (max-width: 800px) {
     .wrap { padding-left: 34px; padding-right: 34px; }
@@ -136,13 +150,13 @@
 {{NAV}}
 
 <nav class="wrap crumbs" aria-label="Breadcrumb">
-  <a href="/spanish-reading-practice">Reading practice</a> &rsaquo; <span aria-current="page">{{PG_LABEL}}</span>
+  <a href="/">Home</a> &rsaquo; <a href="/spanish-reading-practice">Spanish reading practice</a> &rsaquo; <span aria-current="page">{{PG_LABEL}}</span>
 </nav>
 
 <section class="wrap hero-min">
   <span class="label eyebrow">{{PG_EYEBROW}}</span>
   {{PG_H1}}
-  <p>{{PG_INTRO}}</p>
+  {{PG_INTRO}}
   <p>
     Look at the whole page first &mdash; who is there and what is happening? Then read the
     Spanish. Tap a bubble to hear it, and tap any word for its meaning.
@@ -151,6 +165,7 @@
 
 {{EXAMPLE:{{PG_SLUG}}|Every line is voiced — tap a bubble to listen, tap a word for its meaning.}}
 
+{{PG_STUDY}}
 {{PG_EXTRA}}
 
 <section class="band">
