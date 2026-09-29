@@ -31,6 +31,12 @@ require('./services/dbBackup').startDailyBackups();
 const SITE_DIR = path.join(__dirname, '../../site');
 // Pieces site/build.py assembles pages from — never pages themselves.
 const SITE_PARTIALS = new Set(['nav', 'example-page', 'example-stage']);
+// Aggregate server-side measurement (counts only, nothing about the visitor):
+// reading-practice page views and App Store button taps (services/siteAnalytics).
+const siteAnalytics = require('./services/siteAnalytics');
+const siteEventSend = siteAnalytics.makeSender();
+const serveSitePage = (req, res, file, page) =>
+  siteAnalytics.servePage(req, res, require('fs').readFileSync(file, 'utf8'), page, siteEventSend);
 // IndexNow ownership key (site/indexnow/<key>.txt), served at /<key>.txt.
 const indexNow = require('./services/indexNow');
 const indexNowKeyFile = indexNow.keyFileHandler(SITE_DIR);
@@ -62,8 +68,7 @@ app.use((req, res, next) => {
     if (pageMatch && pageMatch[1] !== 'index' && !pageMatch[1].includes('template') && !SITE_PARTIALS.has(pageMatch[1])) {
       const pageFile = path.join(SITE_DIR, `${pageMatch[1]}.html`);
       if (require('fs').existsSync(pageFile)) {
-        res.set('Cache-Control', 'no-store');
-        return res.sendFile(pageFile);
+        return serveSitePage(req, res, pageFile, { pageType: pageMatch[1] === 'spanish-reading-practice' ? 'hub' : 'other' });
       }
     }
     // Old URLs (site/redirects.json, e.g. the first /examples/<slug> pages and
@@ -80,10 +85,12 @@ app.use((req, res, next) => {
       const exFile = path.join(SITE_DIR, 'examples', `${exMatch[1]}.html`);
       if (require('fs').existsSync(exFile)) {
         if (exMatch[2]) return res.redirect(301, `https://comigo.net/spanish-reading-practice/${exMatch[1]}`);
-        res.set('Cache-Control', 'no-store');
-        return res.sendFile(exFile);
+        return serveSitePage(req, res, exFile, { pageType: 'exercise', exercise: exMatch[1] });
       }
     }
+    // App Store buttons: count the tap, then redirect (Apple campaign link for
+    // campaign visitors, the plain App Store page otherwise).
+    if (req.path === '/go/app-store') return siteAnalytics.appStoreRedirect(req, res, siteEventSend);
     if (req.path === '/favicon.png' || req.path === '/favicon.ico') {
       return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
     }
@@ -153,7 +160,8 @@ app.use((req, res, next) => {
     // Anything else is not a page: a real 404 (visitors still see the
     // homepage), so mistyped or old URLs aren't indexed as copies of it.
     const isHome = req.path === '/' || req.path === '/index.html';
-    return res.status(isHome ? 200 : 404).sendFile(path.join(SITE_DIR, 'index.html'));
+    if (isHome) return serveSitePage(req, res, path.join(SITE_DIR, 'index.html'), { pageType: 'other' });
+    return res.status(404).sendFile(path.join(SITE_DIR, 'index.html'));
   }
   next();
 });

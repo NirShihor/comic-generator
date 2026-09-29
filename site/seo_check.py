@@ -49,7 +49,7 @@ class Page(HTMLParser):
 
 def main():
     pages = public_pages()
-    known = {u for u, _ in pages} | {'/privacy'}
+    known = {u for u, _ in pages} | {'/privacy', '/go/app-store'}   # /go/app-store: counted App Store redirect
     redirects = json.load(open(os.path.join(here, 'redirects.json'))) if os.path.exists(os.path.join(here, 'redirects.json')) else {}
     problems, titles, descs, rows = [], {}, {}, []
     for url, f in pages:
