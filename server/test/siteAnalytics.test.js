@@ -8,7 +8,7 @@ const sa = require('../src/services/siteAnalytics');
 
 const SITE_DIR = path.join(__dirname, '../../site');
 const SAFARI = 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1';
-const CAMPAIGN_LINK = 'https://apps.apple.com/app/apple-store/id6760253260?pt=128624331&ct=GoolgeSearch&mt=8';
+const CAMPAIGN_LINK = 'https://apps.apple.com/app/apple-store/id6760253260?pt=128624331&ct=GoogleSearch&mt=8';
 const GOOGLE = { utm_source: 'google', utm_medium: 'cpc', utm_campaign: 'google-reading-practice' };
 // Keys an event may ever carry — nothing about the visitor.
 const ALLOWED = new Set(['surface', 'page_type', 'exercise', 'from_page', 'button', 'apple_campaign', 'from_campaign',
@@ -69,7 +69,7 @@ test('page-view and click events carry only page/button/campaign fields', () => 
   const click = sa.ctaClickEvent({ from: '/spanish-reading-practice/meeting-zik', loc: 'band', utm: GOOGLE });
   assert.deepStrictEqual(click.properties, {
     surface: 'website', from_page: '/spanish-reading-practice/meeting-zik', page_type: 'exercise', exercise: 'meeting-zik',
-    button: 'band', apple_campaign: 'GoolgeSearch', ...GOOGLE, from_campaign: true,
+    button: 'band', apple_campaign: 'GoogleSearch', ...GOOGLE, from_campaign: true,
   });
   const organic = sa.ctaClickEvent({ from: '/spanish-reading-practice', loc: 'nav', utm: {} });
   assert.deepStrictEqual(organic.properties, { surface: 'website', from_page: '/spanish-reading-practice', page_type: 'hub', button: 'nav', apple_campaign: null, from_campaign: false });
@@ -140,7 +140,7 @@ test('App Store redirect: counts the tap and sends campaign visitors to the camp
     assert.strictEqual(events.length, 2);
     assert.strictEqual(events[0].name, 'app_store_cta_clicked');
     assert.strictEqual(events[0].properties.exercise, 'meeting-zik');
-    assert.strictEqual(events[0].properties.apple_campaign, 'GoolgeSearch');
+    assert.strictEqual(events[0].properties.apple_campaign, 'GoogleSearch');
     assert.ok(!JSON.stringify(events).includes('abc'), 'gclid never recorded');
     assert.strictEqual(events[1].properties.from_campaign, false);
   });

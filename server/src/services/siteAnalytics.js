@@ -17,7 +17,7 @@
 const APP_STORE_URL = 'https://apps.apple.com/app/id6760253260';
 const APPLE_PROVIDER_TOKEN = '128624331';
 // utm_campaign (Google Ads final URL suffix) → Apple campaign token (ct).
-const APPLE_CAMPAIGNS = { 'google-reading-practice': 'GoolgeSearch' };
+const APPLE_CAMPAIGNS = { 'google-reading-practice': 'GoogleSearch' };
 const DISTINCT_ID = 'comigo-website';
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
 const BUTTON_LOCATIONS = new Set(['nav', 'menu', 'hero', 'band']);
