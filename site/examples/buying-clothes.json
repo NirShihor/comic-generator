@@ -11,7 +11,7 @@
  "image": "example-buying-clothes",
  "width": 1024,
  "height": 1536,
- "publishedAt": "2026-09-29T15:31:19.281Z",
+ "publishedAt": "2026-09-29T15:39:00.386Z",
  "bubbles": [
   {
    "x": 0.22727272727272718,
@@ -20,20 +20,25 @@
    "h": 0.10505050505050503,
    "sentences": [
     {
-     "es": "mmmm...Interesante... robando...",
-     "en": "mmmm...Interesting... stealing...",
+     "es": "mmmm... Interesante... robando...",
+     "en": "mmmm... Interesting... stealing...",
      "a": "{{AUD_ex-buying-clothes-b1-1}}",
      "words": [
       {
-       "t": "mmmm...Interesante...",
+       "t": "mmmm...",
        "m": "mmmm",
        "b": "mmmm",
        "bm": "",
-       "s": 0,
-       "e": 2200,
-       "a": "{{AUD_ex-buying-clothes-w-mmmminteresante}}",
-       "ba": "{{AUD_ex-buying-clothes-w-mmmm}}",
-       "ex": "The word \"mmmminteresante\" is an informal way of saying \"interesting\" in Spanish, with the extra \"mmm\" suggesting a thoughtful or contemplative tone. In this sentence, it serves as an adjective describing something that captures attention or curiosity.\n\nIn this context, \"mmmminteresante\" is used to express a reaction to the situation being described, which is \"robando\" (stealing). The speaker is likely reflecting on the act of stealing, finding it intriguing or noteworthy. The structure of the sentence indicates that the speaker is pausing to consider the implications of what they are observing.\n\nOverall, \"mmmminteresante\" adds a layer of personal engagement to the statement, showing the speaker's interest in the topic at hand."
+       "a": "{{AUD_ex-buying-clothes-w-mmmm}}",
+       "ex": "In this sentence, \"mmmm\" is an interjection. It expresses a sound or feeling, often indicating contemplation, curiosity, or pleasure. It doesn't have a grammatical role like a verb or noun but serves to convey the speaker's reaction to what they are thinking about.\n\nHere, \"mmmm\" suggests that the speaker is considering something intriguing or appealing, which is reinforced by the following word \"Interesante\" (Interesting). The use of \"mmmm\" sets the tone for a thoughtful or intrigued response to the idea of \"robando\" (stealing). It adds an emotional layer to the sentence, indicating that the speaker finds the concept worth pondering."
+      },
+      {
+       "t": "Interesante...",
+       "m": "interesting",
+       "b": "interesante",
+       "bm": "",
+       "a": "{{AUD_ex-buying-clothes-w-interesante}}",
+       "ex": "The word \"interesante\" in this sentence is an adjective. It describes something that captures attention or curiosity. In this context, it is used to express that the action of \"robando\" (stealing) is intriguing or noteworthy.\n\nIn Spanish, adjectives like \"interesante\" agree in gender and number with the nouns they modify, but here it stands alone, expressing a general observation. The speaker is likely reflecting on the situation or idea of stealing, indicating that they find it compelling or thought-provoking. \n\nSo, in this sentence, \"interesante\" serves to convey the speaker's reaction to the concept of stealing, making it clear that they find it worthy of consideration."
       },
       {
        "t": "robando...",
@@ -44,29 +49,7 @@
        "e": 3200,
        "a": "{{AUD_ex-buying-clothes-w-robando}}",
        "ba": "{{AUD_ex-buying-clothes-w-robar}}",
-       "forms": [
-        {
-         "label": "Masc. sing.",
-         "text": "interesante",
-         "a": "{{AUD_ex-buying-clothes-w-interesante}}"
-        },
-        {
-         "label": "Fem. sing.",
-         "text": "interesante",
-         "a": "{{AUD_ex-buying-clothes-w-interesante}}"
-        },
-        {
-         "label": "Masc. plural",
-         "text": "interesantes",
-         "a": "{{AUD_ex-buying-clothes-w-interesantes}}"
-        },
-        {
-         "label": "Fem. plural",
-         "text": "interesantes",
-         "a": "{{AUD_ex-buying-clothes-w-interesantes}}"
-        }
-       ],
-       "ex": "The word \"robando\" is a verb form in this sentence. It comes from the infinitive verb \"robar,\" which means \"to steal.\" In this case, \"robando\" is the gerund form, indicating an ongoing action, so it translates to \"stealing.\"\n\nIn the sentence \"mmmm...Interesante... robando...\", \"robando\" is used to express what is happening or what someone is doing at that moment. The speaker is likely reflecting on something interesting related to the act of stealing. \n\nHere's a short present-tense conjugation of \"robar\":\n- Yo robo (I steal)\n- Tú robas (You steal)\n- Él/Ella roba (He/She steals)\n\nSo, \"robando\" connects to the idea of an action that is currently taking place, adding a sense of immediacy and intrigue to the conversation."
+       "ex": "The word \"robando\" is a verb form in this sentence. It comes from the infinitive verb \"robar,\" which means \"to steal.\" In this case, \"robando\" is the gerund form, indicating an ongoing action, so it translates to \"stealing.\"\n\nIn the context of the sentence, \"mmmm... Interesante... robando...\" the speaker is likely reflecting on something interesting related to the act of stealing. The use of the gerund here emphasizes that the action is currently happening or being considered, creating a sense of immediacy or curiosity about the situation. \n\nHere's a short present-tense conjugation for \"robar\":\n- yo robo (I steal)\n- tú robas (you steal)\n- él/ella/usted roba (he/she/you formal steal)\n- nosotros/nosotras robamos (we steal)\n- ellos/ellas/ustedes roban (they/you all steal)\n\nSo, \"robando\" connects to the idea of stealing in a way that suggests the speaker is pondering or reacting to this action."
       }
      ]
     }
