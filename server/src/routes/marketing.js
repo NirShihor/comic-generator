@@ -1564,10 +1564,11 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
         const b = await soundOnBadgePng(tmp);
         openElements.push({ key: 'badge', png: b.png, w: b.w, h: b.h, x: Math.round((W - b.w) / 2), y: H - 300 - b.h, def: { effect: 'pop', start: 2.0, dur: 0.4 } });
       }
-      // With a hold set, the card lasts until its last entrance has finished plus the hold.
+      // The card lasts at least until its last entrance has finished (plus the
+      // hold), so a late element (the sound badge) is never cut off.
       const oAnim = secs.openingAnim || {};
       const animEnd = Math.max(...openElements.map(el => { const c = { ...el.def, ...(oAnim[el.key] || {}) }; return (Number(c.start) || 0) + (Number(c.dur) || 0.4); }));
-      const oDur = secs.openingHold > 0 ? Math.max(openingSec, animEnd + secs.openingHold) : openingSec;
+      const oDur = Math.max(openingSec, animEnd + (secs.openingHold || 0) + (secs.soundBadge ? 0.6 : 0));
       parts.push(await layeredCardSegment(tmp, 'open', openElements, oDur, oAnim, run));
     }
     // Optional message card (second slide) after the opening card.
