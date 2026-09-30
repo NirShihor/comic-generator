@@ -1136,6 +1136,86 @@ function CardAnim({ title, rows, presets, value, onChange, secs, note }) {
   );
 }
 
+// Reels: an optional second slide after the opening card — own background,
+// lines of text with colour, size and entrance ("juice"), optional narration.
+const MESSAGE_LINE_DEFAULT = { text: '', color: '#FFFFFF', size: 72, effect: 'fade', start: 0, dur: 0.5 };
+const MESSAGE_CARD_DEFAULT = { enabled: false, background: '#6E40F0', image: '', dim: 0.35, seconds: 4, hold: 0.8, voice: false, autoTime: true,
+                               lines: [{ ...MESSAGE_LINE_DEFAULT }] };
+const MESSAGE_COLORS = [['#FFFFFF', 'White'], ['#FFD23F', 'Yellow'], ['#16182E', 'Ink'], ['#6E40F0', 'Violet'], ['#7FD08A', 'Green'], ['#F07A7A', 'Red']];
+function MessageCardEditor({ value, onChange, images }) {
+  const v = value;
+  const set = (k, x) => onChange({ ...v, [k]: x });
+  const setLine = (i, k, x) => set('lines', v.lines.map((l, j) => (j === i ? { ...l, [k]: x } : l)));
+  const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem' };
+  const effects = [['none', 'Appear'], ['fade', 'Fade in'], ['pop', 'Pop (grow in)'], ['slide-up', 'Slide up'], ['slide-down', 'Slide down'], ['slide-left', 'Slide from right'], ['slide-right', 'Slide from left'], ['typewriter', 'Typewriter']];
+  const lastEnd = Math.max(0, ...v.lines.map(l => (Number(l.start) || 0) + (Number(l.dur) || 0)));
+  return (
+    <div style={{ border: '1px solid #444', borderRadius: 8, padding: 8, margin: '8px 0' }}>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc' }}>
+        <input type="checkbox" checked={v.enabled} onChange={e => set('enabled', e.target.checked)} />
+        Message card — a second slide after the opening card (e.g. "Turn audio on", "In some pages, if you look carefully…")
+      </label>
+      {v.enabled && (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', color: '#aaa' }}>
+            Background
+            <input type="color" value={v.background} onChange={e => set('background', e.target.value.toUpperCase())} title="Background colour" style={{ width: 34, height: 26, padding: 0, border: '1px solid #555', background: 'none' }} />
+            <select value={v.image} onChange={e => set('image', e.target.value)} style={{ ...input, maxWidth: 260 }} title="Or a comic image behind the text">
+              <option value="">Colour only</option>
+              {images.map(im => <option key={im.file} value={im.file}>{im.file}</option>)}
+            </select>
+            {v.image && <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Darken the image so the text reads">
+              dim <input type="range" min={0} max={0.9} step={0.05} value={v.dim} onChange={e => set('dim', Number(e.target.value))} /> {Math.round(v.dim * 100)}%
+            </label>}
+            <span style={{ flex: 1 }} />
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Minimum length of the card">
+              at least <input type="number" min={0.5} max={60} step={0.5} value={v.seconds} onChange={e => set('seconds', Number(e.target.value) || 4)} style={{ ...input, width: 64 }} /> s
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Pause after the last line has appeared (and the narration has finished)">
+              then hold <input type="number" min={0} max={15} step={0.1} value={v.hold} onChange={e => set('hold', Number(e.target.value) || 0)} style={{ ...input, width: 64 }} /> s
+            </label>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 64px 130px 64px 64px auto', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
+            <span style={{ color: '#777' }}>Line</span><span style={{ color: '#777' }}>Colour</span><span style={{ color: '#777' }}>Size</span>
+            <span style={{ color: '#777' }}>Entrance</span><span style={{ color: '#777' }}>{v.voice && v.autoTime ? 'Start (auto)' : 'Start s'}</span><span style={{ color: '#777' }}>Length s</span><span />
+            {v.lines.map((l, i) => (
+              <React.Fragment key={i}>
+                <input style={input} value={l.text} placeholder={i === 0 ? 'Turn audio on' : `Line ${i + 1}`} onChange={e => setLine(i, 'text', e.target.value)} />
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <input type="color" value={l.color} onChange={e => setLine(i, 'color', e.target.value.toUpperCase())} style={{ width: 30, height: 24, padding: 0, border: '1px solid #555', background: 'none' }} />
+                  <select value={MESSAGE_COLORS.some(([c]) => c === l.color) ? l.color : ''} onChange={e => e.target.value && setLine(i, 'color', e.target.value)} style={{ ...input, padding: '0.2rem', width: 70 }}>
+                    <option value="">…</option>{MESSAGE_COLORS.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
+                  </select>
+                </div>
+                <input type="number" min={24} max={200} step={2} value={l.size} onChange={e => setLine(i, 'size', Number(e.target.value) || 72)} style={input} />
+                <select value={l.effect} onChange={e => setLine(i, 'effect', e.target.value)} style={input}>
+                  {effects.map(([x, n]) => <option key={x} value={x}>{n}</option>)}
+                </select>
+                <input type="number" min={0} max={60} step={0.1} value={l.start} onChange={e => setLine(i, 'start', Number(e.target.value) || 0)} style={input} disabled={v.voice && v.autoTime}
+                       title={v.voice && v.autoTime ? 'Set automatically: each line appears as its narration starts' : 'Seconds after the card begins'} />
+                <input type="number" min={0.05} max={5} step={0.1} value={l.dur} onChange={e => setLine(i, 'dur', Number(e.target.value) || 0.5)} style={input} />
+                <button className="btn btn-secondary" onClick={() => set('lines', v.lines.filter((_, j) => j !== i))} disabled={v.lines.length === 1}
+                        style={{ padding: '0.15rem 0.45rem', color: '#f88' }} title="Remove line">✕</button>
+              </React.Fragment>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', color: '#aaa' }}>
+            <button className="btn btn-secondary" onClick={() => set('lines', [...v.lines, { ...MESSAGE_LINE_DEFAULT, start: Number((lastEnd + 0.4).toFixed(1)) }])}
+                    disabled={v.lines.length >= 8} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}>＋ Add line</button>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="The house English narrator reads each line over the card">
+              <input type="checkbox" checked={v.voice} onChange={e => set('voice', e.target.checked)} /> Read the lines aloud (English voice)
+            </label>
+            {v.voice && <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Each line appears as its narration starts, one after another; off = your Start times, narration at each line's start">
+              <input type="checkbox" checked={v.autoTime} onChange={e => set('autoTime', e.target.checked)} /> time the lines to the narration
+            </label>}
+            <span style={{ color: '#777' }}>The card lasts until the last line (and its narration) has finished, plus the hold — never less than "at least".</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Posters() {
   const [comics, setComics] = useState([]);
   const [comicId, setComicId] = useState('');
@@ -1356,6 +1436,7 @@ function Reels() {
   const [openingSec, setOpeningSec] = useState(2);
   const [openingHold, setOpeningHold] = useState(0);
   const [openingAnim, setOpeningAnim] = useState(OPENING_ANIM_DEFAULT);
+  const [messageCard, setMessageCard] = useState(MESSAGE_CARD_DEFAULT);
 
   useEffect(() => {
     api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
@@ -1426,7 +1507,7 @@ function Reels() {
   const remix = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim });
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard });
       setClip(r.data.url);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -1453,7 +1534,7 @@ function Reels() {
     try {
       const r = await api.post(model.startsWith('sora') ? '/marketing/sora-clip' : '/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, mode, aspectRatio: '9:16', styleLock, resolution,
         voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, negativePrompt,
-        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim });
+        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -1697,6 +1778,7 @@ function Reels() {
                 <input type="number" min={0} max={15} step={0.5} value={openingHold} onChange={e => setOpeningHold(Number(e.target.value) || 0)} style={{ ...input, width: 70 }} /> s</label>
             </div>
             {(openingLine1 || openingLine2) && <OpeningCardAnim value={openingAnim} onChange={setOpeningAnim} secs={openingSec} />}
+            <MessageCardEditor value={messageCard} onChange={setMessageCard} images={images} />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input style={input} placeholder="Question card (yellow) — leave empty to skip" value={question} onChange={e => setQuestion(e.target.value)} />
               <input type="number" min={0.5} max={10} step={0.5} value={questionSec} title="How long the question card shows"
