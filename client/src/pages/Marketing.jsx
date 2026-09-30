@@ -1111,7 +1111,7 @@ function CardAnim({ title, rows, presets, value, onChange, secs, note }) {
   const set = (k, f, v) => onChange({ ...value, [k]: { ...value[k], [f]: v } });
   return (
     <div style={{ border: '1px solid #444', borderRadius: 8, padding: 8, marginTop: 8 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, fontSize: '0.82rem', color: '#aaa', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, fontSize: '0.82rem', color: '#d6d0e6', flexWrap: 'wrap' }}>
         {title}
         <span style={{ flex: 1 }} />
         {Object.keys(presets).map(k => (
@@ -1119,7 +1119,7 @@ function CardAnim({ title, rows, presets, value, onChange, secs, note }) {
         ))}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 70px 70px', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
-        <span style={{ color: '#777' }}></span><span style={{ color: '#777' }}>Entrance</span><span style={{ color: '#777' }}>Start s</span><span style={{ color: '#777' }}>Length s</span>
+        <span style={{ color: '#c4bdd8' }}></span><span style={{ color: '#c4bdd8' }}>Entrance</span><span style={{ color: '#c4bdd8' }}>Start s</span><span style={{ color: '#c4bdd8' }}>Length s</span>
         {rows.map(([k, label]) => (
           <React.Fragment key={k}>
             <span>{label}</span>
@@ -1132,7 +1132,7 @@ function CardAnim({ title, rows, presets, value, onChange, secs, note }) {
           </React.Fragment>
         ))}
       </div>
-      <div style={{ color: '#777', fontSize: '0.72rem', marginTop: 6 }}>{note}</div>
+      <div style={{ color: '#c4bdd8', fontSize: '0.72rem', marginTop: 6 }}>{note}</div>
     </div>
   );
 }
@@ -1158,7 +1158,7 @@ function MessageCardEditor({ value, onChange, images }) {
       </label>
       {v.enabled && (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', color: '#aaa' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', color: '#d6d0e6' }}>
             Background
             <input type="color" value={v.background} onChange={e => set('background', e.target.value.toUpperCase())} title="Background colour" style={{ width: 34, height: 26, padding: 0, border: '1px solid #555', background: 'none' }} />
             <select value={v.image} onChange={e => set('image', e.target.value)} style={{ ...input, maxWidth: 260 }} title="Or a comic image behind the text">
@@ -1177,8 +1177,8 @@ function MessageCardEditor({ value, onChange, images }) {
             </label>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 64px 130px 64px 64px auto', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
-            <span style={{ color: '#777' }}>Line</span><span style={{ color: '#777' }}>Colour</span><span style={{ color: '#777' }}>Size</span>
-            <span style={{ color: '#777' }}>Entrance</span><span style={{ color: '#777' }}>{v.voice && v.autoTime ? 'Start (auto)' : 'Start s'}</span><span style={{ color: '#777' }}>Length s</span><span />
+            <span style={{ color: '#c4bdd8' }}>Line</span><span style={{ color: '#c4bdd8' }}>Colour</span><span style={{ color: '#c4bdd8' }}>Size</span>
+            <span style={{ color: '#c4bdd8' }}>Entrance</span><span style={{ color: '#c4bdd8' }}>{v.voice && v.autoTime ? 'Start (auto)' : 'Start s'}</span><span style={{ color: '#c4bdd8' }}>Length s</span><span />
             {v.lines.map((l, i) => (
               <React.Fragment key={i}>
                 <input style={input} value={l.text} placeholder={i === 0 ? 'Turn audio on' : `Line ${i + 1}`} onChange={e => setLine(i, 'text', e.target.value)} />
@@ -1200,7 +1200,7 @@ function MessageCardEditor({ value, onChange, images }) {
               </React.Fragment>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', color: '#aaa' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', color: '#d6d0e6' }}>
             <button className="btn btn-secondary" onClick={() => set('lines', [...v.lines, { ...MESSAGE_LINE_DEFAULT, start: Number((lastEnd + 0.4).toFixed(1)) }])}
                     disabled={v.lines.length >= 8} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}>＋ Add line</button>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="The house English narrator reads each line over the card">
@@ -1209,7 +1209,7 @@ function MessageCardEditor({ value, onChange, images }) {
             {v.voice && <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Each line appears as its narration starts, one after another; off = your Start times, narration at each line's start">
               <input type="checkbox" checked={v.autoTime} onChange={e => set('autoTime', e.target.checked)} /> time the lines to the narration
             </label>}
-            <span style={{ color: '#777' }}>The card lasts until the last line (and its narration) has finished, plus the hold — never less than "at least".</span>
+            <span style={{ color: '#c4bdd8' }}>The card lasts until the last line (and its narration) has finished, plus the hold — never less than "at least".</span>
           </div>
         </div>
       )}
@@ -1547,11 +1547,11 @@ function Reels() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: '1.5rem', alignItems: 'start' }}>
       <div>
-        <p style={{ color: '#888', fontSize: '0.88rem', marginTop: 0 }}>
+        <p style={{ color: '#c4bdd8', fontSize: '0.88rem', marginTop: 0 }}>
           Generates a real video clip with Veo (the video sibling of the comic image model).
           Pick up to 3 directional images to guide style and content, then describe the shot.
         </p>
-        <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', marginBottom: 4 }}>1 · Comic</label>
+        <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', marginBottom: 4 }}>1 · Comic</label>
         <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, maxWidth: 420 }}>
           <option value="">Choose a comic…</option>
           {comics.map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
@@ -1559,7 +1559,7 @@ function Reels() {
 
         {images.length > 0 && (
           <>
-            <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1rem 0 4px' }}>
               2 · Images ({refs.length}/{mode === 'frames' ? 2 : 3}) — click to select, click again to remove.
               For a clip WITHOUT speech bubbles, pick the "no_text" versions (hover shows filenames).
             </label>
@@ -1604,7 +1604,7 @@ function Reels() {
                     e.target.value = '';
                   }} />
               </label>
-              <span style={{ color: '#888', fontSize: '0.85rem' }}>or from another comic:</span>
+              <span style={{ color: '#c4bdd8', fontSize: '0.85rem' }}>or from another comic:</span>
               <select value={extraComicId} onChange={e => setExtraComicId(e.target.value)} style={{ ...input, width: 300 }}>
                 <option value="">Choose a comic…</option>
                 {comics.filter(c => c.id !== comicId).map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
@@ -1631,7 +1631,7 @@ function Reels() {
             <ExtraImages comicId={comicId} selected={refs} onToggle={(t, u) => toggleRef(t, u)} />
             {refs.length > 0 && (
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                <span style={{ color: '#aaa', fontSize: '0.85rem' }}>Selected:</span>
+                <span style={{ color: '#d6d0e6', fontSize: '0.85rem' }}>Selected:</span>
                 {refs.map((token, i) => (
                   <div key={token} style={{ display: 'flex', gap: 6, alignItems: 'center', border: '1px solid #444', borderRadius: 8, padding: '3px 6px', fontSize: '0.8rem' }} title={refLabel(token)}>
                     <span style={{ background: '#8e6bf0', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
@@ -1647,7 +1647,7 @@ function Reels() {
 
         {comicId && (
           <>
-            <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>3 · Describe the clip</label>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1rem 0 4px' }}>3 · Describe the clip</label>
             <textarea style={{ ...input, resize: 'vertical' }} rows={5} value={prompt} onChange={e => setPrompt(e.target.value)}
               placeholder="e.g. Slow cinematic push-in on the lone rider approaching the town of Santa Roja at dusk, hand-drawn western comic style matching the reference art, dust drifting, tense and quiet, no text on screen" />
             <input style={{ ...input, marginTop: 8 }} value={negativePrompt} onChange={e => setNegativePrompt(e.target.value)}
@@ -1658,7 +1658,7 @@ function Reels() {
                 🎨 Comic style lock (experimental — made clips worse in testing)
               </label>
               <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <span style={{ color: '#888' }}>Resolution:</span>
+                <span style={{ color: '#c4bdd8' }}>Resolution:</span>
                 <select value={resolution} onChange={e => setResolution(e.target.value)} style={{ ...input, width: 190 }} title="Veo can only EXTEND 720p clips; 1080p looks sharper on Instagram">
                   <option value="1080p">1080p (sharper)</option>
                   <option value="720p">720p (extendable)</option>
@@ -1673,7 +1673,7 @@ function Reels() {
                 <option value="sora">Sora 2 (OpenAI) — image 1 becomes the OPENING FRAME</option>
                 <option value="sora-pro">Sora 2 Pro (OpenAI, dearer) — image 1 becomes the OPENING FRAME</option>
               </select>
-              <label style={{ fontSize: '0.8rem', color: '#888' }}>Length:</label>
+              <label style={{ fontSize: '0.8rem', color: '#c4bdd8' }}>Length:</label>
               <select value={durationSeconds} onChange={e => setDurationSeconds(Number(e.target.value))} style={{ ...input, width: 90 }}>
                 <option value={4}>4s</option>
                 {!model.startsWith('sora') && <option value={6}>6s</option>}
@@ -1685,7 +1685,7 @@ function Reels() {
                   Sora takes ONE image and animates it as the first frame — pick the exact picture the clip should start from (a finished page or generated still, not a character sheet); images 2–3 are ignored.
                 </span>
               )}
-              <span style={{ color: '#888', fontSize: '0.8rem' }}>
+              <span style={{ color: '#c4bdd8', fontSize: '0.8rem' }}>
                 9:16 · total ≈ {(((openingLine1 || openingLine2) ? openingSec : 0) + durationSeconds + (question ? questionSec : 0) + (endCard ? endSec : 0)).toFixed(1)}s
                 {' '}({(openingLine1 || openingLine2) ? `${openingSec}s opening + ` : ''}{durationSeconds}s clip{question ? ` + ${questionSec}s question` : ''}{endCard ? ` + ${endSec}s logo` : ''}) · costs real money per run
               </span>
@@ -1708,7 +1708,7 @@ function Reels() {
               </label>
             </div>
             {error && <p style={{ color: '#f88', fontSize: '0.85rem' }}>{error}</p>}
-            <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1.2rem 0 4px' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1.2rem 0 4px' }}>
               4 · Voice lines (optional) — the comic's own ElevenLabs audio, in order
             </label>
             <select value="" onChange={e => e.target.value && addVoice(e.target.value)} style={input}>
@@ -1717,7 +1717,7 @@ function Reels() {
             </select>
             {cast.length > 0 && (
               <div style={{ border: '1px solid #444', borderRadius: 8, padding: 10, marginTop: 10 }}>
-                <div style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: 6 }}>🎤 Speak a line — pick the Spanish voice; English always uses the house English voice</div>
+                <div style={{ fontSize: '0.85rem', color: '#d6d0e6', marginBottom: 6 }}>🎤 Speak a line — pick the Spanish voice; English always uses the house English voice</div>
                 <select value={lineVoice} onChange={e => setLineVoice(e.target.value)} style={{ ...input, marginBottom: 6 }}>
                   {cast.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
                 </select>
@@ -1758,7 +1758,7 @@ function Reels() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
                 {voices.map((v, i) => (
                   <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1px solid #444', borderRadius: 8, padding: '4px 8px', fontSize: '0.85rem' }}>
-                    <span style={{ color: '#888', width: 16 }}>{i + 1}</span>
+                    <span style={{ color: '#c4bdd8', width: 16 }}>{i + 1}</span>
                     <span style={{ flex: 1 }}>{v.label}</span>
                     <button className="btn btn-secondary" onClick={() => moveVoice(i, -1)} style={{ padding: '0.15rem 0.45rem' }}>↑</button>
                     <button className="btn btn-secondary" onClick={() => moveVoice(i, 1)} style={{ padding: '0.15rem 0.45rem' }}>↓</button>
@@ -1767,7 +1767,7 @@ function Reels() {
                 ))}
               </div>
             )}
-            <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', margin: '1rem 0 4px' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1rem 0 4px' }}>
               5 · Finish — opening card, question card + Comigo sign-off
             </label>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
@@ -1775,8 +1775,8 @@ function Reels() {
               <input style={input} placeholder="Opening card line 2 (yellow, biggest)" value={openingLine2} onChange={e => setOpeningLine2(e.target.value)} />
               <input type="number" min={0.5} max={10} step={0.5} value={openingSec} title="How long the opening card shows"
                      onChange={e => setOpeningSec(Number(e.target.value) || 2)} style={{ ...input, width: 80 }} disabled={!openingLine1 && !openingLine2} />
-              <span style={{ color: '#888', fontSize: '0.8rem' }}>s</span>
-              <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.8rem', color: '#aaa', whiteSpace: 'nowrap' }} title="Pause on the finished card after its animation, so the caption can be read (the card then lasts animation + this)">then hold
+              <span style={{ color: '#c4bdd8', fontSize: '0.8rem' }}>s</span>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.8rem', color: '#d6d0e6', whiteSpace: 'nowrap' }} title="Pause on the finished card after its animation, so the caption can be read (the card then lasts animation + this)">then hold
                 <input type="number" min={0} max={15} step={0.5} value={openingHold} onChange={e => setOpeningHold(Number(e.target.value) || 0)} style={{ ...input, width: 70 }} /> s</label>
             </div>
             {(openingLine1 || openingLine2) && (
@@ -1791,14 +1791,14 @@ function Reels() {
               <input style={input} placeholder="Question card (yellow) — leave empty to skip" value={question} onChange={e => setQuestion(e.target.value)} />
               <input type="number" min={0.5} max={10} step={0.5} value={questionSec} title="How long the question card shows"
                      onChange={e => setQuestionSec(Number(e.target.value) || 2)} style={{ ...input, width: 80 }} disabled={!question} />
-              <span style={{ color: '#888', fontSize: '0.8rem' }}>s</span>
+              <span style={{ color: '#c4bdd8', fontSize: '0.8rem' }}>s</span>
             </div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 8 }}>
               <input type="checkbox" checked={endCard} onChange={e => setEndCard(e.target.checked)} />
               End with the Comigo logo card, shown for
               <input type="number" min={0.5} max={30} step={0.1} value={endSec} title="How long the logo card shows"
                      onChange={e => setEndSec(Number(e.target.value) || 1.8)} style={{ ...input, width: 80 }} disabled={!endCard} />
-              <span style={{ color: '#888', fontSize: '0.8rem' }}>s</span>
+              <span style={{ color: '#c4bdd8', fontSize: '0.8rem' }}>s</span>
             </label>
             <input style={{ ...input, marginTop: 6 }} disabled={!endCard} value={endMidCaption} onChange={e => setEndMidCaption(e.target.value)}
                    placeholder="Caption between the logo and comigo.net — shows the whole card (optional)" />
@@ -1809,16 +1809,16 @@ function Reels() {
               <input type="checkbox" checked={coversCard} onChange={e => setCoversCard(e.target.checked)} disabled={!endCard} />
               Before the logo card, tile all published covers, for
               <input type="number" min={1} max={15} step={0.5} value={coversSec} onChange={e => setCoversSec(Number(e.target.value) || 3.5)} style={{ ...input, width: 80 }} disabled={!endCard || !coversCard} />
-              <span style={{ color: '#888', fontSize: '0.8rem' }}>s</span>
+              <span style={{ color: '#c4bdd8', fontSize: '0.8rem' }}>s</span>
             </label>
             <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <label style={{ fontSize: '0.8rem', color: '#888' }}>Veo's own audio:</label>
+              <label style={{ fontSize: '0.8rem', color: '#c4bdd8' }}>Veo's own audio:</label>
               <select value={ambient} onChange={e => setAmbient(e.target.value)} style={{ ...input, width: 220 }}>
                 <option value="keep">Keep as generated</option>
                 <option value="duck">Duck under the voices</option>
                 <option value="mute">Mute — voices only</option>
               </select>
-              <label style={{ fontSize: '0.8rem', color: '#888' }}>Subtitles:</label>
+              <label style={{ fontSize: '0.8rem', color: '#c4bdd8' }}>Subtitles:</label>
               <select value={subtitles} onChange={e => setSubtitles(e.target.value)} style={{ ...input, width: 220 }}
                       title="Burned-in text synced to each voice line — e.g. English audio with Spanish subtitles, or the other way around">
                 <option value="none">None</option>
@@ -1845,7 +1845,7 @@ function Reels() {
             <InsetControls comicId={comicId} file={clipFile} onDone={(u, f) => { setClip(u); setClipFile(f); }} />
             {clipFile && (
               <div style={{ border: '1px solid #444', borderRadius: 8, padding: 10, marginTop: 12 }}>
-                <div style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: 6 }}>Improve on this clip</div>
+                <div style={{ fontSize: '0.85rem', color: '#d6d0e6', marginBottom: 6 }}>Improve on this clip</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                   {[['first', 'first frame', 0], ['last', 'last frame', 'last']].map(([k, label, at]) => (
                     <button key={k} className="btn btn-secondary" disabled={busy || extending} style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}
@@ -1875,12 +1875,12 @@ function Reels() {
                     {extending ? 'Extending… (1–4 min)' : '➕ Extend'}
                   </button>
                 </div>
-                <div style={{ color: '#777', fontSize: '0.75rem', marginTop: 6 }}>An extended clip is raw — use "Apply audio to last clip" to add voices and cards, then Download.</div>
+                <div style={{ color: '#c4bdd8', fontSize: '0.75rem', marginTop: 6 }}>An extended clip is raw — use "Apply audio to last clip" to add voices and cards, then Download.</div>
               </div>
             )}
           </>
         ) : (
-          <div style={{ border: '2px dashed #444', borderRadius: 10, padding: '3rem 1rem', textAlign: 'center', color: '#777', fontSize: '0.9rem' }}>
+          <div style={{ border: '2px dashed #444', borderRadius: 10, padding: '3rem 1rem', textAlign: 'center', color: '#c4bdd8', fontSize: '0.9rem' }}>
             {busy ? 'Veo is working…' : 'Generated clip appears here'}<br />1080 × 1920 · 9:16
           </div>
         )}
