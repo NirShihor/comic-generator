@@ -1297,14 +1297,12 @@ async function layeredCardSegment(tmp, name, elements, dur, anim, run, opts = {}
   return seg;
 }
 
-// "Turn sound on" badge: the app's callout look — a yellow rounded frame with
-// a small tail, ink border and bold ink text with a speaker icon.
+// "Turn sound on" badge for the opening card: the app's callout look — a
+// yellow rounded frame with ink border and bold ink text and a speaker icon.
 async function soundOnBadgePng(tmp) {
-  const text = 'Turn sound on', size = 52, padX = 40, w = Math.round(text.length * size * 0.56 + size * 1.3 + padX * 2), h = 112, tail = 22;
-  const svg = `<svg width="${w}" height="${h + tail}" xmlns="http://www.w3.org/2000/svg">
+  const text = 'Turn sound on', size = 52, padX = 40, w = Math.round(text.length * size * 0.56 + size * 1.3 + padX * 2), h = 112;
+  const svg = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
     <rect x="3" y="3" width="${w - 6}" height="${h - 6}" rx="26" ry="26" fill="#FFD23F" stroke="#16182E" stroke-width="5"/>
-    <path d="M${w / 2 - 22} ${h - 4} L${w / 2} ${h + tail - 2} L${w / 2 + 22} ${h - 4} Z" fill="#FFD23F" stroke="#16182E" stroke-width="5" stroke-linejoin="round"/>
-    <rect x="${w / 2 - 20}" y="${h - 8}" width="40" height="10" fill="#FFD23F"/>
     <g transform="translate(${padX},${h / 2 - 26}) scale(1.6)" fill="#16182E">
       <path d="M2 11v10h7l8 7V4L9 11H2z"/>
       <path d="M22 9c2.5 2 2.5 12 0 14" fill="none" stroke="#16182E" stroke-width="3" stroke-linecap="round"/>
@@ -1314,7 +1312,7 @@ async function soundOnBadgePng(tmp) {
   </svg>`;
   const png = path.join(tmp, 'sound-badge.png');
   await sharp(Buffer.from(svg)).png().toFile(png);
-  return { png, w, h: h + tail };
+  return { png, w, h };
 }
 
 // Message card (Reels): an optional second slide after the opening card —
@@ -1560,6 +1558,12 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
         ] : []),
         ...(openingLine2 ? [{ key: 'line2', ...(await textPng('o2.png', openingLine2, s2, '#FFD23F', 800)), x: 0, y: Math.round(H / 2 + (openingLine1 ? 300 : 80) - s2 * 1.02), def: { effect: 'fade', start: 1.6, dur: 0.5 } }] : []),
       ];
+      // Optional "Turn sound on" badge near the bottom of the card, entering
+      // after the lines and leaving with the card.
+      if (secs.soundBadge) {
+        const b = await soundOnBadgePng(tmp);
+        openElements.push({ key: 'badge', png: b.png, w: b.w, h: b.h, x: Math.round((W - b.w) / 2), y: H - 300 - b.h, def: { effect: 'pop', start: 2.0, dur: 0.4 } });
+      }
       // With a hold set, the card lasts until its last entrance has finished plus the hold.
       const oAnim = secs.openingAnim || {};
       const animEnd = Math.max(...openElements.map(el => { const c = { ...el.def, ...(oAnim[el.key] || {}) }; return (Number(c.start) || 0) + (Number(c.dur) || 0.4); }));
@@ -1604,16 +1608,7 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
     // Animated sign-off card: violet base + each layer entering with its effect.
     parts.push(await layeredCardSegment(tmp, 'endcard', endCardSpec.elements, endCardSpec.dur, endAnim, run));
     const inputs = parts.flatMap(f => ['-i', f]);
-    let filter = parts.map((_, i) => `[${i}:v][${i}:a]`).join('') + `concat=n=${parts.length}:v=1:a=1[v0][a]`;
-    // Optional "Turn sound on" badge — a tooltip-style yellow frame near the
-    // bottom, over the whole reel.
-    if (secs.soundBadge) {
-      const badge = await soundOnBadgePng(tmp);
-      inputs.push('-i', badge.png);
-      filter += `;[v0][${parts.length}:v]overlay=(main_w-overlay_w)/2:${H - 300 - badge.h}[v]`;
-    } else {
-      filter += ';[v0]copy[v]';
-    }
+    const filter = parts.map((_, i) => `[${i}:v][${i}:a]`).join('') + `concat=n=${parts.length}:v=1:a=1[v][a]`;
     await run('ffmpeg', ['-y', ...inputs, '-filter_complex', filter, '-map', '[v]', '-map', '[a]',
       '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outPath]);
@@ -1636,7 +1631,7 @@ const cardSecs = body => ({
   coversCard: body.coversCard === true,
   coversSec: Math.min(15, Math.max(1, Number(body.coversSeconds) || 3.5)),
   endAnim: parseAnim(body.endAnim, ['logo', 'tagline', 'caption', 'net', 'bottom']),
-  openingAnim: parseAnim(body.openingAnim, ['logo', 'line1', 'squiggle', 'line2']),
+  openingAnim: parseAnim(body.openingAnim, ['logo', 'line1', 'squiggle', 'line2', 'badge']),
   messageCard: parseMessageCard(body.messageCard),
   soundBadge: body.soundBadge === true,
 });
@@ -1674,7 +1669,7 @@ function parseAnim(src, keys) {
   }
   return out;
 }
-const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim() || parseMessageCard(body.messageCard) || body.soundBadge === true);
+const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim() || parseMessageCard(body.messageCard));
 
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
 // paying for a new generation. Body: { comicId, file, voiceAudio: [..], ambient }

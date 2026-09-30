@@ -1088,14 +1088,15 @@ const OPENING_ANIM_DEFAULT = {
   line1: { effect: 'slide-up', start: 0.35, dur: 0.45 },
   squiggle: { effect: 'typewriter', start: 0.75, dur: 0.9 },
   line2: { effect: 'fade', start: 1.6, dur: 0.5 },
+  badge: { effect: 'pop', start: 2.0, dur: 0.4 },
 };
 const OPENING_ANIM_PRESETS = {
   lively: OPENING_ANIM_DEFAULT,
-  calm: { logo: { effect: 'fade', start: 0, dur: 0.6 }, line1: { effect: 'fade', start: 0.4, dur: 0.6 }, squiggle: { effect: 'typewriter', start: 0.9, dur: 1.0 }, line2: { effect: 'fade', start: 1.8, dur: 0.6 } },
-  static: { logo: { effect: 'none', start: 0, dur: 0.1 }, line1: { effect: 'none', start: 0, dur: 0.1 }, squiggle: { effect: 'none', start: 0, dur: 0.1 }, line2: { effect: 'none', start: 0, dur: 0.1 } },
+  calm: { logo: { effect: 'fade', start: 0, dur: 0.6 }, line1: { effect: 'fade', start: 0.4, dur: 0.6 }, squiggle: { effect: 'typewriter', start: 0.9, dur: 1.0 }, line2: { effect: 'fade', start: 1.8, dur: 0.6 }, badge: { effect: 'fade', start: 2.3, dur: 0.5 } },
+  static: { logo: { effect: 'none', start: 0, dur: 0.1 }, line1: { effect: 'none', start: 0, dur: 0.1 }, squiggle: { effect: 'none', start: 0, dur: 0.1 }, line2: { effect: 'none', start: 0, dur: 0.1 }, badge: { effect: 'none', start: 0, dur: 0.1 } },
 };
-function OpeningCardAnim({ value, onChange, secs }) {
-  return <CardAnim title="Opening card animation" rows={[['logo', 'Logo'], ['line1', 'Line 1 (white)'], ['squiggle', 'Squiggle under line 1'], ['line2', 'Line 2 (yellow)']]}
+function OpeningCardAnim({ value, onChange, secs, badge }) {
+  return <CardAnim title="Opening card animation" rows={[['logo', 'Logo'], ['line1', 'Line 1 (white)'], ['squiggle', 'Squiggle under line 1'], ['line2', 'Line 2 (yellow)'], ...(badge ? [['badge', '"Turn sound on" badge']] : [])]}
                    presets={OPENING_ANIM_PRESETS} value={value} onChange={onChange} secs={secs}
                    note={`Card lasts ${secs}s — make sure the last start + length fits inside it.`} />;
 }
@@ -1778,12 +1779,14 @@ function Reels() {
               <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.8rem', color: '#aaa', whiteSpace: 'nowrap' }} title="Pause on the finished card after its animation, so the caption can be read (the card then lasts animation + this)">then hold
                 <input type="number" min={0} max={15} step={0.5} value={openingHold} onChange={e => setOpeningHold(Number(e.target.value) || 0)} style={{ ...input, width: 70 }} /> s</label>
             </div>
-            {(openingLine1 || openingLine2) && <OpeningCardAnim value={openingAnim} onChange={setOpeningAnim} secs={openingSec} />}
+            {(openingLine1 || openingLine2) && (
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', margin: '2px 0 4px' }}
+                     title="A tooltip-style yellow frame near the bottom of the opening card — enters with the card's other elements and leaves with them">
+                <input type="checkbox" checked={soundBadge} onChange={e => setSoundBadge(e.target.checked)} /> 🔊 "Turn sound on" badge on the opening card
+              </label>
+            )}
+            {(openingLine1 || openingLine2) && <OpeningCardAnim value={openingAnim} onChange={setOpeningAnim} secs={openingSec} badge={soundBadge} />}
             <MessageCardEditor value={messageCard} onChange={setMessageCard} images={images} />
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', margin: '4px 0 8px' }}
-                   title="A tooltip-style yellow frame near the bottom of the whole reel">
-              <input type="checkbox" checked={soundBadge} onChange={e => setSoundBadge(e.target.checked)} /> 🔊 "Turn sound on" badge at the bottom
-            </label>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input style={input} placeholder="Question card (yellow) — leave empty to skip" value={question} onChange={e => setQuestion(e.target.value)} />
               <input type="number" min={0.5} max={10} step={0.5} value={questionSec} title="How long the question card shows"
