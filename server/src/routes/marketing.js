@@ -1241,14 +1241,20 @@ async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath, s
 // Violet card whose layers (PNG elements with x/y and a default entrance) each
 // enter with their own effect/start/duration — shared by the opening and
 // sign-off cards. `anim` overrides per element key.
-async function layeredCardSegment(tmp, name, elements, dur, anim, run) {
+// opts: { color: '0xRRGGBB' base colour (violet), basePng: a full-frame image
+// used as the base instead, audio: [{ file, at }] narration mixed in at `at` s }.
+async function layeredCardSegment(tmp, name, elements, dur, anim, run, opts = {}) {
   const W = 1080, H = 1920, FPS = 25;
-  const args = ['-y', '-f', 'lavfi', '-t', String(dur), '-i', `color=c=0x6E40F0:s=${W}x${H}:r=${FPS}`,
-    '-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=r=44100:cl=stereo'];
+  const args = ['-y'];
+  if (opts.basePng) args.push('-loop', '1', '-framerate', String(FPS), '-t', String(dur), '-i', opts.basePng);
+  else args.push('-f', 'lavfi', '-t', String(dur), '-i', `color=c=${opts.color || '0x6E40F0'}:s=${W}x${H}:r=${FPS}`);
+  args.push('-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=r=44100:cl=stereo');
+  const audio = opts.audio || [];
+  for (const a of audio) args.push('-i', a.file);
   const chain = [];
   let cur = '[0:v]';
   elements.forEach((el, k) => {
-    const idx = 2 + k;
+    const idx = 2 + audio.length + k;
     args.push('-loop', '1', '-framerate', String(FPS), '-t', String(dur), '-i', el.png);
     const cfg = { ...el.def, ...(anim[el.key] || {}) };
     const S = Math.min(dur - 0.05, Math.max(0, Number(cfg.start) || 0)).toFixed(2);
@@ -1274,10 +1280,121 @@ async function layeredCardSegment(tmp, name, elements, dur, anim, run) {
     cur = out;
   });
   chain.push(`${cur}format=yuv420p,setsar=1[v]`);
+  // Narration: each clip delayed to its start, mixed over the silent base.
+  let amap = '1:a';
+  if (audio.length) {
+    let mix = '[1:a]';
+    audio.forEach((a, k) => {
+      const ms = Math.max(0, Math.round(a.at * 1000));
+      chain.push(`[${2 + k}:a]aformat=sample_rates=44100:channel_layouts=stereo,adelay=${ms}|${ms}[n${k}]`); mix += `[n${k}]`;
+    });
+    chain.push(`${mix}amix=inputs=${audio.length + 1}:normalize=0:duration=first,alimiter=limit=0.95[a]`);
+    amap = '[a]';
+  }
   const seg = path.join(tmp, `${name}.mp4`);
-  await run('ffmpeg', [...args, '-filter_complex', chain.join(';'), '-map', '[v]', '-map', '1:a', '-t', String(dur),
+  await run('ffmpeg', [...args, '-filter_complex', chain.join(';'), '-map', '[v]', '-map', amap, '-t', String(dur),
     '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-ar', '44100', '-ac', '2', seg]);
   return seg;
+}
+
+// "Turn sound on" badge for the opening card: the app's callout look — a
+// yellow rounded frame with ink border and bold ink text and a speaker icon.
+async function soundOnBadgePng(tmp) {
+  const text = 'Turn sound on', size = 52, padX = 40, w = Math.round(text.length * size * 0.56 + size * 1.3 + padX * 2), h = 112;
+  const svg = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="3" width="${w - 6}" height="${h - 6}" rx="26" ry="26" fill="#FFD23F" stroke="#16182E" stroke-width="5"/>
+    <g transform="translate(${padX},${h / 2 - 26}) scale(1.6)" fill="#16182E">
+      <path d="M2 11v10h7l8 7V4L9 11H2z"/>
+      <path d="M22 9c2.5 2 2.5 12 0 14" fill="none" stroke="#16182E" stroke-width="3" stroke-linecap="round"/>
+      <path d="M26 5c5 4 5 18 0 22" fill="none" stroke="#16182E" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <text x="${padX + size * 1.3}" y="${h / 2 + size * 0.36}" font-family="Helvetica, Arial, sans-serif" font-size="${size}" font-weight="800" fill="#16182E">${text}</text>
+  </svg>`;
+  const png = path.join(tmp, 'sound-badge.png');
+  await sharp(Buffer.from(svg)).png().toFile(png);
+  return { png, w, h };
+}
+
+// Message card (Reels): an optional second slide after the opening card —
+// its own background (colour or a comic/uploaded image, dimmed), up to
+// MESSAGE_LINES lines of text each with its colour, size and entrance, and
+// optionally the house English narrator reading each line as it appears.
+// Narration clips are cached per text in the comic's marketing/uploads.
+const MESSAGE_LINES = 8;
+const ENGLISH_VOICE_ID = 'GP1bgf0sjoFuuHkyrg8E';
+async function messageCardSegment(tmp, comicId, card, run) {
+  const W = 1080, H = 1920;
+  const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const lines = card.lines.filter(l => l.text);
+  // Text: one PNG per line at the chosen size; a line too long for the frame
+  // wraps onto more rows (the font only shrinks when a single word won't fit).
+  const wrap = (text, size) => {
+    const maxChars = Math.max(4, Math.floor((W - 160) / (0.56 * size)));
+    const rows = []; let cur = '';
+    for (const w of text.split(' ')) {
+      if (cur && (cur + ' ' + w).length > maxChars) { rows.push(cur); cur = w; } else cur = cur ? `${cur} ${w}` : w;
+    }
+    if (cur) rows.push(cur);
+    return rows;
+  };
+  const gap = 22;
+  const blocks = lines.map(l => {
+    const longest = Math.max(...l.text.split(' ').map(w => w.length));
+    const size = Math.min(l.size, Math.floor((W - 160) / (0.56 * longest)));
+    const rows = wrap(l.text, size), rowH = Math.round(size * 1.22);
+    return { size, rows, rowH, h: rows.length * rowH + Math.round(size * 0.1) };
+  });
+  const total = blocks.reduce((t, b) => t + b.h, 0) + gap * Math.max(0, lines.length - 1);
+  let y = Math.round((H - total) / 2);
+  const els = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i], b = blocks[i];
+    const png = path.join(tmp, `msg${i}.png`);
+    await sharp(Buffer.from(`<svg width="${W}" height="${b.h}" xmlns="http://www.w3.org/2000/svg">${b.rows.map((r, k) =>
+      `<text x="${W / 2}" y="${Math.round(k * b.rowH + b.size * 1.0)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${b.size}" font-weight="800" fill="${l.color}">${esc(r)}</text>`).join('')}</svg>`)).png().toFile(png);
+    els.push({ key: `line${i}`, png, w: W, h: b.h, x: 0, y, def: { effect: l.effect, start: l.start, dur: l.dur } });
+    y += b.h + gap;
+  }
+  // Narration (optional): the English narrator reads each line. With autoTime
+  // the lines are re-timed to follow the narration, one after another.
+  const audio = [];
+  if (card.voice && lines.length) {
+    if (!process.env.ELEVENLABS_API_KEY) throw new Error('ELEVENLABS_API_KEY not configured (message card narration)');
+    const upDir = path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads');
+    await fs.mkdir(upDir, { recursive: true });
+    let t = 0.3;
+    for (let i = 0; i < lines.length; i++) {
+      const hash = require('crypto').createHash('sha1').update(lines[i].text).digest('hex').slice(0, 12);
+      const file = path.join(upDir, `msgline-${hash}.mp3`);
+      if (!require('fs').existsSync(file)) {
+        const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ENGLISH_VOICE_ID}`, {
+          method: 'POST',
+          headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+          body: JSON.stringify({ text: lines[i].text, model_id: 'eleven_v3', language_code: 'en', voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 } }),
+        });
+        if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        await fs.writeFile(file, Buffer.from(await r.arrayBuffer()));
+      }
+      const dur = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]));
+      if (card.autoTime) { els[i].def.start = Number(t.toFixed(2)); t += dur + 0.4; }
+      const at = els[i].def.start;
+      audio.push({ file, at, end: at + dur });
+    }
+  }
+  const animEnd = Math.max(...els.map(el => el.def.start + el.def.dur), ...audio.map(a => a.end), 0);
+  const dur = Math.max(card.seconds, animEnd + card.hold);
+  // Background: a colour, or an image fitted to the frame and dimmed.
+  const opts = { color: '0x' + card.background.slice(1), audio };
+  if (card.image) {
+    const src = await resolveRefImage(comicId, await exportDirOrNull(comicId), card.image);
+    const bg = path.join(tmp, 'msgbg.png');
+    const dim = Math.round(card.dim * 255);
+    await sharp(src).resize(W, H, { fit: 'cover' })
+      .composite([{ input: { create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: dim / 255 } } }, blend: 'over' }])
+      .png().toFile(bg);
+    opts.basePng = bg;
+  }
+  return layeredCardSegment(tmp, 'message', els, dur, {}, run, opts);
 }
 
 async function coversMosaicSegment(tmp, dur, run) {
@@ -1441,15 +1558,24 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
         ] : []),
         ...(openingLine2 ? [{ key: 'line2', ...(await textPng('o2.png', openingLine2, s2, '#FFD23F', 800)), x: 0, y: Math.round(H / 2 + (openingLine1 ? 300 : 80) - s2 * 1.02), def: { effect: 'fade', start: 1.6, dur: 0.5 } }] : []),
       ];
-      // With a hold set, the card lasts until its last entrance has finished plus the hold.
+      // Optional "Turn sound on" badge near the bottom of the card, entering
+      // after the lines and leaving with the card.
+      if (secs.soundBadge) {
+        const b = await soundOnBadgePng(tmp);
+        openElements.push({ key: 'badge', png: b.png, w: b.w, h: b.h, x: Math.round((W - b.w) / 2), y: H - 300 - b.h, def: { effect: 'pop', start: 2.0, dur: 0.4 } });
+      }
+      // The card lasts at least until its last entrance has finished (plus the
+      // hold), so a late element (the sound badge) is never cut off.
       const oAnim = secs.openingAnim || {};
       const animEnd = Math.max(...openElements.map(el => { const c = { ...el.def, ...(oAnim[el.key] || {}) }; return (Number(c.start) || 0) + (Number(c.dur) || 0.4); }));
-      const oDur = secs.openingHold > 0 ? Math.max(openingSec, animEnd + secs.openingHold) : openingSec;
+      const oDur = Math.max(openingSec, animEnd + (secs.openingHold || 0) + (secs.soundBadge ? 0.6 : 0));
       parts.push(await layeredCardSegment(tmp, 'open', openElements, oDur, oAnim, run));
     }
+    // Optional message card (second slide) after the opening card.
+    if (secs.messageCard && secs.messageCard.enabled) parts.push(await messageCardSegment(tmp, comicId, secs.messageCard, run));
     const main = path.join(tmp, 'main.mp4');
-    // After an opening card, the clip fades in quickly rather than cutting hard.
-    const mainFade = (openingLine1 || openingLine2) ? ',fade=t=in:st=0:d=0.35:color=0x6E40F0' : '';
+    // After an opening/message card, the clip fades in quickly rather than cutting hard.
+    const mainFade = (openingLine1 || openingLine2 || parts.length) ? ',fade=t=in:st=0:d=0.35:color=0x6E40F0' : '';
     await run('ffmpeg', ['-y', '-i', videoPath,
       '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS},setsar=1${mainFade}`,
       '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
@@ -1506,8 +1632,35 @@ const cardSecs = body => ({
   coversCard: body.coversCard === true,
   coversSec: Math.min(15, Math.max(1, Number(body.coversSeconds) || 3.5)),
   endAnim: parseAnim(body.endAnim, ['logo', 'tagline', 'caption', 'net', 'bottom']),
-  openingAnim: parseAnim(body.openingAnim, ['logo', 'line1', 'squiggle', 'line2']),
+  openingAnim: parseAnim(body.openingAnim, ['logo', 'line1', 'squiggle', 'line2', 'badge']),
+  messageCard: parseMessageCard(body.messageCard),
+  soundBadge: body.soundBadge === true,
 });
+// The message card's settings, validated (see messageCardSegment).
+function parseMessageCard(src) {
+  if (!src || typeof src !== 'object' || src.enabled !== true) return null;
+  const hex = (v, d) => (/^#[0-9a-fA-F]{6}$/.test(String(v || '')) ? String(v).toUpperCase() : d);
+  const effects = ['none', 'fade', 'pop', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'typewriter'];
+  const lines = (Array.isArray(src.lines) ? src.lines : []).slice(0, MESSAGE_LINES).map(l => ({
+    text: String((l && l.text) || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+    color: hex(l && l.color, '#FFFFFF'),
+    size: Math.min(200, Math.max(24, Number(l && l.size) || 72)),
+    effect: effects.includes(l && l.effect) ? l.effect : 'fade',
+    start: Math.min(60, Math.max(0, Number(l && l.start) || 0)),
+    dur: Math.min(5, Math.max(0.05, Number(l && l.dur) || 0.5)),
+  })).filter(l => l.text);
+  if (!lines.length) return null;
+  return {
+    enabled: true, lines,
+    background: hex(src.background, '#6E40F0'),
+    image: String(src.image || '').slice(0, 300),
+    dim: Math.min(0.9, Math.max(0, Number(src.dim) || 0)),
+    seconds: Math.min(60, Math.max(0.5, Number(src.seconds) || 4)),
+    hold: Math.min(15, Math.max(0, Number(src.hold) || 0)),
+    voice: src.voice === true,
+    autoTime: src.autoTime !== false,
+  };
+}
 // Per-element entrance settings ({ effect, start, dur }) for a layered card.
 function parseAnim(src, keys) {
   const out = {}; src = src && typeof src === 'object' ? src : {};
@@ -1517,7 +1670,7 @@ function parseAnim(src, keys) {
   }
   return out;
 }
-const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim());
+const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim() || parseMessageCard(body.messageCard));
 
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
 // paying for a new generation. Body: { comicId, file, voiceAudio: [..], ambient }
