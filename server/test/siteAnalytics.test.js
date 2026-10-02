@@ -42,7 +42,7 @@ test('campaign tags are added to internal page links only', () => {
     '<a href="/spanish-reading-practice/meeting-zik#study">Ex</a>',
     '<a href="/go/app-store?from=/&amp;loc=nav">App</a>',
     '<img src="/assets/x.webp">', '<link href="/favicon.png">', '<a href="https://apps.apple.com/app/id1">x</a>',
-    '<a href="//cdn.example.com/x">x</a>', '<a href="mailto:nir@comigo.net">x</a>',
+    '<a href="//cdn.example.com/x">x</a>', '<a href="mailto:nir@comigo.net">x</a>', '<a href="/privacy">Privacy</a>',
   ].join('\n');
   const out = sa.addUtmToLinks(html, GOOGLE).split('\n');
   const q = 'utm_source=google&amp;utm_medium=cpc&amp;utm_campaign=google-reading-practice';
@@ -50,8 +50,16 @@ test('campaign tags are added to internal page links only', () => {
   assert.strictEqual(out[1], `<a href="/spanish-reading-practice?${q}">Hub</a>`);
   assert.strictEqual(out[2], `<a href="/spanish-reading-practice/meeting-zik?${q}#study">Ex</a>`);
   assert.strictEqual(out[3], `<a href="/go/app-store?from=/&amp;loc=nav&amp;${q}">App</a>`);
-  assert.deepStrictEqual(out.slice(4), html.split('\n').slice(4));
+  assert.deepStrictEqual(out.slice(4), html.split('\n').slice(4));           // assets, other sites, the privacy policy: untouched
   assert.strictEqual(sa.addUtmToLinks(html, {}), html);
+});
+
+test('redirects carry only the approved tags: campaignQuery keeps utm_*, drops gclid/fbclid and everything else', () => {
+  assert.strictEqual(sa.campaignQuery({ ...GOOGLE, gclid: 'Cj0KCQ', fbclid: 'IwAR', ref: 'x' }), '?utm_source=google&utm_medium=cpc&utm_campaign=google-reading-practice');
+  assert.strictEqual(sa.campaignQuery({ utm_source: 'instagram', utm_medium: 'social', utm_campaign: 'instagram-profile' }), '?utm_source=instagram&utm_medium=social&utm_campaign=instagram-profile');
+  assert.strictEqual(sa.campaignQuery({ gclid: 'Cj0KCQ' }), '');
+  assert.strictEqual(sa.campaignQuery({}), '');
+  assert.strictEqual(sa.campaignQuery(undefined), '');
 });
 
 test('the App Store button sends campaign visitors to the Apple campaign link, everyone else to the plain page', () => {
@@ -118,6 +126,12 @@ async function withServer(fn) {
     if (req.path === '/go/app-store') return sa.appStoreRedirect(req, res, send);
     if (req.path === '/spanish-reading-practice') return sa.servePage(req, res, '<a href="/spanish-reading-practice/meeting-zik">x</a>', { pageType: 'hub' }, send);
     if (req.path === '/learn') return sa.servePage(req, res, '<a href="/">x</a>', { pageType: 'other' }, send);
+    if (req.path === '/missing') { res.status(404); return sa.servePage(req, res, '<a href="/">x</a>', { pageType: 'other' }, send); }   // as index.js's 404 fallback
+    // The real built pages, routed as index.js routes them.
+    if (req.path === '/') return sa.servePage(req, res, fs.readFileSync(path.join(SITE_DIR, 'index.html'), 'utf8'), { pageType: 'other' }, send);
+    if (req.path === '/hub') return sa.servePage(req, res, fs.readFileSync(path.join(SITE_DIR, 'spanish-reading-practice.html'), 'utf8'), { pageType: 'hub' }, send);
+    const ex = req.path.match(/^\/spanish-reading-practice\/([a-z0-9-]+)$/);
+    if (ex) return sa.servePage(req, res, fs.readFileSync(path.join(SITE_DIR, 'examples', `${ex[1]}.html`), 'utf8'), { pageType: 'exercise', exercise: ex[1] }, send);
     next();
   });
   const server = http.createServer(app).listen(0);
@@ -158,6 +172,80 @@ test('pages: campaign tags carried into links; hub/exercise views counted, other
     await get(`${base}/learn?utm_source=google`);                                                        // not a counted page
     await new Promise(r => setImmediate(r));
     assert.deepStrictEqual(events.map(e => [e.name, e.properties.page_type, e.properties.from_campaign]), [['site_page_viewed', 'hub', true]]);
+  });
+});
+
+test('a 404 keeps the campaign in its links and is not counted', async () => {
+  await withServer(async (base, events) => {
+    const res = await get(`${base}/missing?utm_source=google&utm_medium=cpc&utm_campaign=google-reading-practice&gclid=abc`);
+    assert.strictEqual(res.status, 404);
+    assert.match(await res.text(), /href="\/\?utm_source=google&amp;utm_medium=cpc&amp;utm_campaign=google-reading-practice"/);
+    await new Promise(r => setImmediate(r));
+    assert.strictEqual(events.length, 0);
+  });
+});
+
+// A visitor's journey through the real built pages: follow the page's own
+// links (as served), then tap an App Store button.
+const links = html => [...html.matchAll(/href="(\/[^"]*)"/g)].map(m => m[1].replace(/&amp;/g, '&'));
+async function journey(base, start, pathnames, loc) {
+  let res = await get(`${base}${start}`); assert.strictEqual(res.status, 200);
+  let html = await res.text();
+  for (const p of pathnames) {
+    const href = links(html).find(h => h.split('?')[0] === p);
+    assert.ok(href, `no link to ${p}`);
+    res = await get(`${base}${href}`); assert.strictEqual(res.status, 200, href);
+    html = await res.text();
+  }
+  const cta = links(html).find(h => h.startsWith('/go/app-store?') && h.includes(`loc=${loc}`));
+  assert.ok(cta, `no ${loc} button`);
+  res = await get(`${base}${cta}`); assert.strictEqual(res.status, 302);
+  await new Promise(r => setImmediate(r));
+  return { html, target: res.headers.get('location') };
+}
+const exercises = fs.readdirSync(path.join(SITE_DIR, 'examples')).filter(f => f.endsWith('.html')).map(f => f.replace(/\.html$/, ''));
+const utmOf = url => Object.fromEntries([...new URL(url, 'https://x').searchParams].filter(([k]) => k.startsWith('utm_')));
+
+test('journeys: campaign tags survive landing → homepage → App Store, and landing → exercise → exercise → App Store', async () => {
+  const google = 'utm_source=google&utm_medium=cpc&utm_campaign=google-reading-practice';
+  await withServer(async (base, events) => {
+    let { target } = await journey(base, `/hub?${google}&gclid=Cj0KCQ&fbclid=IwAR`, ['/'], 'hero');
+    assert.strictEqual(target, CAMPAIGN_LINK);
+    let click = events.filter(e => e.name === 'app_store_cta_clicked').pop();
+    assert.deepStrictEqual(click.properties, { surface: 'website', from_page: '/', page_type: 'other', button: 'hero', apple_campaign: 'GoogleSearch', ...GOOGLE, from_campaign: true });
+    ({ target } = await journey(base, `/hub?${google}`, [`/spanish-reading-practice/${exercises[0]}`, `/spanish-reading-practice/${exercises[1]}`], 'band'));
+    assert.strictEqual(target, CAMPAIGN_LINK);
+    click = events.filter(e => e.name === 'app_store_cta_clicked').pop();
+    assert.strictEqual(click.properties.from_campaign, true);
+    assert.strictEqual(click.properties.exercise, exercises[1]);
+    assert.ok(!JSON.stringify(events).match(/gclid|fbclid|Cj0KCQ|IwAR/), 'click IDs never reach an event');
+    assert.deepStrictEqual(events.filter(e => e.name === 'site_page_viewed').map(e => e.properties.from_campaign), [true, true, true, true]);
+  });
+});
+
+test('journeys: Instagram tags survive the same way; a visitor without tags stays from_campaign=false', async () => {
+  const instagram = 'utm_source=instagram&utm_medium=social&utm_campaign=instagram-profile';
+  await withServer(async (base, events) => {
+    let { html, target } = await journey(base, `/hub?${instagram}`, [`/spanish-reading-practice/${exercises[0]}`, '/'], 'nav');
+    assert.strictEqual(target, sa.APP_STORE_URL);
+    let click = events.filter(e => e.name === 'app_store_cta_clicked').pop();
+    assert.deepStrictEqual(utmOf(`?${instagram}`), { utm_source: click.properties.utm_source, utm_medium: click.properties.utm_medium, utm_campaign: click.properties.utm_campaign });
+    assert.strictEqual(click.properties.from_campaign, true);
+    assert.strictEqual(click.properties.apple_campaign, null);
+    // On a campaign visit every page link carries the tags except the privacy policy; canonical/og/JSON-LD stay clean.
+    for (const h of links(html).filter(h => !/\.(png|ico|jpg)$/.test(h))) {
+      if (h.startsWith('/privacy')) assert.ok(!h.includes('utm_'), h); else assert.deepStrictEqual(utmOf(h), utmOf(`?${instagram}`), h);
+    }
+    assert.match(html, /<link rel="canonical" href="https:\/\/comigo\.net\/">/);
+    assert.match(html, /property="og:url" content="https:\/\/comigo\.net\/"/);
+    for (const m of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) assert.ok(!m[1].includes('utm_'));
+
+    ({ html, target } = await journey(base, '/hub', [`/spanish-reading-practice/${exercises[0]}`, '/'], 'menu'));
+    assert.strictEqual(target, sa.APP_STORE_URL);
+    assert.ok(links(html).every(h => !h.includes('utm_')), 'clean links on an organic visit');
+    click = events.filter(e => e.name === 'app_store_cta_clicked').pop();
+    assert.strictEqual(click.properties.from_campaign, false);
+    assert.ok(!Object.keys(click.properties).some(k => k.startsWith('utm_')));
   });
 });
 

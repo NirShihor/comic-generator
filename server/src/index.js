@@ -53,14 +53,21 @@ function siteRedirects() {
 }
 app.use((req, res, next) => {
   const host = (req.headers.host || '').toLowerCase().split(':')[0];
+  // Site redirects keep only the campaign's approved utm_* tags (so a campaign
+  // visit survives the hop); click IDs and anything else are dropped.
+  const campaignQs = siteAnalytics.campaignQuery(req.query);
   if (host === 'www.comigo.net') {
     // One hostname for the site: www redirects to the canonical comigo.net.
-    return res.redirect(301, `https://comigo.net${req.originalUrl}`);
+    return res.redirect(301, `https://comigo.net${req.path}${campaignQs}`);
   }
   if (host === 'comigo.net') {
     if (req.path === '/privacy' || req.path === '/privacy.html') {
       res.set('Cache-Control', 'no-store');
       return res.sendFile(path.join(SITE_DIR, 'privacy.html'));
+    }
+    if (req.path.length > 1 && req.path.endsWith('/')) {
+      // A trailing slash is the same page.
+      return res.redirect(301, `https://comigo.net${req.path.replace(/\/+$/, '')}${campaignQs}`);
     }
     // SEO/content pages: any site/<name>.html is served at its extensionless
     // URL (and at the .html spelling) — new pages need no server change.
@@ -74,17 +81,14 @@ app.use((req, res, next) => {
     // Old URLs (site/redirects.json, e.g. the first /examples/<slug> pages and
     // renamed exercises): a permanent redirect straight to the current page.
     const redirectTo = siteRedirects()[req.path.replace(/\.html$/, '')];
-    if (redirectTo) {
-      const qs = req.originalUrl.slice(req.path.length);
-      return res.redirect(301, `https://comigo.net${redirectTo}${qs}`);
-    }
+    if (redirectTo) return res.redirect(301, `https://comigo.net${redirectTo}${campaignQs}`);
     // Reading exercises (built by site/build.py into site/examples/<slug>.html)
     // live at /spanish-reading-practice/<slug>; the .html spelling redirects.
     const exMatch = req.path.match(/^\/spanish-reading-practice\/([\w-]+?)(\.html)?$/);
     if (exMatch) {
       const exFile = path.join(SITE_DIR, 'examples', `${exMatch[1]}.html`);
       if (require('fs').existsSync(exFile)) {
-        if (exMatch[2]) return res.redirect(301, `https://comigo.net/spanish-reading-practice/${exMatch[1]}`);
+        if (exMatch[2]) return res.redirect(301, `https://comigo.net/spanish-reading-practice/${exMatch[1]}${campaignQs}`);
         return serveSitePage(req, res, exFile, { pageType: 'exercise', exercise: exMatch[1] });
       }
     }
@@ -158,10 +162,11 @@ app.use((req, res, next) => {
     // deploys, making site updates invisible on phones.
     res.set('Cache-Control', 'no-store');
     // Anything else is not a page: a real 404 (visitors still see the
-    // homepage), so mistyped or old URLs aren't indexed as copies of it.
+    // homepage, with their campaign tags carried into its links), so mistyped
+    // or old URLs aren't indexed as copies of it.
     const isHome = req.path === '/' || req.path === '/index.html';
-    if (isHome) return serveSitePage(req, res, path.join(SITE_DIR, 'index.html'), { pageType: 'other' });
-    return res.status(404).sendFile(path.join(SITE_DIR, 'index.html'));
+    if (!isHome) res.status(404);
+    return serveSitePage(req, res, path.join(SITE_DIR, 'index.html'), { pageType: 'other' });
   }
   next();
 });
