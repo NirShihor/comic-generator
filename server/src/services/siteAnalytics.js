@@ -32,6 +32,13 @@ function cleanUtm(query) {
   return out;
 }
 
+/** The approved tags of a request as a query string ("?utm_source=…" or ""), for redirects — nothing else rides along. */
+function campaignQuery(query) {
+  const utm = cleanUtm(query);
+  const qs = UTM_KEYS.filter(k => utm[k]).map(k => `${k}=${utm[k]}`).join('&');
+  return qs ? `?${qs}` : '';
+}
+
 const BOT_UA = /bot|crawl|spider|slurp|facebookexternalhit|embedly|preview|headless|lighthouse|pingdom|uptime|monitor|curl|wget|python|node-fetch|axios|go-http|java\/|okhttp|scrapy/i;
 /** Crawlers, link previewers and scripts aren't counted (the user agent is only checked, never recorded). */
 function isBot(userAgent) {
@@ -48,14 +55,17 @@ function countable(req) {
 
 /**
  * Add the campaign's utm tags to every internal page link in the HTML (not
- * assets, not other sites), so the campaign is carried through the visit
- * without any storage.
+ * assets, not other sites, not the privacy policy — a legal page, no
+ * attribution value), so the campaign is carried through the visit without
+ * any storage. Only href="/…" links: the site has no other kind of internal
+ * navigation (no scripted navigation, no forms).
  */
 function addUtmToLinks(html, utm) {
   const qs = UTM_KEYS.filter(k => utm[k]).map(k => `${k}=${utm[k]}`).join('&amp;');
   if (!qs) return html;
   return html.replace(/href="(\/(?!\/|assets\/)[^"#]*)(#[^"]*)?"/g, (m, path, hash) => {
     if (/\.[a-z0-9]+(\?|$)/i.test(path)) return m;       // files (favicon.png, …)
+    if (/^\/privacy(\?|$)/.test(path)) return m;
     const sep = path.includes('?') ? '&amp;' : '?';
     return `href="${path}${sep}${qs}${hash || ''}"`;
   });
@@ -162,6 +172,6 @@ function appStoreRedirect(req, res, send) {
 }
 
 module.exports = {
-  APP_STORE_URL, APPLE_CAMPAIGNS, DISTINCT_ID, cleanUtm, isBot, countable, addUtmToLinks, appStoreTarget,
+  APP_STORE_URL, APPLE_CAMPAIGNS, DISTINCT_ID, cleanUtm, campaignQuery, isBot, countable, addUtmToLinks, appStoreTarget,
   pageViewEvent, ctaClickEvent, makeSender, servePage, appStoreRedirect,
 };
