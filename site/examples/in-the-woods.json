@@ -1,0 +1,1250 @@
+{
+ "slug": "in-the-woods",
+ "label": "Los perros callejeros",
+ "labelEn": "The Stray Dogs",
+ "seoTitle": "There Is Someone Here: Beginner Spanish Reading Practice",
+ "summary": "Deep in the forest, a pack of telepathic dogs sense a stranger. Practise short commands and quick questions.",
+ "imageAlt": "A comic page in warm forest tones: in the first panel a hound, a saluki and a spaniel freeze among the trees, sensing someone; in the second two dogs run off while a third keeps watch; in the last a whole pack of dogs stands waiting on the forest path as the first two arrive.",
+ "comic": "LOS PERROS CALLEJEROS",
+ "collection": "",
+ "level": "beginner",
+ "image": "example-in-the-woods",
+ "width": 1024,
+ "height": 1536,
+ "publishedAt": "2026-10-02T14:32:50.684Z",
+ "bubbles": [
+  {
+   "x": 0.036881286671076055,
+   "y": 0.012492363569361231,
+   "w": 0.17472227514269636,
+   "h": 0.13663143447743914,
+   "panel": [
+    0.0136,
+    0.0086,
+    0.95,
+    0.3374
+   ],
+   "sentences": [
+    {
+     "es": "Espera... hay alguien aquí...",
+     "en": "Wait... there is someone here...",
+     "a": "{{AUD_ex-in-the-woods-b1-1}}",
+     "words": [
+      {
+       "t": "Espera...",
+       "m": "wait",
+       "b": "esperar",
+       "bm": "to wait",
+       "s": 0,
+       "e": 1360,
+       "a": "{{AUD_ex-in-the-woods-w-espera}}",
+       "ba": "{{AUD_ex-in-the-woods-w-esperar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "espero",
+         "a": "{{AUD_ex-in-the-woods-w-espero}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "esperé",
+         "a": "{{AUD_ex-in-the-woods-w-espere-6e0950}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "esperaba",
+         "a": "{{AUD_ex-in-the-woods-w-esperaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "esperaré",
+         "a": "{{AUD_ex-in-the-woods-w-esperare-881913}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "esperaría",
+         "a": "{{AUD_ex-in-the-woods-w-esperaria-79552b}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "espere",
+         "a": "{{AUD_ex-in-the-woods-w-espere}}"
+        },
+        {
+         "label": "Command",
+         "text": "espera",
+         "a": "{{AUD_ex-in-the-woods-w-espera}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "esperando",
+         "a": "{{AUD_ex-in-the-woods-w-esperando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "esperado",
+         "a": "{{AUD_ex-in-the-woods-w-esperado}}"
+        }
+       ],
+       "ex": "\"Espera\" is a verb in the imperative form, which is used to give a command or request. The infinitive form of the verb is \"esperar,\" which means \"to wait.\" In the present tense, it conjugates as follows:\n\n- yo espero (I wait)\n- tú esperas (you wait)\n- él/ella/usted espera (he/she/you wait)\n- nosotros/nosotras esperamos (we wait)\n- ellos/ellas/ustedes esperan (they/you all wait)\n\nIn this sentence, \"Espera\" is directed at someone, asking them to \"wait.\" It sets a tone of urgency or caution, as the speaker is alerting the listener to a potential situation by saying, \"hay alguien aquí\" (there is someone here). The use of the imperative form makes it clear that the speaker wants immediate attention and action from the listener."
+      },
+      {
+       "t": "hay",
+       "m": "there is",
+       "b": "haber",
+       "bm": "to have",
+       "s": 1400,
+       "e": 1520,
+       "a": "{{AUD_ex-in-the-woods-w-hay}}",
+       "ba": "{{AUD_ex-in-the-woods-w-haber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "he",
+         "a": "{{AUD_ex-in-the-woods-w-he}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "hube",
+         "a": "{{AUD_ex-in-the-woods-w-hube}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "había",
+         "a": "{{AUD_ex-in-the-woods-w-habia-58fad7}}"
+        },
+        {
+         "label": "Future",
+         "text": "habré",
+         "a": "{{AUD_ex-in-the-woods-w-habre-808e51}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "habría",
+         "a": "{{AUD_ex-in-the-woods-w-habria-795b6b}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "haya",
+         "a": "{{AUD_ex-in-the-woods-w-haya}}"
+        },
+        {
+         "label": "Command",
+         "text": "hab",
+         "a": "{{AUD_ex-in-the-woods-w-hab}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "habiendo",
+         "a": "{{AUD_ex-in-the-woods-w-habiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "habido",
+         "a": "{{AUD_ex-in-the-woods-w-habido}}"
+        }
+       ],
+       "ex": "The word \"hay\" is a verb form in this sentence. It comes from the infinitive \"haber,\" which means \"to have\" or \"to exist.\" In this context, \"hay\" is used to indicate the existence of something, translating to \"there is\" in English.\n\nHere's a short present-tense conjugation table for \"haber\":\n- yo he\n- tú has\n- él/ella/usted ha\n- nosotros/nosotras hemos\n- ellos/ellas/ustedes han\n- hay (third person singular, used for existence)\n\nIn the sentence \"Espera... hay alguien aquí...\", \"hay\" connects the action of existing to \"alguien\" (someone). It tells us that someone is present in the location being referred to. So, \"hay\" plays a crucial role in conveying the idea that there is indeed someone there."
+      },
+      {
+       "t": "alguien",
+       "m": "someone",
+       "b": "alguien",
+       "bm": "someone",
+       "s": 1560,
+       "e": 1840,
+       "a": "{{AUD_ex-in-the-woods-w-alguien}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "alguien",
+         "a": "{{AUD_ex-in-the-woods-w-alguien}}"
+        },
+        {
+         "label": "Plural",
+         "text": "alguienes",
+         "a": "{{AUD_ex-in-the-woods-w-alguienes}}"
+        }
+       ],
+       "ex": "The word \"alguien\" is a pronoun in this sentence, meaning \"someone\" in English. It is used to refer to an unspecified person. In the sentence \"Espera... hay alguien aquí...\", \"alguien\" connects to the idea that there is an unknown individual present in the location being discussed.\n\nGrammatically, \"alguien\" serves as the subject of the phrase \"hay alguien,\" which translates to \"there is someone.\" The verb \"hay\" indicates existence, and \"alguien\" specifies who or what exists in that context. This use of \"alguien\" creates a sense of mystery or surprise, as it implies that the speaker is not sure who is there."
+      },
+      {
+       "t": "aquí...",
+       "m": "here",
+       "b": "aquí",
+       "bm": "here",
+       "s": 1888,
+       "e": 2963,
+       "a": "{{AUD_ex-in-the-woods-w-aqui-27c550}}",
+       "ex": "The word \"aquí\" is an adverb in this sentence. It means \"here\" and indicates a specific location. In the sentence \"Espera... hay alguien aquí...\", \"aquí\" is used to specify where the person is located, emphasizing that they are present in the immediate area.\n\nIn this context, \"aquí\" helps to create a sense of urgency or importance about the presence of someone nearby. It connects the idea of someone being present to the physical space where the speaker is, making it clear that the person is not far away but right there."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.7595295844249196,
+   "y": 0.06504188872244052,
+   "w": 0.12942567963500934,
+   "h": 0.10324955588845229,
+   "panel": [
+    0.0136,
+    0.0086,
+    0.95,
+    0.3374
+   ],
+   "sentences": [
+    {
+     "es": "¿Ah? ¿Dónde?",
+     "en": "Oh? Where?",
+     "a": "{{AUD_ex-in-the-woods-b2-1}}",
+     "words": [
+      {
+       "t": "¿Ah?",
+       "m": "Oh",
+       "b": "ah",
+       "bm": "interjection expressing surprise or realization",
+       "s": 0,
+       "e": 880,
+       "a": "{{AUD_ex-in-the-woods-w-ah}}",
+       "ex": "In this sentence, \"ah\" is an interjection. Interjections are words or phrases that express a sudden emotion or reaction, often standing alone. Here, \"ah\" conveys surprise or realization, similar to \"oh\" in English.\n\nThe speaker is likely reacting to something unexpected or seeking clarification, as indicated by the follow-up question \"¿Dónde?\" (Where?). The use of \"ah\" sets the tone for the inquiry, suggesting that the speaker is caught off guard or intrigued by what was just said."
+      },
+      {
+       "t": "¿Dónde?",
+       "m": "where",
+       "b": "dónde",
+       "bm": "adverb indicating location",
+       "s": 1040,
+       "e": 2160,
+       "a": "{{AUD_ex-in-the-woods-w-donde-f14bce}}",
+       "ex": "In this sentence, \"dónde\" is an interrogative adverb meaning \"where.\" It is used to ask about the location of something or someone. The sentence \"¿Dónde?\" is a direct question, indicating that the speaker is seeking information about a place.\n\nAs an adverb, \"dónde\" does not change form and does not have a conjugation like verbs do. Instead, it functions to connect the question to the context, implying that the speaker is curious about a specific location related to the previous statement or situation. In this case, it follows the expression \"¿Ah?\" which suggests surprise or confusion, prompting the question about \"where.\""
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.03425195968647543,
+   "y": 0.17431292256212622,
+   "w": 0.210283959414928,
+   "h": 0.1503640538656466,
+   "panel": [
+    0.0136,
+    0.0086,
+    0.95,
+    0.3374
+   ],
+   "sentences": [
+    {
+     "es": "Detrás de esos árboles de allí...",
+     "en": "Behind these trees over there...",
+     "a": "{{AUD_ex-in-the-woods-b3-1}}",
+     "words": [
+      {
+       "t": "Detrás",
+       "m": "behind",
+       "b": "detrás",
+       "bm": "behind",
+       "s": 0,
+       "e": 400,
+       "a": "{{AUD_ex-in-the-woods-w-detras-e838a5}}",
+       "ex": "La palabra \"detrás\" es un adverbio de lugar en esta oración. Su función es indicar la posición relativa de algo, en este caso, la ubicación de \"esos árboles de allí.\" Al decir \"Detrás de esos árboles de allí,\" se está señalando que algo se encuentra en la parte posterior de los árboles, es decir, no visible desde el frente.\n\n\"Detrás\" no cambia de forma y se usa para describir la ubicación en relación a otros objetos. En este contexto, ayuda a situar algo en el espacio, lo que es importante para que el lector entienda dónde está lo que se menciona."
+      },
+      {
+       "t": "de",
+       "m": "of",
+       "b": "de",
+       "bm": "of",
+       "s": 453,
+       "e": 560,
+       "a": "{{AUD_ex-in-the-woods-w-de}}",
+       "ex": "The word \"de\" in this sentence is a preposition. It connects the noun \"árboles\" (trees) to the phrase that follows, indicating a relationship of possession or origin. In this context, \"de\" helps specify which trees are being referred to, as in \"trees of there\" or \"those trees.\"\n\nIn the phrase \"de allí,\" \"de\" indicates that the trees are located at a certain place, which is \"allí\" (there). So, \"de\" is essential for clarifying the location of the trees in relation to the speaker."
+      },
+      {
+       "t": "esos",
+       "m": "those",
+       "b": "ese",
+       "bm": "that (masculine)",
+       "s": 624,
+       "e": 1040,
+       "a": "{{AUD_ex-in-the-woods-w-esos}}",
+       "ba": "{{AUD_ex-in-the-woods-w-ese}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "ese",
+         "a": "{{AUD_ex-in-the-woods-w-ese}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "esa",
+         "a": "{{AUD_ex-in-the-woods-w-esa}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "esos",
+         "a": "{{AUD_ex-in-the-woods-w-esos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "esas",
+         "a": "{{AUD_ex-in-the-woods-w-esas}}"
+        }
+       ],
+       "ex": "The word \"esos\" is a demonstrative adjective in this sentence. It means \"those\" in English and is used to specify which trees are being referred to. In this case, \"esos\" modifies \"árboles\" (trees), indicating that the trees are not near the speaker but rather at a distance.\n\nIn Spanish, demonstrative adjectives agree in gender and number with the nouns they modify. Here, \"árboles\" is masculine plural, so \"esos\" is also in the masculine plural form. If it were feminine plural, you would use \"esas.\"\n\nIn summary, \"esos\" helps to identify which specific trees are being talked about, making the sentence \"Detrás de esos árboles de allí...\" clear in its meaning: \"Behind those trees over there...\""
+      },
+      {
+       "t": "árboles",
+       "m": "trees",
+       "b": "árbol",
+       "bm": "tree",
+       "s": 1060,
+       "e": 1600,
+       "a": "{{AUD_ex-in-the-woods-w-arboles-750aed}}",
+       "ba": "{{AUD_ex-in-the-woods-w-arbol-ff3eb1}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "árbol",
+         "a": "{{AUD_ex-in-the-woods-w-arbol-ff3eb1}}"
+        },
+        {
+         "label": "Plural",
+         "text": "árboles",
+         "a": "{{AUD_ex-in-the-woods-w-arboles-750aed}}"
+        }
+       ],
+       "ex": "The word \"árboles\" is a noun in the plural form, meaning \"trees.\" In this sentence, it serves as the subject of the prepositional phrase \"detrás de esos árboles,\" which translates to \"behind those trees.\" \n\nThe word \"árboles\" is the plural form of \"árbol,\" which means \"tree.\" In Spanish, nouns have gender and number; \"árbol\" is masculine, and when pluralized, it becomes \"árboles.\" The use of \"esos\" indicates that the trees are specific and somewhat distant, as it translates to \"those.\"\n\nSo, in this context, \"árboles\" helps specify what is located behind, giving a clear image of the scene being described."
+      },
+      {
+       "t": "de",
+       "m": "of",
+       "b": "de",
+       "bm": "",
+       "s": 453,
+       "e": 560,
+       "a": "{{AUD_ex-in-the-woods-w-de}}",
+       "ex": "In this sentence, \"de\" is a preposition. It connects the noun \"árboles\" (trees) to the phrase \"de allí\" (over there), indicating a relationship of location. Essentially, it helps specify which trees are being referred to, as in \"the trees of there.\"\n\nThe phrase \"de allí\" translates to \"of there,\" which emphasizes that the trees are located at a specific place. Without \"de,\" the sentence would lack clarity about which trees are being discussed. So, \"de\" plays a crucial role in providing that necessary context."
+      },
+      {
+       "t": "allí...",
+       "m": "there",
+       "b": "allí",
+       "bm": "there",
+       "s": 2440,
+       "e": 2840,
+       "a": "{{AUD_ex-in-the-woods-w-alli-88f534}}",
+       "ex": "The word \"allí\" is an adverb in this sentence. It means \"over there\" and indicates a specific location that is somewhat distant from the speaker. In the context of the sentence \"Detrás de esos árboles de allí...\" (\"Behind these trees over there...\"), \"allí\" helps to clarify where the trees are located, suggesting they are not just any trees, but those that are at a certain distance.\n\nIn this case, \"allí\" functions to specify the location of \"esos árboles\" (those trees), enhancing the meaning by providing a spatial reference. It helps the listener visualize the scene more clearly by indicating that the trees are not close by but rather at a farther point."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.7155912362745461,
+   "y": 0.19250721850311253,
+   "w": 0.18396904260242308,
+   "h": 0.1634704114786233,
+   "panel": [
+    0.0136,
+    0.0086,
+    0.95,
+    0.3374
+   ],
+   "sentences": [
+    {
+     "es": "¡Slim, tienes que ir a buscar a todos ahora!",
+     "en": "Slim, you need to go get everyone now!",
+     "a": "{{AUD_ex-in-the-woods-b4-1}}",
+     "words": [
+      {
+       "t": "¡Slim,",
+       "m": "Slim",
+       "b": "Slim",
+       "bm": "Slim",
+       "a": "{{AUD_ex-in-the-woods-w-slim}}",
+       "ex": "In this sentence, \"Slim\" is a proper noun, specifically a name. It is used as a direct address to someone, indicating that the speaker is calling out to a person named Slim. This is why it is set off by a comma: it shows that the speaker is speaking directly to Slim.\n\nThe sentence translates to \"Slim, you need to go get everyone now!\" Here, \"Slim\" is the subject of the implied action that follows, which is \"tienes que ir a buscar a todos\" (you need to go get everyone). The use of the name establishes a personal connection in the conversation."
+      },
+      {
+       "t": "tienes",
+       "m": "you have",
+       "b": "tener",
+       "bm": "to have",
+       "s": 720,
+       "e": 1120,
+       "a": "{{AUD_ex-in-the-woods-w-tienes}}",
+       "ba": "{{AUD_ex-in-the-woods-w-tener}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "tengo",
+         "a": "{{AUD_ex-in-the-woods-w-tengo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "tuve",
+         "a": "{{AUD_ex-in-the-woods-w-tuve}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "tenía",
+         "a": "{{AUD_ex-in-the-woods-w-tenia-1e955d}}"
+        },
+        {
+         "label": "Future",
+         "text": "tendré",
+         "a": "{{AUD_ex-in-the-woods-w-tendre-6d4b25}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "tendría",
+         "a": "{{AUD_ex-in-the-woods-w-tendria-cc46ce}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "tenga",
+         "a": "{{AUD_ex-in-the-woods-w-tenga}}"
+        },
+        {
+         "label": "Command",
+         "text": "ten",
+         "a": "{{AUD_ex-in-the-woods-w-ten}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "teniendo",
+         "a": "{{AUD_ex-in-the-woods-w-teniendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "tenido",
+         "a": "{{AUD_ex-in-the-woods-w-tenido}}"
+        }
+       ],
+       "ex": "The word \"tienes\" is a verb form in this sentence. It is the second person singular (tú) present tense conjugation of the verb \"tener,\" which means \"to have.\" In this context, \"tienes\" translates to \"you have,\" but it is used to express necessity or obligation, as in \"you need to.\"\n\nIn the sentence, \"¡Slim, tienes que ir a buscar a todos ahora!\" the phrase \"tienes que\" means \"you have to.\" It indicates that Slim is being told he must take action. The structure \"tienes que\" is commonly used in Spanish to express what someone needs to do.\n\nHere's a short conjugation table for \"tener\" in the present tense:\n\n- yo tengo\n- tú tienes\n- él/ella/usted tiene\n- nosotros/nosotras tenemos\n- vosotros/vosotras tenéis\n- ellos/ellas/ustedes tienen\n\nSo, in this sentence, \"tienes\" plays a crucial role in conveying the urgency of the action Slim needs to take."
+      },
+      {
+       "t": "que",
+       "m": "that",
+       "b": "que",
+       "bm": "that",
+       "s": 1160,
+       "e": 1280,
+       "a": "{{AUD_ex-in-the-woods-w-que}}",
+       "ex": "In this sentence, \"que\" is a conjunction that connects the verb \"tienes\" (you have) to the infinitive \"ir\" (to go). The phrase \"tienes que\" translates to \"you need to\" in English, indicating obligation or necessity. \n\nSo, \"que\" is essential here because it introduces the action that Slim needs to take: \"ir a buscar a todos\" (to go get everyone). Without \"que,\" the sentence would not convey the same meaning of needing to perform the action. \n\nIn summary, \"que\" serves to link the necessity expressed by \"tienes\" to the action of going, making it clear that Slim is required to take action."
+      },
+      {
+       "t": "ir",
+       "m": "to go",
+       "b": "ir",
+       "bm": "to go",
+       "s": 1360,
+       "e": 1520,
+       "a": "{{AUD_ex-in-the-woods-w-ir}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "voy",
+         "a": "{{AUD_ex-in-the-woods-w-voy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "fui",
+         "a": "{{AUD_ex-in-the-woods-w-fui}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "iba",
+         "a": "{{AUD_ex-in-the-woods-w-iba}}"
+        },
+        {
+         "label": "Future",
+         "text": "iré",
+         "a": "{{AUD_ex-in-the-woods-w-ire-396487}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "iría",
+         "a": "{{AUD_ex-in-the-woods-w-iria-755fca}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "vaya",
+         "a": "{{AUD_ex-in-the-woods-w-vaya}}"
+        },
+        {
+         "label": "Command",
+         "text": "ve",
+         "a": "{{AUD_ex-in-the-woods-w-ve}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "yendo",
+         "a": "{{AUD_ex-in-the-woods-w-yendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "ido",
+         "a": "{{AUD_ex-in-the-woods-w-ido}}"
+        }
+       ],
+       "ex": "The word \"ir\" in this sentence is the infinitive form of the verb, which means \"to go.\" In this context, it expresses the action that Slim needs to perform. The sentence translates to \"you need to go get everyone now,\" indicating that Slim has to take action.\n\nIn Spanish, the present tense conjugation of \"ir\" is as follows:\n\n- yo voy\n- tú vas\n- él/ella/usted va\n- nosotros/nosotras vamos\n- ellos/ellas/ustedes van\n\nHere, \"ir\" is used in its infinitive form after \"tienes que,\" which means \"you have to.\" This construction is common in Spanish to indicate necessity or obligation. So, \"tienes que ir\" translates to \"you need to go.\" The presence of \"ir\" is essential because it specifies the action Slim must take."
+      },
+      {
+       "t": "a",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 1560,
+       "e": 1600,
+       "a": "{{AUD_ex-in-the-woods-w-a}}",
+       "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"ir\" (to go) with the action of \"buscar\" (to get), indicating the direction or purpose of the action. The phrase \"ir a buscar\" translates to \"go to get,\" showing what Slim needs to do.\n\nThe preposition \"a\" is essential here because it specifies where Slim is going: to get everyone. Without \"a,\" the sentence would lack clarity about the purpose of going. So, in this context, \"a\" helps to convey the intended action clearly."
+      },
+      {
+       "t": "buscar",
+       "m": "to get",
+       "b": "buscar",
+       "bm": "to search",
+       "s": 1657,
+       "e": 2000,
+       "a": "{{AUD_ex-in-the-woods-w-buscar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "busco",
+         "a": "{{AUD_ex-in-the-woods-w-busco}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "busqué",
+         "a": "{{AUD_ex-in-the-woods-w-busque-ddea35}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "buscaba",
+         "a": "{{AUD_ex-in-the-woods-w-buscaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "buscaré",
+         "a": "{{AUD_ex-in-the-woods-w-buscare-84f5df}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "buscaría",
+         "a": "{{AUD_ex-in-the-woods-w-buscaria-bc9775}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "busque",
+         "a": "{{AUD_ex-in-the-woods-w-busque}}"
+        },
+        {
+         "label": "Command",
+         "text": "busca",
+         "a": "{{AUD_ex-in-the-woods-w-busca}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "buscando",
+         "a": "{{AUD_ex-in-the-woods-w-buscando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "buscado",
+         "a": "{{AUD_ex-in-the-woods-w-buscado}}"
+        }
+       ],
+       "ex": "The word \"buscar\" in this sentence is an infinitive verb, which means \"to search\" or \"to get.\" In this context, it is used to express the action that Slim needs to perform: \"ir a buscar\" translates to \"go get\" or \"go search for.\"\n\nThe structure \"ir a buscar\" combines the verb \"ir\" (to go) with the infinitive \"buscar.\" In the present tense, \"ir\" conjugates as follows:\n\n- yo voy\n- tú vas\n- él/ella/usted va\n- nosotros/nosotras vamos\n- ellos/ellas/ustedes van\n\nHere, \"buscar\" is essential because it specifies the action Slim must take after \"ir.\" The whole phrase indicates urgency, as Slim is being instructed to \"go get everyone now.\""
+      },
+      {
+       "t": "a",
+       "m": "to",
+       "b": "a",
+       "bm": "",
+       "s": 1560,
+       "e": 1600,
+       "a": "{{AUD_ex-in-the-woods-w-a}}",
+       "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"ir\" (to go) with the action of \"buscar\" (to get or to look for). The phrase \"ir a buscar\" translates to \"go get\" in English. \n\nThe preposition \"a\" indicates direction or purpose, showing that Slim needs to go in order to perform the action of searching for everyone. It helps clarify what Slim is supposed to do: \"ir a buscar a todos\" means \"go get everyone.\" \n\nIn summary, \"a\" is essential here because it links the action of going with the intended action of searching for others."
+      },
+      {
+       "t": "todos",
+       "m": "everyone",
+       "b": "todo",
+       "bm": "all",
+       "s": 2173,
+       "e": 2640,
+       "a": "{{AUD_ex-in-the-woods-w-todos}}",
+       "ba": "{{AUD_ex-in-the-woods-w-todo}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "todo",
+         "a": "{{AUD_ex-in-the-woods-w-todo}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "toda",
+         "a": "{{AUD_ex-in-the-woods-w-toda}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "todos",
+         "a": "{{AUD_ex-in-the-woods-w-todos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "todas",
+         "a": "{{AUD_ex-in-the-woods-w-todas}}"
+        }
+       ],
+       "ex": "The word \"todos\" in this sentence is a pronoun that means \"everyone.\" It is used to refer to all the people that Slim needs to go get. \n\nIn this context, \"todos\" acts as the direct object of the verb \"buscar\" (to get), indicating who Slim is supposed to look for. The sentence is telling Slim that he has to go find \"todos\" — meaning all the people involved.\n\nSo, \"todos\" is essential here because it specifies the group of people Slim needs to gather. It emphasizes that he should not just get some people, but everyone."
+      },
+      {
+       "t": "ahora!",
+       "m": "now",
+       "b": "ahora",
+       "bm": "now",
+       "s": 2773,
+       "e": 3600,
+       "a": "{{AUD_ex-in-the-woods-w-ahora}}",
+       "ex": "The word \"ahora\" in this sentence is an adverb, meaning \"now.\" It indicates the timing of the action that Slim needs to take. In the context of the sentence, \"ahora\" emphasizes urgency, suggesting that Slim should go get everyone immediately.\n\nThe sentence reads, \"¡Slim, tienes que ir a buscar a todos ahora!\" Here, \"ahora\" is placed at the end to highlight that the action should happen right away. It connects the need to go get everyone with the present moment, making it clear that there is no time to waste."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.35757575757575755,
+   "y": 0.36010101010100987,
+   "w": 0.1803030303030303,
+   "h": 0.074747474747475,
+   "panel": [
+    0.0167,
+    0.3389,
+    0.9621,
+    0.3313
+   ],
+   "sentences": [
+    {
+     "es": "¡Ten cuidado!",
+     "en": "Be careful!",
+     "a": "{{AUD_ex-in-the-woods-b5-1}}",
+     "words": [
+      {
+       "t": "¡Ten",
+       "m": "be",
+       "b": "tener",
+       "bm": "to have",
+       "s": 0,
+       "e": 240,
+       "a": "{{AUD_ex-in-the-woods-w-ten}}",
+       "ba": "{{AUD_ex-in-the-woods-w-tener}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "tengo",
+         "a": "{{AUD_ex-in-the-woods-w-tengo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "tuve",
+         "a": "{{AUD_ex-in-the-woods-w-tuve}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "tenía",
+         "a": "{{AUD_ex-in-the-woods-w-tenia-1e955d}}"
+        },
+        {
+         "label": "Future",
+         "text": "tendré",
+         "a": "{{AUD_ex-in-the-woods-w-tendre-6d4b25}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "tendría",
+         "a": "{{AUD_ex-in-the-woods-w-tendria-cc46ce}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "tenga",
+         "a": "{{AUD_ex-in-the-woods-w-tenga}}"
+        },
+        {
+         "label": "Command",
+         "text": "ten",
+         "a": "{{AUD_ex-in-the-woods-w-ten}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "teniendo",
+         "a": "{{AUD_ex-in-the-woods-w-teniendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "tenido",
+         "a": "{{AUD_ex-in-the-woods-w-tenido}}"
+        }
+       ],
+       "ex": "The word \"ten\" is the second-person singular imperative form of the verb \"tener,\" which means \"to have.\" In this sentence, \"¡Ten cuidado!\" translates to \"Be careful!\" The command is directed at someone, telling them to \"have care\" or \"be cautious.\"\n\nHere's a short present-tense conjugation table for \"tener\":\n\n- yo tengo\n- tú tienes\n- él/ella/usted tiene\n- nosotros/nosotras tenemos\n- ellos/ellas/ustedes tienen\n\nIn this context, \"ten\" serves as a direct command, urging the listener to take care. It emphasizes the importance of being cautious in a particular situation."
+      },
+      {
+       "t": "cuidado!",
+       "m": "care",
+       "b": "cuidado",
+       "bm": "care",
+       "s": 288,
+       "e": 1123,
+       "a": "{{AUD_ex-in-the-woods-w-cuidado}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "cuidado",
+         "a": "{{AUD_ex-in-the-woods-w-cuidado}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "cuidado",
+         "a": "{{AUD_ex-in-the-woods-w-cuidado}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "cuidados",
+         "a": "{{AUD_ex-in-the-woods-w-cuidados}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "cuidadas",
+         "a": "{{AUD_ex-in-the-woods-w-cuidadas}}"
+        }
+       ],
+       "ex": "In this sentence, \"cuidado\" is a noun meaning \"care\" or \"caution.\" It is used in the imperative form, which is a command or request. The phrase \"¡Ten cuidado!\" translates to \"Be careful!\" in English, where \"ten\" is the command form of the verb \"tener,\" meaning \"to have.\"\n\nHere, \"cuidado\" serves as the object of the verb \"tener.\" The sentence is instructing someone to \"have care\" or \"be cautious.\" The use of \"cuidado\" emphasizes the importance of being careful in a situation.\n\nIn summary, \"cuidado\" is a noun that highlights the need for caution, and it works with the imperative verb \"ten\" to form a clear and direct warning."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.06969696969696967,
+   "y": 0.5378787878787878,
+   "w": 0.15151515151515155,
+   "h": 0.0888888888888889,
+   "panel": [
+    0.0167,
+    0.3389,
+    0.9621,
+    0.3313
+   ],
+   "sentences": [
+    {
+     "es": "¡Y date prisa!",
+     "en": "And be quick!",
+     "a": "{{AUD_ex-in-the-woods-b6-1}}",
+     "words": [
+      {
+       "t": "¡Y",
+       "m": "and",
+       "b": "y",
+       "bm": "conjunction used to connect words or phrases",
+       "s": 0,
+       "e": 400,
+       "a": "{{AUD_ex-in-the-woods-w-y}}",
+       "ex": "The word \"y\" is a conjunction in this sentence. It translates to \"and\" in English, connecting ideas or actions. In \"¡Y date prisa!\", it serves to add emphasis to the command, suggesting that the speaker is urging the listener to hurry up in addition to whatever else might have been discussed.\n\nIn this context, \"y\" helps to create a sense of urgency and encourages the listener to take action. It implies that being quick is important in the situation at hand."
+      },
+      {
+       "t": "date",
+       "m": "be quick",
+       "b": "dar",
+       "bm": "to give",
+       "s": 416,
+       "e": 480,
+       "a": "{{AUD_ex-in-the-woods-w-date}}",
+       "ba": "{{AUD_ex-in-the-woods-w-dar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "doy",
+         "a": "{{AUD_ex-in-the-woods-w-doy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "di",
+         "a": "{{AUD_ex-in-the-woods-w-di}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "daba",
+         "a": "{{AUD_ex-in-the-woods-w-daba}}"
+        },
+        {
+         "label": "Future",
+         "text": "daré",
+         "a": "{{AUD_ex-in-the-woods-w-dare-fd7e5f}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "daría",
+         "a": "{{AUD_ex-in-the-woods-w-daria-5cd56e}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "dé",
+         "a": "{{AUD_ex-in-the-woods-w-de-52f44b}}"
+        },
+        {
+         "label": "Command",
+         "text": "da",
+         "a": "{{AUD_ex-in-the-woods-w-da}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "dando",
+         "a": "{{AUD_ex-in-the-woods-w-dando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "dado",
+         "a": "{{AUD_ex-in-the-woods-w-dado}}"
+        }
+       ],
+       "ex": "The word \"date\" in this sentence is a verb form. It comes from the infinitive \"darse,\" which means \"to hurry\" or \"to get oneself moving.\" In this context, \"date\" is the second person singular (tú) command form, telling someone directly to hurry up.\n\nHere’s a short present-tense conjugation for \"darse\":\n- yo me doy\n- tú te das\n- él/ella/usted se da\n- nosotros/nosotras nos damos\n- ellos/ellas/ustedes se dan\n\nIn the sentence \"¡Y date prisa!\", \"date\" is used to urge someone to act quickly. The phrase translates to \"And be quick!\" where \"date\" emphasizes the need for urgency. It connects directly to the person being addressed, encouraging them to hurry."
+      },
+      {
+       "t": "prisa!",
+       "m": "hurry",
+       "b": "prisa",
+       "bm": "rush or urgency",
+       "s": 533,
+       "e": 1200,
+       "a": "{{AUD_ex-in-the-woods-w-prisa}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "prisa",
+         "a": "{{AUD_ex-in-the-woods-w-prisa}}"
+        },
+        {
+         "label": "Plural",
+         "text": "prisas",
+         "a": "{{AUD_ex-in-the-woods-w-prisas}}"
+        }
+       ],
+       "ex": "In this sentence, \"prisa\" is a noun that means \"hurry\" or \"quickness.\" It is used in the phrase \"date prisa,\" which translates to \"be quick.\" \n\nThe word \"date\" is the second-person singular imperative form of the verb \"dar,\" meaning \"to give.\" In this context, it means \"give yourself\" or \"get yourself.\" So, \"date prisa\" literally means \"give yourself hurry.\" \n\nHere, \"prisa\" is functioning as the object of the verb \"dar.\" It emphasizes the urgency of the action being requested. The sentence is encouraging someone to act quickly."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.7757575757575758,
+   "y": 0.5611111111111112,
+   "w": 0.12272727272727268,
+   "h": 0.07070707070707061,
+   "panel": [
+    0.0167,
+    0.3389,
+    0.9621,
+    0.3313
+   ],
+   "sentences": [
+    {
+     "es": "¡Vale!",
+     "en": "Okay!",
+     "a": "{{AUD_ex-in-the-woods-b7-1}}",
+     "words": [
+      {
+       "t": "¡Vale!",
+       "m": "okay",
+       "b": "valer",
+       "bm": "to be worth",
+       "s": 0,
+       "e": 520,
+       "a": "{{AUD_ex-in-the-woods-w-vale}}",
+       "ba": "{{AUD_ex-in-the-woods-w-valer}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "valgo",
+         "a": "{{AUD_ex-in-the-woods-w-valgo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "valí",
+         "a": "{{AUD_ex-in-the-woods-w-vali-c533a7}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "valía",
+         "a": "{{AUD_ex-in-the-woods-w-valia-7c7503}}"
+        },
+        {
+         "label": "Future",
+         "text": "valeré",
+         "a": "{{AUD_ex-in-the-woods-w-valere-4c675e}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "valdría",
+         "a": "{{AUD_ex-in-the-woods-w-valdria-86ff68}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "valga",
+         "a": "{{AUD_ex-in-the-woods-w-valga}}"
+        },
+        {
+         "label": "Command",
+         "text": "vale",
+         "a": "{{AUD_ex-in-the-woods-w-vale}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "valiéndose",
+         "a": "{{AUD_ex-in-the-woods-w-valiendose-7e890c}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "valuado",
+         "a": "{{AUD_ex-in-the-woods-w-valuado}}"
+        }
+       ],
+       "ex": "\"Vale\" is an informal interjection in Spanish that means \"okay\" or \"alright.\" In this sentence, \"¡Vale!\" is used to express agreement or acceptance, similar to how someone might say \"okay!\" in English.\n\nAs for its grammatical role, \"vale\" is the third person singular form of the verb \"valer,\" which means \"to be worth.\" However, in this context, it functions more like an expression of affirmation rather than a typical verb. It conveys a sense of understanding or agreement in a casual conversation. \n\nSo, when someone says \"¡Vale!\" they are signaling that they are on board with what has been said or proposed. It's a friendly and straightforward way to acknowledge something in conversation."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.08030303030303027,
+   "y": 0.7964646464646464,
+   "w": 0.16666666666666669,
+   "h": 0.10808080808080811,
+   "panel": [
+    0.0606,
+    0.6793,
+    0.9152,
+    0.3121
+   ],
+   "sentences": [
+    {
+     "es": "¿Qué es? ¿Un perro?",
+     "en": "What is it? A dog? ",
+     "a": "{{AUD_ex-in-the-woods-b8-1}}",
+     "words": [
+      {
+       "t": "¿Qué",
+       "m": "what",
+       "b": "qué",
+       "bm": "what",
+       "s": 0,
+       "e": 160,
+       "a": "{{AUD_ex-in-the-woods-w-que-668150}}",
+       "ex": "In this sentence, \"qué\" is an interrogative pronoun meaning \"what.\" It is used to ask for information or clarification about something. In the phrase \"¿Qué es?\" you are essentially asking, \"What is it?\"\n\n\"Qué\" is functioning as the subject of the question, prompting the listener to provide an answer about the identity of the subject being referred to. It is important in forming questions in Spanish, just like \"what\" is in English. \n\nIn summary, \"qué\" is crucial here for seeking information, making the sentence an inquiry about the nature of the subject."
+      },
+      {
+       "t": "es?",
+       "m": "is",
+       "b": "ser",
+       "bm": "to be",
+       "s": 293,
+       "e": 760,
+       "a": "{{AUD_ex-in-the-woods-w-es}}",
+       "ba": "{{AUD_ex-in-the-woods-w-ser}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "soy",
+         "a": "{{AUD_ex-in-the-woods-w-soy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "fui",
+         "a": "{{AUD_ex-in-the-woods-w-fui}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "era",
+         "a": "{{AUD_ex-in-the-woods-w-era}}"
+        },
+        {
+         "label": "Future",
+         "text": "seré",
+         "a": "{{AUD_ex-in-the-woods-w-sere-7ef6bb}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "sería",
+         "a": "{{AUD_ex-in-the-woods-w-seria-d04c57}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sea",
+         "a": "{{AUD_ex-in-the-woods-w-sea}}"
+        },
+        {
+         "label": "Command",
+         "text": "sé",
+         "a": "{{AUD_ex-in-the-woods-w-se-edf401}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "siendo",
+         "a": "{{AUD_ex-in-the-woods-w-siendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sido",
+         "a": "{{AUD_ex-in-the-woods-w-sido}}"
+        }
+       ],
+       "ex": "The word \"es\" is a verb in this sentence. It is the third-person singular form of the verb \"ser,\" which means \"to be.\" In this context, \"es\" is used to ask about the identity or nature of something, as seen in the question \"¿Qué es?\" which translates to \"What is it?\"\n\nHere’s a short present-tense conjugation of \"ser\":\n\n- yo soy\n- tú eres\n- él/ella/usted es\n- nosotros/nosotras somos\n- ellos/ellas/ustedes son\n\nIn the sentence, \"es\" connects the subject (implied \"it\") to the question of what it is, indicating that the speaker is seeking clarification about the identity of the object in question."
+      },
+      {
+       "t": "¿Un",
+       "m": "a",
+       "b": "un",
+       "bm": "a (masculine)",
+       "s": 860,
+       "e": 1220,
+       "a": "{{AUD_ex-in-the-woods-w-un}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "un",
+         "a": "{{AUD_ex-in-the-woods-w-un}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "una",
+         "a": "{{AUD_ex-in-the-woods-w-una}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "unos",
+         "a": "{{AUD_ex-in-the-woods-w-unos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "unas",
+         "a": "{{AUD_ex-in-the-woods-w-unas}}"
+        }
+       ],
+       "ex": "The word \"un\" is an indefinite article in Spanish, which translates to \"a\" or \"an\" in English. In the sentence \"¿Un perro?\", it introduces the noun \"perro\" (dog) and indicates that we are talking about one unspecified dog, rather than a specific one.\n\nIn this context, \"un\" serves to ask a question about the identity of the thing being referred to. The speaker is curious and is suggesting a possibility: \"A dog?\" This use of \"un\" helps to express that the speaker is not certain and is open to possibilities. \n\nSo, in summary, \"un\" is an indefinite article that connects to the noun \"perro\" to indicate that it is one of many possible dogs."
+      },
+      {
+       "t": "perro?",
+       "m": "dog",
+       "b": "perro",
+       "bm": "dog",
+       "s": 1235,
+       "e": 1680,
+       "a": "{{AUD_ex-in-the-woods-w-perro}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "perro",
+         "a": "{{AUD_ex-in-the-woods-w-perro}}"
+        },
+        {
+         "label": "Plural",
+         "text": "perros",
+         "a": "{{AUD_ex-in-the-woods-w-perros}}"
+        }
+       ],
+       "ex": "The word \"perro\" in this sentence is a noun, specifically a common noun that means \"dog.\" In the sentence \"¿Un perro?\" it functions as the subject of the implied question about what \"it\" is. \n\nThe structure of the sentence suggests that the speaker is asking for clarification or confirmation about the identity of an object, which they suspect might be a dog. The use of \"un\" before \"perro\" indicates that it is an indefinite article, meaning \"a\" in English, and it introduces the noun \"perro\" as a singular, unspecified dog.\n\nOverall, \"perro\" is essential here because it provides the specific identity the speaker is questioning, making the inquiry clear and direct."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.743178297492341,
+   "y": 0.7863856043104517,
+   "w": 0.11061310198501523,
+   "h": 0.17268333683364215,
+   "panel": [
+    0.0606,
+    0.6793,
+    0.9152,
+    0.3121
+   ],
+   "sentences": [
+    {
+     "es": "Aún no lo sé.",
+     "en": "I don't know yet. ",
+     "a": "{{AUD_ex-in-the-woods-b9-1}}",
+     "words": [
+      {
+       "t": "Aún",
+       "m": "yet",
+       "b": "aún",
+       "bm": "still",
+       "s": 0,
+       "e": 240,
+       "a": "{{AUD_ex-in-the-woods-w-aun-3de704}}",
+       "ex": "In the sentence \"Aún no lo sé,\" the word \"aún\" functions as an adverb. It means \"yet\" in English and indicates that something has not happened up to the present moment. \n\nHere, \"aún\" emphasizes that the speaker still does not know something, as shown in the context of \"no lo sé\" (I don't know it). The use of \"aún\" suggests that there is an expectation or possibility that the knowledge might come in the future. \n\nSo, in this sentence, \"aún\" plays a crucial role in conveying the timing of the speaker's knowledge, highlighting that it is still lacking."
+      },
+      {
+       "t": "no",
+       "m": "no",
+       "b": "no",
+       "bm": "not",
+       "s": 267,
+       "e": 320,
+       "a": "{{AUD_ex-in-the-woods-w-no}}",
+       "ex": "In the sentence \"Aún no lo sé,\" the word \"no\" is an adverb. Its role here is to negate the verb \"sé,\" which is the first person singular form of the verb \"saber,\" meaning \"to know.\" \n\nThe infinitive is \"saber,\" and here’s a short present-tense conjugation:\n\n- yo sé (I know)\n- tú sabes (you know)\n- él/ella sabe (he/she knows)\n\nBy using \"no,\" the speaker is indicating that they do not know something at this moment. The phrase \"Aún no\" translates to \"not yet,\" emphasizing that the knowledge is expected in the future but is currently absent."
+      },
+      {
+       "t": "lo",
+       "m": "it",
+       "b": "lo",
+       "bm": "it",
+       "s": 373,
+       "e": 480,
+       "a": "{{AUD_ex-in-the-woods-w-lo}}",
+       "ex": "In the sentence \"Aún no lo sé,\" the word \"lo\" is a direct object pronoun. It refers to something that has not been specified in this context, often meaning \"it\" or \"that.\" \n\nThe verb in this sentence is \"sé,\" which is the first-person singular present tense form of \"saber,\" meaning \"to know.\" The conjugation for \"saber\" in the present tense is:\n\n- yo sé\n- tú sabes\n- él/ella/usted sabe\n- nosotros/nosotras sabemos\n- ellos/ellas/ustedes saben\n\nHere, \"lo\" is used to replace the object of the verb \"saber,\" indicating that the speaker does not know \"it\" or \"that\" yet. It helps avoid repetition and keeps the sentence concise."
+      },
+      {
+       "t": "sé.",
+       "m": "I know",
+       "b": "saber",
+       "bm": "to know",
+       "s": 560,
+       "e": 880,
+       "a": "{{AUD_ex-in-the-woods-w-se-edf401}}",
+       "ba": "{{AUD_ex-in-the-woods-w-saber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "sé",
+         "a": "{{AUD_ex-in-the-woods-w-se-edf401}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "supe",
+         "a": "{{AUD_ex-in-the-woods-w-supe}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "sabía",
+         "a": "{{AUD_ex-in-the-woods-w-sabia-bf2f65}}"
+        },
+        {
+         "label": "Future",
+         "text": "sabré",
+         "a": "{{AUD_ex-in-the-woods-w-sabre-ea3527}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "sabría",
+         "a": "{{AUD_ex-in-the-woods-w-sabria-e99ead}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sepa",
+         "a": "{{AUD_ex-in-the-woods-w-sepa}}"
+        },
+        {
+         "label": "Command",
+         "text": "sabe",
+         "a": "{{AUD_ex-in-the-woods-w-sabe}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "sabiendo",
+         "a": "{{AUD_ex-in-the-woods-w-sabiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sabido",
+         "a": "{{AUD_ex-in-the-woods-w-sabido}}"
+        }
+       ],
+       "ex": "The word \"sé\" is the first-person singular form of the verb \"saber,\" which means \"to know.\" In this sentence, \"Aún no lo sé,\" it translates to \"I don't know yet.\" \n\nIn the present tense, the conjugation of \"saber\" for the first-person singular is:\n- yo sé (I know)\n- tú sabes (you know)\n- él/ella/usted sabe (he/she/you formal knows)\n\nHere, \"sé\" is used to express the speaker's lack of knowledge about something specific, indicated by \"lo,\" which means \"it.\" The sentence conveys that the speaker has not yet acquired the information or understanding they are referring to."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.35454545454545455,
+   "y": 0.9025252525252524,
+   "w": 0.2,
+   "h": 0.06262626262626281,
+   "panel": [
+    0.0606,
+    0.6793,
+    0.9152,
+    0.3121
+   ],
+   "sentences": [
+    {
+     "es": "¡Sígueme!",
+     "en": "Follow me!",
+     "a": "{{AUD_ex-in-the-woods-b10-1}}",
+     "words": [
+      {
+       "t": "¡Sígueme!",
+       "m": "follow me",
+       "b": "seguir",
+       "bm": "to follow",
+       "s": 0,
+       "e": 1360,
+       "a": "{{AUD_ex-in-the-woods-w-sigueme-b13379}}",
+       "ba": "{{AUD_ex-in-the-woods-w-seguir}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "sigo",
+         "a": "{{AUD_ex-in-the-woods-w-sigo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "seguí",
+         "a": "{{AUD_ex-in-the-woods-w-segui-f53c47}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "seguía",
+         "a": "{{AUD_ex-in-the-woods-w-seguia-960165}}"
+        },
+        {
+         "label": "Future",
+         "text": "seguiré",
+         "a": "{{AUD_ex-in-the-woods-w-seguire-52570d}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "seguiría",
+         "a": "{{AUD_ex-in-the-woods-w-seguiria-865af6}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "siga",
+         "a": "{{AUD_ex-in-the-woods-w-siga}}"
+        },
+        {
+         "label": "Command",
+         "text": "sigue",
+         "a": "{{AUD_ex-in-the-woods-w-sigue}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "siguiendo",
+         "a": "{{AUD_ex-in-the-woods-w-siguiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "seguido",
+         "a": "{{AUD_ex-in-the-woods-w-seguido}}"
+        }
+       ],
+       "ex": "\"Sígueme\" is a verb form in the imperative mood, which is used to give commands or requests. The infinitive form of the verb is \"seguir,\" which means \"to follow.\" \n\nIn this sentence, \"sígueme\" translates to \"follow me!\" Here, \"sígueme\" is a direct command directed at someone, telling them to follow the speaker. The \"me\" at the end is an object pronoun that refers to the speaker, indicating that the action of following should be directed towards them.\n\nFor the present tense conjugation of \"seguir,\" it looks like this:\n\n- yo sigo (I follow)\n- tú sigues (you follow)\n- él/ella sigue (he/she follows)\n- nosotros/as seguimos (we follow)\n- ellos/as siguen (they follow)\n\nSo, in \"¡Sígueme!\", the speaker is urging someone to take action and follow them."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
