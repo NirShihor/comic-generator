@@ -529,6 +529,13 @@ router.get('/collection-thumbnail/:collectionId', async (req, res) => {
 
 // POST /api/reader/explain — a short, contextual grammar explanation of a Spanish
 // word AS USED in its sentence. Uses a cheap model. Body: { word, sentence, translation }.
+// POST /api/reader/telemetry — anonymous aggregate usage counts from the app
+// (services/appTelemetry): allow-listed events forwarded to PostHog under one
+// fixed identity, no identifier of any kind, global rate limit, nothing
+// about the request stored or logged. Separate from the opt-in analytics.
+const appTelemetry = require('../services/appTelemetry');
+router.post('/telemetry', appTelemetry.makeHandler({ forward: appTelemetry.makeForwarder() }));
+
 // Purchase attribution (opt-in analytics only): which anonymous analytics ID
 // a purchase's appAccountToken belongs to, so subscription events reported by
 // Apple can be attributed. The app registers it only after the user opts into
