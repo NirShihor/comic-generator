@@ -42,7 +42,7 @@
 <main>
   <a class="home" href="/">← comigo.net</a>
   <h1>Privacy Policy</h1>
-  <p class="date">Effective 29 September 2026 · Comigo for iOS and the comigo.net website</p>
+  <p class="date">Effective 4 October 2026 · Comigo for iOS and the comigo.net website</p>
 
   <p>Comigo is made by an independent developer. The app is designed to work
   without user accounts, without third-party advertising, and without cross-app tracking.
@@ -95,9 +95,34 @@
   sentence is sent to our server and on to OpenAI to generate the explanation.
   This text comes from the comics themselves, not from anything you've written.</p>
 
-  <h2>Usage analytics — only if you allow it</h2>
-  <p>When you first use Comigo, the app asks whether you'd like to share usage
-  statistics. Nothing is collected unless you choose <strong>Allow analytics</strong>;
+  <h2>Anonymous usage counts</h2>
+  <p>The app keeps simple counts of actions — a page read, a practice finished,
+  a paywall shown, a translation revealed — so we can see which comics and
+  features get used. These counts are on by default and you can switch them off
+  at any time in Settings → Privacy → Anonymous usage counts; switching them
+  off also discards any counts not yet sent, and every part of Comigo works the
+  same either way.</p>
+  <p>Each count is a named action (such as "comic page viewed" or "practice
+  completed") with the comic or collection, the page number, the practice mode,
+  whether you're on the free plan, a trial or a subscription, and the app
+  version. It carries no identifier of any kind: no account, device, install,
+  session or advertising identifier, no random code, no name, email address or
+  Apple ID, no location, and never your voice, your answers, anything you type
+  or the text of the comics. The app sends these counts in small batches to our
+  server, which passes them to PostHog, our analytics provider in the EU, under a
+  single fixed label for the whole app. Our telemetry service does not store,
+  forward, hash or derive a location from the IP address on that connection, and
+  does not use it as an identifier. The result is a tally of what was done, not
+  who did it: the telemetry is designed so that the counts are not linked to
+  you, cannot be combined into an individual usage profile, and don't measure or
+  recognise individual users. They are used only to understand how Comigo is
+  used and to improve it, never for advertising.</p>
+
+  <h2>Optional individual usage analytics — only if you allow it</h2>
+  <p>Separately from the anonymous counts above, when you first use Comigo the
+  app asks whether you'd like to share usage
+  statistics. No optional individual usage analytics are collected unless you
+  choose <strong>Allow analytics</strong>;
   if you choose <strong>No thanks</strong>, the app never starts its analytics
   service and nothing is sent. Every part of Comigo works the same either way.
   You can change your answer at any time in Settings → Privacy → Share usage
@@ -108,8 +133,10 @@
   number, the practice mode, whether you're on the free plan, a trial or a
   subscription, the Spanish level you chose in the app, your app version, your
   iPhone or iPad's operating system version and whether it's a phone or a
-  tablet.</p>
-  <p>These statistics are linked to a random identifier created by the app on
+  tablet. Unlike the anonymous counts, these statistics are linked together, so
+  they show how one person's reading and practice unfold over time — which is
+  why they need your permission.</p>
+  <p>These statistics are linked to a random analytics identifier created on
   your device, not to your name, email address, Apple ID or any advertising
   identifier. They never include your voice, your spoken or written answers,
   anything you type, or the text of the comics. Your IP address is not stored and
@@ -126,13 +153,15 @@
   analytics off, the link between the purchase code and your identifier is
   deleted from our server and no further subscription statistics are recorded
   for you.</p>
-  <p><strong>How long it's kept.</strong> PostHog keeps usage statistics for up
-  to 7 years under our current plan. We review at least once a year how much of
-  this data we still need, and we reduce or delete analytics data once it is no
-  longer needed to understand and improve Comigo. Because these statistics are
-  linked only to a random identifier and not to who you are, we generally can't
-  pick out one person's records; turning analytics off stops any further
-  collection straight away.</p>
+  <p><strong>How long it's kept.</strong> PostHog keeps analytics data,
+  including anonymous usage counts and optional individual usage statistics, for
+  up to 7 years under our current plan. We review at least once a year how much
+  of this data we still need and reduce or delete analytics data once it is no
+  longer needed to understand and improve Comigo. Anonymous usage counts contain
+  no user, device, installation or session identifier. Optional individual usage
+  statistics are linked only to a random analytics identifier and not to your
+  identity; turning optional analytics off stops any further collection straight
+  away.</p>
   <p>The record on our own server that links a purchase code to your random
   identifier is kept only while analytics is on. It is deleted immediately if you
   turn analytics off. Otherwise it is kept while your subscription is active,
