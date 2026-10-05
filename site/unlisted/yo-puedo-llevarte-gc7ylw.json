@@ -1,0 +1,770 @@
+{
+ "slug": "yo-puedo-llevarte-gc7ylw",
+ "label": "Yo puedo llevarte",
+ "labelEn": "I can drive you",
+ "seoTitle": "I Can Drive You: Beginner Spanish Reading Practice",
+ "summary": "Two friends on a park bench: one needs to get to work, the other offers a lift. Practise yo + verb — necesito, puedo, debo, pienso — with every line voiced and every word explained.",
+ "imageAlt": "A comic page in soft autumn colours: two young women with takeaway coffees sit on a park bench by the water, a city skyline behind them; one worries about getting to work on time, her friend offers to drive her, and in the last panel they pick up their bags to leave.",
+ "comic": "INFLUENCER - SPANISH.WITH.CONCHITA",
+ "collection": "",
+ "level": "beginner",
+ "image": "example-yo-puedo-llevarte-gc7ylw",
+ "width": 1024,
+ "height": 1536,
+ "publishedAt": "2026-10-05T12:14:48.504Z",
+ "bubbles": [
+  {
+   "x": 0.04440777333027901,
+   "y": 0.16010101010101013,
+   "w": 0.2081541503091392,
+   "h": 0.13737373737373737,
+   "panel": [
+    0.0197,
+    0.0136,
+    0.9409,
+    0.3424
+   ],
+   "sentences": [
+    {
+     "es": "Yo necesito llegar al trabajo…",
+     "en": "I need to get to work...",
+     "g": "Necesito is the present tense of necesitar, indicating a current need or necessity.",
+     "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-b1-1}}",
+     "words": [
+      {
+       "t": "Yo",
+       "m": "I",
+       "b": "yo",
+       "bm": "I",
+       "s": 193,
+       "e": 400,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-yo}}",
+       "ex": "In this sentence, \"yo\" is a subject pronoun. It means \"I\" in English and indicates who is performing the action of the verb \"necesito\" (I need). By using \"yo,\" the speaker is clearly stating that they are the one who has the need to get to work.\n\nIn Spanish, subject pronouns like \"yo\" are often used for clarity, especially when the subject is not obvious from the verb conjugation. Here, \"necesito\" is the first-person singular form of the verb \"necesitar,\" which means \"to need.\" The present tense conjugation for \"necesitar\" is:\n\n- yo necesito (I need)\n- tú necesitas (you need)\n- él/ella/usted necesita (he/she/you formal need)\n- nosotros/nosotras necesitamos (we need)\n- ellos/ellas/ustedes necesitan (they/you all need)\n\nSo, \"yo\" is essential here to specify that it is the speaker who needs to arrive at work."
+      },
+      {
+       "t": "necesito",
+       "m": "need",
+       "b": "necesitar",
+       "bm": "to need",
+       "s": 467,
+       "e": 1120,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-necesito}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-necesitar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "necesito",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-necesito}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "necesité"
+        },
+        {
+         "label": "Imperfect",
+         "text": "necesitaba"
+        },
+        {
+         "label": "Future",
+         "text": "necesitaré"
+        },
+        {
+         "label": "Conditional",
+         "text": "necesitaría"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "necesite"
+        },
+        {
+         "label": "Command",
+         "text": "necesita"
+        },
+        {
+         "label": "Gerund",
+         "text": "necesitando"
+        },
+        {
+         "label": "Past Participle",
+         "text": "necesitado"
+        }
+       ],
+       "ex": "\"Necesito\" is a verb in the present tense, and it comes from the infinitive \"necesitar,\" which means \"to need.\" In this sentence, \"Yo necesito llegar al trabajo,\" it translates to \"I need to get to work.\" \n\nThe subject \"Yo\" (I) is implied in the verb conjugation. \"Necesito\" is the first-person singular form, so it corresponds to \"I need.\" Here’s a short present-tense conjugation table for \"necesitar\":\n\n- Yo necesito (I need)\n- Tú necesitas (You need)\n- Él/Ella/Usted necesita (He/She/You formal need)\n- Nosotros/Nosotras necesitamos (We need)\n- Ellos/Ellas/Ustedes necesitan (They/You all need)\n\nIn this context, \"necesito\" expresses a requirement or necessity for the speaker, indicating that getting to work is important for them."
+      },
+      {
+       "t": "llegar",
+       "m": "to get",
+       "b": "llegar",
+       "bm": "to get",
+       "s": 1177,
+       "e": 1520,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-llegar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "llego"
+        },
+        {
+         "label": "Preterite",
+         "text": "llegué"
+        },
+        {
+         "label": "Imperfect",
+         "text": "llegaba"
+        },
+        {
+         "label": "Future",
+         "text": "llegaré"
+        },
+        {
+         "label": "Conditional",
+         "text": "llegaría"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "llegue"
+        },
+        {
+         "label": "Command",
+         "text": "llega"
+        },
+        {
+         "label": "Gerund",
+         "text": "llegando"
+        },
+        {
+         "label": "Past Participle",
+         "text": "llegado"
+        }
+       ],
+       "ex": "The word \"llegar\" in this sentence is an infinitive verb, meaning \"to arrive\" or \"to get.\" It is used here as the action that the subject \"Yo\" (I) needs to perform. The structure \"necesito llegar\" translates to \"I need to get,\" where \"necesito\" is the first-person singular present tense of the verb \"necesitar\" (to need).\n\nHere’s a short present-tense conjugation of \"llegar\":\n- Yo llego (I arrive)\n- Tú llegas (You arrive)\n- Él/Ella llega (He/She arrives)\n- Nosotros llegamos (We arrive)\n- Ellos llegan (They arrive)\n\nIn this context, \"llegar\" is essential because it specifies the action related to the need expressed by \"necesito.\" The full phrase indicates that the speaker has a requirement to arrive at work."
+      },
+      {
+       "t": "al",
+       "m": "to the",
+       "b": "a el",
+       "bm": "to the",
+       "s": 1573,
+       "e": 1680,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-al}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-ael-ebe60e}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "a el",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-ael-ebe60e}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": ""
+        },
+        {
+         "label": "Masc. plural",
+         "text": ""
+        },
+        {
+         "label": "Fem. plural",
+         "text": ""
+        }
+       ],
+       "ex": "In this sentence, \"al\" is a contraction of the preposition \"a\" and the definite article \"el.\" It translates to \"to the\" in English. The role of \"al\" here is to indicate direction or destination, specifically where the speaker needs to go.\n\nThe phrase \"al trabajo\" means \"to work,\" where \"trabajo\" is a masculine noun meaning \"work.\" The contraction \"al\" connects the action of needing to arrive with the specific place, which is \"trabajo.\" \n\nSo, in summary, \"al\" helps specify the destination of the action \"necesitar llegar\" (need to get to), making it clear that the speaker is talking about going to work."
+      },
+      {
+       "t": "trabajo…",
+       "m": "work",
+       "b": "trabajo",
+       "bm": "work",
+       "s": 1770,
+       "e": 2480,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-trabajo}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "trabajo",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-trabajo}}"
+        },
+        {
+         "label": "Plural",
+         "text": "trabajos"
+        }
+       ],
+       "ex": "The word \"trabajo\" in this sentence is a noun meaning \"work.\" It functions as the object of the preposition \"al,\" which is a contraction of \"a\" (to) and \"el\" (the). So, \"al trabajo\" translates to \"to work.\"\n\nIn the sentence \"Yo necesito llegar al trabajo,\" the phrase indicates the destination the speaker needs to reach. The verb \"necesito\" (I need) shows the necessity, and \"llegar\" (to get) indicates the action of arriving at that destination. Thus, \"trabajo\" is essential here because it specifies where the speaker needs to go."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.6924242424242423,
+   "y": 0.2065656565656566,
+   "w": 0.2,
+   "h": 0.1,
+   "panel": [
+    0.0197,
+    0.0136,
+    0.9409,
+    0.3424
+   ],
+   "sentences": [
+    {
+     "es": "Yo puedo llevarte.",
+     "en": "I can drive you.",
+     "g": "Puedo is the present tense of poder, showing ability in the present moment.",
+     "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-b2-1}}",
+     "words": [
+      {
+       "t": "Yo",
+       "m": "I",
+       "b": "yo",
+       "bm": "I",
+       "s": 0,
+       "e": 240,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-yo}}",
+       "ex": "In the sentence \"Yo puedo llevarte,\" the word \"yo\" is a subject pronoun. It means \"I\" in English and indicates who is performing the action of the verb. Here, \"yo\" is essential because it clarifies that the speaker is the one who can drive.\n\nThe verb in this sentence is \"puedo,\" which comes from the infinitive \"poder,\" meaning \"to be able to.\" The present tense conjugation for \"poder\" is as follows:\n\n- yo puedo\n- tú puedes\n- él/ella/usted puede\n- nosotros/nosotras podemos\n- ellos/ellas/ustedes pueden\n\nSo, \"yo\" is functioning as the subject of the verb \"puedo,\" making it clear that the speaker is the one who has the ability to drive."
+      },
+      {
+       "t": "puedo",
+       "m": "can",
+       "b": "poder",
+       "bm": "to be able",
+       "s": 293,
+       "e": 560,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-puedo}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-poder}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "puedo",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-puedo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "pude"
+        },
+        {
+         "label": "Imperfect",
+         "text": "podía"
+        },
+        {
+         "label": "Future",
+         "text": "podré"
+        },
+        {
+         "label": "Conditional",
+         "text": "podría"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "pueda"
+        },
+        {
+         "label": "Command",
+         "text": "puede"
+        },
+        {
+         "label": "Gerund",
+         "text": "pudiendo"
+        },
+        {
+         "label": "Past Participle",
+         "text": "podido"
+        }
+       ],
+       "ex": "\"puedo\" is a verb form in this sentence. It is the first person singular present tense of the verb \"poder,\" which means \"to be able to\" or \"can.\" In this context, \"puedo\" translates to \"I can,\" indicating the speaker's ability or permission to do something.\n\nThe conjugation of \"poder\" in the present tense is as follows:\n\n- yo puedo\n- tú puedes\n- él/ella/usted puede\n- nosotros/nosotras podemos\n- ellos/ellas/ustedes pueden\n\nIn the sentence \"Yo puedo llevarte,\" \"puedo\" expresses the speaker's capability to \"llevarte,\" which means \"drive you.\" The word \"te\" is an object pronoun referring to the person being driven. So, \"puedo\" is crucial here as it establishes the speaker's ability to perform the action of driving."
+      },
+      {
+       "t": "llevarte.",
+       "m": "to drive you",
+       "b": "llevar",
+       "bm": "to carry",
+       "s": 608,
+       "e": 2680,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-llevarte}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-llevar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "llevo"
+        },
+        {
+         "label": "Preterite",
+         "text": "llevé"
+        },
+        {
+         "label": "Imperfect",
+         "text": "llevaba"
+        },
+        {
+         "label": "Future",
+         "text": "llevaré"
+        },
+        {
+         "label": "Conditional",
+         "text": "llevaría"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "lleve"
+        },
+        {
+         "label": "Command",
+         "text": "lleva"
+        },
+        {
+         "label": "Gerund",
+         "text": "llevando"
+        },
+        {
+         "label": "Past Participle",
+         "text": "llevado"
+        }
+       ],
+       "ex": "The word \"llevarte\" is a verb form in this sentence. It comes from the infinitive verb \"llevar,\" which means \"to carry\" or \"to take.\" In this context, it translates to \"to drive\" or \"to take you.\" \n\nThe form \"llevarte\" is a combination of the verb \"llevar\" and the reflexive pronoun \"te,\" which refers to \"you.\" This indicates that the action of the verb is directed towards the person being spoken to. \n\nIn the present tense, \"llevar\" is conjugated as follows:\n- yo llevo (I carry/take)\n- tú llevas (you carry/take)\n- él/ella lleva (he/she carries/takes)\n- nosotros/as llevamos (we carry/take)\n- ellos/ellas llevan (they carry/take)\n\nSo, in \"Yo puedo llevarte,\" the speaker is saying, \"I can take you,\" indicating their ability to drive or accompany the listener somewhere. The \"te\" makes it clear that the action is specifically for \"you.\""
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.842863373460486,
+   "y": 0.4664660227227081,
+   "w": 0.10518234398811901,
+   "h": 0.07918916667579595,
+   "panel": [
+    0.0227,
+    0.3126,
+    0.9591,
+    0.3636
+   ],
+   "sentences": [
+    {
+     "es": "Lo sé.",
+     "en": "I know.",
+     "g": "Lo is a pronoun that refers to a specific thing, and sé is the first person present form of saber, meaning to know.",
+     "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-b3-1}}",
+     "words": [
+      {
+       "t": "Lo",
+       "m": "it",
+       "b": "lo",
+       "bm": "it",
+       "s": 192,
+       "e": 320,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-lo}}",
+       "ex": "In the sentence \"Lo sé,\" the word \"lo\" is a pronoun. Specifically, it is a direct object pronoun that refers to something that has been previously mentioned or is understood in context. In this case, \"lo\" translates to \"it\" in English, indicating that the speaker knows something specific.\n\nThe verb in this sentence is \"sé,\" which is the first person singular form of the verb \"saber,\" meaning \"to know.\" Here’s a short present-tense conjugation table for \"saber\":\n\n- yo sé\n- tú sabes\n- él/ella/usted sabe\n- nosotros/nosotras sabemos\n- ellos/ellas/ustedes saben\n\nSo, \"lo\" serves to emphasize or specify what the speaker knows, making the sentence more complete. It shows that the speaker has knowledge of a particular fact or situation, even if that fact is not explicitly stated in this sentence."
+      },
+      {
+       "t": "sé.",
+       "m": "I know",
+       "b": "saber",
+       "bm": "to know",
+       "s": 667,
+       "e": 1440,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-se-edf401}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-saber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "sé",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-se-edf401}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "supe"
+        },
+        {
+         "label": "Imperfect",
+         "text": "sabía"
+        },
+        {
+         "label": "Future",
+         "text": "sabré"
+        },
+        {
+         "label": "Conditional",
+         "text": "sabría"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sepa"
+        },
+        {
+         "label": "Command",
+         "text": "sabe"
+        },
+        {
+         "label": "Gerund",
+         "text": "sabiendo"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sabido"
+        }
+       ],
+       "ex": "The word \"sé\" in the sentence \"Lo sé\" is a verb form. It is the first-person singular present tense of the verb \"saber,\" which means \"to know.\" \n\nHere's a short conjugation table for \"saber\" in the present tense:\n\n- yo sé (I know)\n- tú sabes (you know)\n- él/ella/usted sabe (he/she/you formal know)\n- nosotros/nosotras sabemos (we know)\n- ellos/ellas/ustedes saben (they/you all know)\n\nIn this sentence, \"sé\" means \"I know,\" and it indicates that the speaker is expressing their knowledge about something. The pronoun \"lo\" translates to \"it,\" referring to the specific information or fact that the speaker knows. So, \"Lo sé\" directly translates to \"I know it.\""
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.03939393939393934,
+   "y": 0.5368686868686869,
+   "w": 0.2363636363636364,
+   "h": 0.1,
+   "panel": [
+    0.0227,
+    0.3126,
+    0.9591,
+    0.3636
+   ],
+   "sentences": [
+    {
+     "es": "Yo debo llegar a tiempo.",
+     "en": "I must get there on time.",
+     "g": "Debo is the present tense of deber, expressing obligation in the present.",
+     "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-b4-1}}",
+     "words": [
+      {
+       "t": "Yo",
+       "m": "I",
+       "b": "yo",
+       "bm": "I",
+       "s": 250,
+       "e": 400,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-yo}}",
+       "ex": "In this sentence, \"yo\" is a subject pronoun meaning \"I.\" It indicates who is performing the action of the verb \"debo,\" which means \"must\" or \"have to.\" The presence of \"yo\" clarifies that the speaker is the one who must arrive on time.\n\nIn Spanish, subject pronouns like \"yo\" are often used for emphasis or clarity, especially when the verb form alone might not make it clear who is acting. Here, \"yo\" emphasizes that it is the speaker's responsibility to arrive on time.\n\nThe verb \"debo\" comes from the infinitive \"deber,\" which means \"to owe\" or \"to must.\" Here's a short present-tense conjugation for \"deber\":\n\n- yo debo (I must)\n- tú debes (you must)\n- él/ella/usted debe (he/she/you formal must)\n\nSo, \"yo\" is essential in this sentence to specify that the speaker is the one who has the obligation to arrive on time."
+      },
+      {
+       "t": "debo",
+       "m": "must",
+       "b": "deber",
+       "bm": "to must",
+       "s": 453,
+       "e": 640,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-debo}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-deber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "debo",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-debo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "debí"
+        },
+        {
+         "label": "Imperfect",
+         "text": "debía"
+        },
+        {
+         "label": "Future",
+         "text": "deberé"
+        },
+        {
+         "label": "Conditional",
+         "text": "debería"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "deba"
+        },
+        {
+         "label": "Command",
+         "text": "debe"
+        },
+        {
+         "label": "Gerund",
+         "text": "debiendo"
+        },
+        {
+         "label": "Past Participle",
+         "text": "debid"
+        }
+       ],
+       "ex": "The word \"debo\" is a verb form in this sentence. It is the first person singular present tense of the verb \"deber,\" which means \"to must\" or \"to have to.\" In this context, \"debo\" expresses an obligation or necessity. \n\nHere's a short conjugation table for \"deber\" in the present tense:\n\n- yo debo\n- tú debes\n- él/ella/usted debe\n- nosotros/nosotras debemos\n- ellos/ellas/ustedes deben\n\nIn the sentence \"Yo debo llegar a tiempo,\" \"debo\" indicates that the speaker feels a strong obligation to arrive on time. It sets the tone for the action that follows, which is \"llegar a tiempo\" (to get there on time)."
+      },
+      {
+       "t": "llegar",
+       "m": "get there",
+       "b": "llegar",
+       "bm": "to get",
+       "s": 697,
+       "e": 1040,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-llegar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "llego"
+        },
+        {
+         "label": "Preterite",
+         "text": "llegué"
+        },
+        {
+         "label": "Imperfect",
+         "text": "llegaba"
+        },
+        {
+         "label": "Future",
+         "text": "llegaré"
+        },
+        {
+         "label": "Conditional",
+         "text": "llegaría"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "llegue"
+        },
+        {
+         "label": "Command",
+         "text": "llega"
+        },
+        {
+         "label": "Gerund",
+         "text": "llegando"
+        },
+        {
+         "label": "Past Participle",
+         "text": "llegado"
+        }
+       ],
+       "ex": "The word \"llegar\" in the sentence \"Yo debo llegar a tiempo\" is an infinitive verb. Its base form is \"llegar,\" which means \"to arrive\" or \"to get there.\" \n\nIn this context, \"llegar\" is used as the direct object of the verb \"debo,\" which means \"I must.\" The sentence translates to \"I must get there on time,\" indicating the necessity of arriving at a specific time.\n\nFor a short present-tense conjugation of \"llegar,\" here it is:\n\n- yo llego (I arrive)\n- tú llegas (you arrive)\n- él/ella llega (he/she arrives)\n- nosotros/nosotras llegamos (we arrive)\n- ellos/ellas llegan (they arrive)\n\nSo, in this sentence, \"llegar\" is essential because it expresses the action that the subject \"yo\" (I) must perform."
+      },
+      {
+       "t": "a",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 1080,
+       "e": 1120,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-a}}",
+       "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"llegar\" (to arrive) with the idea of direction or destination. In English, it translates to \"to,\" indicating where the action of arriving is directed.\n\nThe phrase \"llegar a\" means \"to arrive at\" or \"to get to.\" So, \"Yo debo llegar a tiempo\" translates to \"I must get there on time,\" where \"a\" specifies the destination of the arrival, which is implied to be a place or event that occurs on time."
+      },
+      {
+       "t": "tiempo.",
+       "m": "time",
+       "b": "tiempo",
+       "bm": "time",
+       "s": 1200,
+       "e": 3120,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-tiempo}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "tiempo",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-tiempo}}"
+        },
+        {
+         "label": "Plural",
+         "text": "tiempos"
+        }
+       ],
+       "ex": "In this sentence, \"tiempo\" is a noun meaning \"time.\" It is used to refer to the concept of being punctual or arriving at the correct moment. The phrase \"a tiempo\" translates to \"on time,\" indicating that the speaker aims to arrive at the scheduled time.\n\nGrammatically, \"tiempo\" is functioning as the object of the preposition \"a.\" The preposition \"a\" connects the idea of arriving with the concept of time, emphasizing the importance of punctuality in this context. The whole phrase \"a tiempo\" serves as an adverbial expression that modifies the verb \"debo llegar,\" explaining how the speaker intends to arrive."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.2801846213774943,
+   "y": 0.8202020202020204,
+   "w": 0.2517519693662237,
+   "h": 0.13838383838383828,
+   "panel": [
+    0.0242,
+    0.6414,
+    0.9455,
+    0.3384
+   ],
+   "sentences": [
+    {
+     "es": "Yo pienso que deberíamos irnos.",
+     "en": "I think we should get going.",
+     "g": "Pienso is the present tense of pensar, used to express an opinion, and deberíamos is the conditional form of deber, indicating a suggestion.",
+     "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-b5-1}}",
+     "words": [
+      {
+       "t": "Yo",
+       "m": "I",
+       "b": "yo",
+       "bm": "I",
+       "s": 180,
+       "e": 400,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-yo}}",
+       "ex": "In this sentence, \"yo\" is a subject pronoun meaning \"I.\" It indicates who is performing the action of the verb \"pienso\" (think). In Spanish, subject pronouns are often used for clarity or emphasis, especially when the subject is not clear from the verb conjugation.\n\nThe verb \"pensar\" (to think) is in the first-person singular form \"pienso.\" Here’s a short present-tense conjugation table for \"pensar\":\n\n- yo pienso (I think)\n- tú piensas (you think)\n- él/ella/usted piensa (he/she/you formal think)\n- nosotros/nosotras pensamos (we think)\n- ellos/ellas/ustedes piensan (they/you all think)\n\nIn this case, \"yo\" is essential because it specifies that the speaker is the one thinking about the action of getting going. Without \"yo,\" the sentence would still be understandable, but it would lack the personal touch that emphasizes the speaker's involvement."
+      },
+      {
+       "t": "pienso",
+       "m": "think",
+       "b": "pensar",
+       "bm": "to think",
+       "s": 480,
+       "e": 1040,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-pienso}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-pensar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "pienso",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-pienso}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "pensé"
+        },
+        {
+         "label": "Imperfect",
+         "text": "pensaba"
+        },
+        {
+         "label": "Future",
+         "text": "pensaré"
+        },
+        {
+         "label": "Conditional",
+         "text": "pensaría"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "piense"
+        },
+        {
+         "label": "Command",
+         "text": "piensa"
+        },
+        {
+         "label": "Gerund",
+         "text": "pensando"
+        },
+        {
+         "label": "Past Participle",
+         "text": "pensado"
+        }
+       ],
+       "ex": "The word \"pienso\" is a verb in the present tense, specifically the first person singular form of the verb \"pensar,\" which means \"to think.\" In this sentence, \"Yo pienso\" translates to \"I think,\" indicating that the speaker is expressing their opinion or belief about something.\n\nHere's a short conjugation table for \"pensar\" in the present tense:\n\n- yo pienso\n- tú piensas\n- él/ella/usted piensa\n- nosotros/nosotras pensamos\n- ellos/ellas/ustedes piensan\n\nIn the sentence \"Yo pienso que deberíamos irnos,\" \"pienso\" serves as the main verb, showing the speaker's thought process. It introduces the idea that follows, which is \"que deberíamos irnos\" (that we should get going). This structure is common in Spanish to express thoughts or beliefs."
+      },
+      {
+       "t": "que",
+       "m": "that",
+       "b": "que",
+       "bm": "that",
+       "s": 1100,
+       "e": 1280,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-que}}",
+       "ex": "In this sentence, \"que\" is a conjunction. Its role is to connect the main clause \"Yo pienso\" (I think) with the subordinate clause \"deberíamos irnos\" (we should get going). \n\n\"Que\" introduces the idea or thought that follows, indicating what the speaker thinks. Without \"que,\" the sentence would be incomplete and would not convey the full meaning of the thought. So, it serves to link the two parts of the sentence together smoothly."
+      },
+      {
+       "t": "deberíamos",
+       "m": "should",
+       "b": "deber",
+       "bm": "to must",
+       "s": 1347,
+       "e": 2080,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-deberiamos-02d1be}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-deber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "debo",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-debo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "debí"
+        },
+        {
+         "label": "Imperfect",
+         "text": "debía"
+        },
+        {
+         "label": "Future",
+         "text": "deberé"
+        },
+        {
+         "label": "Conditional",
+         "text": "debería"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "deba"
+        },
+        {
+         "label": "Command",
+         "text": "debe"
+        },
+        {
+         "label": "Gerund",
+         "text": "debiendo"
+        },
+        {
+         "label": "Past Participle",
+         "text": "debid"
+        }
+       ],
+       "ex": "The word \"deberíamos\" is a verb form in this sentence. It comes from the infinitive verb \"deber,\" which means \"to should\" or \"to owe.\" In this context, \"deberíamos\" is the first-person plural form in the conditional tense, meaning \"we should.\"\n\nHere’s a short conjugation table for \"deber\" in the present tense:\n\n- yo debo (I should)\n- tú debes (you should)\n- él/ella/usted debe (he/she/you should)\n- nosotros/nosotras debemos (we should)\n- ellos/ellas/ustedes deben (they/you all should)\n\nIn the sentence \"Yo pienso que deberíamos irnos,\" \"deberíamos\" expresses a suggestion or recommendation for the group, indicated by \"nos\" in \"irnos,\" which means \"to leave ourselves.\" The use of \"deberíamos\" shows that the speaker thinks it is a good idea for \"us\" to leave."
+      },
+      {
+       "t": "irnos.",
+       "m": "get going",
+       "b": "irse",
+       "bm": "to leave",
+       "s": 2160,
+       "e": 3600,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-irnos}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-irse}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "me voy"
+        },
+        {
+         "label": "Preterite",
+         "text": "me fui"
+        },
+        {
+         "label": "Imperfect",
+         "text": "me iba"
+        },
+        {
+         "label": "Future",
+         "text": "me iré"
+        },
+        {
+         "label": "Conditional",
+         "text": "me iría"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "me vaya"
+        },
+        {
+         "label": "Command",
+         "text": "vete"
+        },
+        {
+         "label": "Gerund",
+         "text": "yendo"
+        },
+        {
+         "label": "Past Participle",
+         "text": "ido"
+        }
+       ],
+       "ex": "The word \"irnos\" is a verb form in this sentence. It comes from the infinitive \"ir,\" which means \"to go.\" In this context, \"irnos\" is the first-person plural form of the verb in the reflexive form, meaning \"to leave\" or \"to get going,\" and it includes the reflexive pronoun \"nos,\" which refers to \"us.\"\n\nIn the sentence \"Yo pienso que deberíamos irnos,\" the phrase \"deberíamos irnos\" translates to \"we should get going.\" Here, \"irnos\" indicates that the action of going is directed towards the speaker and their group, emphasizing that they should leave together. \n\nFor the present tense conjugation of \"ir,\" it looks like this:\n\n- yo voy (I go)\n- tú vas (you go)\n- él/ella/usted va (he/she/you formal go)\n- nosotros/nosotras vamos (we go)\n- ellos/ellas/ustedes van (they/you all go)\n\nSo, \"irnos\" is used to express the idea of leaving as a group, making it clear that the speaker is including themselves and others in the action."
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "unlisted": true,
+ "personalLine": "¡Hola, Conchita! A Comigo comic page made for you and your followers — tap a bubble to hear it.",
+ "utm": {
+  "utm_source": "conchita",
+  "utm_medium": "influencer",
+  "utm_campaign": "yo-puedo-llevarte"
+ }
+}
