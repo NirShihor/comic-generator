@@ -249,6 +249,35 @@ test('journeys: Instagram tags survive the same way; a visitor without tags stay
   });
 });
 
+test('unlisted pages: served with their own baked tags, counted as page_type unlisted, taps attributed to the recipient', async () => {
+  const html = '<a href="/">Home</a><a href="/go/app-store?from=/p/a-small-town-k3f9x2&amp;loc=hero&amp;utm_source=laura&amp;utm_medium=influencer&amp;utm_campaign=a-small-town">App</a>';
+  assert.deepStrictEqual(sa.bakedUtm(html), { utm_source: 'laura', utm_medium: 'influencer', utm_campaign: 'a-small-town' });
+  assert.strictEqual(sa.bakedUtm('<a href="/go/app-store?from=/&amp;loc=hero">x</a>'), null);
+  const events = [];
+  const send = async (e) => { events.push(e); return true; };
+  const app = express();
+  app.use((req, res, next) => {
+    if (req.path === '/p/a-small-town-k3f9x2') return sa.servePage(req, res, html, { pageType: 'unlisted', exercise: 'a-small-town-k3f9x2', utm: sa.bakedUtm(html) }, send);
+    if (req.path === '/go/app-store') return sa.appStoreRedirect(req, res, send);
+    next();
+  });
+  const server = http.createServer(app).listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    // A visitor arriving with someone else's tags on the URL still counts for the page's recipient.
+    const res = await get(`${base}/p/a-small-town-k3f9x2?utm_source=google&utm_medium=cpc&utm_campaign=google-reading-practice`);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(await res.text(), html, 'links already carry the page tags — nothing is appended');
+    const cta = await get(`${base}/go/app-store?from=/p/a-small-town-k3f9x2&loc=hero&utm_source=laura&utm_medium=influencer&utm_campaign=a-small-town`);
+    assert.strictEqual(cta.headers.get('location'), sa.APP_STORE_URL, 'no Apple campaign for influencer pages');
+    await new Promise(r => setImmediate(r));
+    assert.deepStrictEqual(events.map(e => [e.name, e.properties.page_type, e.properties.exercise, e.properties.utm_source, e.properties.from_campaign]), [
+      ['site_page_viewed', 'unlisted', 'a-small-town-k3f9x2', 'laura', true],
+      ['app_store_cta_clicked', 'unlisted', 'a-small-town-k3f9x2', 'laura', true],
+    ]);
+  } finally { server.close(); }
+});
+
 // --- the built site ----------------------------------------------------------
 
 function builtPages() {

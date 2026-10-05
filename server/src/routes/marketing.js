@@ -2707,6 +2707,9 @@ router.get('/examples', async (req, res) => {
           bubbles: bubbles.length,
           missingAudio: bubbles.filter(b => (b.sentences || []).some(s => (s.text || '').trim() && !s.audioUrl)).length,
           slug: p.exampleSlug || '', publishedAt: p.examplePublishedAt || null,
+          unlisted: !!p.exampleUnlisted, shareToken: p.exampleShareToken || '',
+          personalLine: p.examplePersonalLine || '', influencer: p.exampleInfluencer || '',
+          url: p.exampleSlug ? (p.exampleUnlisted ? `${UNLISTED_URL_BASE}/${p.exampleSlug}-${p.exampleShareToken}` : `${EXAMPLE_URL_BASE}/${p.exampleSlug}`) : '',
         });
       }
     }
@@ -2737,7 +2740,8 @@ router.put('/examples/:comicId/:pageId/title', async (req, res) => {
     const clean = (v, max) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, max);
     // Only the fields sent are changed.
     const fields = { title: ['exampleTitle', 80], titleEn: ['exampleTitleEn', 80], seoTitle: ['exampleSeoTitle', 90],
-                     summary: ['exampleSummary', 320], imageAlt: ['exampleImageAlt', 400] };
+                     summary: ['exampleSummary', 320], imageAlt: ['exampleImageAlt', 400],
+                     personalLine: ['examplePersonalLine', 200], influencer: ['exampleInfluencer', 40] };
     const set = {};
     for (const [k, [field, max]] of Object.entries(fields)) {
       if (k in req.body) set[`${list}.${idx}.${field}`] = clean(req.body[k], max);
@@ -2753,6 +2757,7 @@ router.put('/examples/:comicId/:pageId/title', async (req, res) => {
 // EX_BASE). Old URLs 301 to their current one via site/redirects.json
 // ({ "/old/path": "/new/path" }); adding one also re-points any entry that led
 // to the old path, so there are never redirect chains.
+const UNLISTED_URL_BASE = '/p';
 const EXAMPLE_URL_BASE = '/spanish-reading-practice';
 async function addSiteRedirect(from, to) {
   const file = path.join(SITE_DIR, 'redirects.json');
@@ -2781,9 +2786,17 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
     const page = comic[list][idx];
     const slugify = t => String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50);
-    const slug = slugify(req.body.slug || page.exampleSlug || page.exampleLabel || (list === 'pages' ? `${comic.title} ${page.pageNumber}` : '')) || `example-${page.pageNumber}`;
+    const baseSlug = slugify(req.body.slug || page.exampleSlug || page.exampleLabel || (list === 'pages' ? `${comic.title} ${page.pageNumber}` : '')) || `example-${page.pageNumber}`;
     const ascii = t => String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '') || 'x';
     const projectDir = path.join(PROJECTS_DIR, comic.id);
+    // Unlisted: files carry the slug plus a random token (the link is
+    // unguessable), kept once made so republishing never changes the link.
+    const unlisted = req.body.unlisted === true;
+    const wasUnlisted = !!page.exampleUnlisted;
+    if (unlisted && !page.exampleShareToken) page.exampleShareToken = Array.from(require('crypto').randomBytes(6), b => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
+    const slug = unlisted ? `${baseSlug}-${page.exampleShareToken}` : baseSlug;
+    const outDir = path.join(SITE_DIR, unlisted ? 'unlisted' : 'examples');
+    const influencer = slugify(page.exampleInfluencer || '');
 
     // Page image: the baked version (bubble text drawn in) when there is one.
     const imgUrl = (page.bakedImage || page.masterImage || '').split('?')[0];
@@ -2904,25 +2917,70 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
       publishedAt: new Date().toISOString(),
       bubbles: out,
     };
-    await fs.mkdir(path.join(SITE_DIR, 'examples'), { recursive: true });
-    await fs.writeFile(path.join(SITE_DIR, 'examples', `${slug}.json`), JSON.stringify(data, null, 1));
+    if (unlisted) {
+      data.unlisted = true;
+      data.personalLine = String(page.examplePersonalLine || '').trim();
+      // Carried on every link of the page (site/build.py), so views and App
+      // Store taps from this page are counted under the recipient's name —
+      // campaign-level tags, identical for everyone who opens the link.
+      data.utm = { utm_source: influencer || 'unlisted', utm_medium: 'influencer', utm_campaign: baseSlug };
+    }
+    await fs.mkdir(outDir, { recursive: true });
+    await fs.writeFile(path.join(outDir, `${slug}.json`), JSON.stringify(data, null, 1));
 
-    // Renamed (published under a new slug): drop the old slug's files and
-    // 301 its URL to the new one (site/redirects.json, read by the server).
-    const oldSlug = page.exampleSlug;
-    if (oldSlug && oldSlug !== slug) {
-      await fs.rm(path.join(SITE_DIR, 'examples', `${oldSlug}.json`), { force: true });
-      for (const x of ['png', 'jpg']) await fs.rm(path.join(assetsDir, `example-${oldSlug}.${x}`), { force: true });
-      for (const f of await fs.readdir(audioOut)) if (f.startsWith(`ex-${oldSlug}-`)) await fs.rm(path.join(audioOut, f));
-      await addSiteRedirect(`${EXAMPLE_URL_BASE}/${oldSlug}`, `${EXAMPLE_URL_BASE}/${slug}`);
+    // Published before under another slug, or moved between public and
+    // unlisted: drop the old files. A public rename gets a 301 to the new URL
+    // (site/redirects.json); an unlisted page never redirects anywhere.
+    const oldSlug = page.exampleSlug ? (wasUnlisted ? `${page.exampleSlug}-${page.exampleShareToken}` : page.exampleSlug) : '';
+    if (oldSlug && (oldSlug !== slug || wasUnlisted !== unlisted)) {
+      const oldDir = path.join(SITE_DIR, wasUnlisted ? 'unlisted' : 'examples');
+      await fs.rm(path.join(oldDir, `${oldSlug}.json`), { force: true });
+      await fs.rm(path.join(oldDir, `${oldSlug}.html`), { force: true });
+      if (oldSlug !== slug) {
+        for (const x of ['png', 'jpg']) await fs.rm(path.join(assetsDir, `example-${oldSlug}.${x}`), { force: true });
+        for (const f of await fs.readdir(audioOut)) if (f.startsWith(`ex-${oldSlug}-`)) await fs.rm(path.join(audioOut, f));
+      }
+      if (!wasUnlisted && !unlisted) await addSiteRedirect(`${EXAMPLE_URL_BASE}/${oldSlug}`, `${EXAMPLE_URL_BASE}/${slug}`);
     }
 
-    page.exampleSlug = slug;
+    page.exampleSlug = baseSlug;
+    page.exampleUnlisted = unlisted;
     page.examplePublishedAt = new Date();
     await Comic.updateOne({ id: comic.id }, { $set: { [`${list}.${idx}`]: page.toObject ? page.toObject() : page } });
-    res.json({ slug, bubbles: out.length, audioFiles: copied.size, explained, embed: `{{EXAMPLE:${slug}}}` });
+    const url = unlisted ? `${UNLISTED_URL_BASE}/${slug}` : `${EXAMPLE_URL_BASE}/${slug}`;
+    res.json({ slug, unlisted, url, bubbles: out.length, audioFiles: copied.size, explained, embed: unlisted ? '' : `{{EXAMPLE:${slug}}}` });
   } catch (error) {
     console.error('Example publish error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/marketing/examples/:comicId/:pageId/publish — take a published
+// example off the site (its files are removed; the page itself stays in the
+// generator). After the next deploy the URL is a 404 — for an unlisted page,
+// that is how a shared link is revoked. The share token is kept, so
+// publishing again as unlisted restores the same link.
+router.delete('/examples/:comicId/:pageId/publish', async (req, res) => {
+  try {
+    const comic = await Comic.findOne({ id: req.params.comicId });
+    if (!comic) return res.status(404).json({ error: 'Comic not found' });
+    let list = 'examplePages';
+    let idx = (comic.examplePages || []).findIndex(p => p.id === req.params.pageId);
+    if (idx < 0 && comic.isExample) { list = 'pages'; idx = (comic.pages || []).findIndex(p => p.id === req.params.pageId); }
+    if (idx < 0) return res.status(404).json({ error: 'Example page not found' });
+    const page = comic[list][idx];
+    if (!page.exampleSlug) return res.status(400).json({ error: 'Not published' });
+    const slug = page.exampleUnlisted ? `${page.exampleSlug}-${page.exampleShareToken}` : page.exampleSlug;
+    const dir = path.join(SITE_DIR, page.exampleUnlisted ? 'unlisted' : 'examples');
+    await fs.rm(path.join(dir, `${slug}.json`), { force: true });
+    await fs.rm(path.join(dir, `${slug}.html`), { force: true });
+    for (const x of ['png', 'jpg']) await fs.rm(path.join(SITE_DIR, 'assets', `example-${slug}.${x}`), { force: true });
+    const audioOut = path.join(SITE_DIR, 'audio');
+    if (require('fs').existsSync(audioOut)) for (const f of await fs.readdir(audioOut)) if (f.startsWith(`ex-${slug}-`)) await fs.rm(path.join(audioOut, f));
+    await Comic.updateOne({ id: comic.id }, { $set: { [`${list}.${idx}.exampleSlug`]: '', [`${list}.${idx}.examplePublishedAt`]: null } });
+    res.json({ ok: true, removed: slug });
+  } catch (error) {
+    console.error('Example unpublish error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
