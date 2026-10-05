@@ -11,7 +11,7 @@
  "image": "example-yo-puedo-llevarte-gc7ylw",
  "width": 1024,
  "height": 1536,
- "publishedAt": "2026-10-05T12:14:48.504Z",
+ "publishedAt": "2026-10-05T12:21:28.346Z",
  "bubbles": [
   {
    "x": 0.04440777333027901,
@@ -326,92 +326,10 @@
    ]
   },
   {
-   "x": 0.842863373460486,
-   "y": 0.4664660227227081,
-   "w": 0.10518234398811901,
-   "h": 0.07918916667579595,
-   "panel": [
-    0.0227,
-    0.3126,
-    0.9591,
-    0.3636
-   ],
-   "sentences": [
-    {
-     "es": "Lo sé.",
-     "en": "I know.",
-     "g": "Lo is a pronoun that refers to a specific thing, and sé is the first person present form of saber, meaning to know.",
-     "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-b3-1}}",
-     "words": [
-      {
-       "t": "Lo",
-       "m": "it",
-       "b": "lo",
-       "bm": "it",
-       "s": 192,
-       "e": 320,
-       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-lo}}",
-       "ex": "In the sentence \"Lo sé,\" the word \"lo\" is a pronoun. Specifically, it is a direct object pronoun that refers to something that has been previously mentioned or is understood in context. In this case, \"lo\" translates to \"it\" in English, indicating that the speaker knows something specific.\n\nThe verb in this sentence is \"sé,\" which is the first person singular form of the verb \"saber,\" meaning \"to know.\" Here’s a short present-tense conjugation table for \"saber\":\n\n- yo sé\n- tú sabes\n- él/ella/usted sabe\n- nosotros/nosotras sabemos\n- ellos/ellas/ustedes saben\n\nSo, \"lo\" serves to emphasize or specify what the speaker knows, making the sentence more complete. It shows that the speaker has knowledge of a particular fact or situation, even if that fact is not explicitly stated in this sentence."
-      },
-      {
-       "t": "sé.",
-       "m": "I know",
-       "b": "saber",
-       "bm": "to know",
-       "s": 667,
-       "e": 1440,
-       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-se-edf401}}",
-       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-saber}}",
-       "forms": [
-        {
-         "label": "Present",
-         "text": "sé",
-         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-se-edf401}}"
-        },
-        {
-         "label": "Preterite",
-         "text": "supe"
-        },
-        {
-         "label": "Imperfect",
-         "text": "sabía"
-        },
-        {
-         "label": "Future",
-         "text": "sabré"
-        },
-        {
-         "label": "Conditional",
-         "text": "sabría"
-        },
-        {
-         "label": "Subjunctive",
-         "text": "sepa"
-        },
-        {
-         "label": "Command",
-         "text": "sabe"
-        },
-        {
-         "label": "Gerund",
-         "text": "sabiendo"
-        },
-        {
-         "label": "Past Participle",
-         "text": "sabido"
-        }
-       ],
-       "ex": "The word \"sé\" in the sentence \"Lo sé\" is a verb form. It is the first-person singular present tense of the verb \"saber,\" which means \"to know.\" \n\nHere's a short conjugation table for \"saber\" in the present tense:\n\n- yo sé (I know)\n- tú sabes (you know)\n- él/ella/usted sabe (he/she/you formal know)\n- nosotros/nosotras sabemos (we know)\n- ellos/ellas/ustedes saben (they/you all know)\n\nIn this sentence, \"sé\" means \"I know,\" and it indicates that the speaker is expressing their knowledge about something. The pronoun \"lo\" translates to \"it,\" referring to the specific information or fact that the speaker knows. So, \"Lo sé\" directly translates to \"I know it.\""
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "x": 0.03939393939393934,
-   "y": 0.5368686868686869,
-   "w": 0.2363636363636364,
-   "h": 0.1,
+   "x": 0.05909090909090908,
+   "y": 0.4525252525252528,
+   "w": 0.18484848484848487,
+   "h": 0.13131313131313105,
    "panel": [
     0.0227,
     0.3126,
@@ -423,7 +341,7 @@
      "es": "Yo debo llegar a tiempo.",
      "en": "I must get there on time.",
      "g": "Debo is the present tense of deber, expressing obligation in the present.",
-     "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-b4-1}}",
+     "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-b3-1}}",
      "words": [
       {
        "t": "Yo",
@@ -563,6 +481,88 @@
         }
        ],
        "ex": "In this sentence, \"tiempo\" is a noun meaning \"time.\" It is used to refer to the concept of being punctual or arriving at the correct moment. The phrase \"a tiempo\" translates to \"on time,\" indicating that the speaker aims to arrive at the scheduled time.\n\nGrammatically, \"tiempo\" is functioning as the object of the preposition \"a.\" The preposition \"a\" connects the idea of arriving with the concept of time, emphasizing the importance of punctuality in this context. The whole phrase \"a tiempo\" serves as an adverbial expression that modifies the verb \"debo llegar,\" explaining how the speaker intends to arrive."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.8443785249756375,
+   "y": 0.5243644865781449,
+   "w": 0.10518234398811901,
+   "h": 0.07652355209623557,
+   "panel": [
+    0.0227,
+    0.3126,
+    0.9591,
+    0.3636
+   ],
+   "sentences": [
+    {
+     "es": "Lo sé.",
+     "en": "I know.",
+     "g": "Lo is a pronoun that refers to a specific thing, and sé is the first person present form of saber, meaning to know.",
+     "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-b4-1}}",
+     "words": [
+      {
+       "t": "Lo",
+       "m": "it",
+       "b": "lo",
+       "bm": "it",
+       "s": 192,
+       "e": 320,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-lo}}",
+       "ex": "In the sentence \"Lo sé,\" the word \"lo\" is a pronoun. Specifically, it is a direct object pronoun that refers to something that has been previously mentioned or is understood in context. In this case, \"lo\" translates to \"it\" in English, indicating that the speaker knows something specific.\n\nThe verb in this sentence is \"sé,\" which is the first person singular form of the verb \"saber,\" meaning \"to know.\" Here’s a short present-tense conjugation table for \"saber\":\n\n- yo sé\n- tú sabes\n- él/ella/usted sabe\n- nosotros/nosotras sabemos\n- ellos/ellas/ustedes saben\n\nSo, \"lo\" serves to emphasize or specify what the speaker knows, making the sentence more complete. It shows that the speaker has knowledge of a particular fact or situation, even if that fact is not explicitly stated in this sentence."
+      },
+      {
+       "t": "sé.",
+       "m": "I know",
+       "b": "saber",
+       "bm": "to know",
+       "s": 667,
+       "e": 1440,
+       "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-se-edf401}}",
+       "ba": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-saber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "sé",
+         "a": "{{AUD_ex-yo-puedo-llevarte-gc7ylw-w-se-edf401}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "supe"
+        },
+        {
+         "label": "Imperfect",
+         "text": "sabía"
+        },
+        {
+         "label": "Future",
+         "text": "sabré"
+        },
+        {
+         "label": "Conditional",
+         "text": "sabría"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "sepa"
+        },
+        {
+         "label": "Command",
+         "text": "sabe"
+        },
+        {
+         "label": "Gerund",
+         "text": "sabiendo"
+        },
+        {
+         "label": "Past Participle",
+         "text": "sabido"
+        }
+       ],
+       "ex": "The word \"sé\" in the sentence \"Lo sé\" is a verb form. It is the first-person singular present tense of the verb \"saber,\" which means \"to know.\" \n\nHere's a short conjugation table for \"saber\" in the present tense:\n\n- yo sé (I know)\n- tú sabes (you know)\n- él/ella/usted sabe (he/she/you formal know)\n- nosotros/nosotras sabemos (we know)\n- ellos/ellas/ustedes saben (they/you all know)\n\nIn this sentence, \"sé\" means \"I know,\" and it indicates that the speaker is expressing their knowledge about something. The pronoun \"lo\" translates to \"it,\" referring to the specific information or fact that the speaker knows. So, \"Lo sé\" directly translates to \"I know it.\""
       }
      ]
     }
