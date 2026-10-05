@@ -52,7 +52,10 @@ function siteRedirects() {
   return siteRedirectCache.map;
 }
 app.use((req, res, next) => {
-  const host = (req.headers.host || '').toLowerCase().split(':')[0];
+  let host = (req.headers.host || '').toLowerCase().split(':')[0];
+  // Local preview of the site (never on the production server): open
+  // http://comigo.localhost:3001/… — browsers resolve *.localhost to this machine.
+  if (!process.env.FLY_APP_NAME && host === 'comigo.localhost') host = 'comigo.net';
   // Site redirects keep only the campaign's approved utm_* tags (so a campaign
   // visit survives the hop); click IDs and anything else are dropped.
   const campaignQs = siteAnalytics.campaignQuery(req.query);
@@ -90,6 +93,18 @@ app.use((req, res, next) => {
       if (require('fs').existsSync(exFile)) {
         if (exMatch[2]) return res.redirect(301, `https://comigo.net/spanish-reading-practice/${exMatch[1]}${campaignQs}`);
         return serveSitePage(req, res, exFile, { pageType: 'exercise', exercise: exMatch[1] });
+      }
+    }
+    // Unlisted example pages (site/unlisted, built by site/build.py): a page
+    // made for one recipient at /p/<slug>-<token> — not listed, not in the
+    // sitemap, noindex; its links carry the recipient's campaign tags.
+    const unMatch = req.path.match(/^\/p\/([\w-]+)$/);
+    if (unMatch) {
+      const unFile = path.join(SITE_DIR, 'unlisted', `${unMatch[1]}.html`);
+      if (require('fs').existsSync(unFile)) {
+        res.set('X-Robots-Tag', 'noindex, nofollow');
+        const html = require('fs').readFileSync(unFile, 'utf8');
+        return siteAnalytics.servePage(req, res, html, { pageType: 'unlisted', exercise: unMatch[1], utm: siteAnalytics.bakedUtm(html) }, siteEventSend);
       }
     }
     // App Store buttons: count the tap, then redirect (Apple campaign link for

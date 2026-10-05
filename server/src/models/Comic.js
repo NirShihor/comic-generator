@@ -242,6 +242,16 @@ const PageSchema = new mongoose.Schema({
   exampleImageAlt: String,
   exampleSlug: String,
   examplePublishedAt: Date,
+  // Unlisted example (a page to send to one person, e.g. an influencer): lives
+  // at comigo.net/p/<slug>-<token>, off the hub/sitemap/search, with a short
+  // personal line at the top and the App Store buttons tagged with the
+  // recipient's name so their taps can be counted. The token is random and
+  // kept across republishes so the link stays valid; publishing as public
+  // again moves the page back to /spanish-reading-practice/<slug>.
+  exampleUnlisted: { type: Boolean, default: false },
+  exampleShareToken: String,
+  examplePersonalLine: String,
+  exampleInfluencer: String,
   // Last challenge reel built from this page (file in projects/<id>/marketing) and the settings used.
   reelVideo: String,
   reelSettings: mongoose.Schema.Types.Mixed,

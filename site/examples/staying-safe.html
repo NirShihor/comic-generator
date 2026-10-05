@@ -96,6 +96,12 @@
   .crumbs a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .hero-min { padding: 18px 24px 8px; }
   .hero-min .eyebrow { color: var(--accent); display: block; margin-bottom: 12px; }
+  /* Unlisted pages: a short personal line for the person the link was made for. */
+  .hero-min .personal {
+    font-family: system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.05rem;
+    background: var(--deep); color: #FFFFFF; border: 3px solid var(--line); border-radius: 16px;
+    padding: 12px 16px; box-shadow: 5px 5px 0 var(--shadow); display: inline-block; margin: 0 0 18px;
+  }
   .hero-min h1 { margin: 0 0 16px; font-size: clamp(1.9rem, 4vw, 2.7rem); }
   /* Spanish / English title, alternating every 2s (stacked in one grid cell
      so the heading doesn't jump). */

@@ -77,9 +77,18 @@ function appStoreTarget(utm) {
   return ct ? `https://apps.apple.com/app/apple-store/id6760253260?pt=${APPLE_PROVIDER_TOKEN}&ct=${encodeURIComponent(ct)}&mt=8` : APP_STORE_URL;
 }
 
-/** The page a button was on: "/", "/spanish-reading-practice", "/spanish-reading-practice/<slug>", … */
+/** The page a button was on: "/", "/spanish-reading-practice", "/spanish-reading-practice/<slug>", "/p/<slug>", … */
 function cleanFrom(from) {
   return typeof from === 'string' && /^\/[a-z0-9/-]{0,80}$/.test(from) ? from : 'unknown';
+}
+
+/** Page type and exercise slug of a site path. */
+function pageKind(fromPage) {
+  const ex = fromPage.match(/^\/spanish-reading-practice\/([a-z0-9-]+)$/);
+  if (ex) return { page_type: 'exercise', exercise: ex[1] };
+  const un = fromPage.match(/^\/p\/([a-z0-9-]+)$/);
+  if (un) return { page_type: 'unlisted', exercise: un[1] };
+  return { page_type: fromPage === '/spanish-reading-practice' ? 'hub' : 'other' };
 }
 
 function campaignProps(utm) {
@@ -97,14 +106,12 @@ function pageViewEvent({ pageType, exercise, utm }) {
 /** The event for an App Store button tap. */
 function ctaClickEvent({ from, loc, utm }) {
   const fromPage = cleanFrom(from);
-  const exMatch = fromPage.match(/^\/spanish-reading-practice\/([a-z0-9-]+)$/);
   return {
     name: 'app_store_cta_clicked',
     properties: {
       surface: 'website',
       from_page: fromPage,
-      page_type: exMatch ? 'exercise' : fromPage === '/spanish-reading-practice' ? 'hub' : 'other',
-      ...(exMatch && { exercise: exMatch[1] }),
+      ...pageKind(fromPage),
       button: BUTTON_LOCATIONS.has(loc) ? loc : 'unknown',
       apple_campaign: APPLE_CAMPAIGNS[utm.utm_campaign] || null,
       ...campaignProps(utm),
@@ -149,15 +156,26 @@ function makeSender({ fetchImpl = fetch, env = process.env, log = console } = {}
 /**
  * Serve a comigo.net HTML page: campaign tags carried into its links, and a
  * page view counted for the reading-practice hub and exercises.
- * `page` = { pageType: 'hub' | 'exercise' | 'other', exercise? }.
+ * `page` = { pageType: 'hub' | 'exercise' | 'unlisted' | 'other', exercise?, utm? } —
+ * `utm` overrides the request's (an unlisted page's own baked-in tags).
  */
 function servePage(req, res, html, page, send) {
-  const utm = cleanUtm(req.query);
+  const utm = page.utm ? cleanUtm(page.utm) : cleanUtm(req.query);
   if (page.pageType !== 'other' && countable(req)) {
-    Promise.resolve(send(pageViewEvent({ ...page, utm }))).catch(() => {});
+    Promise.resolve(send(pageViewEvent({ pageType: page.pageType, exercise: page.exercise, utm }))).catch(() => {});
   }
   res.set('Cache-Control', 'no-store');
-  res.type('html').send(addUtmToLinks(html, utm));
+  // An unlisted page already carries its tags in its links (site/build.py).
+  res.type('html').send(page.utm ? html : addUtmToLinks(html, utm));
+}
+
+/** The campaign tags an unlisted page was built with (its links all carry them). */
+function bakedUtm(html) {
+  const m = html.match(/href="\/go\/app-store\?[^"]*"/);
+  if (!m) return null;
+  const q = Object.fromEntries(new URLSearchParams(m[0].slice(6, -1).replace(/&amp;/g, '&')));
+  const utm = cleanUtm(q);
+  return Object.keys(utm).length ? utm : null;
 }
 
 /** GET /go/app-store?from=…&loc=…[&utm_…] — count the tap, redirect to the App Store. */
@@ -172,6 +190,6 @@ function appStoreRedirect(req, res, send) {
 }
 
 module.exports = {
-  APP_STORE_URL, APPLE_CAMPAIGNS, DISTINCT_ID, cleanUtm, campaignQuery, isBot, countable, addUtmToLinks, appStoreTarget,
+  APP_STORE_URL, APPLE_CAMPAIGNS, DISTINCT_ID, cleanUtm, campaignQuery, isBot, countable, addUtmToLinks, bakedUtm, appStoreTarget,
   pageViewEvent, ctaClickEvent, makeSender, servePage, appStoreRedirect,
 };

@@ -1920,23 +1920,43 @@ function Examples() {
     });
   }, [comicId]);
 
-  const create = async () => {
-    setBusy('create'); setMsg('');
+  // Create the example page; open it in the editor, or (asIs) just add it to
+  // the list below as a straight copy of the story page, ready to publish.
+  const create = async (asIs = false) => {
+    setBusy(asIs ? 'asis' : 'create'); setMsg('');
     try {
       const r = await api.post(`/comics/${comicId}/example-pages`, { label, ...(source && { sourcePageId: source }) });
-      navigate(`/comic/${comicId}/page/${r.data.page.id}`);
-    } catch (e) { setMsg(e.response?.data?.error || e.message); setBusy(''); }
+      if (!asIs) { navigate(`/comic/${comicId}/page/${r.data.page.id}`); return; }
+      setMsg(`Added "${label.trim()}" as a copy of page ${pages.find(p => p.id === source)?.pageNumber ?? ''} — Publish it below when ready.`);
+      setLabel(''); setSource('');
+      load();
+    } catch (e) { setMsg(e.response?.data?.error || e.message); }
+    finally { setBusy(''); }
   };
 
-  const publish = async (ex) => {
-    const slug = window.prompt('Site slug for this example (used in {{EXAMPLE:slug}})', ex.slug || ex.label.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+  // Publish to the public Reading practice library, or as an unlisted page
+  // (a private link for one person — see the Unlisted switch on the card).
+  const publish = async (ex, unlisted) => {
+    const slug = window.prompt(unlisted ? 'Slug for the private link (a random token is added to it)' : 'Site slug for this example (used in {{EXAMPLE:slug}})',
+                               ex.slug || ex.label.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
     if (slug === null) return;
     setBusy(ex.pageId); setMsg('');
     try {
-      const r = await api.post(`/marketing/examples/${ex.comicId}/${ex.pageId}/publish`, { slug });
-      setMsg(`Published "${ex.label}" as ${r.data.slug}: ${r.data.bubbles} bubbles, ${r.data.audioFiles} audio files, ${r.data.explained} new explanations. It gets its own page at comigo.net/spanish-reading-practice/${r.data.slug} (listed on Reading practice) once the site is rebuilt and deployed; ${r.data.embed} also embeds it inside another page.`);
+      const r = await api.post(`/marketing/examples/${ex.comicId}/${ex.pageId}/publish`, { slug, unlisted: !!unlisted });
+      const tail = `${r.data.bubbles} bubbles, ${r.data.audioFiles} audio files, ${r.data.explained} new explanations`;
+      setMsg(unlisted
+        ? `Published "${ex.label}" as a private page (${tail}). Once the site is rebuilt and deployed, the link to send is https://comigo.net${r.data.url} — not listed anywhere, not indexed. Unpublish to revoke it.`
+        : `Published "${ex.label}" as ${r.data.slug}: ${tail}. It gets its own page at comigo.net/spanish-reading-practice/${r.data.slug} (listed on Reading practice) once the site is rebuilt and deployed; ${r.data.embed} also embeds it inside another page.`);
       load();
     } catch (e) { setMsg(e.response?.data?.error || e.message); }
+    finally { setBusy(''); }
+  };
+
+  const unpublish = async (ex) => {
+    if (!window.confirm(`Take "${ex.label}" off the site? Its page (and a private link, if any) stops working at the next deploy. The example itself stays here.`)) return;
+    setBusy(ex.pageId); setMsg('');
+    try { await api.delete(`/marketing/examples/${ex.comicId}/${ex.pageId}/publish`); setMsg(`Unpublished "${ex.label}" — rebuild and deploy the site to make it live.`); load(); }
+    catch (e) { setMsg(e.response?.data?.error || e.message); }
     finally { setBusy(''); }
   };
 
@@ -1980,9 +2000,15 @@ function Examples() {
             {comics.map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
           </select>
           <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Label, e.g. Looking for work" style={{ ...input, minWidth: 240 }} />
-          <button className="btn btn-primary" disabled={!comicId || !label.trim() || busy === 'create'} onClick={create} style={{ padding: '0.5rem 1.1rem' }}>
+          <button className="btn btn-primary" disabled={!comicId || !label.trim() || !!busy} onClick={() => create(false)} style={{ padding: '0.5rem 1.1rem' }}>
             {busy === 'create' ? 'Creating…' : source ? 'Copy page & edit →' : 'Create blank & edit →'}
           </button>
+          {source && (
+            <button className="btn btn-secondary" disabled={!label.trim() || !!busy} onClick={() => create(true)} style={{ padding: '0.5rem 1.1rem' }}
+                    title="Copy the page exactly as it is in the comic (art, bubbles, words, audio) into the examples below, without opening the editor">
+              {busy === 'asis' ? 'Adding…' : 'Add page as is'}
+            </button>
+          )}
         </div>
         {pages.length > 0 && (
           <>
@@ -2024,16 +2050,32 @@ function Examples() {
                 {ex.missingAudio > 0 && <span style={{ color: '#f0b04a' }}> · {ex.missingAudio} without audio</span>}
               </div>
               <div style={{ fontSize: '0.78rem', color: ex.publishedAt ? '#7fd08a' : '#777' }}>
-                {ex.publishedAt ? `Published as ${ex.slug} · ${new Date(ex.publishedAt).toLocaleDateString()}` : 'Not published'}
+                {ex.publishedAt ? `${ex.unlisted ? '🔒 Private link' : 'Published'} as ${ex.slug} · ${new Date(ex.publishedAt).toLocaleDateString()}` : 'Not published'}
               </div>
-              {ex.slug && <div style={{ fontSize: '0.78rem', color: '#999' }}>Page: comigo.net/spanish-reading-practice/{ex.slug}</div>}
+              {ex.publishedAt && ex.url && (
+                <div style={{ fontSize: '0.78rem', color: '#999', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ wordBreak: 'break-all' }}>comigo.net{ex.url}</span>
+                  <button className="btn btn-secondary" style={{ padding: '0.1rem 0.5rem', fontSize: '0.72rem' }} title="Copy the full link"
+                          onClick={() => navigator.clipboard.writeText(`https://comigo.net${ex.url}`)}>Copy link</button>
+                </div>
+              )}
               <ExampleTitleEditor ex={ex} />
+              <ExampleUnlistedEditor ex={ex} />
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
                 <button className="btn btn-secondary" onClick={() => navigate(`/comic/${ex.comicId}/page/${ex.pageId}`)} style={{ padding: '0.3rem 0.8rem' }}>Edit</button>
-                <button className="btn btn-primary" disabled={busy === ex.pageId || ex.bubbles === 0} onClick={() => publish(ex)} style={{ padding: '0.3rem 0.8rem' }}>
-                  {busy === ex.pageId ? 'Publishing…' : ex.publishedAt ? 'Republish' : 'Publish'}
+                <button className="btn btn-primary" disabled={busy === ex.pageId || ex.bubbles === 0} onClick={() => publish(ex, false)} style={{ padding: '0.3rem 0.8rem' }}
+                        title="On the Reading practice library and in search">
+                  {busy === ex.pageId ? 'Publishing…' : ex.publishedAt && !ex.unlisted ? 'Republish' : 'Publish'}
                 </button>
-                {ex.slug && (
+                <button className="btn btn-secondary" disabled={busy === ex.pageId || ex.bubbles === 0} onClick={() => publish(ex, true)} style={{ padding: '0.3rem 0.8rem' }}
+                        title="A private page at comigo.net/p/… to send to one person: not listed, not indexed, App Store taps counted under their name">
+                  {ex.publishedAt && ex.unlisted ? '🔒 Republish private' : '🔒 Private link'}
+                </button>
+                {ex.publishedAt && (
+                  <button className="btn btn-secondary" disabled={busy === ex.pageId} onClick={() => unpublish(ex)} style={{ padding: '0.3rem 0.8rem' }}
+                          title="Remove the page (and revoke a private link) at the next deploy">Unpublish</button>
+                )}
+                {ex.slug && !ex.unlisted && (
                   <button className="btn btn-secondary" title="Copy the embed code for a site template"
                           onClick={() => navigator.clipboard.writeText(`{{EXAMPLE:${ex.slug}}}`)} style={{ padding: '0.3rem 0.8rem' }}>Copy embed</button>
                 )}
@@ -2046,6 +2088,39 @@ function Examples() {
         </div>
       )}
     </div>
+  );
+}
+
+// Private-link extras: the personal line shown at the top of the page and the
+// recipient's name, which tags the page's App Store buttons (utm_source) so
+// their taps are counted under it. Saved like the other metadata.
+function ExampleUnlistedEditor({ ex }) {
+  const [vals, setVals] = useState({ personalLine: ex.personalLine || '', influencer: ex.influencer || '' });
+  const [state, setState] = useState('');
+  const dirty = vals.personalLine !== (ex.personalLine || '') || vals.influencer !== (ex.influencer || '');
+  const input = { padding: '0.3rem 0.5rem', borderRadius: 5, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.8rem', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' };
+  const save = async () => {
+    setState('saving');
+    try { await api.put(`/marketing/examples/${ex.comicId}/${ex.pageId}/title`, vals); Object.assign(ex, vals); setState('saved'); }
+    catch { setState('error'); }
+  };
+  return (
+    <details style={{ fontSize: '0.78rem', color: '#999' }} open={!!(ex.unlisted || ex.personalLine || ex.influencer)}>
+      <summary style={{ cursor: 'pointer' }}>🔒 Private link: personal line & recipient</summary>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+        <input value={vals.personalLine} onChange={e => { setVals(v => ({ ...v, personalLine: e.target.value })); setState(''); }} maxLength={200} style={input}
+               placeholder="Personal line at the top of the page, e.g. “Hola Laura — a page from Comigo for your readers.”" />
+        <input value={vals.influencer} onChange={e => { setVals(v => ({ ...v, influencer: e.target.value })); setState(''); }} maxLength={40} style={input}
+               placeholder="Recipient's name for the counts, e.g. laura (becomes utm_source)" />
+        {(dirty || state) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem' }}>
+            {dirty && <button className="btn btn-secondary" disabled={state === 'saving'} onClick={save} style={{ padding: '0.2rem 0.7rem', fontSize: '0.75rem' }}>{state === 'saving' ? 'Saving…' : 'Save'}</button>}
+            {state === 'saved' && !dirty && <span style={{ color: '#7fd08a' }}>Saved — publish the private link to update the page</span>}
+            {state === 'error' && <span style={{ color: '#f07a7a' }}>Couldn't save</span>}
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 

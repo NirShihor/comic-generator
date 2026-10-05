@@ -91,6 +91,10 @@ def poster_repl(m):
 # from site/examples/<slug>.html). Old URLs 301 via site/redirects.json.
 SITE_URL = 'https://comigo.net'
 EX_BASE = '/spanish-reading-practice'
+# Unlisted examples (site/unlisted/<slug>.json, slug = name + random token):
+# a page made for one recipient — served at UNLISTED_BASE/<slug>, never listed,
+# never in the sitemap or IndexNow, noindex. See publish in the generator.
+UNLISTED_BASE = '/p'
 def ex_url(slug):
     return f'{EX_BASE}/{slug}'
 
@@ -128,6 +132,8 @@ def expand_examples(html, own_slug=None):
         nonlocal used
         slug, note = m.group(1), (m.group(2) or '').strip()
         p = os.path.join(here, 'examples', f'{slug}.json')
+        if not os.path.exists(p):
+            p = os.path.join(here, 'unlisted', f'{slug}.json')
         if not os.path.exists(p):
             sys.exit(f'missing example: {slug} (publish it from Marketing → Examples)')
         data = json.load(open(p))
@@ -282,7 +288,23 @@ def expand_links(html):
         return css + body
     return re.sub(r'\{\{EXAMPLE_LINKS(?::([\w-]+))?\}\}', one, html)
 
-def build(tmpl_name, out_name, html=None, nav_slug=None, own_slug=None):
+# Unlisted pages carry their recipient's campaign tags on every internal link
+# (the server does the same for ad visitors from the request's query string),
+# so a view of the hub or an App Store tap that started from this page is
+# counted under that name. Only href="/…" page links — not files or anchors.
+def tag_links(html, utm):
+    qs = '&amp;'.join(f'{k}={v}' for k, v in utm.items() if v)
+    if not qs:
+        return html
+    def one(m):
+        path, frag = m.group(1), m.group(2) or ''
+        if re.search(r'\.[a-z0-9]+(\?|$)', path, re.I) or path.startswith('/privacy'):
+            return m.group(0)
+        sep = '&amp;' if '?' in path else '?'
+        return f'href="{path}{sep}{qs}{frag}"'
+    return re.sub(r'href="(/(?!/|assets/)[^"#]*)(#[^"]*)?"', one, html)
+
+def build(tmpl_name, out_name, html=None, nav_slug=None, own_slug=None, utm=None, noindex=False):
     if html is None:
         html = open(os.path.join(here, tmpl_name)).read()
     html = expand_links(html)
@@ -303,8 +325,13 @@ def build(tmpl_name, out_name, html=None, nav_slug=None, own_slug=None):
     # App Store buttons link to /go/app-store?from=<this page> (counted server-side).
     page_path = ('/' if out_name == 'index.html' else
                  EX_BASE + '/' + os.path.basename(out_name)[:-5] if out_name.startswith('examples/') else
+                 UNLISTED_BASE + '/' + os.path.basename(out_name)[:-5] if out_name.startswith('unlisted/') else
                  '/' + out_name[:-5])
     html = html.replace('{{GO_FROM}}', page_path)
+    if noindex:
+        html = html.replace('<title>', '<meta name="robots" content="noindex, nofollow">\n<title>', 1)
+    if utm:
+        html = tag_links(html, utm)
     out = re.sub(r'poster="\{\{IMG_([\w-]+)\}\}"', poster_repl, html)
     out = re.sub(r'src="\{\{IMG_([\w-]+)\}\}"', repl, out)
     out = re.sub(r'\{\{AUD_([\w-]+)\}\}', aud_repl, out)
@@ -402,14 +429,17 @@ def study_section(x):
 
 page_tmpl = open(os.path.join(here, 'example-page.html')).read()
 examples = load_examples()
-for x in examples:
+def build_example_page(x, unlisted=False):
     e = lambda t: html_escape(str(t or ''), quote=True)
     label, level = page_label(x), (x.get('level') or '')
     comic, coll = sentence_case(x.get('comic')), sentence_case(x.get('collection'))
     src = (f'A page from <i lang="es">{e(comic)}</i>' + (f', in the <i lang="es">{e(coll)}</i> collection' if coll else '')
            + ' &mdash; an original Comigo comic, voiced line by line.') if comic else 'A page from an original Comigo comic, voiced line by line.'
     intro = (f'<p>{e(x["summary"])}</p>\n  <p class="src">{src}</p>' if x.get('summary') else f'<p>{src}</p>')
-    url = SITE_URL + ex_url(x['slug'])
+    if unlisted and x.get('personalLine'):
+        # The short personal line for the recipient, above everything else.
+        intro = f'<p class="personal">{e(x["personalLine"])}</p>\n  ' + intro
+    url = SITE_URL + (f"{UNLISTED_BASE}/{x['slug']}" if unlisted else ex_url(x['slug']))
     crumbs = json.dumps({
         '@context': 'https://schema.org', '@type': 'BreadcrumbList',
         'itemListElement': [
@@ -430,9 +460,26 @@ for x in examples:
         'PG_EYEBROW': e(f'{level.capitalize()} · Spanish reading practice' if level else 'Spanish reading practice'),
         'PG_INTRO': intro, 'PG_STUDY': study_section(x), 'PG_EXTRA': extra,
     }
+    if unlisted:
+        vals['PG_BREADCRUMB_LD'] = ''
+        vals['PG_EYEBROW'] = e(f'{level.capitalize()} · Spanish reading practice' if level else 'Spanish reading practice')
     html = re.sub(r'\{\{(PG_\w+)\}\}', lambda m: vals[m.group(1)], page_tmpl)
-    build('example-page.html', os.path.join('examples', x['slug'] + '.html'), html=html,
-          nav_slug='spanish-reading-practice', own_slug=x['slug'])
+    build('example-page.html', os.path.join('unlisted' if unlisted else 'examples', x['slug'] + '.html'), html=html,
+          nav_slug='spanish-reading-practice', own_slug=x['slug'],
+          utm=x.get('utm') if unlisted else None, noindex=unlisted)
+
+for x in examples:
+    build_example_page(x)
+
+# Unlisted pages: built the same way, from site/unlisted/*.json; stale HTML removed.
+un_dir = os.path.join(here, 'unlisted')
+os.makedirs(un_dir, exist_ok=True)
+for f in os.listdir(un_dir):
+    if f.endswith('.html') and not os.path.exists(os.path.join(un_dir, f[:-5] + '.json')):
+        os.remove(os.path.join(un_dir, f))
+for f in sorted(os.listdir(un_dir)):
+    if f.endswith('.json'):
+        build_example_page(json.load(open(os.path.join(un_dir, f))), unlisted=True)
 
 # SEO checks: every example page needs its own title and description, and the
 # summary / image description that make them useful (Marketing → Examples).
