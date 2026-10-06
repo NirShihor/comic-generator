@@ -1137,82 +1137,501 @@ function CardAnim({ title, rows, presets, value, onChange, secs, note }) {
   );
 }
 
-// Reels: an optional second slide after the opening card — own background,
-// lines of text with colour, size and entrance ("juice"), optional narration.
-const MESSAGE_LINE_DEFAULT = { text: '', color: '#FFFFFF', size: 72, effect: 'fade', start: 0, dur: 0.5 };
-const MESSAGE_CARD_DEFAULT = { enabled: false, background: '#6E40F0', image: '', dim: 0.35, seconds: 4, hold: 0.8, voice: false, autoTime: true,
-                               lines: [{ ...MESSAGE_LINE_DEFAULT }] };
+// Reels: an optional second slide after the opening card — own background, an
+// optional heading and subheading and up to 7 lines, each with colour, size and
+// entrance ("juice"), optional narration — with a live preview of the layout.
+const MESSAGE_ITEM = (size, color, gap) => ({ text: '', color, size, gap, effect: 'fade', start: 0, dur: 0.5 });
+const MESSAGE_CARD_DEFAULT = { enabled: false, align: 'center', top: '', background: '#6E40F0', image: '', dim: 0.35, seconds: 4, hold: 0.8, voice: false, autoTime: true,
+                               heading: MESSAGE_ITEM(96, '#FFD23F', 44), subheading: MESSAGE_ITEM(56, '#FFFFFF', 60), lines: [MESSAGE_ITEM(64, '#FFFFFF', 22)] };
 const MESSAGE_COLORS = [['#FFFFFF', 'White'], ['#FFD23F', 'Yellow'], ['#16182E', 'Ink'], ['#6E40F0', 'Violet'], ['#7FD08A', 'Green'], ['#F07A7A', 'Red']];
+const MESSAGE_EFFECTS = [['none', 'Appear'], ['fade', 'Fade in'], ['pop', 'Pop (grow in)'], ['slide-up', 'Slide up'], ['slide-down', 'Slide down'], ['slide-left', 'Slide from right'], ['slide-right', 'Slide from left'], ['typewriter', 'Typewriter']];
+
+// What the server draws: 1080x1920, Helvetica 800, text wrapped inside 80px
+// margins, each item followed by its own gap (px).
+function MessageCardPreview({ card, images }) {
+  const scale = 0.25, w = 1080 * scale, h = 1920 * scale;
+  // As the server lays it out: an empty line between lines of text is a blank
+  // row (a spacer); blanks at either end and a blank heading/subheading are dropped.
+  const all = [{ ...card.heading, kind: 'heading' }, { ...card.subheading, kind: 'subheading' }, ...card.lines.map(l => ({ ...l, kind: 'line' }))]
+    .map(l => ({ ...l, text: (l.text || '').trim(), align: (l.kind !== 'line' && l.align) || card.align || 'center' }));
+  const first = all.findIndex(l => l.text), last = all.map(l => !!l.text).lastIndexOf(true);
+  const items = first < 0 ? [] : all.slice(first, last + 1).filter(l => l.text || l.kind === 'line');
+  const gapAfter = l => (Number(l.gap) || 0) * scale;
+  const img = card.image ? images.find(i => i.file === card.image)?.url : '';
+  // Play: the entrances at their Start/Length (voice off; with narration the
+  // server re-times them to follow the voice). t = seconds since play, or
+  // null when idle (everything shown).
+  const [t, setT] = useState(null);
+  const raf = useRef(0);
+  const end = Math.max(0, ...items.map(l => (Number(l.start) || 0) + (Number(l.dur) || 0))) + 0.6;
+  const play = () => {
+    cancelAnimationFrame(raf.current);
+    const t0 = performance.now();
+    const tick = () => {
+      const el = (performance.now() - t0) / 1000;
+      setT(el);
+      if (el < end) raf.current = requestAnimationFrame(tick); else setT(null);
+    };
+    tick();
+  };
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+  const entrance = l => {
+    if (t == null) return {};
+    const S = Number(l.start) || 0, D = Math.max(0.05, Number(l.dur) || 0.5);
+    const p = Math.min(1, Math.max(0, (t - S) / D)), e = 1 - Math.pow(1 - p, 3);
+    if (t < S) return { opacity: 0 };
+    switch (l.effect) {
+      case 'none': return {};
+      case 'pop': return { opacity: Math.min(1, p / 0.6), transform: `scale(${0.35 + 0.65 * e})` };
+      case 'slide-up': return { opacity: p, transform: `translateY(${(1 - e) * 260 * scale}px)` };
+      case 'slide-down': return { opacity: p, transform: `translateY(${-(1 - e) * 260 * scale}px)` };
+      case 'slide-left': return { opacity: p, transform: `translateX(${(1 - e) * 380 * scale}px)` };
+      case 'slide-right': return { opacity: p, transform: `translateX(${-(1 - e) * 380 * scale}px)` };
+      case 'typewriter': return { clipPath: `inset(0 ${(1 - e) * 100}% 0 0)` };
+      default: return { opacity: p };
+    }
+  };
+  return (
+    <div style={{ flex: 'none', marginLeft: 'auto', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+      <div style={{ position: 'relative', width: w, height: h, borderRadius: 10, overflow: 'hidden', background: card.background,
+                    backgroundImage: img ? `url(${img})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid #444' }}
+           title="Preview of the card's layout; press Play to see the entrances">
+        {img && <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${card.dim})` }} />}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', padding: `0 ${80 * scale}px`,
+                      justifyContent: card.top === '' || card.top == null ? 'center' : 'flex-start', paddingTop: card.top === '' || card.top == null ? 0 : (Number(card.top) || 0) * scale,
+                      alignItems: 'stretch' }}>
+          {items.map((l, i) => {
+            const hanging = l.kind === 'line' && l.bullet && l.align === 'left';
+            return (
+              <div key={i} style={{ color: l.color, fontFamily: 'Helvetica, Arial, sans-serif', fontWeight: 800, fontSize: l.size * scale, lineHeight: 1.22,
+                                    minHeight: l.text ? 0 : l.size * 1.22 * scale, display: hanging ? 'flex' : 'block',
+                                    textAlign: l.align, marginBottom: i < items.length - 1 ? gapAfter(l) : 0, overflowWrap: 'break-word', width: '100%',
+                                    ...entrance(l) }}>
+                {hanging && <span style={{ flex: `0 0 ${l.size * 0.8 * scale}px` }}>•</span>}
+                <span style={{ flex: 1, minWidth: 0 }}>{l.kind === 'line' && l.bullet && !hanging ? `• ${l.text}` : l.text}</span>
+              </div>
+            );
+          })}
+          {!items.length && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontFamily: 'system-ui, sans-serif' }}>Type a heading or a line…</div>}
+        </div>
+      </div>
+      <button className="btn btn-secondary" onClick={play} disabled={!items.length} style={{ padding: '0.2rem 0.8rem', fontSize: '0.78rem' }}
+              title="Play the entrances at their Start / Length (as rendered with the voice off)">
+        {t == null ? '▶ Play entrances' : `${t.toFixed(1)} s`}
+      </button>
+    </div>
+  );
+}
+
 function MessageCardEditor({ value, onChange, images }) {
   const v = value;
   const set = (k, x) => onChange({ ...v, [k]: x });
-  const setLine = (i, k, x) => set('lines', v.lines.map((l, j) => (j === i ? { ...l, [k]: x } : l)));
+  const setItem = (k, f, x) => set(k, { ...v[k], [f]: x });
+  const setLine = (i, f, x) => set('lines', v.lines.map((l, j) => (j === i ? { ...l, [f]: x } : l)));
   const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem' };
-  const effects = [['none', 'Appear'], ['fade', 'Fade in'], ['pop', 'Pop (grow in)'], ['slide-up', 'Slide up'], ['slide-down', 'Slide down'], ['slide-left', 'Slide from right'], ['slide-right', 'Slide from left'], ['typewriter', 'Typewriter']];
-  const lastEnd = Math.max(0, ...v.lines.map(l => (Number(l.start) || 0) + (Number(l.dur) || 0)));
+  const cell = { ...input, width: '100%', minWidth: 0, boxSizing: 'border-box' };   // fits its grid column (inputs otherwise keep their default width)
+  const grey = { color: '#c4bdd8' };
+  const timed = v.voice && v.autoTime;
+  const lastEnd = Math.max(0, ...[v.heading, v.subheading, ...v.lines].map(l => (Number(l.start) || 0) + (Number(l.dur) || 0)));
+  // One row of controls for an item (heading, subheading or a line).
+  const row = (label, l, setF, extra, bullet) => (
+    <React.Fragment key={label}>
+      {bullet ? <input type="checkbox" checked={!!l.bullet} onChange={e => setF('bullet', e.target.checked)} title="Bullet point: a • in front, with wrapped rows aligned to the text" /> : <span />}
+      <input style={cell} value={l.text} placeholder={label} onChange={e => setF('text', e.target.value)} />
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <input type="color" value={l.color} onChange={e => setF('color', e.target.value.toUpperCase())} style={{ width: 30, height: 24, padding: 0, border: '1px solid #555', background: 'none' }} />
+        <select value={MESSAGE_COLORS.some(([c]) => c === l.color) ? l.color : ''} onChange={e => e.target.value && setF('color', e.target.value)} style={{ ...cell, padding: '0.2rem', flex: 1 }}>
+          <option value="">…</option>{MESSAGE_COLORS.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
+        </select>
+      </div>
+      <input type="number" min={24} max={200} step={2} value={l.size} onChange={e => setF('size', Number(e.target.value) || l.size)} style={cell} title="Font size (px on a 1080-wide card)" />
+      <input type="number" min={0} max={400} step={2} value={l.gap} onChange={e => setF('gap', Math.max(0, Number(e.target.value) || 0))} style={cell} title="Space below this item (px on the 1080x1920 card)" />
+      <select value={l.effect} onChange={e => setF('effect', e.target.value)} style={cell}>
+        {MESSAGE_EFFECTS.map(([x, n]) => <option key={x} value={x}>{n}</option>)}
+      </select>
+      <input type="number" min={0} max={60} step={0.1} value={l.start} onChange={e => setF('start', Number(e.target.value) || 0)} style={cell} disabled={timed}
+             title={timed ? 'Set automatically: each item appears as its narration starts' : 'Seconds after the card begins'} />
+      <input type="number" min={0.05} max={5} step={0.1} value={l.dur} onChange={e => setF('dur', Number(e.target.value) || 0.5)} style={cell} />
+      {extra || <span />}
+    </React.Fragment>
+  );
   return (
     <div style={{ border: '1px solid #444', borderRadius: 8, padding: 8, margin: '8px 0' }}>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc' }}>
         <input type="checkbox" checked={v.enabled} onChange={e => set('enabled', e.target.checked)} />
-        Message card — a second slide after the opening card (e.g. "Turn audio on", "In some pages, if you look carefully…")
+        Message card — a second slide after the opening card (heading, subheading and up to 7 lines)
       </label>
       {v.enabled && (
-        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', color: '#d6d0e6' }}>
-            Background
-            <input type="color" value={v.background} onChange={e => set('background', e.target.value.toUpperCase())} title="Background colour" style={{ width: 34, height: 26, padding: 0, border: '1px solid #555', background: 'none' }} />
-            <select value={v.image} onChange={e => set('image', e.target.value)} style={{ ...input, maxWidth: 260 }} title="Or a comic image behind the text">
-              <option value="">Colour only</option>
-              {images.map(im => <option key={im.file} value={im.file}>{im.file}</option>)}
-            </select>
-            {v.image && <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Darken the image so the text reads">
-              dim <input type="range" min={0} max={0.9} step={0.05} value={v.dim} onChange={e => set('dim', Number(e.target.value))} /> {Math.round(v.dim * 100)}%
-            </label>}
-            <span style={{ flex: 1 }} />
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Minimum length of the card">
-              at least <input type="number" min={0.5} max={60} step={0.5} value={v.seconds} onChange={e => set('seconds', Number(e.target.value) || 4)} style={{ ...input, width: 64 }} /> s
-            </label>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Pause after the last line has appeared (and the narration has finished)">
-              then hold <input type="number" min={0} max={15} step={0.1} value={v.hold} onChange={e => set('hold', Number(e.target.value) || 0)} style={{ ...input, width: 64 }} /> s
-            </label>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 64px 130px 64px 64px auto', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
-            <span style={{ color: '#c4bdd8' }}>Line</span><span style={{ color: '#c4bdd8' }}>Colour</span><span style={{ color: '#c4bdd8' }}>Size</span>
-            <span style={{ color: '#c4bdd8' }}>Entrance</span><span style={{ color: '#c4bdd8' }}>{v.voice && v.autoTime ? 'Start (auto)' : 'Start s'}</span><span style={{ color: '#c4bdd8' }}>Length s</span><span />
-            {v.lines.map((l, i) => (
-              <React.Fragment key={i}>
-                <input style={input} value={l.text} placeholder={i === 0 ? 'Turn audio on' : `Line ${i + 1}`} onChange={e => setLine(i, 'text', e.target.value)} />
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                  <input type="color" value={l.color} onChange={e => setLine(i, 'color', e.target.value.toUpperCase())} style={{ width: 30, height: 24, padding: 0, border: '1px solid #555', background: 'none' }} />
-                  <select value={MESSAGE_COLORS.some(([c]) => c === l.color) ? l.color : ''} onChange={e => e.target.value && setLine(i, 'color', e.target.value)} style={{ ...input, padding: '0.2rem', width: 70 }}>
-                    <option value="">…</option>{MESSAGE_COLORS.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
+        <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-start' }}>
+          {/* The preview sits to the right when there is room for the whole grid; otherwise it drops below, never over the controls. */}
+          <div style={{ flex: '1 1 640px', minWidth: 0, overflowX: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', ...grey }}>
+              Background
+              <input type="color" value={v.background} onChange={e => set('background', e.target.value.toUpperCase())} title="Background colour" style={{ width: 34, height: 26, padding: 0, border: '1px solid #555', background: 'none' }} />
+              <select value={v.image} onChange={e => set('image', e.target.value)} style={{ ...input, maxWidth: 240 }} title="Or a comic image behind the text">
+                <option value="">Colour only</option>
+                {images.map(im => <option key={im.file} value={im.file}>{im.file}</option>)}
+              </select>
+              {[['heading', 'Heading'], ['subheading', 'Subheading']].map(([k, n]) => (
+                <label key={k} style={{ display: 'flex', gap: 6, alignItems: 'center' }} title={`How the ${n.toLowerCase()} sits in the frame`}>
+                  {n}
+                  <select value={v[k].align || v.align || 'center'} onChange={e => setItem(k, 'align', e.target.value)} style={input}>
+                    <option value="center">Centred</option><option value="left">Left</option><option value="right">Right</option>
                   </select>
-                </div>
-                <input type="number" min={24} max={200} step={2} value={l.size} onChange={e => setLine(i, 'size', Number(e.target.value) || 72)} style={input} />
-                <select value={l.effect} onChange={e => setLine(i, 'effect', e.target.value)} style={input}>
-                  {effects.map(([x, n]) => <option key={x} value={x}>{n}</option>)}
+                </label>
+              ))}
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="How the lines sit in the frame">
+                Lines
+                <select value={v.align || 'center'} onChange={e => set('align', e.target.value)} style={input}>
+                  <option value="center">Centred</option><option value="left">Left</option><option value="right">Right</option>
                 </select>
-                <input type="number" min={0} max={60} step={0.1} value={l.start} onChange={e => setLine(i, 'start', Number(e.target.value) || 0)} style={input} disabled={v.voice && v.autoTime}
-                       title={v.voice && v.autoTime ? 'Set automatically: each line appears as its narration starts' : 'Seconds after the card begins'} />
-                <input type="number" min={0.05} max={5} step={0.1} value={l.dur} onChange={e => setLine(i, 'dur', Number(e.target.value) || 0.5)} style={input} />
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Distance from the top of the card to the first item (px); leave blank to centre the block vertically">
+                top margin <input type="number" min={0} max={1800} step={10} value={v.top} placeholder="centred" onChange={e => set('top', e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0))} style={{ ...input, width: 96 }} /> px
+              </label>
+              {v.image && <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Darken the image so the text reads">
+                dim <input type="range" min={0} max={0.9} step={0.05} value={v.dim} onChange={e => set('dim', Number(e.target.value))} /> {Math.round(v.dim * 100)}%
+              </label>}
+              <span style={{ flex: 1 }} />
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Minimum length of the card">
+                at least <input type="number" min={0.5} max={60} step={0.5} value={v.seconds} onChange={e => set('seconds', Number(e.target.value) || 4)} style={{ ...input, width: 64 }} /> s
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Pause after the last item has appeared (and the narration has finished)">
+                then hold <input type="number" min={0} max={15} step={0.1} value={v.hold} onChange={e => set('hold', Number(e.target.value) || 0)} style={{ ...input, width: 64 }} /> s
+              </label>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '20px minmax(120px, 1fr) 104px 58px 58px 120px 60px 60px 28px', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
+              <span style={grey} title="Bullet point">•</span><span style={grey}>Text</span><span style={grey}>Colour</span><span style={grey}>Size</span><span style={grey} title="Space below, px">Gap</span>
+              <span style={grey}>Entrance</span><span style={grey}>{timed ? 'Start (auto)' : 'Start s'}</span><span style={grey}>Length s</span><span />
+              {row('Heading (optional)', v.heading, (f, x) => setItem('heading', f, x))}
+              {row('Subheading (optional)', v.subheading, (f, x) => setItem('subheading', f, x))}
+              {v.lines.map((l, i) => row(`Line ${i + 1}`, l, (f, x) => setLine(i, f, x),
                 <button className="btn btn-secondary" onClick={() => set('lines', v.lines.filter((_, j) => j !== i))} disabled={v.lines.length === 1}
-                        style={{ padding: '0.15rem 0.45rem', color: '#f88' }} title="Remove line">✕</button>
+                        style={{ padding: '0.15rem 0.45rem', color: '#f88' }} title="Remove line">✕</button>, true))}
+            </div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', ...grey }}>
+              <button className="btn btn-secondary" onClick={() => set('lines', [...v.lines, { ...MESSAGE_ITEM(64, '#FFFFFF', 22), start: Number((lastEnd + 0.4).toFixed(1)) }])}
+                      disabled={v.lines.length >= 7} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}>＋ Add line</button>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="The house English narrator reads the heading, subheading and lines in order">
+                <input type="checkbox" checked={v.voice} onChange={e => set('voice', e.target.checked)} /> Read it aloud (English voice)
+              </label>
+              {v.voice && <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Each item appears as its narration starts, one after another; off = your Start times, narration at each item's start">
+                <input type="checkbox" checked={v.autoTime} onChange={e => set('autoTime', e.target.checked)} /> time the items to the narration
+              </label>}
+              <span>The card lasts until the last item (and its narration) has finished, plus the hold — never less than "at least". Long text wraps; an empty line between lines is a blank row.</span>
+            </div>
+          </div>
+          <MessageCardPreview card={v} images={images} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Reels: camera moves on the clip — up to 3 pushes in, each on a point you
+// click in the source clip, from a start time (grab it from the video), held
+// until a time or to the end, then released. The frame shows the zoom window.
+const ZOOM_DEFAULT = () => ({ enabled: true, start: 0, ramp: 1, zoom: 1.6, until: '', release: 1, cx: 0.5, cy: 0.5 });
+function ZoomEditor({ value, onChange, src }) {
+  const zooms = value;
+  const [sel, setSel] = useState(0);
+  const [t, setT] = useState(0);
+  const videoRef = useRef(null);
+  const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem', width: '100%', minWidth: 0, boxSizing: 'border-box' };
+  const grey = { color: '#c4bdd8' };
+  const setZ = (i, f, x) => onChange(zooms.map((z, j) => (j === i ? { ...z, [f]: x } : z)));
+  const cur = zooms[sel];
+  // Which move (if any) is active at the video's current time — for the frame.
+  const activeAt = tt => zooms.findIndex(z => z.enabled !== false && tt >= Number(z.start) && (z.until === '' || tt <= Number(z.until) + Number(z.release)));
+  const shown = activeAt(t) >= 0 ? zooms[activeAt(t)] : cur;
+  const onClick = e => {
+    if (!cur) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    setZ(sel, 'cx', Number(((e.clientX - r.left) / r.width).toFixed(3)));
+    setZ(sel, 'cy', Number(((e.clientY - r.top) / r.height).toFixed(3)));
+  };
+  const frame = shown && shown.enabled !== false ? {
+    width: `${100 / shown.zoom}%`, height: `${100 / shown.zoom}%`,
+    left: `${Math.min(Math.max(shown.cx * 100 - 50 / shown.zoom, 0), 100 - 100 / shown.zoom)}%`,
+    top: `${Math.min(Math.max(shown.cy * 100 - 50 / shown.zoom, 0), 100 - 100 / shown.zoom)}%`,
+  } : null;
+  return (
+    <div style={{ border: '1px solid #444', borderRadius: 8, padding: 8, margin: '8px 0' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', flexWrap: 'wrap' }}>
+        🔍 Zoom in while the reel runs
+        <button className="btn btn-secondary" onClick={() => { onChange([...zooms, { ...ZOOM_DEFAULT(), start: Number(t.toFixed(1)) }]); setSel(zooms.length); }}
+                disabled={zooms.length >= 3} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}>＋ Add a zoom</button>
+        {zooms.length > 0 && <span style={{ ...grey, fontSize: '0.78rem' }}>Times are in the clip itself (before the cards). Click the picture to set where the camera pushes in. The zooms are rendered when you press "Apply audio & cards to this clip".</span>}
+      </div>
+      {zooms.length > 0 && (
+        <div style={{ display: 'flex', gap: 14, marginTop: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {/* The picture sits beside the table when there is room for the whole table, otherwise below it. */}
+          <div style={{ flex: '1 1 560px', minWidth: 0, display: 'grid', gridTemplateColumns: '20px 64px 68px 64px 72px 68px 84px 28px', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
+            <span /><span style={grey}>Start s</span><span style={grey} title="How long the push in takes">In over s</span><span style={grey}>Zoom ×</span>
+            <span style={grey} title="When to zoom back out — leave blank to stay zoomed to the end of the clip">Out at s</span><span style={grey}>Out over s</span><span style={grey}>Centre</span><span />
+            {zooms.map((z, i) => (
+              <React.Fragment key={i}>
+                <input type="radio" checked={sel === i} onChange={() => setSel(i)} title="Edit this zoom (click the picture to set its centre)" />
+                <input type="number" min={0} step={0.1} value={z.start} onChange={e => setZ(i, 'start', Number(e.target.value) || 0)} style={input} />
+                <input type="number" min={0.05} step={0.1} value={z.ramp} onChange={e => setZ(i, 'ramp', Number(e.target.value) || 1)} style={input} />
+                <input type="number" min={1.05} max={4} step={0.1} value={z.zoom} onChange={e => setZ(i, 'zoom', Number(e.target.value) || 1.6)} style={input} />
+                <input type="number" min={0} step={0.1} value={z.until} placeholder="end" onChange={e => setZ(i, 'until', e.target.value === '' ? '' : Number(e.target.value) || 0)} style={input} />
+                <input type="number" min={0.05} step={0.1} value={z.release} onChange={e => setZ(i, 'release', Number(e.target.value) || 1)} style={input} disabled={z.until === ''} />
+                <span style={{ ...grey, fontSize: '0.75rem' }}>{Math.round(z.cx * 100)}% , {Math.round(z.cy * 100)}%</span>
+                <button className="btn btn-secondary" onClick={() => { onChange(zooms.filter((_, j) => j !== i)); setSel(0); }} style={{ padding: '0.15rem 0.45rem', color: '#f88' }} title="Remove">✕</button>
               </React.Fragment>
             ))}
+            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+              <button className="btn btn-secondary" disabled={!cur} onClick={() => setZ(sel, 'start', Number(t.toFixed(1)))} style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
+                      title="Use the video's current time as this zoom's start">⏱ Start = {t.toFixed(1)}s</button>
+              <button className="btn btn-secondary" disabled={!cur} onClick={() => setZ(sel, 'until', Number(t.toFixed(1)))} style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
+                      title="Use the video's current time as when this zoom releases">⏱ Out at = {t.toFixed(1)}s</button>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', color: '#d6d0e6' }}>
-            <button className="btn btn-secondary" onClick={() => set('lines', [...v.lines, { ...MESSAGE_LINE_DEFAULT, start: Number((lastEnd + 0.4).toFixed(1)) }])}
-                    disabled={v.lines.length >= 8} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}>＋ Add line</button>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="The house English narrator reads each line over the card">
-              <input type="checkbox" checked={v.voice} onChange={e => set('voice', e.target.checked)} /> Read the lines aloud (English voice)
-            </label>
-            {v.voice && <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Each line appears as its narration starts, one after another; off = your Start times, narration at each line's start">
-              <input type="checkbox" checked={v.autoTime} onChange={e => set('autoTime', e.target.checked)} /> time the lines to the narration
-            </label>}
-            <span style={{ color: '#c4bdd8' }}>The card lasts until the last line (and its narration) has finished, plus the hold — never less than "at least".</span>
+          <div style={{ width: 216, flex: 'none' }}>
+            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 8, cursor: 'crosshair' }} onClick={onClick} title="Click to set the centre of the selected zoom">
+              <video ref={videoRef} src={src} muted playsInline controls={false} onTimeUpdate={e => setT(e.target.currentTime)}
+                     style={{ width: '100%', display: 'block', background: '#000', pointerEvents: 'none' }} />
+              {frame && <div style={{ position: 'absolute', border: '2px solid #FFD23F', boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)', pointerEvents: 'none', borderRadius: 4, ...frame }} />}
+            </div>
+            <input type="range" min={0} max={videoRef.current?.duration || 0} step={0.1} value={t} onClick={e => e.stopPropagation()}
+                   onChange={e => { const v = Number(e.target.value); setT(v); if (videoRef.current) videoRef.current.currentTime = v; }}
+                   style={{ width: '100%', marginTop: 4 }} title="Scrub the clip" />
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Reels: audio cues — Quick audio clips (the house English narrator, or a
+// comic's Spanish voice) placed at exact moments of a clip you recorded
+// yourself. Scrub the recording, add a cue at the playhead, preview it in the
+// browser (the cues fire in sync, nothing is rendered), then render.
+function CueEditor({ comicId, src, cues, onChange, original, onOriginal, cuts, onCuts }) {
+  const [clips, setClips] = useState([]);
+  const [voices, setVoices] = useState([]);
+  const [t, setT] = useState(0);
+  const [previewing, setPreviewing] = useState(false);
+  const [draft, setDraft] = useState({ lang: 'en', voiceId: '', text: '', speed: 1.0 });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [edit, setEdit] = useState(null);   // { file, text, speed } — a clip being reworded in place
+  const videoRef = useRef(null);
+  const fired = useRef(new Set());
+  const playing = useRef([]);
+  const loadClips = () => api.get('/audio/quick', { params: { comicId } }).then(r => setClips(r.data.clips || [])).catch(() => {});
+  useEffect(() => {
+    loadClips();
+    api.get(`/comics/${comicId}`).then(r => { const v = r.data.voices || []; setVoices(v); setDraft(d => ({ ...d, voiceId: v[0]?.voiceId || '' })); }).catch(() => {});
+  }, [comicId]);
+  const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem', minWidth: 0, boxSizing: 'border-box' };
+  const grey = { color: '#c4bdd8' };
+  const clipOf = file => clips.find(c => c.file === file);
+  const setCue = (i, f, x) => onChange(cues.map((c, j) => (j === i ? { ...c, [f]: x } : c)));
+  const addCue = (file) => onChange([...cues, { file: file || clips[0]?.file || '', at: Number(t.toFixed(2)), volume: 1 }].sort((a, b) => a.at - b.at));
+  // Generate a new clip (the Voices tab's Quick audio) and put it at the playhead.
+  const generate = async () => {
+    setBusy(true); setError('');
+    try {
+      const v = voices.find(x => x.voiceId === draft.voiceId);
+      const r = await api.post('/audio/quick', { comicId, text: draft.text, lang: draft.lang, speed: draft.speed,
+        ...(draft.lang === 'es' && { voiceId: draft.voiceId, voiceName: v?.name || '' }) }, { timeout: 120000 });
+      setClips(cs => [r.data.clip, ...cs]);
+      onChange([...cues, { file: r.data.clip.file, at: Number(t.toFixed(2)), volume: 1 }].sort((a, b) => a.at - b.at));
+      setDraft(d => ({ ...d, text: '' }));
+    } catch (e) { setError(e.response?.data?.error || e.message); }
+    finally { setBusy(false); }
+  };
+  // Reword / re-time a clip in place: the same clip, new audio — every cue that
+  // uses it follows, and a freeze that was set to the clip's length is kept in step.
+  const regenerate = async () => {
+    if (!edit) return;
+    setBusy(true); setError('');
+    try {
+      const before = clipOf(edit.file);
+      const r = await api.put(`/audio/quick/${comicId}/${edit.file}`, { text: edit.text, speed: edit.speed }, { timeout: 120000 });
+      const after = r.data.clip;
+      setClips(cs => cs.map(c => (c.file === after.file ? after : c)));
+      if (before?.seconds && after.seconds) {
+        onChange(cues.map(c => (c.file === after.file && Math.abs((Number(c.freeze) || 0) - (before.seconds + 0.25)) < 0.03
+          ? { ...c, freeze: Number((after.seconds + 0.25).toFixed(2)) } : c)));
+      }
+      setEdit(null);
+    } catch (e) { setError(e.response?.data?.error || e.message); }
+    finally { setBusy(false); }
+  };
+  // Preview: the recording plays and each cue fires as the playhead passes it;
+  // the recording's own sound follows the "original sound" choice.
+  const raf = useRef(0);
+  const live = useRef(false);          // a preview is running
+  const frozenUntil = useRef(0);       // performance.now() until which the picture is held
+  const stopPreview = () => {
+    live.current = false; cancelAnimationFrame(raf.current); frozenUntil.current = 0;
+    playing.current.forEach(a => { try { a.pause(); } catch {} }); playing.current = [];
+    setPreviewing(false);
+    if (videoRef.current) { videoRef.current.pause(); videoRef.current.volume = 1; }
+  };
+  // The preview loop: fire each cue as the playhead passes it; a cue with a
+  // freeze pauses the picture for that long while its audio plays on.
+  const tick = () => {
+    const v = videoRef.current;
+    if (!live.current || !v) return;
+    if (frozenUntil.current) {
+      if (performance.now() >= frozenUntil.current) { frozenUntil.current = 0; v.play().catch(() => {}); }
+    } else {
+      const cut = cuts.find(c => v.currentTime >= c.from && v.currentTime < c.to - 0.03);
+      if (cut) v.currentTime = cut.to;                       // cut out: jump over it
+      const now = cut ? cut.from : v.currentTime;             // a cue inside a cut plays where the cut is made
+      for (let i = 0; i < cues.length; i++) {
+        const c = cues[i];
+        if (fired.current.has(i) || now < c.at) continue;
+        fired.current.add(i);
+        const clip = clipOf(c.file);
+        if (clip) {
+          const a = new Audio(clip.url); a.volume = Math.min(1, c.volume ?? 1);
+          a.onended = () => { playing.current = playing.current.filter(x => x !== a); if (original === 'duck' && !playing.current.length && videoRef.current) videoRef.current.volume = 1; };
+          playing.current.push(a);
+          if (original === 'duck') v.volume = 0.22;
+          a.play().catch(() => {});
+        }
+        if (Number(c.freeze) > 0) { v.pause(); frozenUntil.current = performance.now() + Number(c.freeze) * 1000; break; }
+      }
+      if (v.ended) { stopPreview(); return; }
+    }
+    raf.current = requestAnimationFrame(tick);
+  };
+  const startPreview = (from) => {
+    const v = videoRef.current; if (!v) return;
+    stopPreview();
+    fired.current = new Set(cues.map((c, i) => (c.at < from - 0.05 ? i : -1)).filter(i => i >= 0));
+    v.currentTime = from; v.muted = original === 'mute'; v.volume = 1;
+    setPreviewing(true); live.current = true;
+    v.play().catch(() => {});
+    raf.current = requestAnimationFrame(tick);
+  };
+  const onTime = (e) => setT(e.target.currentTime);
+  useEffect(() => () => stopPreview(), []);
+  const frozenTotal = cues.reduce((sum, c) => sum + (Number(c.freeze) || 0), 0);
+  const cutTotal = cuts.reduce((sum, c) => sum + Math.max(0, (Number(c.to) || 0) - (Number(c.from) || 0)), 0);
+  const setCut = (i, f, x) => onCuts(cuts.map((c, j) => (j === i ? { ...c, [f]: x } : c)));
+  const canGenerate = draft.text.trim() && (draft.lang === 'en' || draft.voiceId) && !busy;
+  return (
+    <div style={{ border: '1px solid #444', borderRadius: 8, padding: 8, margin: '8px 0' }}>
+      <div style={{ fontSize: '0.85rem', color: '#ccc' }}>
+        🎙 Audio cues — narration and words placed on your own recording
+        <span style={{ ...grey, fontSize: '0.78rem' }}> · times are in the clip itself (before the cards). Scrub to the moment, then add a cue there.</span>
+      </div>
+      <div style={{ display: 'flex', gap: 14, marginTop: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ width: 216, flex: 'none' }}>
+          <video ref={videoRef} src={src} playsInline onTimeUpdate={onTime}
+                 style={{ width: '100%', display: 'block', borderRadius: 8, background: '#000' }} />
+          <input type="range" min={0} max={videoRef.current?.duration || 0} step={0.05} value={t}
+                 onChange={e => { const x = Number(e.target.value); stopPreview(); setT(x); if (videoRef.current) videoRef.current.currentTime = x; }}
+                 style={{ width: '100%', marginTop: 4 }} title="Scrub the recording" />
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.78rem', ...grey }}>
+            <span style={{ flex: 1 }}>{t.toFixed(2)} s</span>
+            {previewing
+              ? <button className="btn btn-secondary" onClick={stopPreview} style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>■ Stop</button>
+              : <>
+                  <button className="btn btn-secondary" onClick={() => startPreview(0)} style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }} title="Play the recording from the start with the cues">▶ Preview</button>
+                  <button className="btn btn-secondary" onClick={() => startPreview(Math.max(0, t - 1.5))} style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }} title="Preview from just before the playhead">▶ here</button>
+                </>}
+          </div>
+        </div>
+        <div style={{ flex: '1 1 460px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '70px minmax(140px, 1fr) 60px 96px 30px 30px 30px 28px', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
+            <span style={grey}>At s</span><span style={grey}>Clip</span><span style={grey}>Volume</span>
+            <span style={grey} title="Hold the picture at this moment for this many seconds while the clip plays; everything after moves later">⏸ Freeze s</span><span /><span /><span /><span />
+            {cues.map((c, i) => (
+              <React.Fragment key={i}>
+                <input type="number" min={0} step={0.05} value={c.at} onChange={e => setCue(i, 'at', Math.max(0, Number(e.target.value) || 0))} style={{ ...input, width: '100%' }} />
+                <select value={c.file} onChange={e => setCue(i, 'file', e.target.value)} style={{ ...input, width: '100%' }}>
+                  {!clipOf(c.file) && <option value={c.file}>{c.file || '— choose a clip —'}</option>}
+                  {clips.map(k => <option key={k.file} value={k.file}>{k.lang === 'en' ? '🇬🇧' : '🇪🇸'} {k.text}{k.seconds ? ` (${k.seconds}s)` : ''}</option>)}
+                </select>
+                <input type="number" min={0} max={2} step={0.1} value={c.volume ?? 1} onChange={e => setCue(i, 'volume', Math.max(0, Number(e.target.value) || 0))} style={{ ...input, width: '100%' }} />
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <input type="number" min={0} max={60} step={0.1} value={c.freeze || ''} placeholder="0" onChange={e => setCue(i, 'freeze', Math.max(0, Number(e.target.value) || 0))} style={{ ...input, width: '100%' }}
+                         title="Seconds to hold the picture here (0 = don't freeze)" />
+                  <button className="btn btn-secondary" title="Freeze for as long as this clip lasts" style={{ padding: '0.15rem 0.35rem' }}
+                          onClick={() => { const k = clipOf(c.file); if (k?.seconds) setCue(i, 'freeze', Number((k.seconds + 0.25).toFixed(2))); }}>=</button>
+                </div>
+                <button className="btn btn-secondary" title="Move this cue to the playhead" onClick={() => setCue(i, 'at', Number(t.toFixed(2)))} style={{ padding: '0.15rem 0.3rem' }}>⏱</button>
+                <button className="btn btn-secondary" title="Hear the clip" onClick={() => { const k = clipOf(c.file); if (k) new Audio(k.url).play().catch(() => {}); }} style={{ padding: '0.15rem 0.3rem' }}>▶</button>
+                <button className="btn btn-secondary" title="Change this clip's wording or speed and generate it again (the same clip — every cue using it follows)" disabled={!clipOf(c.file)}
+                        onClick={() => { const k = clipOf(c.file); setEdit(edit?.file === c.file ? null : { file: k.file, text: k.text, speed: k.speed ?? 1 }); }} style={{ padding: '0.15rem 0.3rem' }}>✎</button>
+                <button className="btn btn-secondary" title="Remove" onClick={() => onChange(cues.filter((_, j) => j !== i))} style={{ padding: '0.15rem 0.3rem', color: '#f88' }}>✕</button>
+                {edit?.file === c.file && (
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#231c3d', border: '1px solid #5a4a99', borderRadius: 6, padding: '6px 8px' }}>
+                    <span style={{ ...grey, fontSize: '0.78rem' }}>✎ Edit clip</span>
+                    <input value={edit.text} onChange={e => setEdit(x => ({ ...x, text: e.target.value }))} maxLength={400} autoFocus
+                           onKeyDown={e => { if (e.key === 'Enter' && edit.text.trim() && !busy) regenerate(); if (e.key === 'Escape') setEdit(null); }} style={{ ...input, flex: 1, minWidth: 200 }} />
+                    <label style={{ ...grey, fontSize: '0.78rem' }}>×{Number(edit.speed).toFixed(2)} <input type="range" min={0.7} max={1.2} step={0.05} value={edit.speed} onChange={e => setEdit(x => ({ ...x, speed: Number(e.target.value) }))} style={{ width: 70 }} /></label>
+                    <button className="btn btn-primary" disabled={!edit.text.trim() || busy} onClick={regenerate} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}>{busy ? 'Generating…' : 'Regenerate'}</button>
+                    <button className="btn btn-secondary" onClick={() => setEdit(null)} style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Cancel</button>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: '0.8rem', ...grey }}>
+            <button className="btn btn-secondary" disabled={!clips.length || cues.length >= 40} onClick={() => addCue()} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}
+                    title="Add a cue at the playhead using an existing Quick audio clip">＋ Cue at {t.toFixed(1)} s</button>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="What happens to the recording's own sound">
+              Recording's sound
+              <select value={original} onChange={e => onOriginal(e.target.value)} style={input}>
+                <option value="duck">Lower it while a cue speaks</option>
+                <option value="keep">Keep as is</option>
+                <option value="mute">Mute</option>
+              </select>
+            </label>
+          </div>
+          {/* Cuts: stretches of the recording to drop (the app was slow, nothing happens). */}
+          <div style={{ borderTop: '1px solid #333', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8rem', ...grey }}>
+              ✂ Cuts — remove a stretch where nothing happens
+              <button className="btn btn-secondary" disabled={cuts.length >= 40} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}
+                      title="Start a cut at the playhead (then scrub to where it should end and press ⏱ on its To)"
+                      onClick={() => onCuts([...cuts, { from: Number(t.toFixed(2)), to: Number((t + 1).toFixed(2)) }].sort((a, b) => a.from - b.from))}>✂ Cut from {t.toFixed(1)} s</button>
+            </div>
+            {cuts.map((c, i) => (
+              <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
+                <span style={grey}>from</span>
+                <input type="number" min={0} step={0.05} value={c.from} onChange={e => setCut(i, 'from', Math.max(0, Number(e.target.value) || 0))} style={{ ...input, width: 76 }} />
+                <button className="btn btn-secondary" title="Start the cut at the playhead" onClick={() => setCut(i, 'from', Number(t.toFixed(2)))} style={{ padding: '0.15rem 0.3rem' }}>⏱</button>
+                <span style={grey}>to</span>
+                <input type="number" min={0} step={0.05} value={c.to} onChange={e => setCut(i, 'to', Math.max(0, Number(e.target.value) || 0))} style={{ ...input, width: 76 }} />
+                <button className="btn btn-secondary" title="End the cut at the playhead" onClick={() => setCut(i, 'to', Number(t.toFixed(2)))} style={{ padding: '0.15rem 0.3rem' }}>⏱</button>
+                <span style={{ ...grey, fontSize: '0.75rem' }}>{c.to > c.from ? `−${(c.to - c.from).toFixed(1)} s` : 'set where it ends'}</span>
+                <button className="btn btn-secondary" title="Preview across this cut" onClick={() => startPreview(Math.max(0, c.from - 1.5))} style={{ padding: '0.15rem 0.3rem' }}>▶</button>
+                <button className="btn btn-secondary" title="Remove this cut" onClick={() => onCuts(cuts.filter((_, j) => j !== i))} style={{ padding: '0.15rem 0.3rem', color: '#f88' }}>✕</button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid #333', paddingTop: 8 }}>
+            <span style={{ ...grey, fontSize: '0.8rem' }}>New clip at the playhead:</span>
+            <select value={draft.lang} onChange={e => setDraft(d => ({ ...d, lang: e.target.value }))} style={input}>
+              <option value="en">🇬🇧 English — standard voice</option>
+              <option value="es">🇪🇸 Spanish — comic voice</option>
+            </select>
+            {draft.lang === 'es' && (voices.length
+              ? <select value={draft.voiceId} onChange={e => setDraft(d => ({ ...d, voiceId: e.target.value }))} style={input}>
+                  {voices.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
+                </select>
+              : <span style={{ color: '#f0b04a', fontSize: '0.78rem' }}>This comic has no voices yet (Voices tab).</span>)}
+            <input value={draft.text} onChange={e => setDraft(d => ({ ...d, text: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && canGenerate) generate(); }}
+                   placeholder={draft.lang === 'en' ? 'e.g. Now try speaking.' : 'p. ej. carta'} maxLength={400} style={{ ...input, flex: 1, minWidth: 180 }} />
+            <label style={{ ...grey, fontSize: '0.78rem' }} title="Slower is clearer for single words">×{draft.speed.toFixed(2)} <input type="range" min={0.7} max={1.2} step={0.05} value={draft.speed} onChange={e => setDraft(d => ({ ...d, speed: Number(e.target.value) }))} style={{ width: 70 }} /></label>
+            <button className="btn btn-primary" disabled={!canGenerate} onClick={generate} style={{ padding: '0.25rem 0.8rem', fontSize: '0.8rem' }}>{busy ? 'Generating…' : 'Generate & add'}</button>
+          </div>
+          {error && <span style={{ color: '#f07a7a', fontSize: '0.8rem' }}>{error}</span>}
+          {(frozenTotal > 0 || cutTotal > 0) && <span style={{ color: '#FFD23F', fontSize: '0.78rem' }}>
+            {frozenTotal > 0 && `⏸ Picture held for ${frozenTotal.toFixed(1)} s. `}{cutTotal > 0 && `✂ ${cutTotal.toFixed(1)} s cut out. `}
+            The reel will be {(frozenTotal - cutTotal >= 0 ? '+' : '−') + Math.abs(frozenTotal - cutTotal).toFixed(1)} s against your recording. All times here stay in the recording's own time.</span>}
+          <span style={{ ...grey, fontSize: '0.75rem' }}>Clips come from Voices → Quick audio for this comic; anything generated here is added there too. Rendered when you press "Apply audio &amp; cards to this clip".</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1439,6 +1858,10 @@ function Reels() {
   const [openingAnim, setOpeningAnim] = useState(OPENING_ANIM_DEFAULT);
   const [messageCard, setMessageCard] = useState(MESSAGE_CARD_DEFAULT);
   const [soundBadge, setSoundBadge] = useState(false);   // "Turn sound on" badge over the reel
+  const [zooms, setZooms] = useState([]);                 // camera pushes on the clip (ZoomEditor)
+  const [cues, setCues] = useState([]);                   // Quick audio clips placed on the clip (CueEditor)
+  const [cueOriginal, setCueOriginal] = useState('duck'); // the recording's own sound under the cues
+  const [cuts, setCuts] = useState([]);                   // stretches of the recording to drop (CueEditor)
 
   useEffect(() => {
     api.get('/comics').then(r => setComics(Array.isArray(r.data) ? r.data : r.data.comics || []));
@@ -1509,7 +1932,7 @@ function Reels() {
   const remix = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge });
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -1536,7 +1959,7 @@ function Reels() {
     try {
       const r = await api.post(model.startsWith('sora') ? '/marketing/sora-clip' : '/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, mode, aspectRatio: '9:16', styleLock, resolution,
         voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, negativePrompt,
-        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge });
+        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -1787,6 +2210,8 @@ function Reels() {
             )}
             {(openingLine1 || openingLine2) && <OpeningCardAnim value={openingAnim} onChange={setOpeningAnim} secs={openingSec} badge={soundBadge} />}
             <MessageCardEditor value={messageCard} onChange={setMessageCard} images={images} />
+            {clipFile && <CueEditor comicId={comicId} src={`/projects/${comicId}/marketing/${clipFile}`} cues={cues} onChange={setCues} original={cueOriginal} onOriginal={setCueOriginal} cuts={cuts} onCuts={setCuts} />}
+            {clipFile && <ZoomEditor value={zooms} onChange={setZooms} src={`/projects/${comicId}/marketing/${clipFile}`} />}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input style={input} placeholder="Question card (yellow) — leave empty to skip" value={question} onChange={e => setQuestion(e.target.value)} />
               <input type="number" min={0.5} max={10} step={0.5} value={questionSec} title="How long the question card shows"
