@@ -216,6 +216,127 @@ router.get('/voices', async (req, res) => {
 
 // Browse the ElevenLabs community / shared voice library (thousands of voices).
 // Search + language/gender/age filters are applied server-side by ElevenLabs.
+// Quick audio (Voices tab → "Quick audio"): one-off clips of a word or phrase —
+// English in the house narrator's voice, or Spanish in one of the comic's
+// voices — for reels and other marketing work. Saved in the comic's project
+// folder (projects/<comicId>/quick-audio/) with a small index; never exported.
+const QUICK_ENGLISH_VOICE = 'GP1bgf0sjoFuuHkyrg8E';
+const quickDir = comicId => path.join(PROJECTS_DIR, comicId, 'quick-audio');
+const quickIndex = async (comicId) => {
+  try { return JSON.parse(await fs.readFile(path.join(quickDir(comicId), 'index.json'), 'utf8')); } catch { return []; }
+};
+router.get('/quick', async (req, res) => {
+  const comicId = String(req.query.comicId || '');
+  if (!/^[\w-]+$/.test(comicId)) return res.status(400).json({ error: 'comicId required' });
+  res.json({ clips: await quickIndex(comicId), dir: quickDir(comicId) });
+});
+// Synthesise a clip to `file` in the comic's quick-audio folder (silence trimmed).
+async function quickSynth({ comicId, file, text, lang, voiceId, speed, stability }) {
+  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    method: 'POST',
+    headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+    body: JSON.stringify({ text, model_id: 'eleven_v3', language_code: lang, voice_settings: { stability, similarity_boost: 0.75, speed } }),
+  });
+  if (!r.ok) { const e = new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`); e.status = 502; throw e; }
+  const dir = quickDir(comicId);
+  await fs.mkdir(dir, { recursive: true });
+  const raw = path.join(dir, `.raw-${file}`), out = path.join(dir, file);
+  await fs.writeFile(raw, Buffer.from(await r.arrayBuffer()));
+  // Trim the silence ElevenLabs leaves at either end, so a clip can be placed precisely.
+  try {
+    await execFileAsync('ffmpeg', ['-y', '-loglevel', 'error', '-i', raw, '-af',
+      'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.12,areverse',
+      '-ar', '44100', '-b:a', '160k', out]);
+    await fs.rm(raw, { force: true });
+  } catch { await fs.rename(raw, out); }
+  let seconds = null;
+  try { seconds = Number(parseFloat((await execFileAsync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out])).stdout).toFixed(2)); } catch {}
+  return { seconds, path: out };
+}
+const quickNum = (v, lo, hi, d) => (Number.isFinite(Number(v)) && v !== '' && v != null ? Math.min(hi, Math.max(lo, Number(v))) : d);
+router.post('/quick', async (req, res) => {
+  try {
+    if (!process.env.ELEVENLABS_API_KEY) return res.status(400).json({ error: 'ElevenLabs API key not configured.' });
+    const { comicId, lang } = req.body;
+    const text = String(req.body.text || '').trim().slice(0, 400);
+    if (!/^[\w-]+$/.test(String(comicId || '')) || !text) return res.status(400).json({ error: 'comicId and text are required' });
+    if (!['en', 'es'].includes(lang)) return res.status(400).json({ error: 'lang must be en or es' });
+    const voiceId = lang === 'en' ? (req.body.voiceId || QUICK_ENGLISH_VOICE) : req.body.voiceId;
+    if (!voiceId || !/^[A-Za-z0-9]+$/.test(voiceId)) return res.status(400).json({ error: 'Choose a voice' });
+    const speed = quickNum(req.body.speed, 0.7, 1.2, 1.0), stability = quickNum(req.body.stability, 0, 1, 0.5);
+    const slug = text.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'clip';
+    const file = `${slug}-${lang}-${Date.now().toString(36)}.mp3`;
+    const made = await quickSynth({ comicId, file, text, lang, voiceId, speed, stability });
+    const now = new Date().toISOString();
+    const clip = { file, text, lang, voiceId, voiceName: String(req.body.voiceName || (lang === 'en' ? 'English narrator' : '')).slice(0, 60), speed, stability, seconds: made.seconds,
+                   url: `/projects/${comicId}/quick-audio/${file}?v=${Date.now().toString(36)}`, createdAt: now, updatedAt: now };
+    const index = [clip, ...(await quickIndex(comicId))].slice(0, 200);
+    await fs.writeFile(path.join(quickDir(comicId), 'index.json'), JSON.stringify(index, null, 1));
+    res.json({ clip, path: made.path });
+  } catch (error) {
+    console.error('Quick audio error:', error.message);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+// PUT /api/audio/quick/:comicId/:file — re-make an existing clip in place (new
+// wording, voice, speed or stability). The file keeps its name, so anything
+// that already uses the clip — a reel's audio cues — gets the new audio.
+router.put('/quick/:comicId/:file', async (req, res) => {
+  try {
+    const { comicId, file } = req.params;
+    if (!/^[\w-]+$/.test(comicId) || !/^[\w.-]+\.mp3$/.test(file)) return res.status(400).json({ error: 'bad request' });
+    const index = await quickIndex(comicId);
+    const i = index.findIndex(c => c.file === file);
+    if (i < 0) return res.status(404).json({ error: 'Clip not found' });
+    const old = index[i];
+    const text = String(req.body.text ?? old.text).trim().slice(0, 400);
+    if (!text) return res.status(400).json({ error: 'text is required' });
+    const lang = ['en', 'es'].includes(req.body.lang) ? req.body.lang : old.lang;
+    const voiceId = req.body.voiceId || (lang === old.lang ? old.voiceId : (lang === 'en' ? QUICK_ENGLISH_VOICE : ''));
+    if (!voiceId || !/^[A-Za-z0-9]+$/.test(voiceId)) return res.status(400).json({ error: 'Choose a voice' });
+    const speed = quickNum(req.body.speed, 0.7, 1.2, old.speed ?? 1.0), stability = quickNum(req.body.stability, 0, 1, old.stability ?? 0.5);
+    const made = await quickSynth({ comicId, file, text, lang, voiceId, speed, stability });
+    const clip = { ...old, text, lang, voiceId, speed, stability, seconds: made.seconds,
+                   voiceName: String(req.body.voiceName || (voiceId === old.voiceId ? old.voiceName : (lang === 'en' ? 'English narrator' : ''))).slice(0, 60),
+                   url: `/projects/${comicId}/quick-audio/${file}?v=${Date.now().toString(36)}`, updatedAt: new Date().toISOString() };
+    index[i] = clip;
+    await fs.writeFile(path.join(quickDir(comicId), 'index.json'), JSON.stringify(index, null, 1));
+    res.json({ clip, path: made.path });
+  } catch (error) {
+    console.error('Quick audio edit error:', error.message);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+router.delete('/quick/:comicId/:file', async (req, res) => {
+  const { comicId, file } = req.params;
+  if (!/^[\w-]+$/.test(comicId) || !/^[\w.-]+\.mp3$/.test(file)) return res.status(400).json({ error: 'bad request' });
+  await fs.rm(path.join(quickDir(comicId), file), { force: true });
+  const index = (await quickIndex(comicId)).filter(c => c.file !== file);
+  await fs.writeFile(path.join(quickDir(comicId), 'index.json'), JSON.stringify(index, null, 1)).catch(() => {});
+  res.json({ ok: true });
+});
+
+// GET /api/audio/voice-preview?url=… — a voice's preview clip, re-served as
+// audio. ElevenLabs' CDN started sending its preview MP3s with
+// "Content-Type: text/plain" (Oct 2026), which browsers refuse to decode; the
+// bytes are fine, so we fetch them and send them on with the right type.
+// Only ElevenLabs' own hosts are fetched.
+const PREVIEW_HOSTS = /^https:\/\/(storage\.googleapis\.com\/eleven-public-prod\/|[\w.-]+\.elevenlabs\.io\/)/;
+router.get('/voice-preview', async (req, res) => {
+  try {
+    const url = String(req.query.url || '');
+    if (!PREVIEW_HOSTS.test(url)) return res.status(400).json({ error: 'Not a voice preview URL' });
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return res.status(502).json({ error: `Preview fetch failed (${r.status})` });
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.set('Content-Type', url.toLowerCase().includes('.wav') ? 'audio/wav' : 'audio/mpeg');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(buf);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/shared-voices', async (req, res) => {
   try {
     if (!process.env.ELEVENLABS_API_KEY) {

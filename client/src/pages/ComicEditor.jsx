@@ -110,6 +110,104 @@ function UnresolvedWordRow({ comicId, item, voiceId, modelId, onSaved }) {
   );
 }
 
+// Voices tab → Quick audio: make a one-off clip of a word or phrase — English
+// in the house narrator's voice, or Spanish in one of this comic's voices —
+// for reels and other marketing work. Clips live in the comic's project folder.
+function QuickAudio({ comicId, voices }) {
+  const [clips, setClips] = useState([]);
+  const [dir, setDir] = useState('');
+  const [text, setText] = useState('');
+  const [lang, setLang] = useState('en');
+  const [voiceId, setVoiceId] = useState('');
+  const [speed, setSpeed] = useState(1.0);
+  const [stability, setStability] = useState(0.5);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [edit, setEdit] = useState(null);   // { file, text, speed, stability } — a clip being re-made in place
+  const regenerate = async () => {
+    setBusy(true); setError('');
+    try {
+      await api.put(`/audio/quick/${comicId}/${edit.file}`, { text: edit.text, speed: edit.speed, stability: edit.stability }, { timeout: 120000 });
+      setEdit(null);
+      load();
+    } catch (e) { setError(e.response?.data?.error || e.message); }
+    finally { setBusy(false); }
+  };
+  const load = () => api.get('/audio/quick', { params: { comicId } }).then(r => { setClips(r.data.clips || []); setDir(r.data.dir || ''); }).catch(() => {});
+  useEffect(() => { load(); }, [comicId]);
+  useEffect(() => { if (!voiceId && voices.length) setVoiceId(voices[0].voiceId); }, [voices]);
+  const make = async () => {
+    setBusy(true); setError('');
+    try {
+      const v = voices.find(x => x.voiceId === voiceId);
+      await api.post('/audio/quick', { comicId, text, lang, speed, stability,
+        ...(lang === 'es' && { voiceId, voiceName: v?.name || '' }) }, { timeout: 120000 });
+      setText('');
+      load();
+    } catch (e) { setError(e.response?.data?.error || e.message); }
+    finally { setBusy(false); }
+  };
+  const remove = async (file) => { await api.delete(`/audio/quick/${comicId}/${file}`).catch(() => {}); load(); };
+  const input = { padding: '0.5rem 0.7rem', borderRadius: 6, border: '1px solid #ccc', fontSize: '0.95rem' };
+  const canMake = text.trim() && (lang === 'en' || voiceId) && !busy;
+  return (
+    <div style={{ border: '2px solid #8e44ad', borderRadius: 10, padding: '1rem 1.25rem', marginBottom: '2rem', background: '#faf6fd' }}>
+      <h3 style={{ margin: '0 0 0.25rem' }}>Quick audio</h3>
+      <p style={{ color: '#666', fontSize: '0.88rem', margin: '0 0 0.75rem' }}>
+        A word or a phrase as an audio clip — English in our standard narrator's voice, or Spanish in one of this comic's voices. For reels and marketing; not part of the comic.
+      </p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select value={lang} onChange={e => setLang(e.target.value)} style={input}>
+          <option value="en">🇬🇧 English — standard voice</option>
+          <option value="es">🇪🇸 Spanish — a comic voice</option>
+        </select>
+        {lang === 'es' && (voices.length
+          ? <select value={voiceId} onChange={e => setVoiceId(e.target.value)} style={input}>
+              {voices.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
+            </select>
+          : <span style={{ color: '#c0392b', fontSize: '0.85rem' }}>Add a voice below (or from the Voice Library) first.</span>)}
+        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && canMake) make(); }}
+               placeholder={lang === 'en' ? 'e.g. Now try speaking.' : 'p. ej. carta'} maxLength={400} style={{ ...input, flex: 1, minWidth: 260 }} />
+        <button className="btn btn-primary" disabled={!canMake} onClick={make} style={{ padding: '0.5rem 1.1rem' }}>{busy ? 'Generating…' : 'Generate'}</button>
+      </div>
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, fontSize: '0.82rem', color: '#555' }}>
+        <label title="Slower is clearer for single words">Speed {speed.toFixed(2)} <input type="range" min={0.7} max={1.2} step={0.05} value={speed} onChange={e => setSpeed(Number(e.target.value))} /></label>
+        <label title="Higher = steadier, more neutral delivery">Stability {stability.toFixed(1)} <input type="range" min={0} max={1} step={0.1} value={stability} onChange={e => setStability(Number(e.target.value))} /></label>
+        <span>Silence is trimmed from both ends.</span>
+      </div>
+      {error && <p style={{ color: '#c0392b', fontSize: '0.85rem', margin: '8px 0 0' }}>{error}</p>}
+      {clips.length > 0 && (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {clips.map(c => (
+            <div key={c.file} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: '6px 10px' }}>
+              <span style={{ fontSize: '1rem' }}>{c.lang === 'en' ? '🇬🇧' : '🇪🇸'}</span>
+              <span style={{ fontWeight: 600, flex: '1 1 200px', minWidth: 0 }}>{c.text}</span>
+              <span style={{ fontSize: '0.78rem', color: '#777' }}>{c.voiceName || c.voiceId}{c.seconds ? ` · ${c.seconds}s` : ''}{c.speed && c.speed !== 1 ? ` · ×${c.speed}` : ''}</span>
+              <audio key={c.url} controls preload="none" src={c.url} style={{ height: 32, width: 220 }} />
+              <button className="btn btn-secondary" style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }} title="Change the wording, speed or stability and generate this clip again (same file — reels using it follow)"
+                      onClick={() => setEdit(edit?.file === c.file ? null : { file: c.file, text: c.text, speed: c.speed ?? 1, stability: c.stability ?? 0.5 })}>✎ Edit</button>
+              <button className="btn btn-secondary" style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }} title={`Copy the file's path: ${dir}/${c.file}`}
+                      onClick={() => navigator.clipboard.writeText(`${dir}/${c.file}`)}>Copy path</button>
+              <a className="btn btn-secondary" href={c.url} download={c.file} style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem', textDecoration: 'none' }}>Download</a>
+              <button className="btn btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem', color: '#c0392b' }} onClick={() => remove(c.file)} title="Delete this clip">✕</button>
+              {edit?.file === c.file && (
+                <div style={{ flexBasis: '100%', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#f3e9fb', borderRadius: 6, padding: '6px 8px' }}>
+                  <input value={edit.text} onChange={e => setEdit(x => ({ ...x, text: e.target.value }))} maxLength={400} autoFocus
+                         onKeyDown={e => { if (e.key === 'Enter' && edit.text.trim() && !busy) regenerate(); if (e.key === 'Escape') setEdit(null); }} style={{ ...input, flex: 1, minWidth: 240 }} />
+                  <label style={{ fontSize: '0.8rem', color: '#555' }}>Speed {Number(edit.speed).toFixed(2)} <input type="range" min={0.7} max={1.2} step={0.05} value={edit.speed} onChange={e => setEdit(x => ({ ...x, speed: Number(e.target.value) }))} /></label>
+                  <label style={{ fontSize: '0.8rem', color: '#555' }}>Stability {Number(edit.stability).toFixed(1)} <input type="range" min={0} max={1} step={0.1} value={edit.stability} onChange={e => setEdit(x => ({ ...x, stability: Number(e.target.value) }))} /></label>
+                  <button className="btn btn-primary" disabled={!edit.text.trim() || busy} onClick={regenerate} style={{ padding: '0.3rem 0.8rem', fontSize: '0.82rem' }}>{busy ? 'Generating…' : 'Regenerate'}</button>
+                  <button className="btn btn-secondary" onClick={() => setEdit(null)} style={{ padding: '0.3rem 0.7rem', fontSize: '0.82rem' }}>Cancel</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ComicEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -763,6 +861,8 @@ function ComicEditor() {
     const files = Array.from(e.target.files);
     files.forEach(file => {
       const reader = new FileReader();
+      // A file the browser can't read (e.g. an iCloud placeholder not yet downloaded) would otherwise fail silently.
+      reader.onerror = () => alert(`Couldn't read "${file.name}" (${reader.error?.name || 'read error'}). If it lives in iCloud Drive, open it once in Finder so it downloads, or copy it to a local folder, then try again.`);
       reader.onload = (event) => {
         const base64 = event.target.result.split(',')[1];
         setChatImages(prev => [...prev, { preview: event.target.result, base64, name: file.name }]);
@@ -781,6 +881,8 @@ function ComicEditor() {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
+    // A file the browser can't read (e.g. an iCloud placeholder not yet downloaded) would otherwise fail silently.
+    reader.onerror = () => alert(`Couldn't read "${file.name}" (${reader.error?.name || 'read error'}). If it lives in iCloud Drive, open it once in Finder so it downloads, or copy it to a local folder, then try again.`);
     reader.onload = async (event) => {
       const base64 = event.target.result.split(',')[1];
       const newImage = { preview: event.target.result, base64 };
@@ -1186,6 +1288,7 @@ function ComicEditor() {
       const imgResponse = await fetch(`${item.path}`);
       const blob = await imgResponse.blob();
       const reader = new FileReader();
+      reader.onerror = () => alert(`Couldn't read the image (${reader.error?.name || 'read error'}).`);
       reader.onload = async () => {
         const base64 = reader.result.split(',')[1];
         const savePayload = { image: base64 };
@@ -1229,6 +1332,8 @@ function ComicEditor() {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
+    // A file the browser can't read (e.g. an iCloud placeholder not yet downloaded) would otherwise fail silently.
+    reader.onerror = () => alert(`Couldn't read "${file.name}" (${reader.error?.name || 'read error'}). If it lives in iCloud Drive, open it once in Finder so it downloads, or copy it to a local folder, then try again.`);
     reader.onload = async (event) => {
       const base64 = event.target.result.split(',')[1];
       try {
@@ -1287,6 +1392,8 @@ function ComicEditor() {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
+    // A file the browser can't read (e.g. an iCloud placeholder not yet downloaded) would otherwise fail silently.
+    reader.onerror = () => alert(`Couldn't read "${file.name}" (${reader.error?.name || 'read error'}). If it lives in iCloud Drive, open it once in Finder so it downloads, or copy it to a local folder, then try again.`);
     reader.onload = async (event) => {
       const base64 = event.target.result.split(',')[1];
       try {
@@ -1540,7 +1647,8 @@ ${userPrompt.trim()}`;
     }
     if (voiceLibPlayingId === voice.voice_id) { setVoiceLibPlayingId(null); return; }
     if (!voice.preview_url) { alert('No preview available for this voice.'); return; }
-    const audio = new Audio(voice.preview_url);
+    // Through our server: ElevenLabs serves previews as text/plain, which the browser won't decode.
+    const audio = new Audio(`/api/audio/voice-preview?url=${encodeURIComponent(voice.preview_url)}`);
     audio.onended = () => setVoiceLibPlayingId(null);
     audio.onerror = () => { setVoiceLibPlayingId(null); alert('Could not play preview.'); };
     audio.play().catch(() => {});
@@ -2533,6 +2641,8 @@ ${userPrompt.trim()}`;
                           const file = e.target.files[0];
                           if (!file) return;
                           const reader = new FileReader();
+                          // A file the browser can't read (e.g. an iCloud placeholder not yet downloaded) would otherwise fail silently.
+                          reader.onerror = () => alert(`Couldn't read "${file.name}" (${reader.error?.name || 'read error'}). If it lives in iCloud Drive, open it once in Finder so it downloads, or copy it to a local folder, then try again.`);
                           reader.onload = async (event) => {
                             const base64 = event.target.result.split(',')[1];
                             try {
@@ -3163,6 +3273,8 @@ ${userPrompt.trim()}`;
                       const file = e.target.files[0];
                       if (!file) return;
                       const reader = new FileReader();
+                      // A file the browser can't read (e.g. an iCloud placeholder not yet downloaded) would otherwise fail silently.
+                      reader.onerror = () => alert(`Couldn't read "${file.name}" (${reader.error?.name || 'read error'}). If it lives in iCloud Drive, open it once in Finder so it downloads, or copy it to a local folder, then try again.`);
                       reader.onload = async (event) => {
                         const base64 = event.target.result.split(',')[1];
                         try {
@@ -4125,6 +4237,8 @@ ${userPrompt.trim()}`;
                               const file = e.target.files[0];
                               if (!file) return;
                               const reader = new FileReader();
+                              // A file the browser can't read (e.g. an iCloud placeholder not yet downloaded) would otherwise fail silently.
+                              reader.onerror = () => alert(`Couldn't read "${file.name}" (${reader.error?.name || 'read error'}). If it lives in iCloud Drive, open it once in Finder so it downloads, or copy it to a local folder, then try again.`);
                               reader.onload = async (ev) => {
                                 try {
                                   const base64 = ev.target.result.split(',')[1];
@@ -4485,6 +4599,8 @@ ${userPrompt.trim()}`;
 
       {activeTab === 'voices' && (
         <div style={{ maxWidth: '1200px' }}>
+          <QuickAudio comicId={id} voices={comic.voices || []} />
+
           <h2 style={{ marginBottom: '1rem' }}>Voice Configuration</h2>
           <p style={{ color: '#666', marginBottom: '1.5rem' }}>
             Configure character voices using ElevenLabs voice IDs. These will be available when generating audio for sentences.

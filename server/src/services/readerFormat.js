@@ -139,7 +139,7 @@ function transformToReaderFormat(comic, comicSlug) {
           const bubbleId = `${comicSlug}-bubble-cover-${bubbleCounter++}`;
           return {
             id: bubbleId,
-            type: bubble.type || 'narration',
+            type: bubble.type === 'telepathy' ? 'speech' : (bubble.type || 'narration'),
             ...(bubble.fontSize && { fontSize: bubble.fontSize }),
             ...(bubble.bgTransparent && { bgTransparent: true }),
               ...(bubble.textColor && { textColor: bubble.textColor }),
@@ -419,7 +419,9 @@ function transformToReaderFormat(comic, comicSlug) {
             if (bubble.id) bubbleIdMap.set(bubble.id, bubbleId);
             const exported = {
               id: bubbleId,
-              type: bubble.type || 'speech',
+              // The reader knows speech/thought/narration/image only (its enum is
+              // strict); a telepathy balloon is baked into the art and reads as speech.
+              type: bubble.type === 'telepathy' ? 'speech' : (bubble.type || 'speech'),
               ...(bubble.fontSize && { fontSize: bubble.fontSize }),
               ...(bubble.isSoundEffect && { isSoundEffect: true }),
               ...(bubble.bgTransparent && { bgTransparent: true }),

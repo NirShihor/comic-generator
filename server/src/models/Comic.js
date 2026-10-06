@@ -48,7 +48,7 @@ const SentenceSchema = new mongoose.Schema({
 // Bubble Schema (nested in Panel)
 const BubbleSchema = new mongoose.Schema({
   id: String,
-  type: { type: String, enum: ['speech', 'thought', 'narration', 'image'], default: 'speech' },
+  type: { type: String, enum: ['speech', 'telepathy', 'thought', 'narration', 'image'], default: 'speech' },
   // Character name (matches comic.voices[].name) — set on practice-page bubbles
   // so the editor can pre-pick the right voice. Optional elsewhere.
   speaker: String,

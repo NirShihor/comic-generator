@@ -1138,6 +1138,126 @@ router.post('/reel-line-audio', async (req, res) => {
 // the matching text is burned in as a subtitle over each line's exact play
 // window (same timeline as the audio delays, so sync is free). Without
 // subtitles the video stream is copied untouched.
+// Audio cues (Reels → "Audio cues"): Quick audio clips (Voices tab — the house
+// English narrator or a comic's Spanish voice) placed at exact moments of a
+// clip you recorded yourself. `original`: what happens to the clip's own
+// sound — 'keep', 'duck' (lowered only while a cue is speaking) or 'mute'.
+// Times are seconds into the clip itself, before any cards are added.
+const CUE_LIMIT = 40;
+function parseCues(src) {
+  if (!Array.isArray(src)) return [];
+  return src.slice(0, CUE_LIMIT).filter(c => c && typeof c === 'object' && /^[\w.\-]+\.mp3$/.test(String(c.file || '')))
+    .map(c => ({
+      file: String(c.file),
+      at: Math.min(3600, Math.max(0, Number(c.at) || 0)),
+      volume: Math.min(2, Math.max(0, Number.isFinite(Number(c.volume)) && c.volume !== '' && c.volume != null ? Number(c.volume) : 1)),
+      // Hold the picture at this moment for this long (the cue plays over the
+      // frozen frame; everything after it moves later).
+      freeze: Math.min(60, Math.max(0, Number(c.freeze) || 0)),
+    })).sort((a, b) => a.at - b.at);
+}
+// Cuts (Reels → "Audio cues" → ✂): stretches of the recording to drop — where
+// the app was slow and nothing happens. { from, to } in the recording's time.
+function parseCuts(src) {
+  if (!Array.isArray(src)) return [];
+  const cuts = src.slice(0, 40).map(c => ({ from: Math.max(0, Number(c && c.from) || 0), to: Math.max(0, Number(c && c.to) || 0) }))
+    .filter(c => c.to - c.from >= 0.05).sort((a, b) => a.from - b.from);
+  const merged = [];
+  for (const c of cuts) {
+    if (merged.length && c.from <= merged[merged.length - 1].to) merged[merged.length - 1].to = Math.max(merged[merged.length - 1].to, c.to);
+    else merged.push({ ...c });
+  }
+  return merged;
+}
+// The edit: the recording with the cuts removed and the picture held at each
+// cue that asks for a freeze. `timeline(cues, cuts)` maps a time in the
+// recording to its time in the edited clip (a moment inside a cut lands where
+// the cut is made; a freeze begins at its own cue).
+function timeline(cues, cuts) {
+  const snap = t => { const c = cuts.find(x => t > x.from && t < x.to); return c ? c.from : t; };
+  const stops = new Map();          // recording time → seconds held there
+  for (const c of cues) if (c.freeze > 0) { const t = snap(c.at); stops.set(t, (stops.get(t) || 0) + c.freeze); }
+  const map = (t) => {
+    const x = snap(t);
+    const removed = cuts.reduce((sum, c) => sum + Math.max(0, Math.min(x, c.to) - c.from), 0);
+    const held = [...stops].reduce((sum, [at, d]) => sum + (at < x ? d : 0), 0);
+    return x - removed + held;
+  };
+  return { map, stops: [...stops].sort((a, b) => a[0] - b[0]), snap };
+}
+async function retimeClip(videoPath, cues, cuts, outPath) {
+  const { execFile } = require('child_process');
+  const run = (cmd, args) => new Promise((resolve, reject) =>
+    execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
+      err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+  const total = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', videoPath]));
+  const hasAudio = (await run('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', videoPath])).trim() !== '';
+  const { stops } = timeline(cues, cuts);
+  // Pieces to keep: what lies between the cuts, split again at each freeze
+  // (the piece ending at a freeze holds its last frame for that long).
+  const kept = [];
+  let from = 0;
+  for (const c of cuts) { if (c.from > from + 0.02) kept.push([from, Math.min(c.from, total)]); from = Math.max(from, c.to); }
+  if (from < total - 0.02) kept.push([from, total]);
+  if (!kept.length) throw new Error('The cuts remove the whole clip');
+  const pieces = [];                // [start, end, hold]
+  for (const [k0, k1] of kept) {
+    let a = k0;
+    for (const [at, d] of stops) {
+      if (at < k0 || at > k1) continue;                                  // another stretch's freeze
+      const t = Math.min(Math.max(at, k0 + 0.04), k1);                    // at least one frame to hold
+      if (t > a + 0.001) { pieces.push([a, t, d]); a = t; }
+      else pieces[pieces.length - 1][2] += d;                             // two freezes at the same moment
+    }
+    if (k1 > a + 0.02) pieces.push([a, k1, 0]);
+  }
+  const FPS = 30;
+  const n = pieces.length;
+  const chains = [`[0:v]fps=${FPS},split=${n}${pieces.map((_, i) => `[s${i}]`).join('')}`];
+  if (hasAudio) chains.push(`[0:a]aformat=sample_rates=44100:channel_layouts=stereo,asplit=${n}${pieces.map((_, i) => `[t${i}]`).join('')}`);
+  let pairs = '';
+  pieces.forEach(([a, b, hold], i) => {
+    const len = Math.max(0.04, b - a);
+    chains.push(`[s${i}]trim=start=${a.toFixed(3)}:end=${b.toFixed(3)},setpts=PTS-STARTPTS${hold ? `,tpad=stop_mode=clone:stop_duration=${hold.toFixed(3)}` : ''}[v${i}]`);
+    chains.push(hasAudio
+      ? `[t${i}]atrim=start=${a.toFixed(3)}:end=${b.toFixed(3)},asetpts=PTS-STARTPTS,apad=whole_dur=${(len + hold).toFixed(3)},atrim=0:${(len + hold).toFixed(3)}[a${i}]`
+      : `anullsrc=r=44100:cl=stereo,atrim=0:${(len + hold).toFixed(3)}[a${i}]`);
+    pairs += `[v${i}][a${i}]`;
+  });
+  chains.push(`${pairs}concat=n=${n}:v=1:a=1[v][a]`);
+  await run('ffmpeg', ['-y', '-loglevel', 'error', '-i', videoPath, '-filter_complex', chains.join(';'), '-map', '[v]', '-map', '[a]',
+    '-r', String(FPS), '-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outPath]);
+}
+async function mixCuesOnto(comicId, videoPath, cues, original, outPath) {
+  const { execFile } = require('child_process');
+  const run = (cmd, args) => new Promise((resolve, reject) =>
+    execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
+      err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+  const dir = path.join(PROJECTS_DIR, comicId, 'quick-audio');
+  const total = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', videoPath]));
+  const hasAudio = (await run('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', videoPath])).trim() !== '';
+  const inputs = ['-i', videoPath];
+  const chains = [];
+  const spans = [];
+  for (let i = 0; i < cues.length; i++) {
+    const ap = path.join(dir, cues[i].file);
+    if (!require('fs').existsSync(ap)) throw new Error(`Audio clip not found: ${cues[i].file} (Voices → Quick audio)`);
+    const dur = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ap]));
+    inputs.push('-i', ap);
+    const ms = Math.round(cues[i].at * 1000);
+    chains.push(`[${i + 1}:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=${cues[i].volume},adelay=${ms}|${ms}[c${i}]`);
+    spans.push([cues[i].at, cues[i].at + dur]);
+  }
+  // The clip's own sound (silence when it has none, e.g. a muted recording).
+  const base = hasAudio ? '[0:a]aformat=sample_rates=44100:channel_layouts=stereo' : `anullsrc=r=44100:cl=stereo,atrim=0:${total.toFixed(3)}`;
+  const speaking = spans.map(([a, b]) => `between(t,${(a - 0.15).toFixed(2)},${(b + 0.2).toFixed(2)})`).join('+');
+  const vol = original === 'mute' ? ',volume=0' : original === 'duck' && speaking ? `,volume='if(gt(${speaking},0),0.22,1)':eval=frame` : '';
+  chains.unshift(`${base}${vol}[orig]`);
+  chains.push(`[orig]${cues.map((_, i) => `[c${i}]`).join('')}amix=inputs=${cues.length + 1}:duration=first:normalize=0,alimiter=limit=0.95[a]`);
+  await run('ffmpeg', ['-y', '-loglevel', 'error', ...inputs, '-filter_complex', chains.join(';'), '-map', '0:v', '-map', '[a]',
+    '-t', total.toFixed(3), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-movflags', '+faststart', outPath]);
+}
+
 async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath, subtitles = 'none') {
   const { execFile } = require('child_process');
   const run = (cmd, args) => new Promise((resolve, reject) =>
@@ -1320,16 +1440,17 @@ async function soundOnBadgePng(tmp) {
 // MESSAGE_LINES lines of text each with its colour, size and entrance, and
 // optionally the house English narrator reading each line as it appears.
 // Narration clips are cached per text in the comic's marketing/uploads.
-const MESSAGE_LINES = 8;
+const MESSAGE_LINES = 7;
 const ENGLISH_VOICE_ID = 'GP1bgf0sjoFuuHkyrg8E';
 async function messageCardSegment(tmp, comicId, card, run) {
   const W = 1080, H = 1920;
   const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const lines = card.lines.filter(l => l.text);
+  const lines = card.lines;                   // blank lines are spacers (see parseMessageCard)
   // Text: one PNG per line at the chosen size; a line too long for the frame
   // wraps onto more rows (the font only shrinks when a single word won't fit).
-  const wrap = (text, size) => {
-    const maxChars = Math.max(4, Math.floor((W - 160) / (0.56 * size)));
+  const M = 80;                               // side margin (px)
+  const wrap = (text, size, width) => {
+    const maxChars = Math.max(4, Math.floor(width / (0.56 * size)));
     const rows = []; let cur = '';
     for (const w of text.split(' ')) {
       if (cur && (cur + ' ' + w).length > maxChars) { rows.push(cur); cur = w; } else cur = cur ? `${cur} ${w}` : w;
@@ -1337,40 +1458,54 @@ async function messageCardSegment(tmp, comicId, card, run) {
     if (cur) rows.push(cur);
     return rows;
   };
-  const gap = 22;
+  // A bullet line: "•" in front, and wrapped rows aligned with the text after
+  // it (a hanging indent) when left-aligned; otherwise just the "• " prefix.
   const blocks = lines.map(l => {
-    const longest = Math.max(...l.text.split(' ').map(w => w.length));
-    const size = Math.min(l.size, Math.floor((W - 160) / (0.56 * longest)));
-    const rows = wrap(l.text, size), rowH = Math.round(size * 1.22);
-    return { size, rows, rowH, h: rows.length * rowH + Math.round(size * 0.1) };
+    if (!l.text) return { size: l.size, rows: [], rowH: 0, h: Math.round(l.size * 1.22) };     // spacer
+    const hanging = l.bullet && l.align === 'left';
+    const text = l.bullet && !hanging ? `• ${l.text}` : l.text;
+    const indent = hanging ? Math.round(l.size * 0.8) : 0;
+    const longest = Math.max(...text.split(' ').map(w => w.length));
+    const size = Math.min(l.size, Math.floor((W - 2 * M - indent) / (0.56 * longest)));
+    const rows = wrap(text, size, W - 2 * M - indent), rowH = Math.round(size * 1.22);
+    return { size, rows, rowH, indent: hanging ? Math.round(size * 0.8) : 0, h: rows.length * rowH + Math.round(size * 0.1) };
   });
-  const total = blocks.reduce((t, b) => t + b.h, 0) + gap * Math.max(0, lines.length - 1);
-  let y = Math.round((H - total) / 2);
+  // Space after each item: the editor's own value (more under the heading and
+  // the subheading by default).
+  const gapAfter = l => l.gap;
+  const total = blocks.reduce((t, b) => t + b.h, 0) + lines.slice(0, -1).reduce((t, l) => t + gapAfter(l), 0);
+  // The block is centred vertically unless a distance from the top is set.
+  let y = card.top == null ? Math.round((H - total) / 2) : card.top;
+  // Alignment per item (heading, subheading and the lines each have their own).
+  const anchorOf = a => (a === 'left' ? 'start' : a === 'right' ? 'end' : 'middle');
+  const txOf = a => (a === 'left' ? M : a === 'right' ? W - M : W / 2);
   const els = [];
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i], b = blocks[i];
+    if (!l.text) { y += b.h + gapAfter(l); continue; }
     const png = path.join(tmp, `msg${i}.png`);
-    await sharp(Buffer.from(`<svg width="${W}" height="${b.h}" xmlns="http://www.w3.org/2000/svg">${b.rows.map((r, k) =>
-      `<text x="${W / 2}" y="${Math.round(k * b.rowH + b.size * 1.0)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${b.size}" font-weight="800" fill="${l.color}">${esc(r)}</text>`).join('')}</svg>`)).png().toFile(png);
-    els.push({ key: `line${i}`, png, w: W, h: b.h, x: 0, y, def: { effect: l.effect, start: l.start, dur: l.dur } });
-    y += b.h + gap;
+    const font = `font-family="Helvetica, Arial, sans-serif" font-size="${b.size}" font-weight="800" fill="${l.color}"`;
+    await sharp(Buffer.from(`<svg width="${W}" height="${b.h}" xmlns="http://www.w3.org/2000/svg">${b.indent ? `<text x="${M}" y="${Math.round(b.size * 1.0)}" ${font}>•</text>` : ''}${b.rows.map((r, k) =>
+      `<text x="${txOf(l.align) + b.indent}" y="${Math.round(k * b.rowH + b.size * 1.0)}" text-anchor="${anchorOf(l.align)}" ${font}>${esc(r)}</text>`).join('')}</svg>`)).png().toFile(png);
+    els.push({ key: `line${i}`, png, w: W, h: b.h, x: 0, y, text: l.text, def: { effect: l.effect, start: l.start, dur: l.dur } });
+    y += b.h + gapAfter(l);
   }
   // Narration (optional): the English narrator reads each line. With autoTime
   // the lines are re-timed to follow the narration, one after another.
   const audio = [];
-  if (card.voice && lines.length) {
+  if (card.voice && els.length) {
     if (!process.env.ELEVENLABS_API_KEY) throw new Error('ELEVENLABS_API_KEY not configured (message card narration)');
     const upDir = path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads');
     await fs.mkdir(upDir, { recursive: true });
     let t = 0.3;
-    for (let i = 0; i < lines.length; i++) {
-      const hash = require('crypto').createHash('sha1').update(lines[i].text).digest('hex').slice(0, 12);
+    for (let i = 0; i < els.length; i++) {
+      const hash = require('crypto').createHash('sha1').update(els[i].text).digest('hex').slice(0, 12);
       const file = path.join(upDir, `msgline-${hash}.mp3`);
       if (!require('fs').existsSync(file)) {
         const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ENGLISH_VOICE_ID}`, {
           method: 'POST',
           headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
-          body: JSON.stringify({ text: lines[i].text, model_id: 'eleven_v3', language_code: 'en', voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 } }),
+          body: JSON.stringify({ text: els[i].text, model_id: 'eleven_v3', language_code: 'en', voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 } }),
         });
         if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
         await fs.writeFile(file, Buffer.from(await r.arrayBuffer()));
@@ -1576,8 +1711,9 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
     const main = path.join(tmp, 'main.mp4');
     // After an opening/message card, the clip fades in quickly rather than cutting hard.
     const mainFade = (openingLine1 || openingLine2 || parts.length) ? ',fade=t=in:st=0:d=0.35:color=0x6E40F0' : '';
+    const zoom = zoomFilter(secs.zooms || [], FPS, W, H);
     await run('ffmpeg', ['-y', '-i', videoPath,
-      '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS},setsar=1${mainFade}`,
+      '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS},setsar=1${zoom}${mainFade}`,
       '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-ar', '44100', '-ac', '2', main]);
     parts.push(main);
@@ -1635,23 +1771,82 @@ const cardSecs = body => ({
   openingAnim: parseAnim(body.openingAnim, ['logo', 'line1', 'squiggle', 'line2', 'badge']),
   messageCard: parseMessageCard(body.messageCard),
   soundBadge: body.soundBadge === true,
+  zooms: parseZooms(body.zooms),
 });
+
+// Camera moves on the main clip (Reels "Zoom in"): up to ZOOM_MOVES pushes,
+// each zooming in to `zoom`x on a point (cx, cy — fractions of the frame)
+// from `start`, over `ramp` seconds; held until `until` (null = to the end of
+// the clip), then back out over `release` seconds. Times are in the clip
+// itself, before any cards are added in front.
+const ZOOM_MOVES = 3;
+function parseZooms(src) {
+  if (!Array.isArray(src)) return [];
+  const num = (v, lo, hi, d) => (Number.isFinite(Number(v)) && v !== '' && v != null ? Math.min(hi, Math.max(lo, Number(v))) : d);
+  return src.slice(0, ZOOM_MOVES).filter(z => z && typeof z === 'object' && z.enabled !== false).map(z => ({
+    start: num(z.start, 0, 600, 0),
+    ramp: num(z.ramp, 0.05, 30, 1),
+    zoom: num(z.zoom, 1.05, 4, 1.6),
+    until: z.until === '' || z.until == null ? null : num(z.until, 0, 600, null),
+    release: num(z.release, 0.05, 30, 1),
+    cx: num(z.cx, 0, 1, 0.5),
+    cy: num(z.cy, 0, 1, 0.5),
+  })).filter(z => z.until == null || z.until > z.start);
+}
+// The ffmpeg zoompan for the moves (one output frame per input frame): an
+// eased push in, hold, eased release; the crop window follows the active
+// move's centre and never leaves the frame.
+function zoomFilter(zooms, fps, W, H) {
+  if (!zooms.length) return '';
+  const t = `(on/${fps})`;
+  const ease = p => `(${p}*${p}*(3-2*${p}))`;
+  const zs = zooms.map(z => {
+    const pin = `clip((${t}-${z.start})/${z.ramp},0,1)`;
+    const pout = z.until == null ? '0' : `clip((${t}-${z.until})/${z.release},0,1)`;
+    return `(1+${(z.zoom - 1).toFixed(4)}*${ease(pin)}*(1-${ease(pout)}))`;
+  });
+  const zExpr = zs.length === 1 ? zs[0] : zs.slice(1).reduce((a, b) => `max(${a},${b})`, zs[0]);
+  // The centre of whichever move is active at this moment (first wins).
+  const active = (field, dflt) => zooms.reduceRight((rest, z) => {
+    const end = z.until == null ? 1e9 : z.until + z.release;
+    return `if(between(${t},${z.start},${end}),${z[field].toFixed(4)},${rest})`;
+  }, String(dflt));
+  const x = `clip(${active('cx', 0.5)}*iw-(iw/zoom)/2,0,iw-iw/zoom)`;
+  const y = `clip(${active('cy', 0.5)}*ih-(ih/zoom)/2,0,ih-ih/zoom)`;
+  return `,zoompan=z='${zExpr}':x='${x}':y='${y}':d=1:fps=${fps}:s=${W}x${H}`;
+}
 // The message card's settings, validated (see messageCardSegment).
 function parseMessageCard(src) {
   if (!src || typeof src !== 'object' || src.enabled !== true) return null;
   const hex = (v, d) => (/^#[0-9a-fA-F]{6}$/.test(String(v || '')) ? String(v).toUpperCase() : d);
   const effects = ['none', 'fade', 'pop', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'typewriter'];
-  const lines = (Array.isArray(src.lines) ? src.lines : []).slice(0, MESSAGE_LINES).map(l => ({
+  // Items in page order: optional heading, optional subheading, then up to
+  // MESSAGE_LINES lines — each with its text, colour, size and entrance.
+  const alignOf = v => (['left', 'right', 'center'].includes(v) ? v : null);
+  const item = (l, kind, size) => ({
+    kind,
+    // The heading and subheading have their own alignment; the lines share the card's.
+    align: (kind === 'line' ? null : alignOf(l && l.align)) || alignOf(src.align) || 'center',
+    bullet: kind === 'line' && !!(l && l.bullet),
     text: String((l && l.text) || '').replace(/\s+/g, ' ').trim().slice(0, 120),
-    color: hex(l && l.color, '#FFFFFF'),
-    size: Math.min(200, Math.max(24, Number(l && l.size) || 72)),
+    color: hex(l && l.color, kind === 'heading' ? '#FFD23F' : '#FFFFFF'),
+    size: Math.min(200, Math.max(24, Number(l && l.size) || size)),
+      gap: Math.min(400, Math.max(0, l && l.gap !== '' && l.gap != null && Number.isFinite(Number(l.gap)) ? Number(l.gap) : (kind === 'heading' ? 44 : kind === 'subheading' ? 60 : 22))),
     effect: effects.includes(l && l.effect) ? l.effect : 'fade',
     start: Math.min(60, Math.max(0, Number(l && l.start) || 0)),
     dur: Math.min(5, Math.max(0.05, Number(l && l.dur) || 0.5)),
-  })).filter(l => l.text);
+  });
+  // An empty line between two lines of text is kept as a spacer (a blank row
+  // of its size); blank heading/subheading and blank lines at either end are dropped.
+  const all = [item(src.heading, 'heading', 96), item(src.subheading, 'subheading', 56),
+               ...(Array.isArray(src.lines) ? src.lines : []).slice(0, MESSAGE_LINES).map(l => item(l, 'line', 64))];
+  const first = all.findIndex(l => l.text), last = all.map(l => !!l.text).lastIndexOf(true);
+  const lines = first < 0 ? [] : all.slice(first, last + 1).filter(l => l.text || l.kind === 'line');
   if (!lines.length) return null;
   return {
     enabled: true, lines,
+    align: ['left', 'right'].includes(src.align) ? src.align : 'center',
+    top: src.top === '' || src.top == null || !Number.isFinite(Number(src.top)) ? null : Math.min(1800, Math.max(0, Number(src.top))),
     background: hex(src.background, '#6E40F0'),
     image: String(src.image || '').slice(0, 300),
     dim: Math.min(0.9, Math.max(0, Number(src.dim) || 0)),
@@ -1682,16 +1877,38 @@ router.post('/veo-remix', async (req, res) => {
     const name = `${file.replace(/\.mp4$/, '')}-mix-${Date.now()}.mp4`;
     const out = path.join(PROJECTS_DIR, comicId, 'marketing', name);
     const { question = '', endCard = false } = req.body;
-    if (voiceAudio.length === 0 && ambient === 'keep' && !question && !endCard && !hasOpening(req.body)) return res.status(400).json({ error: 'Nothing to change' });
+    const cues = parseCues(req.body.cues);
+    const cuts = parseCuts(req.body.cuts);
+    if (voiceAudio.length === 0 && ambient === 'keep' && !cues.length && !cuts.length && !question && !endCard && !hasOpening(req.body) && !parseZooms(req.body.zooms).length) return res.status(400).json({ error: 'Nothing to change' });
     let cur = src;
     if (voiceAudio.length > 0 || ambient !== 'keep') { await mixVoicesOnto(comicId, src, voiceAudio, ambient, out, req.body.subtitles || 'none'); cur = out; }
-    if (question || endCard || hasOpening(req.body)) {
+    // Audio cues: Quick audio clips at chosen moments of the clip — first the
+    // edit (cuts removed, the picture held where a cue asks for it), then the
+    // audio at the cues' times on that edited clip.
+    const shift = timeline(cues, cuts).map;
+    if (cuts.length || cues.some(c => c.freeze > 0)) {
+      // The edit: cuts removed, the picture held where a cue asks for it.
+      const edited = out.replace(/\.mp4$/, '-edit.mp4');
+      await retimeClip(cur, cues, cuts, edited);
+      cur = edited;
+    }
+    if (cues.length) {
+      const cued = out.replace(/\.mp4$/, '-cue.mp4');
+      await mixCuesOnto(comicId, cur, cues.map(c => ({ ...c, at: shift(c.at) })), ['keep', 'duck', 'mute'].includes(req.body.cueOriginal) ? req.body.cueOriginal : 'duck', cued);
+      cur = cued;
+    }
+    if (question || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) {
       const fin = out.replace(/\.mp4$/, '-fin.mp4');
-      await finishClip(comicId, cur, question, fin, cardSecs(req.body));
+      // Zoom times are in the recording's time too: move them with the cuts and freezes.
+      const secs = cardSecs(req.body);
+      secs.zooms = (secs.zooms || []).map(z => ({ ...z, start: shift(z.start), until: z.until == null ? null : shift(z.until) }));
+      await finishClip(comicId, cur, question, fin, secs);
       const finName = path.basename(fin);
       return res.json({ url: `/projects/${comicId}/marketing/${finName}`, file: finName });
     }
-    res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name });
+    const curName = path.basename(cur);
+    if (cur === src) return res.status(400).json({ error: 'Nothing to change' });
+    res.json({ url: `/projects/${comicId}/marketing/${curName}`, file: curName });
   } catch (error) {
     console.error('Veo remix error:', error.message);
     res.status(500).json({ error: error.message });
@@ -2462,7 +2679,7 @@ router.post('/motion-comic', async (req, res) => {
     await fs.mkdir(outDir, { recursive: true });
     let name = `motion-${Date.now()}.mp4`;
     const { question = '', endCard = false } = req.body;
-    if (question || endCard || hasOpening(req.body)) {
+    if (question || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) {
       await finishClip(comicId, cat, question, path.join(outDir, name), cardSecs(req.body));
     } else {
       await fs.copyFile(cat, path.join(outDir, name));
@@ -2664,7 +2881,7 @@ router.post('/story-reel', async (req, res) => {
     await fs.mkdir(outDir, { recursive: true });
     const name = `story-${Date.now()}.mp4`;
     const { question = '', endCard = false } = req.body;
-    if (question || endCard || hasOpening(req.body)) await finishClip(comicId, cat, question, path.join(outDir, name), cardSecs(req.body));
+    if (question || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) await finishClip(comicId, cat, question, path.join(outDir, name), cardSecs(req.body));
     else await fs.copyFile(cat, path.join(outDir, name));
     res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name, shots: parts.length });
   } catch (error) {
