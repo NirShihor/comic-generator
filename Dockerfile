@@ -34,6 +34,7 @@ COPY site/examples/*.html ./site/examples/
 COPY site/unlisted ./site/unlisted
 COPY site/redirects.json ./site/
 COPY site/indexnow-manifest.json ./site/
+COPY site/sitemap.json ./site/
 COPY site/indexnow ./site/indexnow
 
 # Copy entrypoint script

@@ -4,7 +4,7 @@ as data URIs, producing a single self-contained site/index.html.
 
 Usage: python3 site/build.py
 """
-import hashlib, json, re, os, subprocess, sys
+import hashlib, json, re, os, subprocess, sys, time
 from html import escape as html_escape
 
 here = os.path.dirname(os.path.abspath(__file__))
@@ -136,7 +136,7 @@ def expand_examples(html, own_slug=None):
             p = os.path.join(here, 'unlisted', f'{slug}.json')
         if not os.path.exists(p):
             sys.exit(f'missing example: {slug} (publish it from Marketing → Examples)')
-        data = json.load(open(p))
+        data = load_example(p)
         used = True
         e = lambda t: html_escape(str(t or ''), quote=True)
         spots = []
@@ -177,9 +177,25 @@ def expand_examples(html, own_slug=None):
     return html, used
 
 LEVELS = {'beginner': 0, 'intermediate': 1, 'advanced': 2}
+# ElevenLabs delivery tags ("[whispering]", "[pause]") sometimes survive in a
+# line's text or translation; they're for the voice, never for the page.
+def clean_line(t):
+    return re.sub(r'\s{2,}', ' ', re.sub(r'\[[^\]]{1,40}\]', '', str(t or ''))).strip()
+
+def clean_example(x):
+    for b in x.get('bubbles', []):
+        for sent in b.get('sentences', []):
+            for k in ('es', 'en', 'g'):
+                if sent.get(k):
+                    sent[k] = clean_line(sent[k])
+    return x
+
+def load_example(path):
+    return clean_example(json.load(open(path)))
+
 def load_examples():
     d = os.path.join(here, 'examples')
-    items = [json.load(open(os.path.join(d, f))) for f in sorted(os.listdir(d)) if f.endswith('.json')]
+    items = [load_example(os.path.join(d, f)) for f in sorted(os.listdir(d)) if f.endswith('.json')]
     return sorted(items, key=lambda x: (LEVELS.get(x.get('level'), 9), (x.get('label') or x['slug']).lower()))
 
 def sentence_case(t):
@@ -217,6 +233,21 @@ def alt_title(tag, es, en):
     # titles apart in the page text ("Un pueblo pequeño A small town").
     return (f'<{tag} class="display alt-title"><span class="alt-es" lang="es">{e(es)}</span> '
             f'<span class="alt-en" lang="en" aria-hidden="true">{e(en)}</span></{tag}>')
+
+# {{EXAMPLE_LIST_LD}} -> structured data for the Reading practice library: the
+# page as a CollectionPage whose ItemList is every exercise, in page order.
+def example_list_ld():
+    items = load_examples()
+    data = {'@context': 'https://schema.org', '@graph': [
+        {'@type': 'CollectionPage', '@id': SITE_URL + '/spanish-reading-practice#collection',
+         'url': SITE_URL + '/spanish-reading-practice', 'name': 'Spanish reading practice with comics',
+         'inLanguage': 'en', 'about': {'@type': 'Thing', 'name': 'Spanish language'},
+         'isPartOf': {'@id': SITE_URL + '/#website'},
+         'mainEntity': {'@type': 'ItemList', 'numberOfItems': len(items), 'itemListOrder': 'https://schema.org/ItemListOrderAscending',
+                        'itemListElement': [{'@type': 'ListItem', 'position': i + 1, 'name': page_label(x), 'url': SITE_URL + ex_url(x['slug'])}
+                                            for i, x in enumerate(items)]}},
+    ]}
+    return '<script type="application/ld+json">\n' + json.dumps(data, ensure_ascii=False, indent=1) + '\n</script>'
 
 # {{EXAMPLE_LINKS}} -> the Reading practice library: a card for every published
 # example, grouped by level once there is more than one level.
@@ -304,6 +335,7 @@ def build(tmpl_name, out_name, html=None, nav_slug=None, own_slug=None, utm=None
     if html is None:
         html = open(os.path.join(here, tmpl_name)).read()
     html = expand_links(html)
+    html = html.replace('{{EXAMPLE_LIST_LD}}', example_list_ld())
     html, has_examples = expand_examples(html, own_slug)
     if has_examples:
         # Shared stage styles/script: appended to the page body once.
@@ -324,8 +356,8 @@ def build(tmpl_name, out_name, html=None, nav_slug=None, own_slug=None, utm=None
                  UNLISTED_BASE + '/' + os.path.basename(out_name)[:-5] if out_name.startswith('unlisted/') else
                  '/' + out_name[:-5])
     html = html.replace('{{GO_FROM}}', page_path)
-    if noindex:
-        html = html.replace('<title>', '<meta name="robots" content="noindex, nofollow">\n<title>', 1)
+    html = html.replace('<title>', '<meta name="robots" content="noindex, nofollow">\n<title>' if noindex else
+                        '<meta name="robots" content="max-image-preview:large">\n<title>', 1)
     if utm:
         html = tag_links(html, utm)
     out = re.sub(r'poster="\{\{IMG_([\w-]+)\}\}"', poster_repl, html)
@@ -423,6 +455,29 @@ def study_section(x):
     out.append('</section>')
     return '\n'.join(out) + '\n'
 
+# site/sitemap.json: for every public URL, the fingerprint of its content and
+# the date that fingerprint last changed (its sitemap lastmod) — plus, for an
+# exercise, its page image for the image sitemap. The server builds the
+# sitemap from this file, so lastmod never means "last deployed". A URL seen
+# for the first time gets today's date (an exercise: the day it was published).
+def fingerprint(*parts):
+    return hashlib.sha256('\x00'.join(parts).encode()).hexdigest()[:16]
+def example_fingerprint(x):
+    content = {k: v for k, v in x.items() if k != 'publishedAt'}
+    content['bubbles'] = [{k: v for k, v in b.items() if k != 'panel'} for b in x.get('bubbles', [])]
+    extra_path = os.path.join(here, 'example-extras', x['slug'] + '.html')
+    return fingerprint(json.dumps(content, sort_keys=True, ensure_ascii=False),
+                       open(extra_path).read() if os.path.exists(extra_path) else '')
+TODAY = time.strftime('%Y-%m-%d')
+sitemap_path = os.path.join(here, 'sitemap.json')
+previous_sitemap = json.load(open(sitemap_path)) if os.path.exists(sitemap_path) else {}
+sitemap_entries = {}
+def lastmod_for(url, fp, first_seen=None):
+    prev = previous_sitemap.get(url)
+    date = prev['lastmod'] if prev and prev.get('fp') == fp else (first_seen or TODAY)
+    sitemap_entries[url] = {'fp': fp, 'lastmod': date}
+    return date
+
 page_tmpl = open(os.path.join(here, 'example-page.html')).read()
 examples = load_examples()
 def build_example_page(x, unlisted=False):
@@ -436,13 +491,35 @@ def build_example_page(x, unlisted=False):
         # The short personal line for the recipient, above everything else.
         intro = f'<p class="personal">{e(x["personalLine"])}</p>\n  ' + intro
     url = SITE_URL + (f"{UNLISTED_BASE}/{x['slug']}" if unlisted else ex_url(x['slug']))
-    crumbs = json.dumps({
-        '@context': 'https://schema.org', '@type': 'BreadcrumbList',
-        'itemListElement': [
+    published = (x.get('publishedAt') or '')[:10] or TODAY
+    modified = published if unlisted else lastmod_for(url, example_fingerprint(x), first_seen=published)
+    # The page image, as the site serves it (for the image sitemap and the structured data).
+    img_url, img_w, img_h = (lambda m: (SITE_URL + m[0], int(m[1]), int(m[2])))(manifest.setdefault(x['image'], process(x['image'])))
+    if not unlisted:
+        sitemap_entries[url]['image'] = {'loc': img_url, 'caption': x.get('imageAlt') or f'{page_label(x)} — a page from a Comigo Spanish comic', 'title': page_label(x)}
+    teaches = [t for t in (re.sub(r'[^\w\s\'-]', '', (w.get('b') or w.get('t') or '')).strip().lower()
+                           for b in x.get('bubbles', []) for s_ in b.get('sentences', []) for w in s_.get('words', []))
+               if t and t not in STOP]
+    graph = [
+        {'@type': 'BreadcrumbList', 'itemListElement': [
             {'@type': 'ListItem', 'position': 1, 'name': 'Home', 'item': SITE_URL + '/'},
             {'@type': 'ListItem', 'position': 2, 'name': 'Spanish reading practice', 'item': SITE_URL + '/spanish-reading-practice'},
             {'@type': 'ListItem', 'position': 3, 'name': label, 'item': url},
-        ]}, ensure_ascii=False, indent=1)
+        ]},
+        {'@type': ['Article', 'LearningResource'], '@id': url + '#page', 'mainEntityOfPage': url,
+         'headline': seo_title(x).replace(' | Comigo', ''), 'description': seo_desc(x),
+         'image': {'@type': 'ImageObject', 'url': img_url, 'width': img_w, 'height': img_h, 'caption': x.get('imageAlt') or label},
+         'datePublished': published, 'dateModified': modified,
+         'author': {'@id': SITE_URL + '/#org'}, 'publisher': {'@id': SITE_URL + '/#org'},
+         'inLanguage': 'es', 'learningResourceType': 'Reading practice', 'educationalUse': 'practice',
+         'educationalLevel': level or 'beginner', 'isAccessibleForFree': True,
+         'about': {'@type': 'Thing', 'name': 'Spanish language'},
+         'teaches': ', '.join(dict.fromkeys(teaches))[:300] if teaches else 'Spanish reading comprehension',
+         'isPartOf': {'@type': 'CollectionPage', '@id': SITE_URL + '/spanish-reading-practice#collection'}},
+        {'@type': 'Organization', '@id': SITE_URL + '/#org', 'name': 'Comigo', 'url': SITE_URL + '/',
+         'logo': {'@type': 'ImageObject', 'url': SITE_URL + '/favicon-512.png'}},
+    ]
+    crumbs = json.dumps({'@context': 'https://schema.org', '@graph': graph}, ensure_ascii=False, indent=1)
     # Optional hand-written extras (comprehension questions, vocab) for this
     # page live in site/example-extras/<slug>.html.
     extra_path = os.path.join(here, 'example-extras', x['slug'] + '.html')
@@ -450,14 +527,16 @@ def build_example_page(x, unlisted=False):
     vals = {
         'PG_TITLE': e(seo_title(x)), 'PG_DESC': e(seo_desc(x)), 'PG_URL': url,
         'PG_OG_IMAGE': f'{{{{OGIMG_{x["image"]}}}}}',
-        'PG_BREADCRUMB_LD': f'<script type="application/ld+json">\n{crumbs}\n</script>',
+        'PG_BREADCRUMB_LD': (f'<meta property="article:published_time" content="{published}">\n'
+                             f'<meta property="article:modified_time" content="{modified}">\n'
+                             f'<script type="application/ld+json">\n{crumbs}\n</script>'),
         'PG_SLUG': x['slug'], 'PG_LABEL': e(label),
         'PG_H1': alt_title('h1', label, x.get('labelEn')),
         'PG_EYEBROW': e(f'{level.capitalize()} · Spanish reading practice' if level else 'Spanish reading practice'),
         'PG_INTRO': intro, 'PG_STUDY': study_section(x), 'PG_EXTRA': extra,
     }
     if unlisted:
-        vals['PG_BREADCRUMB_LD'] = ''
+        vals['PG_BREADCRUMB_LD'] = ''   # a private page: no structured data, nothing for search
         vals['PG_EYEBROW'] = e(f'{level.capitalize()} · Spanish reading practice' if level else 'Spanish reading practice')
     html = re.sub(r'\{\{(PG_\w+)\}\}', lambda m: vals[m.group(1)], page_tmpl)
     build('example-page.html', os.path.join('unlisted' if unlisted else 'examples', x['slug'] + '.html'), html=html,
@@ -475,7 +554,7 @@ for f in os.listdir(un_dir):
         os.remove(os.path.join(un_dir, f))
 for f in sorted(os.listdir(un_dir)):
     if f.endswith('.json'):
-        build_example_page(json.load(open(os.path.join(un_dir, f))), unlisted=True)
+        build_example_page(load_example(os.path.join(un_dir, f)), unlisted=True)
 
 # SEO checks: every example page needs its own title and description, and the
 # summary / image description that make them useful (Marketing → Examples).
@@ -502,8 +581,6 @@ for x in examples:
 #     hand-written extras
 #   - redirected old URLs: "redirect:<target>", so a new or re-pointed redirect
 #     gets its old URL submitted once
-def fingerprint(*parts):
-    return hashlib.sha256('\x00'.join(parts).encode()).hexdigest()[:16]
 index_manifest = {}
 for tmpl in sorted(f for f in os.listdir(here) if f.endswith('.template.html')):
     name = tmpl.replace('.template.html', '')
@@ -512,17 +589,15 @@ for tmpl in sorted(f for f in os.listdir(here) if f.endswith('.template.html')):
     if '{{EXAMPLE_LINKS}}' in text:
         parts.append(json.dumps([{k: x.get(k) for k in ('slug', 'label', 'labelEn', 'level', 'comic', 'collection')} for x in examples],
                                 sort_keys=True, ensure_ascii=False))
-    index_manifest[SITE_URL + ('/' if name == 'index' else '/' + name)] = fingerprint(*parts)
+    url = SITE_URL + ('/' if name == 'index' else '/' + name)
+    index_manifest[url] = fingerprint(*parts)
+    lastmod_for(url, index_manifest[url])
 index_manifest[SITE_URL + '/privacy'] = fingerprint(open(os.path.join(here, 'privacy.html')).read())
+lastmod_for(SITE_URL + '/privacy', index_manifest[SITE_URL + '/privacy'])
 for x in examples:
     # Not content: when it was published, and each bubble's panel box (only
     # used to place the popup).
-    content = {k: v for k, v in x.items() if k != 'publishedAt'}
-    content['bubbles'] = [{k: v for k, v in b.items() if k != 'panel'} for b in x.get('bubbles', [])]
-    extra_path = os.path.join(here, 'example-extras', x['slug'] + '.html')
-    index_manifest[SITE_URL + ex_url(x['slug'])] = fingerprint(
-        json.dumps(content, sort_keys=True, ensure_ascii=False),
-        open(extra_path).read() if os.path.exists(extra_path) else '')
+    index_manifest[SITE_URL + ex_url(x['slug'])] = example_fingerprint(x)
 redirects_path = os.path.join(here, 'redirects.json')
 for old, target in (json.load(open(redirects_path)).items() if os.path.exists(redirects_path) else []):
     index_manifest[SITE_URL + old] = 'redirect:' + target
@@ -530,6 +605,10 @@ with open(os.path.join(here, 'indexnow-manifest.json'), 'w') as fh:
     json.dump(dict(sorted(index_manifest.items())), fh, indent=1)
     fh.write('\n')
 print(f'site/indexnow-manifest.json written, {len(index_manifest)} URLs')
+with open(sitemap_path, 'w') as fh:
+    json.dump(dict(sorted(sitemap_entries.items())), fh, indent=1, ensure_ascii=False)
+    fh.write('\n')
+print(f'site/sitemap.json written, {len(sitemap_entries)} URLs')
 
 total = sum(os.path.getsize(os.path.join(DIST, f)) for f in os.listdir(DIST))
 print(f'assets-dist: {len(os.listdir(DIST))} files, {total / 1024:.0f} KB')
