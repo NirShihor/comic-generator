@@ -31,6 +31,86 @@ function drawImageCover(ctx, img, W, H) {
   ctx.drawImage(img, dx, dy, dw, dh);
 }
 
+// Telepathy balloon: the speech balloon's outline made to waver (a gentle
+// ripple along the edge, phase seeded by the bubble id so each one differs but
+// never changes between renders/bakes) with a lightning-shaped tail toward the
+// sender — one closed path, so the tail is open to the balloon and filled with
+// its colour, like the speech tail. Same geometry inputs as the speech tail so
+// the tail width/length/angle/bend controls work unchanged.
+function telepathyPath({ bx, by, bw, bh, r, tail, halfTailWidth, tailLength, angleOffset, bendOffset, seed }) {
+  const cx = bx + bw / 2, cy = by + bh / 2;
+  const isVeryRound = r >= Math.min(bw, bh) * 0.4;
+  // The outline, sampled clockwise from the top centre with outward normals.
+  const pts = [];
+  if (isVeryRound) {
+    const rx = bw / 2, ry = bh / 2, n = Math.max(48, Math.round((rx + ry) * Math.PI / 3));
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (i / n) * 2 * Math.PI;
+      const nx = Math.cos(a) / rx, ny = Math.sin(a) / ry, len = Math.hypot(nx, ny) || 1;
+      pts.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), nx: nx / len, ny: ny / len });
+    }
+  } else {
+    const rr = Math.max(0.01, r);
+    const step = 3;
+    const edge = (x0, y0, x1, y1, nx, ny) => {
+      const L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.round(L / step));
+      for (let i = 0; i < n; i++) pts.push({ x: x0 + (x1 - x0) * i / n, y: y0 + (y1 - y0) * i / n, nx, ny });
+    };
+    const arc = (ax, ay, a0) => {
+      const n = Math.max(3, Math.round(rr * Math.PI / 2 / step));
+      for (let i = 0; i < n; i++) { const a = a0 + (i / n) * Math.PI / 2; pts.push({ x: ax + rr * Math.cos(a), y: ay + rr * Math.sin(a), nx: Math.cos(a), ny: Math.sin(a) }); }
+    };
+    edge(cx, by, bx + bw - rr, by, 0, -1);
+    arc(bx + bw - rr, by + rr, -Math.PI / 2);
+    edge(bx + bw, by + rr, bx + bw, by + bh - rr, 1, 0);
+    arc(bx + bw - rr, by + bh - rr, 0);
+    edge(bx + bw - rr, by + bh, bx + rr, by + bh, 0, 1);
+    arc(bx + rr, by + bh - rr, Math.PI / 2);
+    edge(bx, by + bh - rr, bx, by + rr, -1, 0);
+    arc(bx + rr, by + rr, Math.PI);
+    edge(bx + rr, by, cx, by, 0, -1);
+  }
+  // The waver: a slight ripple along the outward normal — a long wave with a
+  // weaker, faster one over it so it reads hand-drawn rather than scalloped.
+  const perimeter = isVeryRound ? Math.PI * (bw + bh) / 2 : 2 * (bw + bh);
+  const waves = Math.max(4, Math.round(perimeter / 52));
+  const amp = Math.min(2.2, Math.max(1.1, Math.min(bw, bh) * 0.018));
+  const phase = ((seed || 0) % 97) / 97 * 2 * Math.PI;
+  const wavy = pts.map((p, i) => {
+    const t = (i / pts.length) * 2 * Math.PI;
+    const d = amp * Math.sin(t * waves + phase) + amp * 0.45 * Math.sin(t * waves * 2.3 + phase * 1.7);
+    return { x: p.x + p.nx * d, y: p.y + p.ny * d, rx: p.x, ry: p.y };
+  });
+  const seg = q => `L ${q.x.toFixed(2)} ${q.y.toFixed(2)}`;
+  if (!tail) return `M ${wavy[0].x.toFixed(2)} ${wavy[0].y.toFixed(2)} ` + wavy.slice(1).map(seg).join(' ') + ' Z';
+  // The tail: the bottom-edge points between its base corners are replaced
+  // (the outline runs clockwise, so right-to-left along the bottom) by a
+  // lightning bolt — a zigzag ribbon as wide as a speech tail at the base,
+  // tapering to the point, its two jags growing with the length.
+  const w = Math.max(1, Math.min(halfTailWidth, isVeryRound ? bw * 0.3 : bw / 2 - r - 2));   // down to a line
+  const baseL = cx - w, baseR = cx + w, yB = by + bh;
+  const edgeY = x => (isVeryRound ? cy + (bh / 2) * Math.sqrt(Math.max(0, 1 - ((x - cx) / (bw / 2)) ** 2)) : yB);
+  const inGap = q => q.ry > cy && q.rx > baseL && q.rx < baseR;
+  const first = wavy.findIndex(inGap);
+  let last = first; while (last + 1 < wavy.length && inGap(wavy[last + 1])) last++;
+  const before = first < 0 ? wavy : wavy.slice(0, first), after = first < 0 ? [] : wavy.slice(last + 1);
+  const tipX = cx + angleOffset, tipY = yB + tailLength;
+  const x0 = cx, y0 = edgeY(cx);
+  const dx = tipX - x0, dy = tipY - y0, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, px = uy, py = -ux;   // p: screen-right of u
+  const jag = L * 0.1;                                                   // the zigzag's sideways reach — a fixed share of the length, so every segment grows alike
+  // Spine: base → jag right → jag left → tip, with the ribbon's half-width at each.
+  const spine = [[0, 0, w], [0.19, jag, w * 0.72], [0.49, -jag, w * 0.55], [1, 0, 0]].map(([s, side, half]) => ({
+    x: x0 + ux * L * s + px * side + (s > 0 && s < 1 ? bendOffset * (1 - Math.abs(2 * s - 1)) : 0),
+    y: y0 + uy * L * s + py * side, half,
+  }));
+  const right = spine.slice(0, -1).map(c => ({ x: c.x + px * c.half, y: c.y + py * c.half }));
+  const left = spine.slice(0, -1).reverse().map(c => ({ x: c.x - px * c.half, y: c.y - py * c.half }));
+  right[0] = { x: baseR, y: edgeY(baseR) }; left[left.length - 1] = { x: baseL, y: edgeY(baseL) };   // base corners on the outline
+  const bolt = [...right, { x: tipX, y: tipY }, ...left].map(seg);
+  const all = [...before.map(seg), ...bolt, ...after.map(seg)];
+  return 'M' + all[0].slice(1) + ' ' + all.slice(1).join(' ') + ' Z';
+}
+
 // True when every "verifiable" bubble visibly differs from the source artwork in
 // its own region — i.e. it actually rendered into the baked canvas. html2canvas
 // intermittently drops a whole bubble in its off-screen clone (the cover title
@@ -833,6 +913,7 @@ function PageEditor({ isCover = false }) {
     try {
       const bubble = bubbles.find(b => b.id === bubbleId);
       const context = bubble?.type === 'thought' ? 'This is an internal thought' :
+                      bubble?.type === 'telepathy' ? 'This is a telepathic message (spoken mind to mind)' :
                       bubble?.type === 'narration' ? 'This is narration text' :
                       'This is dialogue speech';
 
@@ -1928,7 +2009,7 @@ function PageEditor({ isCover = false }) {
       y: coords.y,
       width: 0.2,
       height: 0.1,
-      type: 'speech', // 'speech', 'thought', 'narration', 'image'
+      type: 'speech', // 'speech', 'telepathy', 'thought', 'narration', 'image'
       fontId: defaultBubbleStyle.fontId || 'patrick-hand',
       fontSize: defaultBubbleStyle.fontSize || 15,
       italic: false,
@@ -6890,7 +6971,7 @@ function PageEditor({ isCover = false }) {
                     );
                   })()}
                   {/* Unified Speech Bubble with integrated tail */}
-                  {bubble.type === 'speech' && bubble.showTail !== false && (() => {
+                  {(bubble.type === 'telepathy' || (bubble.type === 'speech' && bubble.showTail !== false)) && (() => {
                     // Bubble dimensions in pixels
                     const bx = bubble.x * CANVAS_WIDTH;
                     const by = bubble.y * CANVAS_HEIGHT;
@@ -6993,6 +7074,9 @@ function PageEditor({ isCover = false }) {
                         A ${r} ${r} 0 0 1 ${bx + r} ${by}
                         Z
                       `;
+                    }
+                    if (bubble.type === 'telepathy') {
+                      path = telepathyPath({ bx, by, bw, bh, r, tail: bubble.showTail !== false, halfTailWidth, tailLength, angleOffset, bendOffset, seed: bubble.id.charCodeAt(bubble.id.length - 1) });
                     }
 
                     // Calculate rotated tip position for the indicator line
@@ -7103,7 +7187,7 @@ function PageEditor({ isCover = false }) {
                   })()}
 
                   {/* Resize handles for speech bubbles with tail — edge midpoints for independent axis control */}
-                  {bubble.type === 'speech' && bubble.showTail !== false && editorMode === 'bubbles' && selectedBubbleId === bubble.id && (() => {
+                  {(bubble.type === 'telepathy' || (bubble.type === 'speech' && bubble.showTail !== false)) && editorMode === 'bubbles' && selectedBubbleId === bubble.id && (() => {
                     const rot = (bubble.rotation || 0) * Math.PI / 180;
                     const cosR = Math.cos(rot);
                     const sinR = Math.sin(rot);
@@ -7351,7 +7435,7 @@ function PageEditor({ isCover = false }) {
                     );
                   })()}
                   {/* Bubble body - hand-drawn style (for non-speech or speech without tail) */}
-                  {!(bubble.type === 'speech' && bubble.showTail !== false) && (
+                  {!(bubble.type === 'telepathy' || (bubble.type === 'speech' && bubble.showTail !== false)) && (
                   <div
                     data-bubble-id={bubble.id}
                     onMouseDown={(e) => handleBubbleMouseDown(e, bubble)}
@@ -7513,7 +7597,7 @@ function PageEditor({ isCover = false }) {
 
 
                   {/* Rotation handle (orange - for rotating speech/thought bubble) */}
-                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (bubble.type === 'speech' || bubble.type === 'thought') && bubble.showTail !== false && (() => {
+                  {editorMode === 'bubbles' && selectedBubbleId === bubble.id && (bubble.type === 'speech' || bubble.type === 'telepathy' || bubble.type === 'thought') && bubble.showTail !== false && (() => {
                     const rotation = bubble.rotation ?? 0;
                     const rotRad = (rotation - 90) * Math.PI / 180; // -90 so 0 degrees = bottom
                     const cx = bubble.x + bubble.width / 2;
@@ -8355,7 +8439,7 @@ function PageEditor({ isCover = false }) {
                           Type:
                         </label>
                         <div style={{ display: 'flex', gap: '0.25rem' }}>
-                          {['speech', 'thought', 'narration', 'image'].map(type => (
+                          {['speech', 'telepathy', 'thought', 'narration', 'image'].map(type => (
                             <button
                               key={type}
                               onClick={(e) => { e.stopPropagation(); updateBubble(bubble.id, { type }); }}
@@ -9958,8 +10042,8 @@ function PageEditor({ isCover = false }) {
                         />
                       </div>
 
-                      {/* Show/Hide Tail (for speech and thought bubbles) */}
-                      {(bubble.type === 'speech' || bubble.type === 'thought') && (
+                      {/* Show/Hide Tail (for speech, telepathy and thought bubbles) */}
+                      {(bubble.type === 'speech' || bubble.type === 'telepathy' || bubble.type === 'thought') && (
                         <div style={{ marginBottom: '0.5rem' }}>
                           <label style={{ fontSize: '0.8rem', color: '#888', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <input
@@ -9994,7 +10078,7 @@ function PageEditor({ isCover = false }) {
                       )}
 
                       {/* Tail Controls (for speech bubbles) */}
-                      {bubble.type === 'speech' && bubble.showTail !== false && (
+                      {(bubble.type === 'speech' || bubble.type === 'telepathy') && bubble.showTail !== false && (
                         <>
                           {/* Bubble Angle */}
                           <div style={{ marginBottom: '0.5rem' }}>
@@ -10019,7 +10103,7 @@ function PageEditor({ isCover = false }) {
                             </label>
                             <input
                               type="range"
-                              min="10"
+                              min={bubble.type === 'telepathy' ? 1 : 10}
                               max="50"
                               value={Math.round((bubble.tailWidth ?? 0.15) * 100)}
                               onChange={(e) => updateBubble(bubble.id, { tailWidth: parseInt(e.target.value) / 100 })}
@@ -13451,7 +13535,7 @@ function PageEditor({ isCover = false }) {
                 && bubble.type !== 'image' && bubble.bgTransparent && bubble.noBorder;
               return (
                 <div key={bubble.id}>
-                  {bubble.type === 'speech' && bubble.showTail !== false && (() => {
+                  {(bubble.type === 'telepathy' || (bubble.type === 'speech' && bubble.showTail !== false)) && (() => {
                     const bx = bubble.x * CANVAS_WIDTH;
                     const by = bubble.y * CANVAS_HEIGHT;
                     const bw = bubble.width * CANVAS_WIDTH;
@@ -13491,6 +13575,9 @@ function PageEditor({ isCover = false }) {
                       path = `M ${cx} ${by} A ${ellipseRx} ${ellipseRy} 0 0 1 ${cx + tailConnectRight} ${connectRightY} C ${cx + tailConnectRight} ${connectRightY + tailLength * 0.2}, ${ctrl1X} ${ctrl1Y}, ${tipX} ${tipY} C ${ctrl2X} ${ctrl2Y}, ${cx - tailConnectLeft} ${connectLeftY + tailLength * 0.2}, ${cx - tailConnectLeft} ${connectLeftY} A ${ellipseRx} ${ellipseRy} 0 1 1 ${cx} ${by} Z`;
                     } else {
                       path = `M ${bx + r} ${by} L ${bx + bw - r} ${by} A ${r} ${r} 0 0 1 ${bx + bw} ${by + r} L ${bx + bw} ${by + bh - r} A ${r} ${r} 0 0 1 ${bx + bw - r} ${by + bh} L ${tailRightX} ${by + bh} C ${ctrl1X} ${ctrl1Y}, ${tipX + halfTailWidth * 0.2} ${tipY - tailLength * 0.15}, ${tipX} ${tipY} C ${tipX - halfTailWidth * 0.2} ${tipY - tailLength * 0.15}, ${ctrl2X} ${ctrl2Y}, ${tailLeftX} ${by + bh} L ${bx + r} ${by + bh} A ${r} ${r} 0 0 1 ${bx} ${by + bh - r} L ${bx} ${by + r} A ${r} ${r} 0 0 1 ${bx + r} ${by} Z`;
+                    }
+                    if (bubble.type === 'telepathy') {
+                      path = telepathyPath({ bx, by, bw, bh, r, tail: bubble.showTail !== false, halfTailWidth, tailLength, angleOffset, bendOffset, seed: bubble.id.charCodeAt(bubble.id.length - 1) });
                     }
                     return (
                       <>
@@ -13667,7 +13754,7 @@ function PageEditor({ isCover = false }) {
                       </svg>
                     );
                   })()}
-                  {!(bubble.type === 'speech' && bubble.showTail !== false) && (
+                  {!(bubble.type === 'telepathy' || (bubble.type === 'speech' && bubble.showTail !== false)) && (
                   <div
                     style={{
                       position: 'absolute',
