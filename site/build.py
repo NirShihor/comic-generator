@@ -236,6 +236,10 @@ LINKS_CSS = """<style>
   .ex-card img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; display: block; border-bottom: 3px solid var(--line); }
   .ex-card .ex-card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
   .ex-card .label { color: var(--accent); }
+  .ex-card .ex-level-pill {
+    align-self: flex-start; font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #FFFFFF; background: var(--accent); border-radius: 999px; padding: 3px 10px; margin-bottom: 2px;
+  }
   .ex-card .ex-title { margin: 0; font-size: 1.3rem; }
   .ex-card .ex-src { font-family: system-ui, sans-serif; font-size: 0.85rem; color: var(--muted); }
   .ex-card .ex-go { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.92rem; margin-top: auto; padding-top: 4px; }
@@ -248,7 +252,7 @@ def ex_card(x, htag):
     return (f'  <a class="ex-card" href="{ex_url(e(x["slug"]))}">\n'
             f'    <img loading="lazy" decoding="async" src="{{{{IMG_{x["image"]}}}}}" alt="">\n'
             f'    <div class="ex-card-body">\n'
-            + (f'      <span class="label">{e(lvl)}</span>\n' if lvl else '') +
+            + (f'      <span class="ex-level-pill">{e(lvl)}</span>\n' if lvl else '') +
             f'      {title}\n'
             + (f'      <span class="ex-src" lang="es">{e(source_line(x))}</span>\n' if source_line(x) else '') +
             f'      <span class="ex-go">Read and listen &rarr;</span>\n'
@@ -270,17 +274,9 @@ def expand_links(html):
         if slug:
             body = '<section class="wrap ex-links">\n' + '\n'.join(ex_card(x, 'h3') for x in related(slug, items)) + '\n</section>'
         else:
-            levels = []
-            for x in items:
-                if (x.get('level') or '') not in levels: levels.append(x.get('level') or '')
-            if len(levels) > 1:
-                body = ''.join(
-                    f'<div class="wrap ex-level" id="level-{lv or "other"}"><h3 class="display ex-level-head">{(lv or "Other").capitalize()}</h3></div>\n'
-                    '<section class="wrap ex-links">\n'
-                    + '\n'.join(ex_card(x, 'h4') for x in items if (x.get('level') or '') == lv) + '\n</section>\n'
-                    for lv in levels)
-            else:
-                body = '<section class="wrap ex-links">\n' + '\n'.join(ex_card(x, 'h3') for x in items) + '\n</section>'
+            # One grid: beginner pages first, intermediate after them (the order
+            # load_examples gives); each card carries its own level label.
+            body = '<section class="wrap ex-links">\n' + '\n'.join(ex_card(x, 'h3') for x in items) + '\n</section>'
         if not items:
             return ''
         css = '' if used else LINKS_CSS
