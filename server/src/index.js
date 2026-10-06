@@ -136,32 +136,40 @@ app.use((req, res, next) => {
       return res.sendFile(path.join(SITE_DIR, 'robots.txt'));
     }
     if (req.path === '/sitemap.xml') {
-      // Built from the .html files actually in site/, so new public pages are
-      // picked up automatically. index.html is the homepage.
+      // site/sitemap.json (written by site/build.py) carries every public URL
+      // with the date its CONTENT last changed — never the deploy date — and,
+      // for an exercise, its page image (an image sitemap entry). Without the
+      // file, fall back to listing the pages from the files on disk.
       const fsSync = require('fs');
-      const entries = fsSync.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && !f.includes('.template.')
-        && !SITE_PARTIALS.has(f.replace(/\.html$/, ''))).map(f => {
-        // Extensionless canonical URLs (the server serves both spellings).
-        const loc = f === 'index.html' ? 'https://comigo.net/' : `https://comigo.net/${f.replace(/\.html$/, '')}`;
-        const lastmod = fsSync.statSync(path.join(SITE_DIR, f)).mtime.toISOString().slice(0, 10);
-        return `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`;
-      });
-      const exDir = path.join(SITE_DIR, 'examples');
-      if (fsSync.existsSync(exDir)) {
-        for (const f of fsSync.readdirSync(exDir).filter(f => f.endsWith('.html')).sort()) {
-          // lastmod = when the example was last published (every build rewrites
-          // the HTML, so the file date says nothing about the content).
-          let lastmod = fsSync.statSync(path.join(exDir, f)).mtime.toISOString().slice(0, 10);
-          try {
-            const pub = JSON.parse(fsSync.readFileSync(path.join(exDir, f.replace(/\.html$/, '.json')), 'utf8')).publishedAt;
-            if (pub) lastmod = pub.slice(0, 10);
-          } catch {}
-          entries.push(`  <url><loc>https://comigo.net/spanish-reading-practice/${f.replace(/\.html$/, '')}</loc><lastmod>${lastmod}</lastmod></url>`);
+      const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      let entries = [];
+      let fromManifest = null;
+      try { fromManifest = JSON.parse(fsSync.readFileSync(path.join(SITE_DIR, 'sitemap.json'), 'utf8')); } catch {}
+      if (fromManifest && Object.keys(fromManifest).length) {
+        entries = Object.entries(fromManifest).map(([loc, v]) =>
+          `  <url><loc>${esc(loc)}</loc><lastmod>${esc(v.lastmod)}</lastmod>`
+          + (v.image ? `<image:image><image:loc>${esc(v.image.loc)}</image:loc>`
+                       + (v.image.title ? `<image:title>${esc(v.image.title)}</image:title>` : '')
+                       + (v.image.caption ? `<image:caption>${esc(v.image.caption)}</image:caption>` : '') + '</image:image>' : '')
+          + '</url>');
+      } else {
+        entries = fsSync.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && !f.includes('.template.')
+          && !SITE_PARTIALS.has(f.replace(/\.html$/, ''))).map(f => {
+          const loc = f === 'index.html' ? 'https://comigo.net/' : `https://comigo.net/${f.replace(/\.html$/, '')}`;
+          const lastmod = fsSync.statSync(path.join(SITE_DIR, f)).mtime.toISOString().slice(0, 10);
+          return `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`;
+        });
+        const exDir = path.join(SITE_DIR, 'examples');
+        if (fsSync.existsSync(exDir)) {
+          for (const f of fsSync.readdirSync(exDir).filter(f => f.endsWith('.html')).sort()) {
+            const lastmod = fsSync.statSync(path.join(exDir, f)).mtime.toISOString().slice(0, 10);
+            entries.push(`  <url><loc>https://comigo.net/spanish-reading-practice/${f.replace(/\.html$/, '')}</loc><lastmod>${lastmod}</lastmod></url>`);
+          }
         }
       }
       res.set('Cache-Control', 'public, max-age=3600');
       return res.type('application/xml').send(
-        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join('\n')}\n</urlset>\n`);
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${entries.join('\n')}\n</urlset>\n`);
     }
     if (req.path === '/demo-poster.jpg') {
       res.set('Cache-Control', 'public, max-age=86400');

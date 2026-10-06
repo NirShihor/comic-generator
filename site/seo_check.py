@@ -96,6 +96,21 @@ def main():
     for old, new in redirects.items():
         if new not in known: problems.append(f'redirect {old} -> {new}: target is not a page')
         if old in known: problems.append(f'redirect {old} is also a live page')
+    # The sitemap manifest (site/sitemap.json, served as /sitemap.xml) must list
+    # exactly the public pages, each with a date and (exercises) an image.
+    sm_path = os.path.join(here, 'sitemap.json')
+    sm = json.load(open(sm_path)) if os.path.exists(sm_path) else None
+    if sm is None:
+        problems.append('site/sitemap.json missing (run build.py)')
+    else:
+        want_urls = {SITE + ('/' if u == '/' else u) for u, _ in pages} | {SITE + '/privacy'}
+        for u in want_urls - set(sm): problems.append(f'sitemap.json: {u} missing')
+        for u in set(sm) - want_urls: problems.append(f'sitemap.json: {u} is not a public page')
+        for u, v in sm.items():
+            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', str(v.get('lastmod', ''))): problems.append(f'sitemap.json: {u} has no lastmod date')
+            if u.startswith(SITE + EX_BASE + '/') and not (v.get('image') or {}).get('loc', '').startswith(SITE + '/assets/'):
+                problems.append(f'sitemap.json: {u} has no page image')
+            if 'noindex' in str(v): problems.append(f'sitemap.json: {u} carries noindex')
     for url, title, h1, can in rows:
         print(f'{url}\n    title: {title}\n    h1:    {h1}\n    canonical: {can}')
     print(f'\n{len(pages)} pages checked')

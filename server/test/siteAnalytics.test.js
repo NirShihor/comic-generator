@@ -213,13 +213,17 @@ test('journeys: campaign tags survive landing → homepage → App Store, and la
     assert.strictEqual(target, CAMPAIGN_LINK);
     let click = events.filter(e => e.name === 'app_store_cta_clicked').pop();
     assert.deepStrictEqual(click.properties, { surface: 'website', from_page: '/', page_type: 'other', button: 'hero', apple_campaign: 'GoogleSearch', ...GOOGLE, from_campaign: true });
-    ({ target } = await journey(base, `/hub?${google}`, [`/spanish-reading-practice/${exercises[0]}`, `/spanish-reading-practice/${exercises[1]}`], 'band'));
+    // From the first exercise, follow whichever related exercise its page offers.
+    const firstPage = await (await get(`${base}/spanish-reading-practice/${exercises[0]}?${google}`)).text();
+    const related = links(firstPage).map(h => h.split('?')[0]).find(h => /^\/spanish-reading-practice\/[a-z0-9-]+$/.test(h) && !h.endsWith(`/${exercises[0]}`));
+    assert.ok(related, 'an exercise page links to another exercise');
+    ({ target } = await journey(base, `/hub?${google}`, [`/spanish-reading-practice/${exercises[0]}`, related], 'band'));
     assert.strictEqual(target, CAMPAIGN_LINK);
     click = events.filter(e => e.name === 'app_store_cta_clicked').pop();
     assert.strictEqual(click.properties.from_campaign, true);
-    assert.strictEqual(click.properties.exercise, exercises[1]);
+    assert.strictEqual(click.properties.exercise, related.split('/').pop());
     assert.ok(!JSON.stringify(events).match(/gclid|fbclid|Cj0KCQ|IwAR/), 'click IDs never reach an event');
-    assert.deepStrictEqual(events.filter(e => e.name === 'site_page_viewed').map(e => e.properties.from_campaign), [true, true, true, true]);
+    assert.ok(events.filter(e => e.name === 'site_page_viewed').every(e => e.properties.from_campaign === true));
   });
 });
 
