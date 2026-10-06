@@ -118,6 +118,7 @@
        siblings that can be reordered. */
     .hero { display: flex; flex-direction: column; }
     .hero > div:first-child { display: contents; }
+    .hero .hero-h1 { order: 0; margin: 0 16px 10px; }
     .hero .bubble { order: 1; margin: 0 10px; }
     .hero p.hero-copy:nth-of-type(1) { order: 2; }
     .hero .fan { order: 3; margin: 26px auto 0; }
@@ -143,14 +144,17 @@
     box-shadow: 7px 7px 0 var(--shadow);
     display: inline-block;
   }
-  .bubble h1 { margin: 0; font-size: clamp(2rem, 5.2vw, 3.4rem); }
-  .bubble h1 .row { display: block; }
+  /* The page's heading (what the page is for); the slogan below it is the
+     visual hero and carries no heading role. */
+  .hero-h1 { margin: 0 0 14px 6px; font-size: clamp(1rem, 1.6vw, 1.2rem); color: var(--accent); letter-spacing: 0.1em; }
+  .bubble .slogan { margin: 0; font-size: clamp(2rem, 5.2vw, 3.4rem); }
+  .bubble .slogan .row { display: block; }
 
   /* Headline crossfade: Spanish holds 2.8s, slow ~1.8s fade, English holds 2.8s,
      repeats (9.2s cycle). Both languages occupy the same grid cell so the bubble
      sizes to the taller of the two and nothing jumps during the swap. */
-  .bubble h1 { display: grid; }
-  .bubble h1 .lang { grid-area: 1 / 1; }
+  .bubble .slogan { display: grid; }
+  .bubble .slogan .lang { grid-area: 1 / 1; }
   .lang-es { animation: heroEs 9.2s ease-in-out infinite; }
   .lang-en { opacity: 0; animation: heroEn 9.2s ease-in-out infinite; }
   @keyframes heroEs {
@@ -359,8 +363,9 @@
 
 <section class="hero wrap">
   <div>
+    <h1 class="display hero-h1">Practice Spanish reading</h1>
     <div class="bubble">
-      <h1 class="display">
+      <p class="display slogan">
         <span class="lang lang-es">
           <span class="row">No estás estudiando.</span>
           <span class="row">Estás leyendo.</span>
@@ -369,7 +374,7 @@
           <span class="row">You're not studying.</span>
           <span class="row">You're reading.</span>
         </span>
-      </h1>
+      </p>
     </div>
     <p class="hero-copy">
       <strong>Original Spanish comics</strong> you read, hear and speak. Every bubble is
