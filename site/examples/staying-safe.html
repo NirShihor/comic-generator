@@ -697,6 +697,10 @@
   .sl-row { display: flex; justify-content: center; gap: 10px; margin-top: 12px; }
   .ex-play.en { background: #8E44D6; }
   .sl-swipe { touch-action: pan-y; }
+  .sl-view { position: relative; overflow: hidden; }
+  .sl-card { transition: transform 0.28s ease; }
+  .sl-card.in { position: absolute; left: 0; top: 0; width: 100%; }
+  @media (prefers-reduced-motion: reduce) { .sl-card { transition: none; } }
 </style>
 <script>
 (function () {
@@ -1163,46 +1167,84 @@
       closeSheet(); audio.pause(); clearSpeaking();
       if (current) setActive(current, false);
       current = null;
-      var slides = hs.slides || [], k = 0;
-      function show() {
-        var sl = slides[k] || {};
-        body.innerHTML = '<div class="sl-head">' + esc(hs.label || '') + '</div><div class="sl-swipe">'
-          + (sl.img ? '<img class="sl-img" src="' + esc(sl.img) + '" alt="">' : '')
+      var slides = hs.slides || [], k = 0, imgMax = 0, moving = false;
+      // The frame — title, a viewport the cards slide through, the arrows —
+      // is built once; moving between slides glides the old card out and
+      // the new one in, as a swipe would, instead of redrawing the popup.
+      body.innerHTML = '<div class="sl-head">' + esc(hs.label || '') + '</div><div class="sl-swipe"><div class="sl-view"></div></div>';
+      var view = body.querySelector('.sl-view'), counter = null, prevBtn = null, nextBtn = null;
+      if (slides.length > 1) {
+        var nav = document.createElement('div');
+        nav.className = 'ex-nav';
+        nav.innerHTML = '<button class="ex-prev" aria-label="Previous slide">&#8249;</button><span></span>'
+          + '<button class="ex-next" aria-label="Next slide">&#8250;</button>';
+        prevBtn = nav.querySelector('.ex-prev'); nextBtn = nav.querySelector('.ex-next'); counter = nav.querySelector('span');
+        prevBtn.addEventListener('click', function () { go(-1); });
+        nextBtn.addEventListener('click', function () { go(1); });
+        body.appendChild(nav);
+      }
+      function card(n) {
+        var sl = slides[n] || {}, el = document.createElement('div');
+        el.className = 'sl-card';
+        el.innerHTML = (sl.img ? '<img class="sl-img" src="' + esc(sl.img) + '" alt="">' : '')
           + (sl.es ? '<p class="sl-es" lang="es">' + esc(sl.es) + '</p>' : '')
           + (sl.en ? '<p class="sl-en">' + esc(sl.en) + '</p>' : '')
           + '<div class="sl-row">' + (sl.a ? '<button class="ex-play sl-play">▶︎&nbsp; Play</button>' : '')
-          + (sl.ea ? '<button class="ex-play en sl-en-play">🔊&nbsp; EN</button>' : '') + '</div></div>';
-        var pl = body.querySelector('.sl-play'), en = body.querySelector('.sl-en-play');
+          + (sl.ea ? '<button class="ex-play en sl-en-play">🔊&nbsp; EN</button>' : '') + '</div>';
+        var pl = el.querySelector('.sl-play'), en = el.querySelector('.sl-en-play');
         if (pl) pl.addEventListener('click', function () { playSrc(sl.a); });
         if (en) en.addEventListener('click', function () { playSrc(sl.ea); });
-        if (slides.length > 1) {
-          var nav = document.createElement('div');
-          nav.className = 'ex-nav';
-          nav.innerHTML = '<button class="ex-prev" aria-label="Previous slide">&#8249;</button>'
-            + '<span>' + (k + 1) + ' / ' + slides.length + '</span>'
-            + '<button class="ex-next" aria-label="Next slide">&#8250;</button>';
-          var prev = nav.querySelector('.ex-prev'), next = nav.querySelector('.ex-next');
-          prev.disabled = k === 0; next.disabled = k === slides.length - 1;
-          prev.addEventListener('click', function () { go(-1); });
-          next.addEventListener('click', function () { go(1); });
-          body.appendChild(nav);
-        }
-        var im = body.querySelector('.sl-img');
+        var im = el.querySelector('.sl-img');
         if (im) {
-          // Everything but the picture, measured with the picture out of the
-          // flow; the picture gets what's left of the popup's height.
-          im.style.display = 'none';
-          var room = stage.clientHeight * 0.96 - 16 - popup.offsetHeight;
-          im.style.display = '';
-          im.style.maxHeight = Math.max(72, Math.floor(room)) + 'px';
+          if (imgMax) im.style.maxHeight = imgMax + 'px';
           if (!im.complete) im.addEventListener('load', placePopup, { once: true });
+        }
+        return el;
+      }
+      function setNav() {
+        if (!counter) return;
+        counter.textContent = (k + 1) + ' / ' + slides.length;
+        prevBtn.disabled = k === 0; nextBtn.disabled = k === slides.length - 1;
+      }
+      function show() {
+        var el = card(k);
+        view.appendChild(el);
+        setNav();
+        // Everything but the picture, measured with the picture out of the
+        // flow; the picture gets what's left of the popup's height — the
+        // same height on every slide, so the frame never jumps.
+        var im = el.querySelector('.sl-img');
+        if (im) {
+          im.style.display = 'none';
+          imgMax = Math.max(72, Math.floor(stage.clientHeight * 0.96 - 16 - popup.offsetHeight));
+          im.style.display = '';
+          im.style.maxHeight = imgMax + 'px';
         }
         placePopup();
       }
       function go(d) {
         var n = k + d;
-        if (n < 0 || n >= slides.length) return;
-        k = n; audio.pause(); show();
+        if (moving || n < 0 || n >= slides.length) return;
+        moving = true;
+        audio.pause();
+        var old = view.querySelector('.sl-card'), el = card(n);
+        k = n; setNav();
+        view.style.height = old.offsetHeight + 'px';
+        el.classList.add('in'); el.style.transform = 'translateX(' + (d > 0 ? 100 : -100) + '%)';
+        view.appendChild(el);
+        el.getBoundingClientRect();   // commit the start position before sliding
+        old.style.transform = 'translateX(' + (d > 0 ? -100 : 100) + '%)';
+        el.style.transform = 'translateX(0)';
+        var done = false;
+        function finish() {
+          if (done) return; done = true;
+          old.remove(); el.classList.remove('in'); el.style.transform = '';
+          view.style.height = '';
+          moving = false;
+          placePopup();
+        }
+        el.addEventListener('transitionend', finish, { once: true });
+        setTimeout(finish, 400);
       }
       // Swipe between slides, as in the app.
       var sx = null;
