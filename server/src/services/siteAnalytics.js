@@ -3,7 +3,7 @@
 // the App Store buttons are tapped and where from — COUNTS only.
 //
 // Nothing is stored on or read from the visitor's device (no cookies, no
-// browser storage, no scripts), and nothing identifies or recognises a
+// browser storage, no identifiers), and nothing identifies or recognises a
 // visitor: no IP address, user agent, referrer, click ID (gclid) or any
 // per-visitor/per-visit identifier is recorded or sent. Every event goes to
 // PostHog under one fixed distinct_id with person profiles and GeoIP off.
@@ -11,8 +11,14 @@
 // A campaign visit is carried through the visit by adding the ad's utm_*
 // tags (campaign-level, identical for everyone who clicks that ad) to the
 // page's internal links as it is served. The App Store buttons link to
-// /go/app-store, which counts the click and redirects — to the Apple campaign
-// link for campaign visitors, to the plain App Store page otherwise.
+// /go/app-store: GET only redirects — to the Apple campaign link for campaign
+// visitors, to the plain App Store page otherwise — and never counts, so
+// crawlers and link previewers that fetch the link leave no event. A tap is
+// counted by a small first-party script (site/nav.html) that POSTs the
+// button's own URL from a trusted click, alongside the normal navigation.
+// Requests are only counted when they carry a browser's Fetch Metadata
+// headers (checked, never recorded): a navigation for a page view, a
+// same-origin fetch for a tap.
 
 const APP_STORE_URL = 'https://apps.apple.com/app/id6760253260';
 const APPLE_PROVIDER_TOKEN = '128624331';
@@ -45,11 +51,29 @@ function isBot(userAgent) {
   return !userAgent || BOT_UA.test(userAgent);
 }
 
-/** A real page view by a browser: GET, not a prefetch/prerender, not a bot. */
+const header = (req, name) => String(req.headers[name] || '').toLowerCase();
+
+/**
+ * A real page view by a browser: a GET navigation to a document (the Fetch
+ * Metadata headers every browser sends with a navigation; bare HTTP clients
+ * with a borrowed user agent don't), not a prefetch/prerender, not a bot.
+ */
 function countable(req) {
   if (req.method !== 'GET') return false;
-  const purpose = String(req.headers['sec-purpose'] || req.headers.purpose || '').toLowerCase();
+  if (header(req, 'sec-fetch-mode') !== 'navigate' || header(req, 'sec-fetch-dest') !== 'document') return false;
+  const purpose = header(req, 'sec-purpose') || header(req, 'purpose');
   if (purpose.includes('prefetch') || purpose.includes('prerender')) return false;
+  return !isBot(req.headers['user-agent']);
+}
+
+/**
+ * A real App Store button tap: the POST the page's script sends from a trusted
+ * click — a same-origin fetch from a browser — not a bot. Nothing else can
+ * record a tap: not a GET of the link, not a cross-site POST.
+ */
+function countableTap(req) {
+  if (req.method !== 'POST') return false;
+  if (header(req, 'sec-fetch-site') !== 'same-origin' || header(req, 'sec-fetch-mode') !== 'cors' || header(req, 'sec-fetch-dest') !== 'empty') return false;
   return !isBot(req.headers['user-agent']);
 }
 
@@ -178,18 +202,25 @@ function bakedUtm(html) {
   return Object.keys(utm).length ? utm : null;
 }
 
-/** GET /go/app-store?from=…&loc=…[&utm_…] — count the tap, redirect to the App Store. */
-function appStoreRedirect(req, res, send) {
-  const utm = cleanUtm(req.query);
-  if (countable(req)) {
-    Promise.resolve(send(ctaClickEvent({ from: req.query.from, loc: req.query.loc, utm }))).catch(() => {});
-  }
+/**
+ * /go/app-store?from=…&loc=…[&utm_…] — the App Store buttons' link.
+ * GET: redirect to the App Store (the Apple campaign link for campaign
+ * visitors) and count NOTHING — anything that fetches the link lands here.
+ * POST: the tap beacon from the page's script — count the tap, no redirect.
+ */
+function appStore(req, res, send) {
   res.set('Cache-Control', 'no-store');
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  res.redirect(302, appStoreTarget(utm));
+  if (req.method === 'POST') {
+    if (countableTap(req)) {
+      Promise.resolve(send(ctaClickEvent({ from: req.query.from, loc: req.query.loc, utm: cleanUtm(req.query) }))).catch(() => {});
+    }
+    return res.status(204).end();
+  }
+  res.redirect(302, appStoreTarget(cleanUtm(req.query)));
 }
 
 module.exports = {
-  APP_STORE_URL, APPLE_CAMPAIGNS, DISTINCT_ID, cleanUtm, campaignQuery, isBot, countable, addUtmToLinks, bakedUtm, appStoreTarget,
-  pageViewEvent, ctaClickEvent, makeSender, servePage, appStoreRedirect,
+  APP_STORE_URL, APPLE_CAMPAIGNS, DISTINCT_ID, cleanUtm, campaignQuery, isBot, countable, countableTap, addUtmToLinks, bakedUtm, appStoreTarget,
+  pageViewEvent, ctaClickEvent, makeSender, servePage, appStore,
 };

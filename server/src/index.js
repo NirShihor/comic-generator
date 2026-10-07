@@ -107,9 +107,10 @@ app.use((req, res, next) => {
         return siteAnalytics.servePage(req, res, html, { pageType: 'unlisted', exercise: unMatch[1], utm: siteAnalytics.bakedUtm(html) }, siteEventSend);
       }
     }
-    // App Store buttons: count the tap, then redirect (Apple campaign link for
-    // campaign visitors, the plain App Store page otherwise).
-    if (req.path === '/go/app-store') return siteAnalytics.appStoreRedirect(req, res, siteEventSend);
+    // App Store buttons: GET redirects (Apple campaign link for campaign
+    // visitors, the plain App Store page otherwise) without counting; the
+    // page's script POSTs the same URL on a real tap, which is what's counted.
+    if (req.path === '/go/app-store') return siteAnalytics.appStore(req, res, siteEventSend);
     if (req.path === '/favicon.png' || req.path === '/favicon.ico') {
       return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
     }

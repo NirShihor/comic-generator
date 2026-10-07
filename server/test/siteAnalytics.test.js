@@ -23,17 +23,43 @@ test('only the five utm tags survive, as short plain tokens; click IDs and anyth
   assert.deepStrictEqual(sa.cleanUtm(undefined), {});
 });
 
-test('bots, scripts, HEAD requests and prefetches are not counted', () => {
-  const req = (ua, extra = {}) => ({ method: 'GET', headers: { 'user-agent': ua, ...extra } });
+// The Fetch Metadata headers a browser sends with a navigation, and with the
+// tap script's same-origin fetch.
+const NAV = { 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document', 'sec-fetch-site': 'none' };
+const TAP = { 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' };
+
+test('page views: only browser navigations count — bots, scripts, HEAD requests and prefetches do not', () => {
+  const req = (ua, extra = {}) => ({ method: 'GET', headers: { 'user-agent': ua, ...NAV, ...extra } });
   assert.ok(sa.countable(req(SAFARI)));
+  assert.ok(sa.countable(req(SAFARI, { 'sec-fetch-site': 'cross-site' })), 'arriving from Google is a navigation too');
   for (const ua of ['Mozilla/5.0 (compatible; Googlebot/2.1)', 'AdsBot-Google (+http://www.google.com/adsbot.html)',
     'Mozilla/5.0 (compatible; bingbot/2.0)', 'Mozilla/5.0 AppleWebKit/537.36; compatible; OAI-SearchBot/1.3', 'curl/8.7.1',
     'python-requests/2.32', 'facebookexternalhit/1.1', '', undefined]) {
     assert.ok(!sa.countable(req(ua)), String(ua));
   }
-  assert.ok(!sa.countable({ method: 'HEAD', headers: { 'user-agent': SAFARI } }));
+  assert.ok(!sa.countable({ method: 'HEAD', headers: { 'user-agent': SAFARI, ...NAV } }));
   assert.ok(!sa.countable(req(SAFARI, { 'sec-purpose': 'prefetch;prerender' })));
   assert.ok(!sa.countable(req(SAFARI, { purpose: 'prefetch' })));
+  // A browser user agent without a browser's navigation headers is a script.
+  assert.ok(!sa.countable({ method: 'GET', headers: { 'user-agent': SAFARI } }), 'no Fetch Metadata');
+  assert.ok(!sa.countable(req(SAFARI, { 'sec-fetch-mode': 'cors' })), 'not a navigation');
+  assert.ok(!sa.countable(req(SAFARI, { 'sec-fetch-dest': 'image' })), 'not a document');
+});
+
+test('taps: only the page script\'s same-origin POST counts — GETs, cross-site POSTs and bots do not', () => {
+  const req = (method, extra = {}, ua = SAFARI) => ({ method, headers: { 'user-agent': ua, ...TAP, ...extra } });
+  assert.ok(sa.countableTap(req('POST')));
+  assert.ok(!sa.countableTap(req('GET')), 'a GET of the link is a fetch, not a tap');
+  assert.ok(!sa.countableTap({ method: 'GET', headers: { 'user-agent': SAFARI, ...NAV } }), 'a browser navigating to the link is not a tap');
+  assert.ok(!sa.countableTap(req('POST', { 'sec-fetch-site': 'cross-site' })));
+  assert.ok(!sa.countableTap(req('POST', { 'sec-fetch-site': 'same-site' })));
+  assert.ok(!sa.countableTap(req('POST', { 'sec-fetch-site': 'none' })));
+  assert.ok(!sa.countableTap(req('POST', { 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' })), 'a form post is not a tap');
+  assert.ok(!sa.countableTap({ method: 'POST', headers: { 'user-agent': SAFARI } }), 'a scripted POST without Fetch Metadata');
+  for (const ua of ['Mozilla/5.0 (compatible; Googlebot/2.1)', 'curl/8.7.1', 'python-requests/2.32', 'Mozilla/5.0 HeadlessChrome/130', '']) {
+    assert.ok(!sa.countableTap(req('POST', {}, ua)), String(ua));
+  }
+  assert.ok(!sa.countableTap({ method: 'POST', headers: { ...TAP } }), 'no user agent');
 });
 
 test('campaign tags are added to internal page links only', () => {
@@ -123,7 +149,7 @@ async function withServer(fn) {
   const send = async (e) => { events.push(e); return true; };
   const app = express();
   app.use((req, res, next) => {
-    if (req.path === '/go/app-store') return sa.appStoreRedirect(req, res, send);
+    if (req.path === '/go/app-store') return sa.appStore(req, res, send);
     if (req.path === '/spanish-reading-practice') return sa.servePage(req, res, '<a href="/spanish-reading-practice/meeting-zik">x</a>', { pageType: 'hub' }, send);
     if (req.path === '/learn') return sa.servePage(req, res, '<a href="/">x</a>', { pageType: 'other' }, send);
     if (req.path === '/missing') { res.status(404); return sa.servePage(req, res, '<a href="/">x</a>', { pageType: 'other' }, send); }   // as index.js's 404 fallback
@@ -138,25 +164,129 @@ async function withServer(fn) {
   const base = `http://127.0.0.1:${server.address().port}`;
   try { await fn(base, events); } finally { server.close(); }
 }
-const get = (url, ua = SAFARI, extra = {}) => fetch(url, { headers: { 'user-agent': ua, ...extra }, redirect: 'manual' });
+// A raw request (Node's fetch overwrites the Sec-Fetch-* headers with its own,
+// so it can't play a browser): a fetch-like { status, headers, text() }.
+function request(url, { method = 'GET', headers = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(url, { method, headers }, res => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve({
+        status: res.statusCode,
+        headers: { get: n => res.headers[n.toLowerCase()] ?? null },
+        text: async () => Buffer.concat(chunks).toString('utf8'),
+      }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+// A browser navigating to a page (or following a link): GET with a navigation's Fetch Metadata.
+const get = (url, ua = SAFARI, extra = {}) => request(url, { headers: { 'user-agent': ua, ...NAV, ...extra } });
+// The tap script's beacon: a same-origin POST of the button's URL.
+const tap = (url, ua = SAFARI, extra = {}) => request(url, { method: 'POST', headers: { 'user-agent': ua, ...TAP, ...extra } });
+const settle = () => new Promise(r => setImmediate(r));
+const BUTTON = '/go/app-store?from=/spanish-reading-practice/meeting-zik&loc=band';
+const GOOGLE_BUTTON = `${BUTTON}&utm_source=google&utm_medium=cpc&utm_campaign=google-reading-practice`;
 
-test('App Store redirect: counts the tap and sends campaign visitors to the campaign link', async () => {
+test('GET /go/app-store only redirects: a fetch of the link never creates a CTA event', async () => {
   await withServer(async (base, events) => {
-    let res = await get(`${base}/go/app-store?from=/spanish-reading-practice/meeting-zik&loc=band&utm_source=google&utm_medium=cpc&utm_campaign=google-reading-practice&gclid=abc`);
+    // A browser following the link (what a crawler, a link previewer and a no-JS visitor all do).
+    let res = await get(`${base}${GOOGLE_BUTTON}&gclid=abc`);
     assert.strictEqual(res.status, 302);
     assert.strictEqual(res.headers.get('location'), CAMPAIGN_LINK);
     assert.strictEqual(res.headers.get('set-cookie'), null);
+    assert.strictEqual(res.headers.get('cache-control'), 'no-store');
     assert.match(res.headers.get('x-robots-tag'), /noindex/);
     res = await get(`${base}/go/app-store?from=/&loc=hero`);
+    assert.strictEqual(res.status, 302);
     assert.strictEqual(res.headers.get('location'), 'https://apps.apple.com/app/id6760253260');
-    await get(`${base}/go/app-store?from=/&loc=nav`, 'Mozilla/5.0 (compatible; bingbot/2.0)');   // bot: redirected, not counted
-    await new Promise(r => setImmediate(r));
-    assert.strictEqual(events.length, 2);
+    // The 14:29 UTC burst: three links of one page fetched within 312 ms by a browser-like agent.
+    await Promise.all(['menu', 'band', 'nav'].map(loc => get(`${base}/go/app-store?from=/visual-learning-language&loc=${loc}`)));
+    // Plain HTTP clients and named crawlers too.
+    await request(`${base}${BUTTON}`, { headers: { 'user-agent': SAFARI } });
+    await get(`${base}${BUTTON}`, 'Mozilla/5.0 (compatible; bingbot/2.0)');
+    await get(`${base}${BUTTON}`, 'Mozilla/5.0 (compatible; Google-InspectionTool/1.0;)');
+    await settle();
+    assert.deepStrictEqual(events, []);
+  });
+});
+
+test('POST /go/app-store is the only thing that counts a tap: one genuine same-origin POST → exactly one CTA event', async () => {
+  await withServer(async (base, events) => {
+    const res = await tap(`${base}${GOOGLE_BUTTON}&gclid=abc`);
+    assert.strictEqual(res.status, 204);
+    assert.strictEqual(res.headers.get('location'), null, 'the beacon is not redirected');
+    assert.strictEqual(res.headers.get('set-cookie'), null);
+    await settle();
+    assert.strictEqual(events.length, 1);
     assert.strictEqual(events[0].name, 'app_store_cta_clicked');
-    assert.strictEqual(events[0].properties.exercise, 'meeting-zik');
-    assert.strictEqual(events[0].properties.apple_campaign, 'GoogleSearch');
+    assert.deepStrictEqual(events[0].properties, {
+      surface: 'website', from_page: '/spanish-reading-practice/meeting-zik', page_type: 'exercise', exercise: 'meeting-zik',
+      button: 'band', apple_campaign: 'GoogleSearch', ...GOOGLE, from_campaign: true,
+    });
     assert.ok(!JSON.stringify(events).includes('abc'), 'gclid never recorded');
+    // The tap's navigation then follows: the same URL, GET, to the Apple campaign link — not counted again.
+    const nav = await get(`${base}${GOOGLE_BUTTON}`);
+    assert.strictEqual(nav.status, 302);
+    assert.strictEqual(nav.headers.get('location'), CAMPAIGN_LINK);
+    await settle();
+    assert.strictEqual(events.length, 1);
+    // An ordinary visitor: one event with from_campaign=false, then the plain App Store page.
+    await tap(`${base}/go/app-store?from=/&loc=hero`);
+    const plain = await get(`${base}/go/app-store?from=/&loc=hero`);
+    assert.strictEqual(plain.headers.get('location'), sa.APP_STORE_URL);
+    await settle();
+    assert.strictEqual(events.length, 2);
     assert.strictEqual(events[1].properties.from_campaign, false);
+    assert.strictEqual(events[1].properties.apple_campaign, null);
+    assert.strictEqual(events[1].properties.button, 'hero');
+  });
+});
+
+test('cross-site, scripted and bot POSTs are answered but never counted', async () => {
+  await withServer(async (base, events) => {
+    for (const [ua, extra] of [
+      [SAFARI, { 'sec-fetch-site': 'cross-site' }],                                // another site posting to us
+      [SAFARI, { 'sec-fetch-site': 'same-site' }],
+      [SAFARI, { 'sec-fetch-site': 'none' }],
+      [SAFARI, { 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' }],    // a form submission
+      ['Mozilla/5.0 (compatible; Googlebot/2.1)', {}],
+      ['curl/8.7.1', {}],
+      ['', {}],
+    ]) {
+      const res = await tap(`${base}${GOOGLE_BUTTON}`, ua, extra);
+      assert.strictEqual(res.status, 204);
+    }
+    // A POST with a browser user agent but no Fetch Metadata at all (a script).
+    await request(`${base}${GOOGLE_BUTTON}`, { method: 'POST', headers: { 'user-agent': SAFARI } });
+    await settle();
+    assert.deepStrictEqual(events, []);
+  });
+});
+
+test('the App Store link works without JavaScript: the plain GET navigation reaches the right App Store page', async () => {
+  await withServer(async (base, events) => {
+    // No script ran, so no POST — just the browser following the href.
+    assert.strictEqual((await get(`${base}${GOOGLE_BUTTON}`)).headers.get('location'), CAMPAIGN_LINK);
+    assert.strictEqual((await get(`${base}${BUTTON}`)).headers.get('location'), sa.APP_STORE_URL);
+    assert.strictEqual((await get(`${base}${BUTTON}&utm_source=instagram&utm_medium=social&utm_campaign=instagram-profile`)).headers.get('location'), sa.APP_STORE_URL);
+    // Even a browser too old to send Fetch Metadata is redirected.
+    const old = await request(`${base}${GOOGLE_BUTTON}`, { headers: { 'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 Version/15.0 Mobile/15E148 Safari/604.1' } });
+    assert.strictEqual(old.status, 302);
+    assert.strictEqual(old.headers.get('location'), CAMPAIGN_LINK);
+    await settle();
+    assert.deepStrictEqual(events, []);
+  });
+});
+
+test('HEAD /go/app-store redirects without counting', async () => {
+  await withServer(async (base, events) => {
+    const res = await request(`${base}${GOOGLE_BUTTON}`, { method: 'HEAD', headers: { 'user-agent': SAFARI, ...NAV } });
+    assert.strictEqual(res.status, 302);
+    assert.strictEqual(res.headers.get('location'), CAMPAIGN_LINK);
+    await settle();
+    assert.deepStrictEqual(events, []);
   });
 });
 
@@ -170,6 +300,10 @@ test('pages: campaign tags carried into links; hub/exercise views counted, other
     await get(`${base}/spanish-reading-practice`, 'Mozilla/5.0 (compatible; Googlebot/2.1)');             // bot
     await get(`${base}/spanish-reading-practice`, SAFARI, { 'sec-purpose': 'prefetch' });               // prefetch
     await get(`${base}/learn?utm_source=google`);                                                        // not a counted page
+    // A browser user agent without a navigation's Fetch Metadata (an HTTP client, a scraper): served, not counted.
+    res = await request(`${base}/spanish-reading-practice`, { headers: { 'user-agent': SAFARI } });
+    assert.strictEqual(res.status, 200);
+    await get(`${base}/spanish-reading-practice`, SAFARI, { 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' });
     await new Promise(r => setImmediate(r));
     assert.deepStrictEqual(events.map(e => [e.name, e.properties.page_type, e.properties.from_campaign]), [['site_page_viewed', 'hub', true]]);
   });
@@ -199,6 +333,8 @@ async function journey(base, start, pathnames, loc) {
   }
   const cta = links(html).find(h => h.startsWith('/go/app-store?') && h.includes(`loc=${loc}`));
   assert.ok(cta, `no ${loc} button`);
+  // A tap: the page script POSTs the button's URL, and the browser follows the link.
+  res = await tap(`${base}${cta}`); assert.strictEqual(res.status, 204);
   res = await get(`${base}${cta}`); assert.strictEqual(res.status, 302);
   await new Promise(r => setImmediate(r));
   return { html, target: res.headers.get('location') };
@@ -223,7 +359,9 @@ test('journeys: campaign tags survive landing → homepage → App Store, and la
     assert.strictEqual(click.properties.from_campaign, true);
     assert.strictEqual(click.properties.exercise, related.split('/').pop());
     assert.ok(!JSON.stringify(events).match(/gclid|fbclid|Cj0KCQ|IwAR/), 'click IDs never reach an event');
-    assert.ok(events.filter(e => e.name === 'site_page_viewed').every(e => e.properties.from_campaign === true));
+    const views = events.filter(e => e.name === 'site_page_viewed');
+    assert.ok(views.length >= 4, `${views.length} page views counted`);                   // hub, hub, exercise, exercise
+    assert.ok(views.every(e => e.properties.from_campaign === true));
   });
 });
 
@@ -262,7 +400,7 @@ test('unlisted pages: served with their own baked tags, counted as page_type unl
   const app = express();
   app.use((req, res, next) => {
     if (req.path === '/p/a-small-town-k3f9x2') return sa.servePage(req, res, html, { pageType: 'unlisted', exercise: 'a-small-town-k3f9x2', utm: sa.bakedUtm(html) }, send);
-    if (req.path === '/go/app-store') return sa.appStoreRedirect(req, res, send);
+    if (req.path === '/go/app-store') return sa.appStore(req, res, send);
     next();
   });
   const server = http.createServer(app).listen(0);
@@ -272,7 +410,9 @@ test('unlisted pages: served with their own baked tags, counted as page_type unl
     const res = await get(`${base}/p/a-small-town-k3f9x2?utm_source=google&utm_medium=cpc&utm_campaign=google-reading-practice`);
     assert.strictEqual(res.status, 200);
     assert.strictEqual(await res.text(), html, 'links already carry the page tags — nothing is appended');
-    const cta = await get(`${base}/go/app-store?from=/p/a-small-town-k3f9x2&loc=hero&utm_source=laura&utm_medium=influencer&utm_campaign=a-small-town`);
+    const button = '/go/app-store?from=/p/a-small-town-k3f9x2&loc=hero&utm_source=laura&utm_medium=influencer&utm_campaign=a-small-town';
+    assert.strictEqual((await tap(`${base}${button}`)).status, 204);
+    const cta = await get(`${base}${button}`);
     assert.strictEqual(cta.headers.get('location'), sa.APP_STORE_URL, 'no Apple campaign for influencer pages');
     await new Promise(r => setImmediate(r));
     assert.deepStrictEqual(events.map(e => [e.name, e.properties.page_type, e.properties.exercise, e.properties.utm_source, e.properties.from_campaign]), [
@@ -312,4 +452,21 @@ test('every App Store button in the built site goes through /go/app-store with i
     }
   }
   assert.ok(buttons >= 20, `${buttons} buttons`);
+});
+
+test('every built page with an App Store button carries the tap script: a trusted click POSTs the link, navigation untouched', () => {
+  for (const f of builtPages()) {
+    const html = fs.readFileSync(f, 'utf8');
+    if (!html.includes('href="/go/app-store?')) continue;
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).filter(s => s.includes('/go/app-store'));
+    assert.strictEqual(scripts.length, 1, `tap script in ${f}`);
+    const s = scripts[0];
+    assert.match(s, /addEventListener\('click'/, f);
+    assert.match(s, /e\.isTrusted/, f);
+    assert.match(s, /method: 'POST'/, f);
+    assert.match(s, /credentials: 'omit'/, f);
+    assert.ok(!/preventDefault|location\.(href|assign|replace)|window\.open|setTimeout/.test(s), `navigation must not be prevented or delayed in ${f}`);
+    const code = s.replace(/^\s*\/\/.*$/gm, '');                                   // comments aside
+    assert.ok(!/cookie|localStorage|sessionStorage|indexedDB|navigator\.userAgent|crypto\.|Math\.random/.test(code), `no storage or identifiers in ${f}`);
+  }
 });
