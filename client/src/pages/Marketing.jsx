@@ -69,6 +69,41 @@ export default function Marketing() {
 // trailer. Story Hook shape: big opening panel + hook, zoomed bubbles with
 // Spanish and a small English echo, an atmosphere beat with no translation,
 // then the Comigo sign-off (in-world, never an advert).
+// The comic dropdowns (Examples, Reels, Posters, …): grouped by collection in
+// alphabetical order, each collection's episodes in the reader's order
+// (episode number), then the comics that belong to no collection.
+let collectionsPromise = null;
+function useCollections() {
+  const [collections, setCollections] = useState([]);
+  useEffect(() => {
+    collectionsPromise = collectionsPromise || api.get('/collections').then(r => (Array.isArray(r.data) ? r.data : r.data.collections || [])).catch(() => []);
+    collectionsPromise.then(setCollections);
+  }, []);
+  return collections;
+}
+function groupComics(comics, collections) {
+  const titleOf = Object.fromEntries(collections.map(c => [c.id, c.title || c.id]));
+  const byCollection = new Map();
+  const loose = [];
+  for (const c of comics) {
+    if (c.collectionId) { if (!byCollection.has(c.collectionId)) byCollection.set(c.collectionId, []); byCollection.get(c.collectionId).push(c); }
+    else loose.push(c);
+  }
+  const groups = [...byCollection.entries()]
+    .map(([id, list]) => ({ title: titleOf[id] || id, comics: list.sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0) || a.title.localeCompare(b.title)) }))
+    .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+  if (loose.length) groups.push({ title: 'Other comics', comics: loose.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })) });
+  return groups;
+}
+function ComicOptions({ comics }) {
+  const collections = useCollections();
+  return groupComics(comics, collections).map(g => (
+    <optgroup key={g.title} label={g.title}>
+      {g.comics.map(c => <option key={c.id} value={c.id}>{c.episodeNumber ? `${c.episodeNumber} · ` : ''}{c.title}{c.isExample ? ' (example)' : ''}</option>)}
+    </optgroup>
+  ));
+}
+
 function Carousel() {
   const [comics, setComics] = useState([]);
   const [comicId, setComicId] = useState('');
@@ -188,7 +223,7 @@ function Carousel() {
       <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', marginBottom: 4 }}>1 · Comic</label>
       <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, maxWidth: 420 }}>
         <option value="">Choose a comic…</option>
-        {comics.map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
+        <ComicOptions comics={comics} />
       </select>
 
       {images.length > 0 && (
@@ -615,7 +650,7 @@ function Artwork() {
       <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', marginBottom: 4 }}>1 · Comic</label>
       <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, maxWidth: 420 }}>
         <option value="">Choose a comic…</option>
-        {comics.map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
+        <ComicOptions comics={comics} />
       </select>
 
       {comicId && (
@@ -857,7 +892,7 @@ function MotionComic() {
         <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', marginBottom: 4 }}>1 · Comic</label>
         <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, maxWidth: 420 }}>
           <option value="">Choose a comic…</option>
-          {comics.map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
+          <ComicOptions comics={comics} />
         </select>
 
         {comicId && (
@@ -1430,6 +1465,8 @@ function CueEditor({ comicId, src, cues, onChange, original, onOriginal, cuts, o
   const clipOf = file => clips.find(c => c.file === file);
   const setCue = (i, f, x) => onChange(cues.map((c, j) => (j === i ? { ...c, [f]: x } : c)));
   const addCue = (file) => onChange([...cues, { file: file || clips[0]?.file || '', at: Number(t.toFixed(2)), volume: 1 }].sort((a, b) => a.at - b.at));
+  // A freeze with no audio: the picture simply holds here for a moment.
+  const addFreeze = () => onChange([...cues, { file: '', at: Number(t.toFixed(2)), volume: 1, freeze: 1 }].sort((a, b) => a.at - b.at));
   // Generate a new clip (the Voices tab's Quick audio) and put it at the playhead.
   const generate = async () => {
     setBusy(true); setError('');
@@ -1547,7 +1584,8 @@ function CueEditor({ comicId, src, cues, onChange, original, onOriginal, cuts, o
               <React.Fragment key={i}>
                 <input type="number" min={0} step={0.05} value={c.at} onChange={e => setCue(i, 'at', Math.max(0, Number(e.target.value) || 0))} style={{ ...input, width: '100%' }} />
                 <select value={c.file} onChange={e => setCue(i, 'file', e.target.value)} style={{ ...input, width: '100%' }}>
-                  {!clipOf(c.file) && <option value={c.file}>{c.file || '— choose a clip —'}</option>}
+                  <option value="">⏸ freeze only — no audio</option>
+                  {c.file && !clipOf(c.file) && <option value={c.file}>{c.file}</option>}
                   {clips.map(k => <option key={k.file} value={k.file}>{k.lang === 'en' ? '🇬🇧' : '🇪🇸'} {k.text}{k.seconds ? ` (${k.seconds}s)` : ''}</option>)}
                 </select>
                 <input type="number" min={0} max={2} step={0.1} value={c.volume ?? 1} onChange={e => setCue(i, 'volume', Math.max(0, Number(e.target.value) || 0))} style={{ ...input, width: '100%' }} />
@@ -1578,6 +1616,8 @@ function CueEditor({ comicId, src, cues, onChange, original, onOriginal, cuts, o
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: '0.8rem', ...grey }}>
             <button className="btn btn-secondary" disabled={!clips.length || cues.length >= 40} onClick={() => addCue()} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}
                     title="Add a cue at the playhead using an existing Quick audio clip">＋ Cue at {t.toFixed(1)} s</button>
+            <button className="btn btn-secondary" disabled={cues.length >= 40} onClick={addFreeze} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}
+                    title="Hold the picture at the playhead for a moment, with no audio (set how long in its Freeze field)">⏸ Freeze at {t.toFixed(1)} s</button>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="What happens to the recording's own sound">
               Recording's sound
               <select value={original} onChange={e => onOriginal(e.target.value)} style={input}>
@@ -1704,7 +1744,7 @@ function Posters() {
         <label style={{ display: 'block', fontSize: '0.85rem', color: '#aaa', marginBottom: 4 }}>1 · Comic</label>
         <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, maxWidth: 420 }}>
           <option value="">Choose a comic…</option>
-          {comics.map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
+          <ComicOptions comics={comics} />
         </select>
 
         {/* 2. art */}
@@ -1932,7 +1972,7 @@ function Reels() {
   const remix = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -1959,7 +1999,7 @@ function Reels() {
     try {
       const r = await api.post(model.startsWith('sora') ? '/marketing/sora-clip' : '/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, mode, aspectRatio: '9:16', styleLock, resolution,
         voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, negativePrompt,
-        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
+        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -1977,7 +2017,7 @@ function Reels() {
         <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', marginBottom: 4 }}>1 · Comic</label>
         <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, maxWidth: 420 }}>
           <option value="">Choose a comic…</option>
-          {comics.map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
+          <ComicOptions comics={comics} />
         </select>
 
         {images.length > 0 && (
@@ -2422,7 +2462,7 @@ function Examples() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, minWidth: 260 }}>
             <option value="">Choose a comic…</option>
-            {comics.map(c => <option key={c.id} value={c.id}>{c.title}{c.collectionTitle ? ` — ${c.collectionTitle}` : ''}</option>)}
+            <ComicOptions comics={comics} />
           </select>
           <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Label, e.g. Looking for work" style={{ ...input, minWidth: 240 }} />
           <button className="btn btn-primary" disabled={!comicId || !label.trim() || !!busy} onClick={() => create(false)} style={{ padding: '0.5rem 1.1rem' }}>

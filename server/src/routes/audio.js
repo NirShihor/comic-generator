@@ -241,17 +241,33 @@ async function quickSynth({ comicId, file, text, lang, voiceId, speed, stability
   const dir = quickDir(comicId);
   await fs.mkdir(dir, { recursive: true });
   const raw = path.join(dir, `.raw-${file}`), out = path.join(dir, file);
-  await fs.writeFile(raw, Buffer.from(await r.arrayBuffer()));
-  // Trim the silence ElevenLabs leaves at either end, so a clip can be placed precisely.
+  const body = Buffer.from(await r.arrayBuffer());
+  if (body.length < 500) { const e = new Error('ElevenLabs returned no audio for that text'); e.status = 502; throw e; }
+  await fs.writeFile(raw, body);
+  const seconds = async (f) => {
+    try { const v = parseFloat((await execFileAsync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f])).stdout); return Number.isFinite(v) ? Number(v.toFixed(2)) : 0; } catch { return 0; }
+  };
+  // Trim the silence ElevenLabs leaves at either end, so a clip can be placed
+  // precisely — unless that leaves nothing (the text was only punctuation or
+  // silence), in which case the clip is kept as delivered.
+  let len = 0;
   try {
     await execFileAsync('ffmpeg', ['-y', '-loglevel', 'error', '-i', raw, '-af',
       'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.12,areverse',
       '-ar', '44100', '-b:a', '160k', out]);
+    len = await seconds(out);
+  } catch { len = 0; }
+  if (len < 0.08) {
+    await fs.rename(raw, out).catch(() => {});
+    len = await seconds(out);
+  } else {
     await fs.rm(raw, { force: true });
-  } catch { await fs.rename(raw, out); }
-  let seconds = null;
-  try { seconds = Number(parseFloat((await execFileAsync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out])).stdout).toFixed(2)); } catch {}
-  return { seconds, path: out };
+  }
+  if (len < 0.08) {
+    await fs.rm(out, { force: true });
+    const e = new Error('That text produced no audible speech — try real words'); e.status = 400; throw e;
+  }
+  return { seconds: len, path: out };
 }
 const quickNum = (v, lo, hi, d) => (Number.isFinite(Number(v)) && v !== '' && v != null ? Math.min(hi, Math.max(lo, Number(v))) : d);
 router.post('/quick', async (req, res) => {
@@ -260,6 +276,7 @@ router.post('/quick', async (req, res) => {
     const { comicId, lang } = req.body;
     const text = String(req.body.text || '').trim().slice(0, 400);
     if (!/^[\w-]+$/.test(String(comicId || '')) || !text) return res.status(400).json({ error: 'comicId and text are required' });
+    if (!/[\p{L}\p{N}]/u.test(text)) return res.status(400).json({ error: 'Type some words — that text has nothing to say' });
     if (!['en', 'es'].includes(lang)) return res.status(400).json({ error: 'lang must be en or es' });
     const voiceId = lang === 'en' ? (req.body.voiceId || QUICK_ENGLISH_VOICE) : req.body.voiceId;
     if (!voiceId || !/^[A-Za-z0-9]+$/.test(voiceId)) return res.status(400).json({ error: 'Choose a voice' });
@@ -290,7 +307,7 @@ router.put('/quick/:comicId/:file', async (req, res) => {
     if (i < 0) return res.status(404).json({ error: 'Clip not found' });
     const old = index[i];
     const text = String(req.body.text ?? old.text).trim().slice(0, 400);
-    if (!text) return res.status(400).json({ error: 'text is required' });
+    if (!text || !/[\p{L}\p{N}]/u.test(text)) return res.status(400).json({ error: 'Type some words — that text has nothing to say' });
     const lang = ['en', 'es'].includes(req.body.lang) ? req.body.lang : old.lang;
     const voiceId = req.body.voiceId || (lang === old.lang ? old.voiceId : (lang === 'en' ? QUICK_ENGLISH_VOICE : ''));
     if (!voiceId || !/^[A-Za-z0-9]+$/.test(voiceId)) return res.status(400).json({ error: 'Choose a voice' });

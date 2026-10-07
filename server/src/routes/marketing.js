@@ -1146,9 +1146,10 @@ router.post('/reel-line-audio', async (req, res) => {
 const CUE_LIMIT = 40;
 function parseCues(src) {
   if (!Array.isArray(src)) return [];
-  return src.slice(0, CUE_LIMIT).filter(c => c && typeof c === 'object' && /^[\w.\-]+\.mp3$/.test(String(c.file || '')))
+  // A cue without a clip is a freeze on its own: the picture holds, no audio.
+  return src.slice(0, CUE_LIMIT).filter(c => c && typeof c === 'object' && (/^[\w.\-]+\.mp3$/.test(String(c.file || '')) || (!c.file && Number(c.freeze) > 0)))
     .map(c => ({
-      file: String(c.file),
+      file: c.file ? String(c.file) : '',
       at: Math.min(3600, Math.max(0, Number(c.at) || 0)),
       volume: Math.min(2, Math.max(0, Number.isFinite(Number(c.volume)) && c.volume !== '' && c.volume != null ? Number(c.volume) : 1)),
       // Hold the picture at this moment for this long (the cue plays over the
@@ -1242,7 +1243,9 @@ async function mixCuesOnto(comicId, videoPath, cues, original, outPath) {
   for (let i = 0; i < cues.length; i++) {
     const ap = path.join(dir, cues[i].file);
     if (!require('fs').existsSync(ap)) throw new Error(`Audio clip not found: ${cues[i].file} (Voices → Quick audio)`);
-    const dur = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ap]));
+    let dur = 0;
+    try { dur = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ap])); } catch { dur = 0; }
+    if (!(dur > 0)) throw new Error(`The audio clip "${cues[i].file}" is empty or unreadable — delete it and generate it again (Voices → Quick audio), then remove it from the cues`);
     inputs.push('-i', ap);
     const ms = Math.round(cues[i].at * 1000);
     chains.push(`[${i + 1}:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=${cues[i].volume},adelay=${ms}|${ms}[c${i}]`);
@@ -1892,9 +1895,10 @@ router.post('/veo-remix', async (req, res) => {
       await retimeClip(cur, cues, cuts, edited);
       cur = edited;
     }
-    if (cues.length) {
+    const spoken = cues.filter(c => c.file);
+    if (spoken.length) {
       const cued = out.replace(/\.mp4$/, '-cue.mp4');
-      await mixCuesOnto(comicId, cur, cues.map(c => ({ ...c, at: shift(c.at) })), ['keep', 'duck', 'mute'].includes(req.body.cueOriginal) ? req.body.cueOriginal : 'duck', cued);
+      await mixCuesOnto(comicId, cur, spoken.map(c => ({ ...c, at: shift(c.at) })), ['keep', 'duck', 'mute'].includes(req.body.cueOriginal) ? req.body.cueOriginal : 'duck', cued);
       cur = cued;
     }
     if (question || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) {
