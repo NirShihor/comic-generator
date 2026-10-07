@@ -467,6 +467,15 @@
       <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
+  <a class="ex-card" href="/spanish-reading-practice/counting-and-numbers">
+    <img loading="lazy" decoding="async" src="/assets/example-counting-and-numbers.a0f4486d.webp" width="640" height="960" alt="">
+    <div class="ex-card-body">
+      <span class="ex-level-pill">Beginner</span>
+      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Conteo y números</span> <span class="alt-en" lang="en" aria-hidden="true">Counting and numbers</span></h3>
+      <span class="ex-src" lang="es">Conteo y números</span>
+      <span class="ex-go">Read and listen &rarr;</span>
+    </div>
+  </a>
   <a class="ex-card" href="/spanish-reading-practice/where-are-the-ghosts">
     <img loading="lazy" decoding="async" src="/assets/example-where-are-the-ghosts.f89d7639.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
@@ -482,15 +491,6 @@
       <span class="ex-level-pill">Beginner</span>
       <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Los perros callejeros</span> <span class="alt-en" lang="en" aria-hidden="true">The Stray Dogs</span></h3>
       <span class="ex-src" lang="es">Los perros callejeros</span>
-      <span class="ex-go">Read and listen &rarr;</span>
-    </div>
-  </a>
-  <a class="ex-card" href="/spanish-reading-practice/emergency-call">
-    <img loading="lazy" decoding="async" src="/assets/example-emergency-call.e714e4d1.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="ex-level-pill">Beginner</span>
-      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Operadora de emergencias</span> <span class="alt-en" lang="en" aria-hidden="true">Emergency dispatcher</span></h3>
-      <span class="ex-src" lang="es">Operadora de emergencias</span>
       <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
@@ -649,6 +649,16 @@
     padding: 0 6px; box-shadow: 0 2px 3px rgba(0, 0, 0, 0.35);
   }
   @media (prefers-reduced-motion: reduce) { .spot-frame, .spot-halo, .spot-cut { animation: none; } .spot-frame { opacity: 0.9; } .spot-halo { opacity: 0.6; } }
+  /* Arrival cue, as in the app: a green pointing hand on bubble 1 gives two
+     soft pulses once the comic scrolls into view, then it's gone. */
+  .ex-hand { position: absolute; width: 40px; height: 40px; z-index: 2; pointer-events: none; opacity: 0;
+    transform: translate(-17.5px, -3.3px) rotate(-45deg); transform-origin: 17.5px 3.3px;
+    filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 4px rgba(0, 0, 0, 0.6)); }
+  .ex-hand.go { animation: handPulse 3.95s linear forwards; }
+  @keyframes handPulse {
+    0%, 11.4% { opacity: 0; } 21.5%, 39.2% { opacity: 1; } 49.4%, 60.8% { opacity: 0; } 70.9%, 88.6% { opacity: 1; } 98.7%, 100% { opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { .ex-hand.go { animation-duration: 2s; } }
   .sl-head { font-weight: 800; font-size: 1.05rem; margin: 0 28px 10px 0; }
   .sl-img { display: block; max-width: 100%; max-height: 220px; width: auto; height: auto; margin: 0 auto 10px; border-radius: 10px; }
   .sl-es { font-family: Charter, Georgia, serif; font-size: 1.35rem; font-weight: 700; text-align: center; margin: 0; }
@@ -1004,6 +1014,7 @@
     function openBubble(i) {
       var h = hotspots[i];
       if (!h) return;
+      dropHand();
       if (hint) hint.style.display = 'none';
       closeSheet();
       audio.pause();
@@ -1028,6 +1039,26 @@
     hotspots.forEach(function (h, i) {
       h.addEventListener('click', function () { openBubble(i); });
     });
+
+    // Arrival cue: the hand sits at bubble 1's bottom-right corner, pointing
+    // up-left into it; it starts when the comic is mostly on screen and is
+    // dropped the moment anything is opened.
+    var hand = null;
+    var first = data.bubbles[0];
+    if (first && !first.caption && 'IntersectionObserver' in window) {
+      hand = document.createElement('div');
+      hand.className = 'ex-hand';
+      hand.innerHTML = '<svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><path fill="#61F527" d="M9 11.5V3.5a1.5 1.5 0 0 1 3 0V10l1-.2a1.5 1.5 0 0 1 1.8 1.2h.2a1.5 1.5 0 0 1 1.8 1.2h.2a1.5 1.5 0 0 1 1.8 1.4V17c0 2.8-2 5-5 5h-1.5c-1.6 0-3-.7-3.9-2L5.3 15.4a1.5 1.5 0 0 1 2.4-1.8L9 15z"/></svg>';
+      hand.style.left = ((first.x + first.w * 0.95) * 100) + '%';
+      hand.style.top = ((first.y + first.h) * 100) + '%';
+      stage.appendChild(hand);
+      hand.addEventListener('animationend', function () { dropHand(); });
+      var io = new IntersectionObserver(function (entries) {
+        if (entries.some(function (e) { return e.isIntersecting; })) { io.disconnect(); if (hand) hand.classList.add('go'); }
+      }, { threshold: 0.5 });
+      io.observe(stage);
+    }
+    function dropHand() { if (hand) { hand.remove(); hand = null; } }
 
     // Hotspots: the cue behind each tap target, drawn once the page image is
     // in (a traced one is a cut-out of the art), and the slides popup.
@@ -1095,6 +1126,7 @@
       var btn = spots[i], hs = (data.hotspots || [])[+btn.dataset.h];
       if (!hs) return;
       if (hs.bubble != null) { openBubble(hs.bubble); return; }
+      dropHand();
       if (hint) hint.style.display = 'none';
       closeSheet(); audio.pause(); clearSpeaking();
       if (current) setActive(current, false);
