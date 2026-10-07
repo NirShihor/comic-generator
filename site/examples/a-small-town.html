@@ -650,7 +650,8 @@
      arrows — so it may take nearly the whole comic, and the picture is sized
      (by script) to whatever height the rest leaves. */
   .popup.slides { max-height: 96%; }
-  .sl-img { display: block; max-width: 100%; max-height: 220px; width: auto; height: auto; margin: 0 auto 10px; border-radius: 10px; }
+  .sl-pic { display: flex; align-items: center; justify-content: center; height: 220px; margin: 0 0 10px; }
+  .sl-img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; border-radius: 10px; }
   .sl-es { font-family: Charter, Georgia, serif; font-size: 1.35rem; font-weight: 700; text-align: center; margin: 0; }
   .sl-en { color: #55536B; text-align: center; margin: 4px 0 0; font-size: 1rem; }
   .sl-row { display: flex; justify-content: center; gap: 10px; margin-top: 12px; }
@@ -1145,7 +1146,7 @@
       function card(n) {
         var sl = slides[n] || {}, el = document.createElement('div');
         el.className = 'sl-card';
-        el.innerHTML = (sl.img ? '<img class="sl-img" src="' + esc(sl.img) + '" alt="">' : '')
+        el.innerHTML = (sl.img ? '<div class="sl-pic"><img class="sl-img" src="' + esc(sl.img) + '" alt=""></div>' : '')
           + (sl.es ? '<p class="sl-es" lang="es">' + esc(sl.es) + '</p>' : '')
           + (sl.en ? '<p class="sl-en">' + esc(sl.en) + '</p>' : '')
           + '<div class="sl-row">' + (sl.a ? '<button class="ex-play sl-play">▶︎&nbsp; Play</button>' : '')
@@ -1153,11 +1154,8 @@
         var pl = el.querySelector('.sl-play'), en = el.querySelector('.sl-en-play');
         if (pl) pl.addEventListener('click', function () { playSrc(sl.a); });
         if (en) en.addEventListener('click', function () { playSrc(sl.ea); });
-        var im = el.querySelector('.sl-img');
-        if (im) {
-          if (imgMax) im.style.maxHeight = imgMax + 'px';
-          if (!im.complete) im.addEventListener('load', placePopup, { once: true });
-        }
+        var pic = el.querySelector('.sl-pic');
+        if (pic && imgMax) pic.style.height = imgMax + 'px';
         return el;
       }
       function setNav() {
@@ -1166,19 +1164,22 @@
         prevBtn.disabled = k === 0; nextBtn.disabled = k === slides.length - 1;
       }
       function show() {
-        var el = card(k);
-        view.appendChild(el);
         setNav();
-        // Everything but the picture, measured with the picture out of the
-        // flow; the picture gets what's left of the popup's height — the
-        // same height on every slide, so the frame never jumps.
-        var im = el.querySelector('.sl-img');
-        if (im) {
-          im.style.display = 'none';
-          imgMax = Math.max(72, Math.floor(stage.clientHeight * 0.96 - 16 - popup.offsetHeight));
-          im.style.display = '';
-          im.style.maxHeight = imgMax + 'px';
-        }
+        // One size for every slide: the frame (title, arrows) plus the
+        // tallest slide's words and buttons, and the picture box gets what's
+        // left of the popup's height — so nothing moves as you go through.
+        var frame = popup.offsetHeight, text = 0;
+        slides.forEach(function (_, n) {
+          var probe = card(n), pic = probe.querySelector('.sl-pic');
+          if (pic) pic.remove();
+          probe.className = 'sl-card in'; probe.style.visibility = 'hidden';
+          view.appendChild(probe);
+          text = Math.max(text, probe.offsetHeight);
+          probe.remove();
+        });
+        imgMax = Math.max(72, Math.floor(stage.clientHeight * 0.96 - 16 - frame - text - 10));
+        view.style.height = (text + imgMax + 10) + 'px';
+        view.appendChild(card(k));
         placePopup();
       }
       function go(d) {
@@ -1188,7 +1189,6 @@
         audio.pause();
         var old = view.querySelector('.sl-card'), el = card(n);
         k = n; setNav();
-        view.style.height = old.offsetHeight + 'px';
         el.classList.add('in'); el.style.transform = 'translateX(' + (d > 0 ? 100 : -100) + '%)';
         view.appendChild(el);
         el.getBoundingClientRect();   // commit the start position before sliding
@@ -1198,7 +1198,6 @@
         function finish() {
           if (done) return; done = true;
           old.remove(); el.classList.remove('in'); el.style.transform = '';
-          view.style.height = '';
           moving = false;
           placePopup();
         }
