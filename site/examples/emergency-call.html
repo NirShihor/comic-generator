@@ -647,6 +647,10 @@
   }
   @media (prefers-reduced-motion: reduce) { .ex-hand.go { animation-duration: 2s; } }
   .sl-head { font-weight: 800; font-size: 1.05rem; margin: 0 28px 10px 0; }
+  /* A slides popup shows its whole slide at once — picture, words, buttons,
+     arrows — so it may take nearly the whole comic, and the picture is sized
+     (by script) to whatever height the rest leaves. */
+  .popup.slides { max-height: 96%; }
   .sl-img { display: block; max-width: 100%; max-height: 220px; width: auto; height: auto; margin: 0 auto 10px; border-radius: 10px; }
   .sl-es { font-family: Charter, Georgia, serif; font-size: 1.35rem; font-weight: 700; text-align: center; margin: 0; }
   .sl-en { color: #55536B; text-align: center; margin: 4px 0 0; font-size: 1rem; }
@@ -1008,6 +1012,7 @@
       if (current) setActive(current, false);
       current = h; setActive(h, true);
       var b = data.bubbles[+h.dataset.i] || { sentences: [] };
+      popup.classList.remove('slides');
       renderBubble(b);
       navRow(i);
       popupRef = bubbleRef(h);
@@ -1127,8 +1132,6 @@
           + (sl.en ? '<p class="sl-en">' + esc(sl.en) + '</p>' : '')
           + '<div class="sl-row">' + (sl.a ? '<button class="ex-play sl-play">▶︎&nbsp; Play</button>' : '')
           + (sl.ea ? '<button class="ex-play en sl-en-play">🔊&nbsp; EN</button>' : '') + '</div></div>';
-        var im = body.querySelector('.sl-img');
-        if (im && !im.complete) im.addEventListener('load', placePopup, { once: true });
         var pl = body.querySelector('.sl-play'), en = body.querySelector('.sl-en-play');
         if (pl) pl.addEventListener('click', function () { playSrc(sl.a); });
         if (en) en.addEventListener('click', function () { playSrc(sl.ea); });
@@ -1143,6 +1146,16 @@
           prev.addEventListener('click', function () { go(-1); });
           next.addEventListener('click', function () { go(1); });
           body.appendChild(nav);
+        }
+        var im = body.querySelector('.sl-img');
+        if (im) {
+          // Everything but the picture, measured with the picture out of the
+          // flow; the picture gets what's left of the popup's height.
+          im.style.display = 'none';
+          var room = stage.clientHeight * 0.96 - 16 - popup.offsetHeight;
+          im.style.display = '';
+          im.style.maxHeight = Math.max(72, Math.floor(room)) + 'px';
+          if (!im.complete) im.addEventListener('load', placePopup, { once: true });
         }
         placePopup();
       }
@@ -1160,6 +1173,7 @@
         if (dx > 50) go(-1); else if (dx < -50) go(1);
       };
       popupRef = hs.y + hs.h / 2;
+      popup.classList.add('slides');
       popup.hidden = false;
       popup.scrollTop = 0;
       show();
