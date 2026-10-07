@@ -147,6 +147,18 @@ def expand_examples(html, own_slug=None):
             first = (b.get('sentences') or [{}])[0].get('es', '')
             spots.append(f'    <button class="hotspot" data-i="{i}" style="left:{left:.1f}%;top:{top:.1f}%;width:{w:.1f}%;height:{h:.1f}%"'
                          f'{" data-caption" if b.get("caption") else ""} aria-label="{e(first)} — tap to hear and explore"></button>')
+        # Hotspots (the app's pulsing aids that open a slides popup): the cue
+        # itself is drawn by the stage script from the data blob; here each gets
+        # its tap target. Slide images become hashed static files like the page.
+        hotspots = []
+        for i, h in enumerate(data.get('hotspots', [])):
+            for sl in h.get('slides', []):
+                if sl.get('img'):
+                    if sl['img'] not in manifest:
+                        manifest[sl['img']] = process(sl['img'])
+                    sl['img'] = manifest[sl['img']][0]
+            spots.append(f'    <button class="spot" data-h="{i}" style="left:{h["x"] * 100:.1f}%;top:{h["y"] * 100:.1f}%;'
+                         f'width:{h["w"] * 100:.1f}%;height:{h["h"] * 100:.1f}%" aria-label="{e(h.get("label") or "Open")}"></button>')
         # On the example's own page the comic is the main content (loaded
         # eagerly: it is the largest thing above the fold); embedded in another
         # page it loads lazily and links to that page.
@@ -154,14 +166,15 @@ def expand_examples(html, own_slug=None):
         comic, coll = sentence_case(data.get('comic')), sentence_case(data.get('collection'))
         alt = data.get('imageAlt') or (f"A page from {comic or 'an original Comigo comic'}"
                                        + (f" ({coll})" if coll else '') + ', an original Comigo Spanish comic.')
-        blob = json.dumps({'bubbles': data.get('bubbles', [])}, ensure_ascii=False).replace('</', '<\\/')
+        blob = json.dumps({'bubbles': data.get('bubbles', []), 'hotspots': data.get('hotspots', [])}, ensure_ascii=False).replace('</', '<\\/')
         htag = 'h2' if own else 'h3'
+        hot_word = ' or a <span class="hot-word">hotspot</span>' if data.get('hotspots') else ''
         load = 'fetchpriority="high" decoding="async"' if own else 'loading="lazy" decoding="async"'
         link = ('' if own else
                 f'<p class="wrap stage-link"><a href="{ex_url(slug)}">Read &ldquo;{e(page_label(data))}&rdquo; as a full '
                 'exercise, with the transcript, vocabulary and translation &rarr;</a></p>\n')
         return (f'<section class="wrap stage-wrap">\n'
-                f'  <{htag} class="display stage-head">Click on a bubble</{htag}>\n'
+                f'  <{htag} class="display stage-head">Click on a bubble{hot_word}</{htag}>\n'
                 + (f'  <p class="stage-note">{e(note)}</p>\n' if note else '') +
                 f'  <div class="stage" data-ex="{e(slug)}">\n'
                 f'    <img {load} src="{{{{IMG_{data["image"]}}}}}" alt="{e(alt)}">\n'
@@ -169,7 +182,7 @@ def expand_examples(html, own_slug=None):
                 '    <div class="popup" hidden><button class="popup-x" aria-label="Close">✕</button><div class="popup-body"></div></div>\n'
                 '    <div class="ex-sheet" hidden><div class="sh-head"><b></b><button class="sh-done">Done</button></div><div class="sh-body"></div></div>\n'
                 '    <audio preload="none"></audio>\n'
-                '    <div class="hint">\U0001F446 Tap a speech bubble</div>\n'
+                '    <div class="hint">\U0001F446 Tap a speech bubble' + (' or a glowing spot' if data.get('hotspots') else '') + '</div>\n'
                 '  </div>\n'
                 f'  <script type="application/json" class="ex-data">{blob}</script>\n'
                 '</section>\n' + link)
@@ -188,6 +201,11 @@ def clean_example(x):
             for k in ('es', 'en', 'g'):
                 if sent.get(k):
                     sent[k] = clean_line(sent[k])
+    for h in x.get('hotspots', []):
+        for sl in h.get('slides', []):
+            for k in ('es', 'en'):
+                if sl.get(k):
+                    sl[k] = clean_line(sl[k])
     return x
 
 def load_example(path):
@@ -433,6 +451,18 @@ def study_section(x):
                          + (f' <span class="base">(<span lang="es">{e(base)}</span>)</span>' if base else '')
                          + f' &mdash; {e(w["m"])}</li>')
     notes = [s for s in sents if s.get('g')]
+    # Hotspot aids: each one's slides as a list (the numbers, the phrases...).
+    aids = []
+    for h in x.get('hotspots', []):
+        rows = [sl for sl in h.get('slides', []) if sl.get('es') or sl.get('en')]
+        if not rows:
+            continue
+        aids.append('  <details class="study-block">\n'
+                    f'    <summary><h3>{e(h.get("label") or "On this page")}</h3></summary>\n'
+                    '    <ol class="lines">\n'
+                    + '\n'.join(f'      <li><span class="es" lang="es">{e(sl.get("es"))}</span>'
+                                + (f'<span class="en">{e(sl["en"])}</span>' if sl.get('en') else '') + '</li>' for sl in rows)
+                    + '\n    </ol>\n  </details>')
     out = ['<section class="wrap study">',
            '  <h2 class="display">Study the Spanish</h2>',
            '  <p class="hint-line">Everything on the page as text: open a section when you want it.</p>',
@@ -452,6 +482,7 @@ def study_section(x):
                 '\n'.join(f'      <li><span class="es" lang="es">{e(s["es"])}</span><span class="note">{e(s["g"])}</span></li>' for s in notes),
                 '    </ul>',
                 '  </details>']
+    out += aids
     out.append('</section>')
     return '\n'.join(out) + '\n'
 
