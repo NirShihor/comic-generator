@@ -96,6 +96,58 @@
   .ex-sheet .sh-text.used { font-weight: 800; }
   .ex-sheet .sh-explain { white-space: pre-wrap; line-height: 1.55; font-size: 0.98rem; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* Hotspots, as in the app: a pulsing cue over part of the art that opens a
+     slides popup (an aid such as "count to 20"). The cue is one of: a framed
+     box, a soft breathing halo (frame colour "transparent"), a real button,
+     or — for a traced outline — a cut-out of the page that lifts and settles
+     with a heartbeat. The .spot button is the tap target over it. */
+  .spot { position: absolute; background: transparent; border: 0; padding: 0; cursor: pointer; z-index: 2; border-radius: 8px; }
+  .spot-cue { position: absolute; pointer-events: none; z-index: 1; }
+  /* Every cue beats like a heart: a small pulse, straight away a bigger one,
+     then a rest (cycle 2.6s: beats at 0–0.26s and 0.40–0.66s). */
+  .spot-frame { border: 1.5px solid var(--c, #00BCD4); border-radius: 6px; animation: spotFrame 2.6s linear infinite; }
+  @keyframes spotFrame {
+    0%, 10%, 15.4%, 25.4%, 100% { opacity: 0.35; transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+    5% { opacity: 0.7; transform: scale(1.05); box-shadow: 0 0 6px 0 var(--c, #00BCD4); }
+    20.4% { opacity: 1; transform: scale(1.12); box-shadow: 0 0 11px 1px var(--c, #00BCD4); }
+  }
+  /* Frame colour "transparent": no line at all — a translucent cyan wash
+     over the area that breathes with the heartbeat. */
+  .spot-halo { background: #00BCD4; border-radius: 9px; filter: blur(1.5px); animation: spotHalo 2.6s linear infinite; }
+  @keyframes spotHalo {
+    0%, 10%, 15.4%, 25.4%, 100% { opacity: 0; transform: scale(1); }
+    5% { opacity: 0.25; transform: scale(1.04); }
+    20.4% { opacity: 0.42; transform: scale(1.08); }
+  }
+  /* The word "hotspot" in the heading beats in step with the cues: the same
+     wash behind it, on the same clock. */
+  .hot-word { position: relative; display: inline-block; padding: 0 0.18em; margin: 0 -0.18em; border-radius: 0.3em; }
+  .hot-word::before { content: ''; position: absolute; inset: -0.22em -0.3em; background: #00BCD4; border-radius: 0.45em; z-index: -1; animation: hotWord 2.6s linear infinite; }
+  @keyframes hotWord {
+    0%, 10%, 15.4%, 25.4%, 100% { opacity: 0; transform: scale(1); }
+    5% { opacity: 0.45; transform: scale(1.12); }
+    20.4% { opacity: 0.75; transform: scale(1.3); }
+  }
+  .spot-cut { display: block; animation: spotBeat 2.6s linear infinite; }
+  @keyframes spotBeat {
+    0%, 10%, 15.4%, 25.4%, 100% { transform: scale(1); filter: brightness(1) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.12)); }
+    5% { transform: scale(calc(1 + (var(--peak, 1.12) - 1) / 2)); filter: brightness(calc(1 + (var(--bright, 1.2) - 1) / 2)) drop-shadow(0 3px 6px rgba(0, 0, 0, 0.26)); }
+    20.4% { transform: scale(var(--peak, 1.12)); filter: brightness(var(--bright, 1.2)) drop-shadow(0 5px 9px rgba(0, 0, 0, 0.4)); }
+  }
+  .spot-btn {
+    display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+    background: var(--c, #00BCD4); color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.65);
+    border-radius: 999px; font-family: system-ui, sans-serif; font-weight: 600; white-space: nowrap; overflow: hidden;
+    padding: 0 6px; box-shadow: 0 2px 3px rgba(0, 0, 0, 0.35);
+  }
+  @media (prefers-reduced-motion: reduce) { .spot-frame, .spot-halo, .spot-cut { animation: none; } .spot-frame { opacity: 0.9; } .spot-halo { opacity: 0.6; } }
+  .sl-head { font-weight: 800; font-size: 1.05rem; margin: 0 28px 10px 0; }
+  .sl-img { display: block; max-width: 100%; max-height: 220px; width: auto; height: auto; margin: 0 auto 10px; border-radius: 10px; }
+  .sl-es { font-family: Charter, Georgia, serif; font-size: 1.35rem; font-weight: 700; text-align: center; margin: 0; }
+  .sl-en { color: #55536B; text-align: center; margin: 4px 0 0; font-size: 1rem; }
+  .sl-row { display: flex; justify-content: center; gap: 10px; margin-top: 12px; }
+  .ex-play.en { background: #8E44D6; }
+  .sl-swipe { touch-action: pan-y; }
 </style>
 <script>
 (function () {
@@ -305,6 +357,11 @@
       if (current) setActive(current, false);
       current = null;
     }
+    function bubbleRef(h) {
+      var b = data.bubbles[+h.dataset.i] || {};
+      return (b.panel && b.panel[3] <= 0.75) ? b.panel[1] + b.panel[3] / 2
+        : (parseFloat(h.style.top) + parseFloat(h.style.height) / 2) / 100;
+    }
     function speaker(src, label) {
       return src ? '<button class="wplay" data-snd="' + esc(src) + '" aria-label="' + esc(label) + '">🔊</button>' : '';
     }
@@ -366,19 +423,19 @@
     // panel as possible: a panel in the top half → popup at the bottom, and
     // vice versa. A panel that fills most of the page (or no panel data)
     // falls back to the bubble's own position.
+    var popupRef = 0.5;   // vertical centre (0..1) of what the open popup belongs to
     function placePopup() {
-      if (!current || popup.hidden) return;
+      if (popup.hidden) return;
       var sh = stage.clientHeight, ph = popup.offsetHeight;
-      var b = data.bubbles[+current.dataset.i] || {};
-      var ref = (b.panel && b.panel[3] <= 0.75) ? b.panel[1] + b.panel[3] / 2
-        : (parseFloat(current.style.top) + parseFloat(current.style.height) / 2) / 100;
-      var top = ref >= 0.5 ? 8 : sh - ph - 8;
-      popup.style.top = Math.max(8, top) + 'px';
+      var top = popupRef >= 0.5 ? 8 : sh - ph - 8;
+      // Never past the bottom of the comic (the stage clips what spills over).
+      popup.style.top = Math.max(8, Math.min(top, sh - ph - 8)) + 'px';
       popup.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
     function renderBubble(b) {
       body.innerHTML = '';
+      body.ontouchstart = body.ontouchend = null;
       if (!tipSeen && (b.sentences || []).some(function (s) { return s.words && s.words.length; })) {
         var tip = document.createElement('div');
         tip.className = 'tap-tip';
@@ -447,6 +504,7 @@
       var b = data.bubbles[+h.dataset.i] || { sentences: [] };
       renderBubble(b);
       navRow(i);
+      popupRef = bubbleRef(h);
       popup.hidden = false;
       popup.scrollTop = 0;
       placePopup();
@@ -462,6 +520,124 @@
     hotspots.forEach(function (h, i) {
       h.addEventListener('click', function () { openBubble(i); });
     });
+
+    // Hotspots: the cue behind each tap target, drawn once the page image is
+    // in (a traced one is a cut-out of the art), and the slides popup.
+    var spots = Array.prototype.slice.call(stage.querySelectorAll('.spot'));
+    function pct(v) { return (v * 100).toFixed(2) + '%'; }
+    function drawCue(btn, hs) {
+      var cue;
+      if (hs.button) {
+        cue = document.createElement('div');
+        cue.className = 'spot-cue spot-btn';
+        cue.textContent = hs.button;
+        var hpx = hs.h * stage.clientHeight;
+        cue.style.borderRadius = (hpx * 0.3) + 'px';
+        cue.style.fontSize = Math.min(hpx * 0.42, 17) + 'px';
+        if (hs.color && hs.color !== 'transparent') cue.style.setProperty('--c', hs.color);
+      } else if (hs.points && hs.points.length >= 3 && img.complete && img.naturalWidth) {
+        var W = img.naturalWidth, H = img.naturalHeight, pts = hs.points;
+        var x0 = 1, y0 = 1, x1 = 0, y1 = 0, cx = 0, cy = 0;
+        pts.forEach(function (p) {
+          if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+          cx += p[0] / pts.length; cy += p[1] / pts.length;
+        });
+        // Room for the stroke and the shadow around the shape.
+        var m = 4 / W;
+        x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(1, x1 + m); y1 = Math.min(1, y1 + m);
+        var cv = document.createElement('canvas');
+        var bw = Math.max(1, Math.round((x1 - x0) * W)), bh = Math.max(1, Math.round((y1 - y0) * H));
+        cv.width = bw; cv.height = bh;
+        var c = cv.getContext('2d');
+        c.beginPath();
+        pts.forEach(function (p, k) { c[k ? 'lineTo' : 'moveTo']((p[0] - x0) * W, (p[1] - y0) * H); });
+        c.closePath();
+        c.save(); c.clip();
+        try { c.drawImage(img, -x0 * W, -y0 * H, W, H); } catch (e) { return null; }
+        c.restore();
+        if (hs.color !== 'transparent') {
+          c.strokeStyle = hs.color || '#00BCD4'; c.lineWidth = 2.5; c.stroke();
+        }
+        cue = cv;
+        cue.className = 'spot-cue spot-cut';
+        cue.style.left = pct(x0); cue.style.top = pct(y0); cue.style.width = pct(x1 - x0); cue.style.height = pct(y1 - y0);
+        cue.style.transformOrigin = pct((cx - x0) / (x1 - x0)) + ' ' + pct((cy - y0) / (y1 - y0));
+        cue.style.setProperty('--peak', 1 + (hs.pulseScale != null ? hs.pulseScale : 0.12));
+        cue.style.setProperty('--bright', 1 + (hs.pulseBrightness != null ? hs.pulseBrightness : 0.2));
+        stage.insertBefore(cue, btn);
+        return cue;
+      } else if (hs.points && hs.points.length >= 3) {
+        return undefined;   // image not loaded yet: drawn on load
+      } else {
+        cue = document.createElement('div');
+        if (hs.color === 'transparent') cue.className = 'spot-cue spot-halo';
+        else { cue.className = 'spot-cue spot-frame'; if (hs.color) cue.style.setProperty('--c', hs.color); }
+      }
+      cue.style.left = btn.style.left; cue.style.top = btn.style.top; cue.style.width = btn.style.width; cue.style.height = btn.style.height;
+      stage.insertBefore(cue, btn);
+      return cue;
+    }
+    spots.forEach(function (btn) {
+      var hs = (data.hotspots || [])[+btn.dataset.h];
+      if (!hs) return;
+      if (drawCue(btn, hs) === undefined) img.addEventListener('load', function () { drawCue(btn, hs); }, { once: true });
+    });
+
+    function openSpot(i) {
+      var btn = spots[i], hs = (data.hotspots || [])[+btn.dataset.h];
+      if (!hs) return;
+      if (hs.bubble != null) { openBubble(hs.bubble); return; }
+      if (hint) hint.style.display = 'none';
+      closeSheet(); audio.pause(); clearSpeaking();
+      if (current) setActive(current, false);
+      current = null;
+      var slides = hs.slides || [], k = 0;
+      function show() {
+        var sl = slides[k] || {};
+        body.innerHTML = '<div class="sl-head">' + esc(hs.label || '') + '</div><div class="sl-swipe">'
+          + (sl.img ? '<img class="sl-img" src="' + esc(sl.img) + '" alt="">' : '')
+          + (sl.es ? '<p class="sl-es" lang="es">' + esc(sl.es) + '</p>' : '')
+          + (sl.en ? '<p class="sl-en">' + esc(sl.en) + '</p>' : '')
+          + '<div class="sl-row">' + (sl.a ? '<button class="ex-play sl-play">▶︎&nbsp; Play</button>' : '')
+          + (sl.ea ? '<button class="ex-play en sl-en-play">🔊&nbsp; EN</button>' : '') + '</div></div>';
+        var im = body.querySelector('.sl-img');
+        if (im && !im.complete) im.addEventListener('load', placePopup, { once: true });
+        var pl = body.querySelector('.sl-play'), en = body.querySelector('.sl-en-play');
+        if (pl) pl.addEventListener('click', function () { playSrc(sl.a); });
+        if (en) en.addEventListener('click', function () { playSrc(sl.ea); });
+        if (slides.length > 1) {
+          var nav = document.createElement('div');
+          nav.className = 'ex-nav';
+          nav.innerHTML = '<button class="ex-prev" aria-label="Previous slide">&#8249;</button>'
+            + '<span>' + (k + 1) + ' / ' + slides.length + '</span>'
+            + '<button class="ex-next" aria-label="Next slide">&#8250;</button>';
+          var prev = nav.querySelector('.ex-prev'), next = nav.querySelector('.ex-next');
+          prev.disabled = k === 0; next.disabled = k === slides.length - 1;
+          prev.addEventListener('click', function () { go(-1); });
+          next.addEventListener('click', function () { go(1); });
+          body.appendChild(nav);
+        }
+        placePopup();
+      }
+      function go(d) {
+        var n = k + d;
+        if (n < 0 || n >= slides.length) return;
+        k = n; audio.pause(); show();
+      }
+      // Swipe between slides, as in the app.
+      var sx = null;
+      body.ontouchstart = function (ev) { sx = ev.touches[0].clientX; };
+      body.ontouchend = function (ev) {
+        if (sx == null) return;
+        var dx = ev.changedTouches[0].clientX - sx; sx = null;
+        if (dx > 50) go(-1); else if (dx < -50) go(1);
+      };
+      popupRef = hs.y + hs.h / 2;
+      popup.hidden = false;
+      popup.scrollTop = 0;
+      show();
+    }
+    spots.forEach(function (btn, i) { btn.addEventListener('click', function () { openSpot(i); }); });
     popup.querySelector('.popup-x').addEventListener('click', close);
     sheet.querySelector('.sh-done').addEventListener('click', closeSheet);
   });

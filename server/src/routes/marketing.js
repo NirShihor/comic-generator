@@ -3125,6 +3125,52 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
       });
     }
 
+    // Hotspots: the app's pulsing areas that open a slides popup (an aid such
+    // as "count to 20"). Exported with their shape and cue settings, and each
+    // slide's image (into site/assets, hashed by build.py like the page
+    // image), Spanish/English text and audio. A hotspot that merely opens a
+    // bubble's card points at that bubble's index in `out`.
+    for (const f of await fs.readdir(assetsDir)) if (f.startsWith(`example-${slug}-h`)) await fs.rm(path.join(assetsDir, f));
+    const hotspots = [];
+    let hn = 0;
+    for (const h of page.hotspots || []) {
+      const slides = [];
+      let sn = 0;
+      for (const s of h.slides || []) {
+        sn++;
+        const slide = { es: (s.text || '').trim(), en: (s.translation || '').trim() };
+        const rel = String(s.imageUrl || '').split('?')[0];
+        const src = rel.startsWith('/uploads/') ? path.join(__dirname, '../../uploads', rel.slice('/uploads/'.length))
+          : rel.startsWith('/projects/') ? path.join(PROJECTS_DIR, rel.replace(/^\/projects\//, '')) : '';
+        if (src && !src.includes('..') && fsSync.existsSync(src)) {
+          const name = `example-${slug}-h${hn + 1}-s${sn}`;
+          const x = path.extname(src).toLowerCase() === '.jpg' ? 'jpg' : 'png';
+          await fs.copyFile(src, path.join(assetsDir, `${name}.${x}`));
+          slide.img = name;
+        }
+        const a = await copyAudio(s.audioUrl, `ex-${slug}-h${hn + 1}-s${sn}`);
+        const ea = await copyAudio(s.translationAudioUrl, `ex-${slug}-h${hn + 1}-s${sn}-en`);
+        if (a) slide.a = a;
+        if (ea) slide.ea = ea;
+        if (slide.es || slide.en || slide.img) slides.push(slide);
+      }
+      const bubbleIdx = h.triggerBubbleId ? bubbles.findIndex(b => b.id === h.triggerBubbleId) : -1;
+      if (!slides.length && bubbleIdx < 0) continue;
+      hn++;
+      const pts = (h.points || []).filter(p => p && p.x != null && p.y != null);
+      hotspots.push({
+        x: h.x || 0, y: h.y || 0, w: h.width || 0, h: h.height || 0,
+        label: (h.label || '').trim(),
+        ...(pts.length >= 3 && { points: pts.map(p => [+(+p.x).toFixed(4), +(+p.y).toFixed(4)]) }),
+        ...(h.borderColor && { color: h.borderColor }),
+        ...(h.pulseScale != null && { pulseScale: h.pulseScale }),
+        ...(h.pulseBrightness != null && { pulseBrightness: h.pulseBrightness }),
+        ...(h.pulseTint && { pulseTint: h.pulseTint }),
+        ...(h.displayStyle === 'button' && { button: (h.buttonLabel || h.label || '•••').trim() }),
+        ...(bubbleIdx >= 0 ? { bubble: bubbleIdx } : { slides }),
+      });
+    }
+
     const meta = await require('sharp')(imgSrc).metadata();
     const data = {
       slug, label: page.exampleTitle || page.exampleLabel || '', labelEn: page.exampleTitleEn || '',
@@ -3133,6 +3179,7 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
       image: `example-${slug}`, width: meta.width, height: meta.height,
       publishedAt: new Date().toISOString(),
       bubbles: out,
+      ...(hotspots.length && { hotspots }),
     };
     if (unlisted) {
       data.unlisted = true;
@@ -3155,6 +3202,7 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
       await fs.rm(path.join(oldDir, `${oldSlug}.html`), { force: true });
       if (oldSlug !== slug) {
         for (const x of ['png', 'jpg']) await fs.rm(path.join(assetsDir, `example-${oldSlug}.${x}`), { force: true });
+        for (const f of await fs.readdir(assetsDir)) if (f.startsWith(`example-${oldSlug}-h`)) await fs.rm(path.join(assetsDir, f));
         for (const f of await fs.readdir(audioOut)) if (f.startsWith(`ex-${oldSlug}-`)) await fs.rm(path.join(audioOut, f));
       }
       if (!wasUnlisted && !unlisted) await addSiteRedirect(`${EXAMPLE_URL_BASE}/${oldSlug}`, `${EXAMPLE_URL_BASE}/${slug}`);
@@ -3165,7 +3213,7 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
     page.examplePublishedAt = new Date();
     await Comic.updateOne({ id: comic.id }, { $set: { [`${list}.${idx}`]: page.toObject ? page.toObject() : page } });
     const url = unlisted ? `${UNLISTED_URL_BASE}/${slug}` : `${EXAMPLE_URL_BASE}/${slug}`;
-    res.json({ slug, unlisted, url, bubbles: out.length, audioFiles: copied.size, explained, embed: unlisted ? '' : `{{EXAMPLE:${slug}}}` });
+    res.json({ slug, unlisted, url, bubbles: out.length, hotspots: hotspots.length, audioFiles: copied.size, explained, embed: unlisted ? '' : `{{EXAMPLE:${slug}}}` });
   } catch (error) {
     console.error('Example publish error:', error.message);
     res.status(500).json({ error: error.message });
@@ -3192,6 +3240,7 @@ router.delete('/examples/:comicId/:pageId/publish', async (req, res) => {
     await fs.rm(path.join(dir, `${slug}.json`), { force: true });
     await fs.rm(path.join(dir, `${slug}.html`), { force: true });
     for (const x of ['png', 'jpg']) await fs.rm(path.join(SITE_DIR, 'assets', `example-${slug}.${x}`), { force: true });
+    for (const f of await fs.readdir(path.join(SITE_DIR, 'assets'))) if (f.startsWith(`example-${slug}-h`)) await fs.rm(path.join(SITE_DIR, 'assets', f));
     const audioOut = path.join(SITE_DIR, 'audio');
     if (require('fs').existsSync(audioOut)) for (const f of await fs.readdir(audioOut)) if (f.startsWith(`ex-${slug}-`)) await fs.rm(path.join(audioOut, f));
     await Comic.updateOne({ id: comic.id }, { $set: { [`${list}.${idx}.exampleSlug`]: '', [`${list}.${idx}.examplePublishedAt`]: null } });

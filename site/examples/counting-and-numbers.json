@@ -1,0 +1,1641 @@
+{
+ "slug": "counting-and-numbers",
+ "label": "Conteo y números",
+ "labelEn": "Counting and numbers",
+ "seoTitle": "Spanish Numbers Reading Practice: a Comic with Audio",
+ "summary": "A family of fleas plans a weekend trip across the dog — walking 852 metres and climbing to 2,564. Read the beginner dialogue, tap any word for its meaning and hear every bubble read aloud to practise Spanish numbers in context.",
+ "imageAlt": "Three-panel comic. A flea family in a dog's fur plans a weekend visit to the Saltitos family; the father flea traces a route on a map of the dog with the numbers 852 and 2564 metres; below, an elderly couple watch their dog scratching.",
+ "comic": "CONTEO Y NÚMEROS",
+ "collection": "",
+ "level": "intermediate",
+ "image": "example-counting-and-numbers",
+ "width": 1024,
+ "height": 1536,
+ "publishedAt": "2026-10-07T14:25:57.652Z",
+ "bubbles": [
+  {
+   "x": 0.36363636363636354,
+   "y": 0.17727272727272728,
+   "w": 0.2,
+   "h": 0.1,
+   "panel": [
+    0.0197,
+    0.0066,
+    0.953,
+    0.3323
+   ],
+   "sentences": [
+    {
+     "es": "Creo que este fin de semana...",
+     "en": "I think that this weekend...",
+     "g": "Creo is the present tense of creer (to think), indicating a current belief or opinion.",
+     "a": "{{AUD_ex-counting-and-numbers-b1-1}}",
+     "words": [
+      {
+       "t": "Creo",
+       "m": "I think",
+       "b": "creer",
+       "bm": "to believe",
+       "s": 0,
+       "e": 440,
+       "a": "{{AUD_ex-counting-and-numbers-w-creo}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-creer}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "creo",
+         "a": "{{AUD_ex-counting-and-numbers-w-creo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "creí",
+         "a": "{{AUD_ex-counting-and-numbers-w-crei-583e83}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "creía",
+         "a": "{{AUD_ex-counting-and-numbers-w-creia-ca0200}}"
+        },
+        {
+         "label": "Future",
+         "text": "creeré",
+         "a": "{{AUD_ex-counting-and-numbers-w-creere-87cbab}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "creería",
+         "a": "{{AUD_ex-counting-and-numbers-w-creeria-d2606f}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "cree",
+         "a": "{{AUD_ex-counting-and-numbers-w-cree}}"
+        },
+        {
+         "label": "Command",
+         "text": "cree",
+         "a": "{{AUD_ex-counting-and-numbers-w-cree}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "creyendo",
+         "a": "{{AUD_ex-counting-and-numbers-w-creyendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "creído",
+         "a": "{{AUD_ex-counting-and-numbers-w-creido-b1f0f3}}"
+        }
+       ],
+       "ex": "The word \"creo\" is a verb in the first person singular form of the verb \"creer,\" which means \"to think\" or \"to believe.\" In this sentence, \"Creo que este fin de semana...\" translates to \"I think that this weekend...\" Here, \"creo\" expresses the speaker's opinion or belief about something.\n\nThe present-tense conjugation of \"creer\" for the first person is as follows:\n\n- yo creo (I think)\n- tú crees (you think)\n- él/ella/usted cree (he/she/you think)\n- nosotros/nosotras creemos (we think)\n- ellos/ellas/ustedes creen (they/you all think)\n\nIn this context, \"creo\" serves as the main verb, indicating the speaker's thought process. It introduces a statement about the upcoming weekend, suggesting that the speaker has a belief or expectation related to it. The use of \"que\" following \"creo\" connects the thought to what is being expressed about the weekend."
+      },
+      {
+       "t": "que",
+       "m": "that",
+       "b": "que",
+       "bm": "that",
+       "s": 470,
+       "e": 560,
+       "a": "{{AUD_ex-counting-and-numbers-w-que}}",
+       "ex": "In this sentence, \"que\" is a conjunction. It connects the main clause \"Creo\" (I think) with the subordinate clause \"este fin de semana\" (this weekend). The role of \"que\" here is to introduce the content of what the speaker thinks.\n\nIn English, we often use \"that\" in similar contexts, so \"Creo que\" translates to \"I think that.\" This connection is essential because it clarifies what the speaker is thinking about. Without \"que,\" the sentence would feel incomplete. \n\nOverall, \"que\" serves as a crucial link in expressing the speaker's thought process."
+      },
+      {
+       "t": "este",
+       "m": "this",
+       "b": "este",
+       "bm": "this",
+       "s": 624,
+       "e": 880,
+       "a": "{{AUD_ex-counting-and-numbers-w-este}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "este",
+         "a": "{{AUD_ex-counting-and-numbers-w-este}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "esta",
+         "a": "{{AUD_ex-counting-and-numbers-w-esta}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "estos",
+         "a": "{{AUD_ex-counting-and-numbers-w-estos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "estas",
+         "a": "{{AUD_ex-counting-and-numbers-w-estas}}"
+        }
+       ],
+       "ex": "The word \"este\" in the sentence \"Creo que este fin de semana...\" is a demonstrative adjective. It is used to specify a particular noun, in this case, \"fin de semana,\" which means \"weekend.\" \n\n\"Este\" translates to \"this\" in English and indicates that the speaker is referring to the weekend that is coming up soon, as opposed to a weekend in the past or a distant one. It helps to clarify which weekend is being discussed.\n\nIn Spanish, \"este\" agrees in gender and number with the noun it modifies. Since \"fin de semana\" is masculine and singular, \"este\" is the correct form to use here. If it were feminine, you would use \"esta,\" and for plural, \"estos\" or \"estas\" would be appropriate."
+      },
+      {
+       "t": "fin",
+       "m": "weekend",
+       "b": "fin",
+       "bm": "end",
+       "s": 960,
+       "e": 1200,
+       "a": "{{AUD_ex-counting-and-numbers-w-fin}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "fin",
+         "a": "{{AUD_ex-counting-and-numbers-w-fin}}"
+        },
+        {
+         "label": "Plural",
+         "text": "fines",
+         "a": "{{AUD_ex-counting-and-numbers-w-fines}}"
+        }
+       ],
+       "ex": "The word \"fin\" in this sentence is a noun, meaning \"end.\" In the phrase \"fin de semana,\" it translates to \"weekend,\" which literally means \"end of the week.\" \n\nIn this context, \"fin\" is part of a compound noun. It connects with \"de\" to specify what kind of end it is — the end of the week. The whole phrase \"fin de semana\" functions as the object of the preposition \"este,\" meaning \"this.\" So, \"este fin de semana\" refers to the upcoming weekend.\n\nOverall, \"fin\" is essential here because it helps define the time period being discussed, which is the weekend."
+      },
+      {
+       "t": "de",
+       "m": "of",
+       "b": "de",
+       "bm": "of",
+       "s": 1253,
+       "e": 1360,
+       "a": "{{AUD_ex-counting-and-numbers-w-de}}",
+       "ex": "In the sentence \"Creo que este fin de semana...\", the word \"de\" is a preposition. It connects the noun \"fin\" (meaning \"end\") with \"semana\" (meaning \"week\"), forming the phrase \"fin de semana,\" which translates to \"weekend\" in English.\n\nThe preposition \"de\" indicates possession or relationship, showing that the \"end\" belongs to the \"week.\" It's essential for creating this compound noun in Spanish. Without \"de,\" the phrase would not convey the same meaning."
+      },
+      {
+       "t": "semana...",
+       "m": "week",
+       "b": "semana",
+       "bm": "week",
+       "s": 1440,
+       "e": 2080,
+       "a": "{{AUD_ex-counting-and-numbers-w-semana}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "semana",
+         "a": "{{AUD_ex-counting-and-numbers-w-semana}}"
+        },
+        {
+         "label": "Plural",
+         "text": "semanas",
+         "a": "{{AUD_ex-counting-and-numbers-w-semanas}}"
+        }
+       ],
+       "ex": "The word \"semana\" is a noun in this sentence. It means \"week\" in English. In the phrase \"este fin de semana,\" it refers to \"this weekend,\" which is a common way to talk about the upcoming Saturday and Sunday.\n\nIn Spanish, \"semana\" is feminine, so it uses the article \"la\" when singular (la semana) and \"las\" when plural (las semanas). Here, it is part of the expression \"fin de semana,\" which translates to \"weekend.\" The whole phrase indicates a specific time frame, and \"semana\" helps to clarify that it is the week that is ending with the weekend mentioned. \n\nSo, in this context, \"semana\" plays a crucial role in specifying the time you are thinking about."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.0393939393939394,
+   "y": 0.1919191919191919,
+   "w": 0.2878787878787879,
+   "h": 0.1373737373737374,
+   "panel": [
+    0.0197,
+    0.0066,
+    0.953,
+    0.3323
+   ],
+   "sentences": [
+    {
+     "es": "... deberíamos visitar a la familia Saltitos.",
+     "en": "... we should visit the Saltitos.",
+     "g": "Deberíamos is the conditional tense of deber (should), introducing a suggestion about a future action.",
+     "a": "{{AUD_ex-counting-and-numbers-b2-1}}",
+     "words": [
+      {
+       "t": "...",
+       "m": "we should",
+       "b": "deber",
+       "bm": "",
+       "s": 0,
+       "e": 40,
+       "ba": "{{AUD_ex-counting-and-numbers-w-deber}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "debo",
+         "a": "{{AUD_ex-counting-and-numbers-w-debo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "debí",
+         "a": "{{AUD_ex-counting-and-numbers-w-debi-7f61f8}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "debía",
+         "a": "{{AUD_ex-counting-and-numbers-w-debia-9a1ae1}}"
+        },
+        {
+         "label": "Future",
+         "text": "deberé",
+         "a": "{{AUD_ex-counting-and-numbers-w-debere-2e203f}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "debería",
+         "a": "{{AUD_ex-counting-and-numbers-w-deberia-1bf823}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "deba",
+         "a": "{{AUD_ex-counting-and-numbers-w-deba}}"
+        },
+        {
+         "label": "Command",
+         "text": "debe",
+         "a": "{{AUD_ex-counting-and-numbers-w-debe}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "debiendo",
+         "a": "{{AUD_ex-counting-and-numbers-w-debiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "debid",
+         "a": "{{AUD_ex-counting-and-numbers-w-debid}}"
+        }
+       ],
+       "ex": "It looks like you didn't provide a specific word to analyze in the sentence. However, I can explain the key components of the sentence for you.\n\nIn the sentence \"... deberíamos visitar a la familia Saltitos,\" the verb \"deberíamos\" is the first-person plural conditional form of \"deber,\" which means \"should\" or \"ought to.\" Here’s a short conjugation table for \"deber\":\n\n- yo debo\n- tú debes\n- él/ella/usted debe\n- nosotros/nosotras debemos\n- vosotros/vosotras debéis\n- ellos/ellas/ustedes deben\n\nIn this context, \"deberíamos\" expresses a suggestion or recommendation, indicating that \"we should\" visit the Saltitos family.\n\nThe phrase \"a la familia Saltitos\" uses the preposition \"a,\" which indicates direction or intention, connecting the action of visiting to the family being visited. The article \"la\" specifies that it is a particular family, in this case, the Saltitos.\n\nIf you have a specific word you'd like to analyze, please provide it, and I'd be happy to help!"
+      },
+      {
+       "t": "deberíamos",
+       "m": "to visit",
+       "b": "visitar",
+       "bm": "to visit",
+       "s": 60,
+       "e": 800,
+       "a": "{{AUD_ex-counting-and-numbers-w-deberiamos-02d1be}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-visitar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "visito",
+         "a": "{{AUD_ex-counting-and-numbers-w-visito}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "visité",
+         "a": "{{AUD_ex-counting-and-numbers-w-visite-a3a980}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "visitaba",
+         "a": "{{AUD_ex-counting-and-numbers-w-visitaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "visitaré",
+         "a": "{{AUD_ex-counting-and-numbers-w-visitare-af1ffa}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "visitaría",
+         "a": "{{AUD_ex-counting-and-numbers-w-visitaria-c6d179}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "visite",
+         "a": "{{AUD_ex-counting-and-numbers-w-visite}}"
+        },
+        {
+         "label": "Command",
+         "text": "visita",
+         "a": "{{AUD_ex-counting-and-numbers-w-visita}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "visitando",
+         "a": "{{AUD_ex-counting-and-numbers-w-visitando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "visitado",
+         "a": "{{AUD_ex-counting-and-numbers-w-visitado}}"
+        }
+       ],
+       "ex": "\"Deberíamos\" is a verb form in this sentence. It comes from the infinitive verb \"deber,\" which means \"to should\" or \"to owe.\" In this context, \"deberíamos\" translates to \"we should.\" \n\nThe conjugation for \"deber\" in the present tense for the subject \"nosotros\" (we) is as follows:\n- yo debo\n- tú debes\n- él/ella/usted debe\n- nosotros/nosotras debemos\n- vosotros/vosotras debéis\n- ellos/ellas/ustedes deben\n\nIn the sentence \"... deberíamos visitar a la familia Saltitos,\" \"deberíamos\" indicates a suggestion or recommendation. It expresses that the speaker thinks it is a good idea for \"us\" (the group including the speaker) to visit the Saltitos family. The use of \"deberíamos\" sets a tone of possibility and obligation, making it clear that visiting is something they ought to do."
+      },
+      {
+       "t": "visitar",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 867,
+       "e": 1360,
+       "a": "{{AUD_ex-counting-and-numbers-w-visitar}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-a}}",
+       "ex": "In this sentence, \"visitar\" is a verb in its infinitive form, meaning \"to visit.\" It is used here to express an action that the subject \"nosotros\" (we) should take. The phrase \"deberíamos visitar\" translates to \"we should visit,\" indicating a suggestion or recommendation.\n\nTo give you a quick present-tense conjugation of \"visitar,\" here it is:\n\n- yo visito (I visit)\n- tú visitas (you visit)\n- él/ella/usted visita (he/she/you visit)\n- nosotros/nosotras visitamos (we visit)\n- ellos/ellas/ustedes visitan (they/you all visit)\n\nIn this context, \"visitar\" is essential because it conveys the main action of the sentence, which is the suggestion to visit the Saltitos family."
+      },
+      {
+       "t": "a",
+       "m": "the",
+       "b": "el",
+       "bm": "the",
+       "s": 1520,
+       "e": 1680,
+       "a": "{{AUD_ex-counting-and-numbers-w-a}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-counting-and-numbers-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-counting-and-numbers-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-counting-and-numbers-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-counting-and-numbers-w-las}}"
+        }
+       ],
+       "ex": "In this sentence, \"a\" is a preposition. It is used to indicate the direction of the action, which is visiting. In Spanish, when you are going to visit a person or a group of people, you use the preposition \"a\" before the noun that represents them. \n\nHere, \"a\" connects the verb \"visitar\" (to visit) with \"la familia Saltitos\" (the Saltitos family). It shows that the action of visiting is directed towards the family. Without \"a,\" the sentence would be incomplete and unclear about who is being visited. \n\nSo, in summary, \"a\" is essential for clarifying that the action of visiting is aimed at \"la familia Saltitos.\""
+      },
+      {
+       "t": "la",
+       "m": "family",
+       "b": "familia",
+       "bm": "family",
+       "s": 1733,
+       "e": 1840,
+       "a": "{{AUD_ex-counting-and-numbers-w-la}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-familia}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "familia",
+         "a": "{{AUD_ex-counting-and-numbers-w-familia}}"
+        },
+        {
+         "label": "Plural",
+         "text": "familias",
+         "a": "{{AUD_ex-counting-and-numbers-w-familias}}"
+        }
+       ],
+       "ex": "In this sentence, \"la\" is a definite article in Spanish. It is used to specify a particular noun, in this case, \"familia\" (family). So, \"la familia\" translates to \"the family\" in English, indicating that we are talking about a specific family, the Saltitos.\n\nThe article \"la\" is feminine singular, which agrees with \"familia,\" also feminine. In Spanish, nouns have genders, and articles must match the gender and number of the nouns they accompany. Here, \"la\" helps clarify that you are referring to a specific family, making the sentence clear and precise: \"... deberíamos visitar a la familia Saltitos.\""
+      },
+      {
+       "t": "familia",
+       "m": "family",
+       "b": "familia",
+       "bm": "family",
+       "s": 1910,
+       "e": 2400,
+       "a": "{{AUD_ex-counting-and-numbers-w-familia}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "familia",
+         "a": "{{AUD_ex-counting-and-numbers-w-familia}}"
+        },
+        {
+         "label": "Plural",
+         "text": "familias",
+         "a": "{{AUD_ex-counting-and-numbers-w-familias}}"
+        }
+       ],
+       "ex": "The word \"familia\" in this sentence is a noun, specifically a common noun. It means \"family\" in English. In the context of the sentence, \"la familia Saltitos\" refers to a specific family, indicating that the speaker is suggesting a visit to them.\n\n\"Familia\" is used here with the definite article \"la,\" which specifies that it is a particular family known to the speaker and listener. This construction, \"la familia,\" is typical in Spanish when referring to a specific group of people related by blood or marriage.\n\nIn summary, \"familia\" serves as the subject of the action \"visitar,\" and it helps clarify who is being referred to in the suggestion to visit."
+      },
+      {
+       "t": "Saltitos.",
+       "m": "Saltitos",
+       "b": "Saltitos",
+       "bm": "Saltitos",
+       "s": 2480,
+       "e": 3360,
+       "a": "{{AUD_ex-counting-and-numbers-w-saltitos}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "saltito"
+        },
+        {
+         "label": "Plural",
+         "text": "saltitos",
+         "a": "{{AUD_ex-counting-and-numbers-w-saltitos}}"
+        }
+       ],
+       "ex": "The word \"Saltitos\" in this sentence is a proper noun, specifically a family name. It functions as the subject of the action in the sentence, as it identifies the specific family that the speaker is suggesting to visit. \n\nIn Spanish, proper nouns like \"Saltitos\" are capitalized and often used to refer to people or families. Here, \"la familia Saltitos\" translates to \"the Saltitos family,\" indicating that \"Saltitos\" is the last name of the family being discussed. \n\nThe sentence structure \"deberíamos visitar a la familia Saltitos\" translates to \"we should visit the Saltitos.\" The use of \"Saltitos\" helps to personalize the suggestion, making it clear who the speaker is referring to."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.5925715991681932,
+   "y": 0.2026180571186984,
+   "w": 0.23909922590603755,
+   "h": 0.11799620899492645,
+   "panel": [
+    0.0197,
+    0.0066,
+    0.953,
+    0.3323
+   ],
+   "sentences": [
+    {
+     "es": "¿Cómo llegaremos allí, papi?",
+     "en": "How will we get there daddy?",
+     "g": "Llegaremos is the simple future tense of llegar (to arrive), showing an action that will happen.",
+     "a": "{{AUD_ex-counting-and-numbers-b3-1}}",
+     "words": [
+      {
+       "t": "¿Cómo",
+       "m": "how",
+       "b": "cómo",
+       "bm": "how",
+       "s": 0,
+       "e": 320,
+       "a": "{{AUD_ex-counting-and-numbers-w-como-d4d1ee}}",
+       "ex": "In this sentence, \"cómo\" is an interrogative adverb meaning \"how.\" It is used to ask about the manner or method of getting to a place. The sentence translates to \"How will we get there, daddy?\" \n\n\"Cómo\" is functioning as the question word that introduces the inquiry. It connects directly to the verb \"llegaremos,\" which means \"we will get.\" The speaker is asking for clarification on the process or means of arriving at the destination mentioned.\n\nIn summary, \"cómo\" is essential here because it sets up the question regarding the method of reaching \"allí\" (there)."
+      },
+      {
+       "t": "llegaremos",
+       "m": "we will get",
+       "b": "llegar",
+       "bm": "to arrive",
+       "s": 368,
+       "e": 880,
+       "a": "{{AUD_ex-counting-and-numbers-w-llegaremos}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-llegar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "llego",
+         "a": "{{AUD_ex-counting-and-numbers-w-llego}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "llegué",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegue-0eecf7}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "llegaba",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "llegaré",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegare-ecc4e4}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "llegaría",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegaria-6baf97}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "llegue",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegue}}"
+        },
+        {
+         "label": "Command",
+         "text": "llega",
+         "a": "{{AUD_ex-counting-and-numbers-w-llega}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "llegando",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "llegado",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegado}}"
+        }
+       ],
+       "ex": "The word \"llegaremos\" is a verb form in this sentence. It is the first-person plural future tense of the verb \"llegar,\" which means \"to arrive\" or \"to get.\" In this context, \"llegaremos\" translates to \"we will get\" or \"we will arrive.\"\n\nHere’s a short present-tense conjugation of \"llegar\":\n- yo llego (I arrive)\n- tú llegas (you arrive)\n- él/ella llega (he/she arrives)\n- nosotros/nosotras llegamos (we arrive)\n- ellos/ellas llegan (they arrive)\n\nIn the sentence \"¿Cómo llegaremos allí, papi?\" the speaker is asking \"How will we get there, daddy?\" The use of \"llegaremos\" indicates a future action, showing that the speaker is inquiring about the method or way to arrive at a certain place (\"allí\"). The word is essential here because it expresses the main action of the question."
+      },
+      {
+       "t": "allí,",
+       "m": "there",
+       "b": "allí",
+       "bm": "there",
+       "s": 940,
+       "e": 1280,
+       "a": "{{AUD_ex-counting-and-numbers-w-alli-88f534}}",
+       "ex": "The word \"allí\" is an adverb in this sentence, meaning \"there.\" It indicates a specific location that the speaker is referring to, which is implied to be a place they want to reach.\n\nIn the sentence \"¿Cómo llegaremos allí, papi?\", \"allí\" is used to ask about the destination. The phrase translates to \"How will we get there, daddy?\" Here, \"allí\" connects the question to the place they want to arrive at. It emphasizes the location in relation to the action of getting there. \n\nOverall, \"allí\" helps clarify where the speaker wants to go, making the question more specific."
+      },
+      {
+       "t": "papi?",
+       "m": "daddy",
+       "b": "papa",
+       "bm": "dad",
+       "s": 1320,
+       "e": 1760,
+       "a": "{{AUD_ex-counting-and-numbers-w-papi}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-papa}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "papa",
+         "a": "{{AUD_ex-counting-and-numbers-w-papa}}"
+        },
+        {
+         "label": "Plural",
+         "text": "papas",
+         "a": "{{AUD_ex-counting-and-numbers-w-papas}}"
+        }
+       ],
+       "ex": "In this sentence, \"papi\" is a noun that means \"daddy\" or \"dad.\" It is used as a term of endearment or affection, typically by children when addressing their fathers. Here, it directly follows the question \"¿Cómo llegaremos allí?\" which means \"How will we get there?\" The use of \"papi\" adds a personal touch to the inquiry, indicating that the speaker is likely looking for guidance or reassurance from their father.\n\nThe word \"papi\" serves as a vocative, which is a grammatical case used to address someone directly. It emphasizes the relationship between the speaker and the person they are talking to, making the question more intimate and relatable. In this context, it shows that the speaker feels comfortable asking their father for help or advice."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.027272727272727254,
+   "y": 0.37929292929292924,
+   "w": 0.2,
+   "h": 0.11212121212121218,
+   "panel": [
+    0.0182,
+    0.3551,
+    0.9576,
+    0.3293
+   ],
+   "sentences": [
+    {
+     "es": "Los cinco empezaremos aquí...",
+     "en": "The five of us will start here...",
+     "g": "Empezaremos is the simple future tense of empezar (to start), indicating the group's intention to start at a specific time.",
+     "a": "{{AUD_ex-counting-and-numbers-b4-1}}",
+     "words": [
+      {
+       "t": "Los",
+       "m": "the",
+       "b": "el",
+       "bm": "the",
+       "s": 0,
+       "e": 320,
+       "a": "{{AUD_ex-counting-and-numbers-w-los}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-counting-and-numbers-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-counting-and-numbers-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-counting-and-numbers-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-counting-and-numbers-w-las}}"
+        }
+       ],
+       "ex": "In this sentence, \"los\" is a definite article in Spanish. It is used to specify a particular group of people, in this case, \"los cinco,\" which translates to \"the five.\" This indicates that the speaker is referring to a specific set of five individuals known to both the speaker and the listener.\n\n\"Los\" is the plural form of the article \"el,\" which is used for masculine nouns. Since \"cinco\" (five) is a masculine number, \"los\" agrees with it in gender and number. The phrase \"los cinco\" emphasizes that it is not just any five people, but a specific group.\n\nIn summary, \"los\" serves to define and specify the group of five individuals in the context of the sentence."
+      },
+      {
+       "t": "cinco",
+       "m": "five",
+       "b": "cinco",
+       "bm": "five",
+       "s": 413,
+       "e": 880,
+       "a": "{{AUD_ex-counting-and-numbers-w-cinco}}",
+       "ex": "In this sentence, \"cinco\" is a cardinal number, specifically the word for \"five\" in Spanish. It functions as a noun that indicates the quantity of people involved in the action. Here, it refers to a group of five individuals, as seen in the phrase \"Los cinco,\" which translates to \"The five of us.\"\n\nThe word \"cinco\" is essential because it specifies how many people will be starting the activity. It helps to clarify that it's not just anyone, but a specific group of five. The sentence implies that these five individuals are united in the action of starting together, indicated by \"empezaremos aquí,\" meaning \"we will start here.\""
+      },
+      {
+       "t": "empezaremos",
+       "m": "we will start",
+       "b": "empezar",
+       "bm": "to start",
+       "s": 1000,
+       "e": 2160,
+       "a": "{{AUD_ex-counting-and-numbers-w-empezaremos}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-empezar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "empiezo",
+         "a": "{{AUD_ex-counting-and-numbers-w-empiezo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "empecé",
+         "a": "{{AUD_ex-counting-and-numbers-w-empece-89491a}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "empezaba",
+         "a": "{{AUD_ex-counting-and-numbers-w-empezaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "empezaré",
+         "a": "{{AUD_ex-counting-and-numbers-w-empezare-50262b}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "empezaría",
+         "a": "{{AUD_ex-counting-and-numbers-w-empezaria-a70d80}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "empiece",
+         "a": "{{AUD_ex-counting-and-numbers-w-empiece}}"
+        },
+        {
+         "label": "Command",
+         "text": "empieza",
+         "a": "{{AUD_ex-counting-and-numbers-w-empieza}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "empezando",
+         "a": "{{AUD_ex-counting-and-numbers-w-empezando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "empezado",
+         "a": "{{AUD_ex-counting-and-numbers-w-empezado}}"
+        }
+       ],
+       "ex": "\"Empezaremos\" is a verb form in this sentence. It comes from the infinitive \"empezar,\" which means \"to start.\" In this case, \"empezaremos\" is the first-person plural future tense form, meaning \"we will start.\"\n\nHere's a short conjugation table for \"empezar\" in the present tense:\n\n- yo empiezo (I start)\n- tú empiezas (you start)\n- él/ella/usted empieza (he/she/you start)\n- nosotros/nosotras empezamos (we start)\n- ellos/ellas/ustedes empiezan (they/you all start)\n\nIn the sentence \"Los cinco empezaremos aquí...\", \"empezaremos\" indicates that the group referred to as \"los cinco\" (the five of us) will take action in the future, specifically starting at the location mentioned, \"aquí\" (here). It shows intention and collective action."
+      },
+      {
+       "t": "aquí...",
+       "m": "here",
+       "b": "aquí",
+       "bm": "here",
+       "s": 2272,
+       "e": 2960,
+       "a": "{{AUD_ex-counting-and-numbers-w-aqui-27c550}}",
+       "ex": "The word \"aquí\" in the sentence \"Los cinco empezaremos aquí...\" is an adverb of place. It translates to \"here\" in English and indicates the location where the action will take place. \n\nIn this context, \"aquí\" is essential because it specifies the exact spot where \"los cinco\" (the five of us) will begin their activity. It helps the reader understand that the starting point is not just anywhere, but specifically at the location being referred to. \n\nOverall, \"aquí\" serves to clarify the setting of the action, making the sentence more precise."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.5212758532432183,
+   "y": 0.36252229130542074,
+   "w": 0.1422967783620481,
+   "h": 0.13960188203562293,
+   "panel": [
+    0.0182,
+    0.3551,
+    0.9576,
+    0.3293
+   ],
+   "sentences": [
+    {
+     "es": "Caminamos 852 metros de huida...",
+     "en": "We walk 852 flee meters...",
+     "g": "Caminamos is the present tense of caminar (to walk), expressing a habitual or ongoing action.",
+     "a": "{{AUD_ex-counting-and-numbers-b5-1}}",
+     "words": [
+      {
+       "t": "Caminamos",
+       "m": "we walk",
+       "b": "caminar",
+       "bm": "to walk",
+       "s": 0,
+       "e": 880,
+       "a": "{{AUD_ex-counting-and-numbers-w-caminamos}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-caminar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "camino",
+         "a": "{{AUD_ex-counting-and-numbers-w-camino}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "camine",
+         "a": "{{AUD_ex-counting-and-numbers-w-camine}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "caminaba",
+         "a": "{{AUD_ex-counting-and-numbers-w-caminaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "caminaré",
+         "a": "{{AUD_ex-counting-and-numbers-w-caminare-9de519}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "caminaría",
+         "a": "{{AUD_ex-counting-and-numbers-w-caminaria-eb2fb2}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "camine",
+         "a": "{{AUD_ex-counting-and-numbers-w-camine}}"
+        },
+        {
+         "label": "Command",
+         "text": "camina",
+         "a": "{{AUD_ex-counting-and-numbers-w-camina}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "caminando",
+         "a": "{{AUD_ex-counting-and-numbers-w-caminando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "caminado",
+         "a": "{{AUD_ex-counting-and-numbers-w-caminado}}"
+        }
+       ],
+       "ex": "The word \"caminamos\" is a verb in the first-person plural form of the verb \"caminar,\" which means \"to walk.\" In this sentence, it translates to \"we walk.\" \n\nThe present-tense conjugation for \"caminar\" looks like this:\n\n- yo camino\n- tú caminas\n- él/ella/usted camina\n- nosotros/nosotras caminamos\n- vosotros/vosotras camináis\n- ellos/ellas/ustedes caminan\n\nIn the sentence \"Caminamos 852 metros de huida...\", \"caminamos\" indicates that the subject (we) is performing the action of walking. It sets the scene for what the characters are doing, which is crucial for understanding the context of their escape (\"de huida\"). The use of \"caminamos\" shows that this action is happening in the present, making it immediate and engaging for the reader."
+      },
+      {
+       "t": "852",
+       "m": "852",
+       "b": "852",
+       "bm": "852",
+       "s": 1200,
+       "e": 3280,
+       "a": "{{AUD_ex-counting-and-numbers-w-852}}",
+       "ex": "In this sentence, \"852\" is a numeral that specifies the distance being referred to. It functions as a quantifier, indicating the exact number of meters. The phrase \"852 metros\" translates to \"852 meters\" in English, showing how far they have walked.\n\nThe context of \"Caminamos 852 metros de huida\" means \"We walk 852 meters of fleeing.\" Here, \"852\" helps to give a precise measurement to the action of walking, emphasizing the urgency or distance involved in their escape. It plays a crucial role in conveying the extent of their movement."
+      },
+      {
+       "t": "metros",
+       "m": "meters",
+       "b": "metro",
+       "bm": "meter",
+       "s": 3480,
+       "e": 4320,
+       "a": "{{AUD_ex-counting-and-numbers-w-metros}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-metro}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "metro",
+         "a": "{{AUD_ex-counting-and-numbers-w-metro}}"
+        },
+        {
+         "label": "Plural",
+         "text": "metros",
+         "a": "{{AUD_ex-counting-and-numbers-w-metros}}"
+        }
+       ],
+       "ex": "The word \"metros\" is a noun in this sentence. It is the plural form of \"metro,\" which means \"meter,\" a unit of measurement. In the context of the sentence, \"Caminamos 852 metros de huida,\" it indicates the distance that is being walked.\n\nHere, \"metros\" is used to quantify how far the action of walking is taking place. The phrase \"852 metros\" specifies the exact distance of \"huida,\" which means \"flee\" or \"escape.\" So, the sentence translates to \"We walk 852 meters of escape,\" indicating a specific distance related to the action of fleeing. \n\nIn summary, \"metros\" serves as the subject of measurement in the sentence, providing important context about the distance involved in the action."
+      },
+      {
+       "t": "de",
+       "m": "of",
+       "b": "de",
+       "bm": "of",
+       "s": 4480,
+       "e": 4800,
+       "a": "{{AUD_ex-counting-and-numbers-w-de}}",
+       "ex": "The word \"de\" in this sentence is a preposition. It connects the quantity \"852 metros\" with the noun \"huida.\" In English, it translates to \"of,\" indicating a relationship between the two parts.\n\nIn this context, \"de\" helps specify what kind of meters are being referred to. The phrase \"metros de huida\" means \"flee meters,\" suggesting a distance related to fleeing. So, \"de\" is essential for clarifying that the meters are specifically associated with the action of fleeing."
+      },
+      {
+       "t": "huida...",
+       "m": "flee",
+       "b": "huida",
+       "bm": "escape",
+       "s": 4840,
+       "e": 7840,
+       "a": "{{AUD_ex-counting-and-numbers-w-huida}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "huida",
+         "a": "{{AUD_ex-counting-and-numbers-w-huida}}"
+        },
+        {
+         "label": "Plural",
+         "text": "huidas",
+         "a": "{{AUD_ex-counting-and-numbers-w-huidas}}"
+        }
+       ],
+       "ex": "The word \"huida\" is a noun in this sentence. It comes from the verb \"huir,\" which means \"to flee\" or \"to escape.\" In this context, \"huida\" refers to the act of fleeing, so it translates to \"flee\" or \"escape.\"\n\nIn the sentence \"Caminamos 852 metros de huida,\" the phrase \"de huida\" indicates the type of distance being covered. It specifies that the 852 meters are related to fleeing, suggesting that the walking is part of an escape. \n\nTo give you a brief conjugation of the verb \"huir\" in the present tense:\n- yo huyo\n- tú huyes\n- él/ella/usted huye\n- nosotros/nosotras huimos\n- ellos/ellas/ustedes huyen\n\nSo, \"huida\" is essential here as it conveys the urgency and context of the distance being walked."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.6272727272727272,
+   "y": 0.44090909090909114,
+   "w": 0.12424242424242449,
+   "h": 0.2999999999999998,
+   "panel": [
+    0.0182,
+    0.3551,
+    0.9576,
+    0.3293
+   ],
+   "sentences": [
+    {
+     "es": "... hasta que lleguemos a una altura de 2564 metros.",
+     "en": "... until we get to a height of 2564 flee meters.",
+     "g": "Lleguemos is the subjunctive present form of llegar, used here in a context that reflects a condition (until we reach).",
+     "a": "{{AUD_ex-counting-and-numbers-b6-1}}",
+     "words": [
+      {
+       "t": "...",
+       "m": "until",
+       "b": "hasta",
+       "bm": "",
+       "s": 0,
+       "e": 80,
+       "ba": "{{AUD_ex-counting-and-numbers-w-hasta}}",
+       "ex": "It looks like there was a mistake, and the word you wanted to analyze is missing. However, I can help you with the sentence you provided.\n\nIn the sentence, \"hasta que lleguemos a una altura de 2564 metros,\" the phrase \"hasta que\" means \"until.\" Here, \"hasta\" is a preposition that introduces a condition or limit, and \"que\" is a conjunction that connects the clause that follows.\n\nThe verb \"lleguemos\" is the first-person plural form of the verb \"llegar,\" which means \"to arrive\" or \"to get.\" The present tense conjugation for \"llegar\" is:\n\n- yo llego\n- tú llegas\n- él/ella llega\n- nosotros/nosotras llegamos\n- ellos/ellas llegan\n\nIn this context, \"lleguemos\" indicates that the action of arriving is something that will happen in the future, specifically when the height of 2564 meters is reached. So, \"hasta que lleguemos\" translates to \"until we get.\" \n\nIf you have a specific word you want to analyze, please provide it, and I’d be happy to help!"
+      },
+      {
+       "t": "hasta",
+       "m": "that",
+       "b": "que",
+       "bm": "that",
+       "s": 120,
+       "e": 400,
+       "a": "{{AUD_ex-counting-and-numbers-w-hasta}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-que}}",
+       "ex": "The word \"hasta\" in this sentence is a preposition. It translates to \"until\" in English and indicates a limit in time or space. In the context of the sentence, \"hasta que lleguemos\" means \"until we get,\" setting a condition for the action that follows.\n\nHere, \"hasta\" introduces a subordinate clause that specifies when something will happen. The phrase \"hasta que\" is commonly used to express a point in time that must be reached before another action occurs. In this case, it connects the action of getting to a height of 2564 meters with the timing of that action. \n\nSo, \"hasta\" is essential for conveying the idea of waiting or reaching a specific point before proceeding with something else."
+      },
+      {
+       "t": "que",
+       "m": "we get",
+       "b": "llegar",
+       "bm": "to arrive",
+       "s": 440,
+       "e": 560,
+       "a": "{{AUD_ex-counting-and-numbers-w-que}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-llegar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "llego",
+         "a": "{{AUD_ex-counting-and-numbers-w-llego}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "llegué",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegue-0eecf7}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "llegaba",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "llegaré",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegare-ecc4e4}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "llegaría",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegaria-6baf97}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "llegue",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegue}}"
+        },
+        {
+         "label": "Command",
+         "text": "llega",
+         "a": "{{AUD_ex-counting-and-numbers-w-llega}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "llegando",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "llegado",
+         "a": "{{AUD_ex-counting-and-numbers-w-llegado}}"
+        }
+       ],
+       "ex": "In this sentence, \"que\" is a conjunction. It connects two parts of the sentence: \"hasta\" (until) and \"lleguemos a una altura de 2564 metros\" (we get to a height of 2564 meters). The word \"que\" introduces a dependent clause that explains the condition or limit of the action.\n\nThe phrase \"hasta que\" translates to \"until,\" indicating that the action of getting to the height will happen at a specific point in time. Here, \"que\" is essential for linking the idea of waiting or reaching a point in time with the action that follows. Without \"que,\" the sentence would not convey the same meaning. \n\nSo, in summary, \"que\" serves to connect the idea of \"until\" with the action of \"we get to a height,\" making it clear that the action is contingent on reaching that height."
+      },
+      {
+       "t": "lleguemos",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 608,
+       "e": 1280,
+       "a": "{{AUD_ex-counting-and-numbers-w-lleguemos}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-a}}",
+       "ex": "The word \"lleguemos\" is a verb form in this sentence. It comes from the infinitive verb \"llegar,\" which means \"to arrive\" or \"to get.\" In this context, \"lleguemos\" is the first-person plural form in the present subjunctive tense. \n\nHere’s a short conjugation table for \"llegar\" in the present tense:\n\n- yo llego\n- tú llegas\n- él/ella/usted llega\n- nosotros/nosotras llegamos\n- ellos/ellas/ustedes llegan\n\nIn the sentence \"... hasta que lleguemos a una altura de 2564 metros,\" \"lleguemos\" is used to express a condition or a goal that needs to be met, specifically \"until we get to a height.\" The use of the subjunctive here indicates that this is a future event that depends on reaching that height. The phrase \"hasta que\" (until) sets up this condition, making \"lleguemos\" essential for conveying the idea of reaching a specific point in the future."
+      },
+      {
+       "t": "a",
+       "m": "a",
+       "b": "uno",
+       "bm": "one",
+       "s": 1600,
+       "e": 2164,
+       "a": "{{AUD_ex-counting-and-numbers-w-a}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-uno}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "uno",
+         "a": "{{AUD_ex-counting-and-numbers-w-uno}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "una",
+         "a": "{{AUD_ex-counting-and-numbers-w-una}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "unos",
+         "a": "{{AUD_ex-counting-and-numbers-w-unos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "unas",
+         "a": "{{AUD_ex-counting-and-numbers-w-unas}}"
+        }
+       ],
+       "ex": "In this sentence, \"a\" is a preposition. It is used to indicate direction or destination, connecting the action of arriving (\"lleguemos\") with the noun that follows it, which is \"una altura\" (a height). \n\nThe phrase \"lleguemos a\" translates to \"we get to,\" showing that the action is directed towards reaching a specific point, in this case, \"una altura de 2564 metros\" (a height of 2564 meters). The preposition \"a\" is essential here because it establishes the relationship between the verb and the noun, indicating where the action is leading."
+      },
+      {
+       "t": "una",
+       "m": "height",
+       "b": "altura",
+       "bm": "height",
+       "s": 2204,
+       "e": 2324,
+       "a": "{{AUD_ex-counting-and-numbers-w-una}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-altura}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "altura",
+         "a": "{{AUD_ex-counting-and-numbers-w-altura}}"
+        },
+        {
+         "label": "Plural",
+         "text": "alturas",
+         "a": "{{AUD_ex-counting-and-numbers-w-alturas}}"
+        }
+       ],
+       "ex": "In this sentence, \"una\" is an indefinite article. It is used to indicate a non-specific noun, in this case, \"altura,\" which means \"height.\" The phrase \"una altura\" translates to \"a height\" in English, suggesting that there are many possible heights, but the speaker is referring to one of them.\n\n\"Una\" is the feminine singular form of the article, which agrees with \"altura,\" a feminine noun. This grammatical agreement is important in Spanish, as articles must match the gender and number of the nouns they modify. \n\nSo, in summary, \"una\" helps specify that they are talking about any height, not a particular one, and it connects directly to \"altura\" in the sentence."
+      },
+      {
+       "t": "altura",
+       "m": "of",
+       "b": "de",
+       "bm": "of",
+       "s": 2415,
+       "e": 2964,
+       "a": "{{AUD_ex-counting-and-numbers-w-altura}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-de}}",
+       "ex": "The word \"altura\" in this sentence is a noun. It means \"height\" in English and refers to the measurement of how high something is. In this context, it is used to specify the altitude that is being reached: \"una altura de 2564 metros\" translates to \"a height of 2564 meters.\"\n\nIn the sentence, \"altura\" is the object of the preposition \"a,\" which indicates the destination or goal of the action \"lleguemos\" (we get to). The phrase \"lleguemos a una altura\" means \"we get to a height,\" showing that the action of arriving is directed towards this specific measurement. \n\nOverall, \"altura\" plays a crucial role in conveying the idea of reaching a particular elevation during the journey."
+      },
+      {
+       "t": "de",
+       "m": "2564",
+       "b": "2564",
+       "bm": "2564",
+       "s": 3097,
+       "e": 3364,
+       "a": "{{AUD_ex-counting-and-numbers-w-de}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-2564}}",
+       "ex": "In this sentence, \"de\" is a preposition. It connects the noun \"altura\" (height) to the measurement \"2564 metros\" (2564 meters). The phrase \"una altura de 2564 metros\" translates to \"a height of 2564 meters\" in English, indicating the specific measurement of the height being referred to.\n\nThe preposition \"de\" is commonly used in Spanish to indicate possession, origin, or, as in this case, to specify a characteristic or quality of a noun. Here, it specifies what kind of height is being discussed."
+      },
+      {
+       "t": "2564",
+       "m": "meters",
+       "b": "metro",
+       "bm": "meter",
+       "s": 3524,
+       "e": 6004,
+       "a": "{{AUD_ex-counting-and-numbers-w-2564}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-metro}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "metro",
+         "a": "{{AUD_ex-counting-and-numbers-w-metro}}"
+        },
+        {
+         "label": "Plural",
+         "text": "metros",
+         "a": "{{AUD_ex-counting-and-numbers-w-metros}}"
+        }
+       ],
+       "ex": "In this sentence, \"2564\" is a numeral that specifies the exact height being referred to. It functions as a noun, representing a quantity, specifically the number of meters. \n\nThe phrase \"una altura de 2564 metros\" translates to \"a height of 2564 meters,\" where \"2564\" quantifies \"altura\" (height). It gives a precise measurement that is essential for understanding the context of the sentence, which discusses reaching a certain elevation. \n\nOverall, \"2564\" serves to provide specific information about the height the speaker is referring to in the journey described."
+      },
+      {
+       "t": "metros.",
+       "m": "meters",
+       "b": "metro",
+       "bm": "unit of length",
+       "s": 6084,
+       "e": 6884,
+       "a": "{{AUD_ex-counting-and-numbers-w-metros}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-metro}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "metro",
+         "a": "{{AUD_ex-counting-and-numbers-w-metro}}"
+        },
+        {
+         "label": "Plural",
+         "text": "metros",
+         "a": "{{AUD_ex-counting-and-numbers-w-metros}}"
+        }
+       ],
+       "ex": "The word \"metros\" in this sentence is a noun in the plural form. It refers to \"meters,\" which is a unit of measurement for height. In this context, it specifies the altitude being discussed, which is \"2564 metros.\"\n\nThe sentence translates to \"... until we get to a height of 2564 meters,\" indicating that the height is measured in meters. The use of the plural \"metros\" is necessary here because it refers to a quantity (2564) rather than just one meter. \n\nIn summary, \"metros\" is crucial for conveying the specific measurement of height in this context."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.5151515151515152,
+   "y": 0.8267676767676767,
+   "w": 0.24696969696969684,
+   "h": 0.12929292929292935,
+   "panel": [
+    0.0167,
+    0.6879,
+    0.9727,
+    0.296
+   ],
+   "sentences": [
+    {
+     "es": "Este perro se está rascando mucho...",
+     "en": "This dog is really scratching...",
+     "g": "Se está rascando is the reflexive verb rascarse (to scratch oneself) in the present progressive, showing an ongoing action.",
+     "a": "{{AUD_ex-counting-and-numbers-b7-1}}",
+     "words": [
+      {
+       "t": "Este",
+       "m": "this",
+       "b": "este",
+       "bm": "this",
+       "s": 0,
+       "e": 400,
+       "a": "{{AUD_ex-counting-and-numbers-w-este}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "este",
+         "a": "{{AUD_ex-counting-and-numbers-w-este}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "esta",
+         "a": "{{AUD_ex-counting-and-numbers-w-esta}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "estos",
+         "a": "{{AUD_ex-counting-and-numbers-w-estos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "estas",
+         "a": "{{AUD_ex-counting-and-numbers-w-estas}}"
+        }
+       ],
+       "ex": "The word \"este\" in the sentence \"Este perro se está rascando mucho...\" is a demonstrative adjective. It means \"this\" in English and is used to specify which dog is being referred to. In this case, \"este\" is modifying the noun \"perro\" (dog), indicating that it is the specific dog that the speaker is talking about.\n\n\"Este\" agrees in gender and number with \"perro,\" which is masculine and singular. That's why we use \"este\" instead of \"esta\" (which would be used for a feminine noun) or \"estos\" (for plural masculine nouns). The presence of \"este\" helps the listener understand that the speaker is focusing on a particular dog, rather than any dog in general."
+      },
+      {
+       "t": "perro",
+       "m": "dog",
+       "b": "perro",
+       "bm": "dog",
+       "s": 480,
+       "e": 880,
+       "a": "{{AUD_ex-counting-and-numbers-w-perro}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "perro",
+         "a": "{{AUD_ex-counting-and-numbers-w-perro}}"
+        },
+        {
+         "label": "Plural",
+         "text": "perros",
+         "a": "{{AUD_ex-counting-and-numbers-w-perros}}"
+        }
+       ],
+       "ex": "The word \"perro\" in this sentence is a noun, specifically a common noun that means \"dog.\" It is the subject of the sentence, which tells us who is performing the action of scratching. In this case, \"Este perro\" translates to \"This dog,\" indicating a specific dog that is being referred to.\n\nThe sentence structure shows that \"perro\" is modified by the demonstrative adjective \"este,\" which means \"this.\" Together, they specify which dog is being discussed. The phrase \"se está rascando\" indicates that the dog is currently engaged in the action of scratching itself, emphasizing what the dog is doing. \n\nSo, \"perro\" is essential here because it identifies the subject of the action, making it clear that the sentence is about a specific dog."
+      },
+      {
+       "t": "se",
+       "m": "oneself",
+       "b": "se",
+       "bm": "oneself",
+       "s": 933,
+       "e": 1040,
+       "a": "{{AUD_ex-counting-and-numbers-w-se}}",
+       "ex": "In this sentence, \"se\" is a reflexive pronoun. It indicates that the action of the verb is being performed by the subject on itself. In this case, \"se\" refers back to \"este perro\" (this dog), meaning the dog is scratching itself.\n\nThe verb here is \"rascar,\" which means \"to scratch.\" The present tense conjugation for \"rascarse\" (the reflexive form) is as follows:\n\n- yo me rasco\n- tú te rascas\n- él/ella/usted se rasca\n- nosotros/nosotras nos rascamos\n- ellos/ellas/ustedes se rascan\n\nSo, in \"se está rascando,\" the \"se\" shows that the dog is the one doing the scratching to itself, emphasizing that the action is reflexive."
+      },
+      {
+       "t": "está",
+       "m": "is",
+       "b": "estar",
+       "bm": "to be",
+       "s": 1088,
+       "e": 1280,
+       "a": "{{AUD_ex-counting-and-numbers-w-esta-093ed6}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-estar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "estoy",
+         "a": "{{AUD_ex-counting-and-numbers-w-estoy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "estuve",
+         "a": "{{AUD_ex-counting-and-numbers-w-estuve}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "estaba",
+         "a": "{{AUD_ex-counting-and-numbers-w-estaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "estaré",
+         "a": "{{AUD_ex-counting-and-numbers-w-estare-ef494e}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "estaría",
+         "a": "{{AUD_ex-counting-and-numbers-w-estaria-62ba70}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "esté",
+         "a": "{{AUD_ex-counting-and-numbers-w-este-39081b}}"
+        },
+        {
+         "label": "Command",
+         "text": "está",
+         "a": "{{AUD_ex-counting-and-numbers-w-esta-093ed6}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "estando",
+         "a": "{{AUD_ex-counting-and-numbers-w-estando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "estado",
+         "a": "{{AUD_ex-counting-and-numbers-w-estado}}"
+        }
+       ],
+       "ex": "The word \"está\" is a verb form in this sentence. It is the third person singular present tense of the verb \"estar,\" which means \"to be.\" In this context, \"está\" helps describe the ongoing action of the dog scratching itself. \n\nThe full conjugation of \"estar\" in the present tense for the third person singular is:\n\n- yo estoy\n- tú estás\n- él/ella/usted está\n- nosotros/nosotras estamos\n- ellos/ellas/ustedes están\n\nIn the sentence \"Este perro se está rascando mucho,\" \"está\" is part of the present progressive construction \"se está rascando,\" indicating that the action is happening right now. The reflexive pronoun \"se\" refers back to \"este perro,\" meaning \"this dog\" is the one performing the action of scratching. Overall, \"está\" is crucial for conveying that the scratching is currently happening."
+      },
+      {
+       "t": "rascando",
+       "m": "scratching",
+       "b": "rascar",
+       "bm": "to scratch",
+       "s": 1320,
+       "e": 1840,
+       "a": "{{AUD_ex-counting-and-numbers-w-rascando}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-rascar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "rasco",
+         "a": "{{AUD_ex-counting-and-numbers-w-rasco}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "rasqué",
+         "a": "{{AUD_ex-counting-and-numbers-w-rasque-9e287c}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "rascaba",
+         "a": "{{AUD_ex-counting-and-numbers-w-rascaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "rascaré",
+         "a": "{{AUD_ex-counting-and-numbers-w-rascare-6b5668}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "rascaría",
+         "a": "{{AUD_ex-counting-and-numbers-w-rascaria-afafb1}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "rasque",
+         "a": "{{AUD_ex-counting-and-numbers-w-rasque}}"
+        },
+        {
+         "label": "Command",
+         "text": "rasca",
+         "a": "{{AUD_ex-counting-and-numbers-w-rasca}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "rascando",
+         "a": "{{AUD_ex-counting-and-numbers-w-rascando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "rascado",
+         "a": "{{AUD_ex-counting-and-numbers-w-rascado}}"
+        }
+       ],
+       "ex": "\"Rascando\" is a present participle form of the verb \"rascar,\" which means \"to scratch.\" In this sentence, \"rascando\" is used to describe the ongoing action of the dog scratching itself. The phrase \"se está rascando\" translates to \"is scratching itself,\" indicating that the action is happening right now.\n\nThe verb \"rascar\" conjugates as follows in the present tense:\n\n- Yo rasco\n- Tú rascas\n- Él/Ella rasca\n- Nosotros/as rascamos\n- Ellos/Ellas rascan\n\nIn this case, \"se\" is a reflexive pronoun that refers back to \"el perro\" (the dog), indicating that the dog is performing the action on itself. So, \"se está rascando\" means \"is scratching itself,\" emphasizing that the dog is the one doing the scratching."
+      },
+      {
+       "t": "mucho...",
+       "m": "a lot",
+       "b": "mucho",
+       "bm": "much",
+       "s": 1933,
+       "e": 2640,
+       "a": "{{AUD_ex-counting-and-numbers-w-mucho}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "mucho",
+         "a": "{{AUD_ex-counting-and-numbers-w-mucho}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "mucha"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "muchos"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "muchas"
+        }
+       ],
+       "ex": "In this sentence, \"mucho\" is an adverb. It modifies the verb \"rascando\" (scratching) to indicate the degree or intensity of the action. In English, it translates to \"really\" or \"a lot,\" emphasizing that the dog is scratching quite a bit.\n\nThe structure of the sentence is \"Este perro se está rascando mucho,\" where \"mucho\" tells us how much the dog is scratching. It adds emphasis to the action, suggesting that the scratching is significant. \n\nSo, in summary, \"mucho\" is used here to enhance the verb and convey that the action is happening to a great extent."
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "hotspots": [
+  {
+   "x": 0.1916666666666667,
+   "y": 0.5409090909090909,
+   "w": 0.1977272727272727,
+   "h": 0.0984848484848484,
+   "label": "Count 1 to 20",
+   "color": "transparent",
+   "slides": [
+    {
+     "es": "Uno",
+     "en": "One",
+     "img": "example-counting-and-numbers-h1-s1",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s1}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s1-en}}"
+    },
+    {
+     "es": "Dos",
+     "en": "Two",
+     "img": "example-counting-and-numbers-h1-s2",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s2}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s2-en}}"
+    },
+    {
+     "es": "Tres",
+     "en": "Three",
+     "img": "example-counting-and-numbers-h1-s3",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s3}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s3-en}}"
+    },
+    {
+     "es": "Quatro",
+     "en": "Four",
+     "img": "example-counting-and-numbers-h1-s4",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s4}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s4-en}}"
+    },
+    {
+     "es": "Cinco",
+     "en": "Five",
+     "img": "example-counting-and-numbers-h1-s5",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s5}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s5-en}}"
+    },
+    {
+     "es": "Seis",
+     "en": "Six",
+     "img": "example-counting-and-numbers-h1-s6",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s6}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s6-en}}"
+    },
+    {
+     "es": "Siete",
+     "en": "Seven",
+     "img": "example-counting-and-numbers-h1-s7",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s7}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s7-en}}"
+    },
+    {
+     "es": "Ocho",
+     "en": "Eight",
+     "img": "example-counting-and-numbers-h1-s8",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s8}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s8-en}}"
+    },
+    {
+     "es": "Nueve",
+     "en": "Nine",
+     "img": "example-counting-and-numbers-h1-s9",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s9}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s9-en}}"
+    },
+    {
+     "es": "Diez",
+     "en": "Ten",
+     "img": "example-counting-and-numbers-h1-s10",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s10}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s10-en}}"
+    },
+    {
+     "es": "Once",
+     "en": "Eleven",
+     "img": "example-counting-and-numbers-h1-s11",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s11}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s11-en}}"
+    },
+    {
+     "es": "Doce",
+     "en": "Twelve",
+     "img": "example-counting-and-numbers-h1-s12",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s12}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s12-en}}"
+    },
+    {
+     "es": "Trece",
+     "en": "Thirteen",
+     "img": "example-counting-and-numbers-h1-s13",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s13}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s13-en}}"
+    },
+    {
+     "es": "Catorce",
+     "en": "Fourteen",
+     "img": "example-counting-and-numbers-h1-s14",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s14}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s14-en}}"
+    },
+    {
+     "es": "Quince",
+     "en": "Fifteen",
+     "img": "example-counting-and-numbers-h1-s15",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s15}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s15-en}}"
+    },
+    {
+     "es": "Dieciséis",
+     "en": "Sixteen",
+     "img": "example-counting-and-numbers-h1-s16",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s16}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s16-en}}"
+    },
+    {
+     "es": "Diecisiete[fadeout]",
+     "en": "Seventeen",
+     "img": "example-counting-and-numbers-h1-s17",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s17}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s17-en}}"
+    },
+    {
+     "es": "Dieciocho",
+     "en": "Eighteen",
+     "img": "example-counting-and-numbers-h1-s18",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s18}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s18-en}}"
+    },
+    {
+     "es": "Diecinueve",
+     "en": "Nineteen",
+     "img": "example-counting-and-numbers-h1-s19",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s19}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s19-en}}"
+    },
+    {
+     "es": "Viente",
+     "en": "Twenty",
+     "img": "example-counting-and-numbers-h1-s20",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s20}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h1-s20-en}}"
+    }
+   ]
+  },
+  {
+   "x": 0.35530303030303034,
+   "y": 0.46616161616161617,
+   "w": 0.20833333333333326,
+   "h": 0.06060606060606061,
+   "label": "Count 10-200",
+   "color": "transparent",
+   "slides": [
+    {
+     "es": "Diez",
+     "en": "Ten",
+     "img": "example-counting-and-numbers-h2-s1",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s1}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s1-en}}"
+    },
+    {
+     "es": "Veinte",
+     "en": "Twenty",
+     "img": "example-counting-and-numbers-h2-s2",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s2}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s2-en}}"
+    },
+    {
+     "es": "Treinta",
+     "en": "Thirty",
+     "img": "example-counting-and-numbers-h2-s3",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s3}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s3-en}}"
+    },
+    {
+     "es": "Cuarenta",
+     "en": "Forty",
+     "img": "example-counting-and-numbers-h2-s4",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s4}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s4-en}}"
+    },
+    {
+     "es": "Cincuenta",
+     "en": "Fifty",
+     "img": "example-counting-and-numbers-h2-s5",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s5}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s5-en}}"
+    },
+    {
+     "es": "Sesenta",
+     "en": "Sixty",
+     "img": "example-counting-and-numbers-h2-s6",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s6}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s6-en}}"
+    },
+    {
+     "es": "Setenta",
+     "en": "Seventy",
+     "img": "example-counting-and-numbers-h2-s7",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s7}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s7-en}}"
+    },
+    {
+     "es": "Ochenta",
+     "en": "Eighty",
+     "img": "example-counting-and-numbers-h2-s8",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s8}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s8-en}}"
+    },
+    {
+     "es": "Noventa",
+     "en": "Ninty",
+     "img": "example-counting-and-numbers-h2-s9",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s9}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s9-en}}"
+    },
+    {
+     "es": "Cien",
+     "en": "One hundred",
+     "img": "example-counting-and-numbers-h2-s10",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s10}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s10-en}}"
+    },
+    {
+     "es": "Ciento diez",
+     "en": "One hundred and ten",
+     "img": "example-counting-and-numbers-h2-s11",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s11}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s11-en}}"
+    },
+    {
+     "es": "Ciento veinte",
+     "en": "One hundred and twenty",
+     "img": "example-counting-and-numbers-h2-s12",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s12}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s12-en}}"
+    },
+    {
+     "es": "Ciento treinta",
+     "en": "One hundres and thirty",
+     "img": "example-counting-and-numbers-h2-s13",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s13}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s13-en}}"
+    },
+    {
+     "es": "Ciento cuarenta",
+     "en": "One hundred and forty",
+     "img": "example-counting-and-numbers-h2-s14",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s14}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s14-en}}"
+    },
+    {
+     "es": "Ciento cincuenta",
+     "en": "One hundred and fifty",
+     "img": "example-counting-and-numbers-h2-s15",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s15}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s15-en}}"
+    },
+    {
+     "es": "Ciento sesenta",
+     "en": "One hundred and sixty",
+     "img": "example-counting-and-numbers-h2-s16",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s16}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s16-en}}"
+    },
+    {
+     "es": "Ciento setenta",
+     "en": "One hundred and seventy",
+     "img": "example-counting-and-numbers-h2-s17",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s17}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s17-en}}"
+    },
+    {
+     "es": "Ciento ochenta",
+     "en": "One hundred and eighty",
+     "img": "example-counting-and-numbers-h2-s18",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s18}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s18-en}}"
+    },
+    {
+     "es": "Ciento noventa",
+     "en": "One hundred and ninty",
+     "img": "example-counting-and-numbers-h2-s19",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s19}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s19-en}}"
+    },
+    {
+     "es": "Doscientos",
+     "en": "Two hundred",
+     "img": "example-counting-and-numbers-h2-s20",
+     "a": "{{AUD_ex-counting-and-numbers-h2-s20}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h2-s20-en}}"
+    }
+   ]
+  },
+  {
+   "x": 0.7537878787878788,
+   "y": 0.4207070707070707,
+   "w": 0.16439393939393943,
+   "h": 0.07575757575757575,
+   "label": "Count 1000-3000",
+   "color": "transparent",
+   "slides": [
+    {
+     "es": "Mil",
+     "en": "One thousand",
+     "img": "example-counting-and-numbers-h3-s1",
+     "a": "{{AUD_ex-counting-and-numbers-h3-s1}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h3-s1-en}}"
+    },
+    {
+     "es": "Dos mil",
+     "en": "Two thousand",
+     "img": "example-counting-and-numbers-h3-s2",
+     "a": "{{AUD_ex-counting-and-numbers-h3-s2}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h3-s2-en}}"
+    },
+    {
+     "es": "Tres mil",
+     "en": "Three thousand",
+     "img": "example-counting-and-numbers-h3-s3",
+     "a": "{{AUD_ex-counting-and-numbers-h3-s3}}",
+     "ea": "{{AUD_ex-counting-and-numbers-h3-s3-en}}"
+    }
+   ]
+  }
+ ]
+}

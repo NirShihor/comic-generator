@@ -12,8 +12,8 @@
   "lastmod": "2026-10-06"
  },
  "https://comigo.net/spanish-reading-practice": {
-  "fp": "3adcf647bad59c89",
-  "lastmod": "2026-10-06"
+  "fp": "0b558753872fe977",
+  "lastmod": "2026-10-07"
  },
  "https://comigo.net/spanish-reading-practice/a-small-town": {
   "fp": "8132d3387b25b06d",
@@ -40,6 +40,15 @@
    "loc": "https://comigo.net/assets/example-buying-clothes.cb1309c9.webp",
    "caption": "A comic page in an elegant clothes shop: a woman in glasses slips a shirt and then a jacket into her large bag while a grey-haired man watches; when he comes over and says «Disculpe, señora», she calmly holds up a coat and asks for a smaller size.",
    "title": "Comprar ropa"
+  }
+ },
+ "https://comigo.net/spanish-reading-practice/counting-and-numbers": {
+  "fp": "cdba5f447987aca9",
+  "lastmod": "2026-10-07",
+  "image": {
+   "loc": "https://comigo.net/assets/example-counting-and-numbers.6d3fd505.webp",
+   "caption": "Three-panel comic. A flea family in a dog's fur plans a weekend visit to the Saltitos family; the father flea traces a route on a map of the dog with the numbers 852 and 2564 metres; below, an elderly couple watch their dog scratching.",
+   "title": "Conteo y números"
   }
  },
  "https://comigo.net/spanish-reading-practice/emergency-call": {
