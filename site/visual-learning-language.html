@@ -233,6 +233,18 @@
     </nav>
   </details>
 </header>
+<script>
+  // Count a tap on an App Store button: one same-origin POST of the button's
+  // own URL (its page, position and campaign tags — nothing else) from a real
+  // click, sent alongside the normal navigation, never instead of it. A GET of
+  // the link only redirects, so crawlers that fetch it aren't counted
+  // (server/src/services/siteAnalytics.js). No cookies, storage or identifiers.
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href^="/go/app-store"]') : null;
+    if (!a || !e.isTrusted) return;
+    try { fetch(a.getAttribute('href'), { method: 'POST', keepalive: true, credentials: 'omit' }).catch(function () {}); } catch (err) {}
+  });
+</script>
 
 
 <section class="hero wrap">
