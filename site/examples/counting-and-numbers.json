@@ -11,7 +11,7 @@
  "image": "example-counting-and-numbers",
  "width": 1024,
  "height": 1536,
- "publishedAt": "2026-10-07T15:08:37.477Z",
+ "publishedAt": "2026-10-07T15:27:10.003Z",
  "bubbles": [
   {
    "x": 0.36363636363636354,
@@ -422,7 +422,8 @@
        "forms": [
         {
          "label": "Singular",
-         "text": "saltito"
+         "text": "saltito",
+         "a": "{{AUD_ex-counting-and-numbers-w-saltito}}"
         },
         {
          "label": "Plural",
@@ -693,10 +694,10 @@
    ]
   },
   {
-   "x": 0.5212758532432183,
-   "y": 0.36252229130542074,
-   "w": 0.1422967783620481,
-   "h": 0.13960188203562293,
+   "x": 0.513169832868565,
+   "y": 0.35954533588505977,
+   "w": 0.15850881911135495,
+   "h": 0.14555579287634485,
    "panel": [
     0.0182,
     0.3551,
@@ -705,7 +706,7 @@
    ],
    "sentences": [
     {
-     "es": "Caminamos 852 metros de huida...",
+     "es": "Caminamos 852 metros-pulga...",
      "en": "We walk 852 flee meters...",
      "g": "Caminamos is the present tense of caminar (to walk), expressing a habitual or ongoing action.",
      "a": "{{AUD_ex-counting-and-numbers-b5-1}}",
@@ -716,7 +717,7 @@
        "b": "caminar",
        "bm": "to walk",
        "s": 0,
-       "e": 880,
+       "e": 800,
        "a": "{{AUD_ex-counting-and-numbers-w-caminamos}}",
        "ba": "{{AUD_ex-counting-and-numbers-w-caminar}}",
        "forms": [
@@ -727,8 +728,8 @@
         },
         {
          "label": "Preterite",
-         "text": "camine",
-         "a": "{{AUD_ex-counting-and-numbers-w-camine}}"
+         "text": "camino",
+         "a": "{{AUD_ex-counting-and-numbers-w-camino}}"
         },
         {
          "label": "Imperfect",
@@ -752,8 +753,7 @@
         },
         {
          "label": "Command",
-         "text": "camina",
-         "a": "{{AUD_ex-counting-and-numbers-w-camina}}"
+         "text": "caminas"
         },
         {
          "label": "Gerund",
@@ -766,81 +766,48 @@
          "a": "{{AUD_ex-counting-and-numbers-w-caminado}}"
         }
        ],
-       "ex": "The word \"caminamos\" is a verb in the first-person plural form of the verb \"caminar,\" which means \"to walk.\" In this sentence, it translates to \"we walk.\" \n\nThe present-tense conjugation for \"caminar\" looks like this:\n\n- yo camino\n- tú caminas\n- él/ella/usted camina\n- nosotros/nosotras caminamos\n- vosotros/vosotras camináis\n- ellos/ellas/ustedes caminan\n\nIn the sentence \"Caminamos 852 metros de huida...\", \"caminamos\" indicates that the subject (we) is performing the action of walking. It sets the scene for what the characters are doing, which is crucial for understanding the context of their escape (\"de huida\"). The use of \"caminamos\" shows that this action is happening in the present, making it immediate and engaging for the reader."
+       "ex": "\"Caminamos\" is a verb form in this sentence. It comes from the infinitive verb \"caminar,\" which means \"to walk.\" In the present tense, \"caminamos\" is the first-person plural form, meaning \"we walk\" or \"we are walking.\" Here’s a short conjugation table for \"caminar\" in the present tense:\n\n- yo camino (I walk)\n- tú caminas (you walk)\n- él/ella/usted camina (he/she/you formal walk)\n- nosotros/nosotras caminamos (we walk)\n- vosotros/vosotras camináis (you all walk)\n- ellos/ellas/ustedes caminan (they/you all formal walk)\n\nIn the sentence \"Caminamos 852 metros-pulga,\" \"caminamos\" indicates the action performed by the subject \"nosotros\" (we). It tells us that the group is walking a specific distance, which is \"852 metros-pulga.\" The verb is essential here because it conveys the main action of the sentence."
       },
       {
        "t": "852",
        "m": "852",
        "b": "852",
        "bm": "852",
-       "s": 1200,
-       "e": 3280,
+       "s": 1040,
+       "e": 2800,
        "a": "{{AUD_ex-counting-and-numbers-w-852}}",
-       "ex": "In this sentence, \"852\" is a numeral that specifies the distance being referred to. It functions as a quantifier, indicating the exact number of meters. The phrase \"852 metros\" translates to \"852 meters\" in English, showing how far they have walked.\n\nThe context of \"Caminamos 852 metros de huida\" means \"We walk 852 meters of fleeing.\" Here, \"852\" helps to give a precise measurement to the action of walking, emphasizing the urgency or distance involved in their escape. It plays a crucial role in conveying the extent of their movement."
+       "ex": "In this sentence, \"852\" is a numeral that indicates a specific quantity, functioning as a noun. It tells us how far the action of walking extends, specifically \"852 metros,\" meaning \"852 meters.\" \n\nThe word \"metros\" is the unit of measurement, and \"852\" quantifies it. Together, they provide clear information about the distance being referred to in the context of the action \"caminamos,\" which means \"we walk.\" \n\nSo, \"852\" is essential here because it specifies the exact distance of the walk, making the sentence informative and precise."
       },
       {
-       "t": "metros",
-       "m": "meters",
-       "b": "metro",
-       "bm": "meter",
-       "s": 3480,
-       "e": 4320,
-       "a": "{{AUD_ex-counting-and-numbers-w-metros}}",
-       "ba": "{{AUD_ex-counting-and-numbers-w-metro}}",
+       "t": "metros-pulga...",
+       "m": "flee meters",
+       "b": "pulga",
+       "bm": "flea",
+       "s": 2903,
+       "e": 4480,
+       "a": "{{AUD_ex-counting-and-numbers-w-metrospulga-b6f9a3}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-pulga}}",
        "forms": [
         {
          "label": "Singular",
-         "text": "metro",
-         "a": "{{AUD_ex-counting-and-numbers-w-metro}}"
+         "text": "pulga",
+         "a": "{{AUD_ex-counting-and-numbers-w-pulga}}"
         },
         {
          "label": "Plural",
-         "text": "metros",
-         "a": "{{AUD_ex-counting-and-numbers-w-metros}}"
+         "text": "pulgas"
         }
        ],
-       "ex": "The word \"metros\" is a noun in this sentence. It is the plural form of \"metro,\" which means \"meter,\" a unit of measurement. In the context of the sentence, \"Caminamos 852 metros de huida,\" it indicates the distance that is being walked.\n\nHere, \"metros\" is used to quantify how far the action of walking is taking place. The phrase \"852 metros\" specifies the exact distance of \"huida,\" which means \"flee\" or \"escape.\" So, the sentence translates to \"We walk 852 meters of escape,\" indicating a specific distance related to the action of fleeing. \n\nIn summary, \"metros\" serves as the subject of measurement in the sentence, providing important context about the distance involved in the action."
-      },
-      {
-       "t": "de",
-       "m": "of",
-       "b": "de",
-       "bm": "of",
-       "s": 4480,
-       "e": 4800,
-       "a": "{{AUD_ex-counting-and-numbers-w-de}}",
-       "ex": "The word \"de\" in this sentence is a preposition. It connects the quantity \"852 metros\" with the noun \"huida.\" In English, it translates to \"of,\" indicating a relationship between the two parts.\n\nIn this context, \"de\" helps specify what kind of meters are being referred to. The phrase \"metros de huida\" means \"flee meters,\" suggesting a distance related to fleeing. So, \"de\" is essential for clarifying that the meters are specifically associated with the action of fleeing."
-      },
-      {
-       "t": "huida...",
-       "m": "flee",
-       "b": "huida",
-       "bm": "escape",
-       "s": 4840,
-       "e": 7840,
-       "a": "{{AUD_ex-counting-and-numbers-w-huida}}",
-       "forms": [
-        {
-         "label": "Singular",
-         "text": "huida",
-         "a": "{{AUD_ex-counting-and-numbers-w-huida}}"
-        },
-        {
-         "label": "Plural",
-         "text": "huidas",
-         "a": "{{AUD_ex-counting-and-numbers-w-huidas}}"
-        }
-       ],
-       "ex": "The word \"huida\" is a noun in this sentence. It comes from the verb \"huir,\" which means \"to flee\" or \"to escape.\" In this context, \"huida\" refers to the act of fleeing, so it translates to \"flee\" or \"escape.\"\n\nIn the sentence \"Caminamos 852 metros de huida,\" the phrase \"de huida\" indicates the type of distance being covered. It specifies that the 852 meters are related to fleeing, suggesting that the walking is part of an escape. \n\nTo give you a brief conjugation of the verb \"huir\" in the present tense:\n- yo huyo\n- tú huyes\n- él/ella/usted huye\n- nosotros/nosotras huimos\n- ellos/ellas/ustedes huyen\n\nSo, \"huida\" is essential here as it conveys the urgency and context of the distance being walked."
+       "ex": "In the sentence \"Caminamos 852 metros-pulga,\" the word \"metros-pulga\" is a compound noun. It combines \"metros,\" which means \"meters,\" and \"pulga,\" meaning \"flea.\" Together, \"metros-pulga\" refers to a specific unit of measurement that is likely humorous or exaggerated, suggesting a very small distance, akin to how small a flea is.\n\n\"Metros\" is a plural noun in this context, functioning as the main part of the compound. It indicates the quantity of distance being walked. The word \"pulga\" modifies \"metros\" to create a playful or informal expression. This compound form is not standard but adds a creative flair to the sentence, making it memorable and engaging.\n\nIn summary, \"metros-pulga\" serves as a whimsical way to describe a very short distance, emphasizing the humor in the context of walking."
       }
      ]
     }
    ]
   },
   {
-   "x": 0.6272727272727272,
-   "y": 0.44090909090909114,
-   "w": 0.12424242424242449,
+   "x": 0.6232323232323231,
+   "y": 0.4510101010101012,
+   "w": 0.13232323232323262,
    "h": 0.2999999999999998,
    "panel": [
     0.0182,
@@ -850,7 +817,7 @@
    ],
    "sentences": [
     {
-     "es": "... hasta que lleguemos a una altura de 2564 metros.",
+     "es": "... hasta que lleguemos a una altura de 2564 metros-pulga.",
      "en": "... until we get to a height of 2564 flee meters.",
      "g": "Lleguemos is the subjunctive present form of llegar, used here in a context that reflects a condition (until we reach).",
      "a": "{{AUD_ex-counting-and-numbers-b6-1}}",
@@ -863,18 +830,18 @@
        "s": 0,
        "e": 80,
        "ba": "{{AUD_ex-counting-and-numbers-w-hasta}}",
-       "ex": "It looks like there was a mistake, and the word you wanted to analyze is missing. However, I can help you with the sentence you provided.\n\nIn the sentence, \"hasta que lleguemos a una altura de 2564 metros,\" the phrase \"hasta que\" means \"until.\" Here, \"hasta\" is a preposition that introduces a condition or limit, and \"que\" is a conjunction that connects the clause that follows.\n\nThe verb \"lleguemos\" is the first-person plural form of the verb \"llegar,\" which means \"to arrive\" or \"to get.\" The present tense conjugation for \"llegar\" is:\n\n- yo llego\n- tú llegas\n- él/ella llega\n- nosotros/nosotras llegamos\n- ellos/ellas llegan\n\nIn this context, \"lleguemos\" indicates that the action of arriving is something that will happen in the future, specifically when the height of 2564 meters is reached. So, \"hasta que lleguemos\" translates to \"until we get.\" \n\nIf you have a specific word you want to analyze, please provide it, and I’d be happy to help!"
+       "ex": "It looks like the word you're asking about is missing. However, I can help you understand the sentence structure and the role of some key words in it.\n\nIn the sentence, \"hasta que lleguemos a una altura de 2564 metros-pulga,\" the phrase \"hasta que\" means \"until.\" It introduces a temporal clause that indicates a condition or point in time. The verb \"lleguemos\" is the first-person plural (nosotros) form of the verb \"llegar,\" which means \"to arrive\" or \"to get to.\" \n\nHere’s a short present-tense conjugation for \"llegar\":\n- yo llego\n- tú llegas\n- él/ella llega\n- nosotros/nosotras llegamos\n- ellos/ellas llegan\n\nIn this context, \"lleguemos\" indicates that the action of arriving is expected to happen in the future, specifically at the height of 2564 meters. The phrase \"a una altura de 2564 metros-pulga\" translates to \"to a height of 2564 flee meters,\" specifying the destination.\n\nIf you have a specific word you want to analyze, please provide it, and I’d be happy to help!"
       },
       {
        "t": "hasta",
        "m": "that",
        "b": "que",
        "bm": "that",
-       "s": 120,
+       "s": 88,
        "e": 400,
        "a": "{{AUD_ex-counting-and-numbers-w-hasta}}",
        "ba": "{{AUD_ex-counting-and-numbers-w-que}}",
-       "ex": "The word \"hasta\" in this sentence is a preposition. It translates to \"until\" in English and indicates a limit in time or space. In the context of the sentence, \"hasta que lleguemos\" means \"until we get,\" setting a condition for the action that follows.\n\nHere, \"hasta\" introduces a subordinate clause that specifies when something will happen. The phrase \"hasta que\" is commonly used to express a point in time that must be reached before another action occurs. In this case, it connects the action of getting to a height of 2564 meters with the timing of that action. \n\nSo, \"hasta\" is essential for conveying the idea of waiting or reaching a specific point before proceeding with something else."
+       "ex": "In this sentence, \"hasta\" is a preposition that means \"until.\" It connects the action of \"lleguemos\" (we get) with the condition of reaching a specific height. The phrase \"hasta que lleguemos\" translates to \"until we get,\" indicating that something will happen or be true only up to the point of reaching that height.\n\nThe word \"hasta\" is essential here because it sets the timeframe for the action. It shows that the event or situation being discussed will continue or be relevant only until the specified height of \"2564 metros-pulga\" is reached."
       },
       {
        "t": "que",
@@ -932,7 +899,7 @@
          "a": "{{AUD_ex-counting-and-numbers-w-llegado}}"
         }
        ],
-       "ex": "In this sentence, \"que\" is a conjunction. It connects two parts of the sentence: \"hasta\" (until) and \"lleguemos a una altura de 2564 metros\" (we get to a height of 2564 meters). The word \"que\" introduces a dependent clause that explains the condition or limit of the action.\n\nThe phrase \"hasta que\" translates to \"until,\" indicating that the action of getting to the height will happen at a specific point in time. Here, \"que\" is essential for linking the idea of waiting or reaching a point in time with the action that follows. Without \"que,\" the sentence would not convey the same meaning. \n\nSo, in summary, \"que\" serves to connect the idea of \"until\" with the action of \"we get to a height,\" making it clear that the action is contingent on reaching that height."
+       "ex": "In this sentence, \"que\" is a conjunction that introduces a subordinate clause. It connects the main idea, which is about reaching a certain height, to the condition that must be met before that happens. The phrase \"hasta que\" translates to \"until,\" indicating a point in time when something will occur.\n\nThe full phrase \"hasta que lleguemos\" means \"until we get.\" Here, \"que\" plays a crucial role in linking the two parts of the sentence: it tells us that the action of getting to the height will happen after a certain condition is fulfilled. \n\nSo, in summary, \"que\" is used to connect the idea of reaching a height with the condition of time, making it essential for understanding the timing of the action in the sentence."
       },
       {
        "t": "lleguemos",
@@ -940,10 +907,10 @@
        "b": "a",
        "bm": "to",
        "s": 608,
-       "e": 1280,
+       "e": 1200,
        "a": "{{AUD_ex-counting-and-numbers-w-lleguemos}}",
        "ba": "{{AUD_ex-counting-and-numbers-w-a}}",
-       "ex": "The word \"lleguemos\" is a verb form in this sentence. It comes from the infinitive verb \"llegar,\" which means \"to arrive\" or \"to get.\" In this context, \"lleguemos\" is the first-person plural form in the present subjunctive tense. \n\nHere’s a short conjugation table for \"llegar\" in the present tense:\n\n- yo llego\n- tú llegas\n- él/ella/usted llega\n- nosotros/nosotras llegamos\n- ellos/ellas/ustedes llegan\n\nIn the sentence \"... hasta que lleguemos a una altura de 2564 metros,\" \"lleguemos\" is used to express a condition or a goal that needs to be met, specifically \"until we get to a height.\" The use of the subjunctive here indicates that this is a future event that depends on reaching that height. The phrase \"hasta que\" (until) sets up this condition, making \"lleguemos\" essential for conveying the idea of reaching a specific point in the future."
+       "ex": "The word \"lleguemos\" is a verb form in this sentence. It is the first-person plural (nosotros) form of the verb \"llegar,\" which means \"to arrive\" or \"to get to.\" In this context, \"lleguemos\" translates to \"we get to\" or \"we arrive at.\"\n\nThe sentence fragment \"... hasta que lleguemos...\" means \"... until we get to...\". Here, \"lleguemos\" indicates an action that will happen in the future, specifically when the subject (we) reaches the specified height. \n\nIn the present tense, the conjugation of \"llegar\" is as follows:\n- yo llego\n- tú llegas\n- él/ella/usted llega\n- nosotros/nosotras llegamos\n- vosotros/vosotras llegáis\n- ellos/ellas/ustedes llegan\n\nSo, \"lleguemos\" is essential for expressing the future action of arriving at a certain height in this context."
       },
       {
        "t": "a",
@@ -951,7 +918,7 @@
        "b": "uno",
        "bm": "one",
        "s": 1600,
-       "e": 2164,
+       "e": 2111,
        "a": "{{AUD_ex-counting-and-numbers-w-a}}",
        "ba": "{{AUD_ex-counting-and-numbers-w-uno}}",
        "forms": [
@@ -976,15 +943,15 @@
          "a": "{{AUD_ex-counting-and-numbers-w-unas}}"
         }
        ],
-       "ex": "In this sentence, \"a\" is a preposition. It is used to indicate direction or destination, connecting the action of arriving (\"lleguemos\") with the noun that follows it, which is \"una altura\" (a height). \n\nThe phrase \"lleguemos a\" translates to \"we get to,\" showing that the action is directed towards reaching a specific point, in this case, \"una altura de 2564 metros\" (a height of 2564 meters). The preposition \"a\" is essential here because it establishes the relationship between the verb and the noun, indicating where the action is leading."
+       "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"lleguemos\" (we get) to the noun \"altura\" (height). The phrase \"lleguemos a una altura\" translates to \"get to a height,\" indicating the destination or goal of the action.\n\nThe preposition \"a\" is commonly used in Spanish to express direction or movement towards a place or situation. Here, it shows that the action of arriving is directed towards \"una altura de 2564 metros-pulga\" (a height of 2564 flee meters). \n\nSo, in this context, \"a\" is essential for indicating where the action is leading."
       },
       {
        "t": "una",
        "m": "height",
        "b": "altura",
        "bm": "height",
-       "s": 2204,
-       "e": 2324,
+       "s": 2124,
+       "e": 2164,
        "a": "{{AUD_ex-counting-and-numbers-w-una}}",
        "ba": "{{AUD_ex-counting-and-numbers-w-altura}}",
        "forms": [
@@ -999,37 +966,37 @@
          "a": "{{AUD_ex-counting-and-numbers-w-alturas}}"
         }
        ],
-       "ex": "In this sentence, \"una\" is an indefinite article. It is used to indicate a non-specific noun, in this case, \"altura,\" which means \"height.\" The phrase \"una altura\" translates to \"a height\" in English, suggesting that there are many possible heights, but the speaker is referring to one of them.\n\n\"Una\" is the feminine singular form of the article, which agrees with \"altura,\" a feminine noun. This grammatical agreement is important in Spanish, as articles must match the gender and number of the nouns they modify. \n\nSo, in summary, \"una\" helps specify that they are talking about any height, not a particular one, and it connects directly to \"altura\" in the sentence."
+       "ex": "The word \"una\" in this sentence is an indefinite article. It is used to indicate a non-specific noun, in this case, \"altura,\" which means \"height.\" The phrase \"una altura\" translates to \"a height\" in English, suggesting that there are many possible heights, but the speaker is referring to one of them.\n\nIn Spanish, articles agree in gender and number with the nouns they modify. \"Altura\" is a feminine singular noun, so the correct form of the indefinite article is \"una.\" If it were a masculine noun, you would use \"un.\" \n\nIn summary, \"una\" helps specify that the height being referred to is not a particular one but rather any height that meets the condition mentioned in the sentence."
       },
       {
        "t": "altura",
        "m": "of",
        "b": "de",
        "bm": "of",
-       "s": 2415,
-       "e": 2964,
+       "s": 2221,
+       "e": 2564,
        "a": "{{AUD_ex-counting-and-numbers-w-altura}}",
        "ba": "{{AUD_ex-counting-and-numbers-w-de}}",
-       "ex": "The word \"altura\" in this sentence is a noun. It means \"height\" in English and refers to the measurement of how high something is. In this context, it is used to specify the altitude that is being reached: \"una altura de 2564 metros\" translates to \"a height of 2564 meters.\"\n\nIn the sentence, \"altura\" is the object of the preposition \"a,\" which indicates the destination or goal of the action \"lleguemos\" (we get to). The phrase \"lleguemos a una altura\" means \"we get to a height,\" showing that the action of arriving is directed towards this specific measurement. \n\nOverall, \"altura\" plays a crucial role in conveying the idea of reaching a particular elevation during the journey."
+       "ex": "The word \"altura\" in this sentence is a noun. It means \"height\" in English and refers to the vertical measurement of something. In the context of the sentence, \"altura\" is used to describe the specific elevation they are aiming to reach, which is \"2564 metros-pulga.\"\n\nIn the phrase \"una altura de 2564 metros-pulga,\" \"altura\" is the subject of the prepositional phrase \"de 2564 metros-pulga,\" indicating what kind of height they are discussing. The article \"una\" before \"altura\" indicates that it is a singular, feminine noun, which is appropriate since \"altura\" is feminine in Spanish. \n\nOverall, \"altura\" is essential here as it specifies the goal of their journey: reaching a certain height."
       },
       {
        "t": "de",
        "m": "2564",
        "b": "2564",
        "bm": "2564",
-       "s": 3097,
-       "e": 3364,
+       "s": 2617,
+       "e": 2724,
        "a": "{{AUD_ex-counting-and-numbers-w-de}}",
        "ba": "{{AUD_ex-counting-and-numbers-w-2564}}",
-       "ex": "In this sentence, \"de\" is a preposition. It connects the noun \"altura\" (height) to the measurement \"2564 metros\" (2564 meters). The phrase \"una altura de 2564 metros\" translates to \"a height of 2564 meters\" in English, indicating the specific measurement of the height being referred to.\n\nThe preposition \"de\" is commonly used in Spanish to indicate possession, origin, or, as in this case, to specify a characteristic or quality of a noun. Here, it specifies what kind of height is being discussed."
+       "ex": "In this sentence, \"de\" is a preposition. It connects the noun \"altura\" (height) to the measurement \"2564 metros-pulga\" (2564 flee meters). The phrase \"una altura de 2564 metros-pulga\" translates to \"a height of 2564 flee meters,\" indicating the specific measurement of height being referred to.\n\nThe preposition \"de\" is commonly used in Spanish to express relationships between nouns, such as possession, origin, or, as in this case, specification. Here, it specifies what kind of height is being discussed."
       },
       {
        "t": "2564",
        "m": "meters",
        "b": "metro",
        "bm": "meter",
-       "s": 3524,
-       "e": 6004,
+       "s": 2804,
+       "e": 4644,
        "a": "{{AUD_ex-counting-and-numbers-w-2564}}",
        "ba": "{{AUD_ex-counting-and-numbers-w-metro}}",
        "forms": [
@@ -1044,30 +1011,29 @@
          "a": "{{AUD_ex-counting-and-numbers-w-metros}}"
         }
        ],
-       "ex": "In this sentence, \"2564\" is a numeral that specifies the exact height being referred to. It functions as a noun, representing a quantity, specifically the number of meters. \n\nThe phrase \"una altura de 2564 metros\" translates to \"a height of 2564 meters,\" where \"2564\" quantifies \"altura\" (height). It gives a precise measurement that is essential for understanding the context of the sentence, which discusses reaching a certain elevation. \n\nOverall, \"2564\" serves to provide specific information about the height the speaker is referring to in the journey described."
+       "ex": "In this sentence, \"2564\" is a numeral that indicates a specific measurement. It is functioning as a noun, representing the height in meters. The phrase \"de 2564 metros-pulga\" translates to \"of 2564 flee meters,\" where \"2564\" quantifies the height being discussed.\n\nThe context shows that this number is part of a larger idea about reaching a certain altitude, which is important for understanding the situation in the comic. It helps to convey the exact point they are aiming for, making it clear how high they need to go."
       },
       {
-       "t": "metros.",
-       "m": "meters",
-       "b": "metro",
-       "bm": "unit of length",
-       "s": 6084,
-       "e": 6884,
-       "a": "{{AUD_ex-counting-and-numbers-w-metros}}",
-       "ba": "{{AUD_ex-counting-and-numbers-w-metro}}",
+       "t": "metros-pulga.",
+       "m": "flee meters",
+       "b": "metro-pulga",
+       "bm": "flea meter",
+       "s": 4713,
+       "e": 8004,
+       "a": "{{AUD_ex-counting-and-numbers-w-metrospulga-b6f9a3}}",
+       "ba": "{{AUD_ex-counting-and-numbers-w-metropulga-cdcdbb}}",
        "forms": [
         {
          "label": "Singular",
-         "text": "metro",
-         "a": "{{AUD_ex-counting-and-numbers-w-metro}}"
+         "text": "metro-pulga",
+         "a": "{{AUD_ex-counting-and-numbers-w-metropulga-cdcdbb}}"
         },
         {
          "label": "Plural",
-         "text": "metros",
-         "a": "{{AUD_ex-counting-and-numbers-w-metros}}"
+         "text": "metros-pulgas"
         }
        ],
-       "ex": "The word \"metros\" in this sentence is a noun in the plural form. It refers to \"meters,\" which is a unit of measurement for height. In this context, it specifies the altitude being discussed, which is \"2564 metros.\"\n\nThe sentence translates to \"... until we get to a height of 2564 meters,\" indicating that the height is measured in meters. The use of the plural \"metros\" is necessary here because it refers to a quantity (2564) rather than just one meter. \n\nIn summary, \"metros\" is crucial for conveying the specific measurement of height in this context."
+       "ex": "In the sentence, \"metros-pulga\" is a compound noun that combines \"metros\" and \"pulga.\" \n\n\"Metros\" is the plural form of \"metro,\" which means \"meter\" in English. It is a masculine noun, and here it indicates a unit of measurement for height. The word \"pulga\" means \"flea\" in English, but in this context, it refers to a specific type of measurement, often used humorously or informally to describe a small unit.\n\nTogether, \"metros-pulga\" suggests a playful or exaggerated way to describe a height measurement, implying that it is very small or insignificant. The phrase \"2564 metros-pulga\" indicates a height of 2564 of these small units, likely for comedic effect in the comic. \n\nSo, in summary, \"metros-pulga\" serves as a humorous measurement of height, combining a standard unit with a whimsical twist."
       }
      ]
     }
@@ -1287,15 +1253,18 @@
         },
         {
          "label": "Fem. sing.",
-         "text": "mucha"
+         "text": "mucha",
+         "a": "{{AUD_ex-counting-and-numbers-w-mucha}}"
         },
         {
          "label": "Masc. plural",
-         "text": "muchos"
+         "text": "muchos",
+         "a": "{{AUD_ex-counting-and-numbers-w-muchos}}"
         },
         {
          "label": "Fem. plural",
-         "text": "muchas"
+         "text": "muchas",
+         "a": "{{AUD_ex-counting-and-numbers-w-muchas}}"
         }
        ],
        "ex": "In this sentence, \"mucho\" is an adverb. It modifies the verb \"rascando\" (scratching) to indicate the degree or intensity of the action. In English, it translates to \"really\" or \"a lot,\" emphasizing that the dog is scratching quite a bit.\n\nThe structure of the sentence is \"Este perro se está rascando mucho,\" where \"mucho\" tells us how much the dog is scratching. It adds emphasis to the action, suggesting that the scratching is significant. \n\nSo, in summary, \"mucho\" is used here to enhance the verb and convey that the action is happening to a great extent."
@@ -1409,6 +1378,7 @@
      "es": "Catorce",
      "en": "Fourteen",
      "img": "example-counting-and-numbers-h1-s14",
+     "a": "{{AUD_ex-counting-and-numbers-h1-s14}}",
      "ea": "{{AUD_ex-counting-and-numbers-h1-s14-en}}"
     },
     {
