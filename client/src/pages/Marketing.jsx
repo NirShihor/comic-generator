@@ -1260,10 +1260,37 @@ function MessageCardPreview({ card, images }) {
 
 const OPENING_IMAGE_DEFAULT = { image: '', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, fade: true };
 const OPENING_IMAGES_MAX = 6;
-// Stills — the comic's images — each held for a few seconds, shown in order
-// right before the clip (after the opening and message cards, if any).
-function OpeningImagesEditor({ value, onChange, images }) {
+// Stills — the comic's images, or your own uploaded pages — each held for a
+// few seconds, shown in order right before the clip (after the opening and
+// message cards, if any). With no clip at all, they ARE the reel.
+function OpeningImagesEditor({ value, onChange, images, comicId }) {
   const list = value;
+  const [uploads, setUploads] = useState([]);   // your own images, this session: { file: 'upload:…', url, label }
+  const [uploading, setUploading] = useState(false);
+  const all = [...uploads, ...images];
+  const upload = async e => {
+    const files = [...(e.target.files || [])]; e.target.value = '';
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const added = [];
+      for (const f of files) {
+        const fd = new FormData(); fd.append('comicId', comicId); fd.append('image', f);
+        const r = await api.post('/marketing/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        added.push({ file: r.data.file, url: r.data.url, label: r.data.label });
+      }
+      setUploads(u => [...added, ...u]);
+      // Each uploaded page becomes a slide (filling empty rows first).
+      let l = [...list];
+      for (const a of added) {
+        const empty = l.findIndex(s => !s.image);
+        if (empty >= 0) l[empty] = { ...l[empty], image: a.file };
+        else if (l.length < OPENING_IMAGES_MAX) l.push({ ...(l[l.length - 1] || OPENING_IMAGE_DEFAULT), image: a.file });
+      }
+      onChange(l);
+    } catch (err) { alert(err.response?.data?.error || err.message); }
+    finally { setUploading(false); }
+  };
   const setAt = (i, k, x) => onChange(list.map((s, j) => (j === i ? { ...s, [k]: x } : s)));
   const remove = i => onChange(list.filter((_, j) => j !== i));
   const move = (i, d) => { const l = [...list]; [l[i], l[i + d]] = [l[i + d], l[i]]; onChange(l); };
@@ -1276,16 +1303,22 @@ function OpeningImagesEditor({ value, onChange, images }) {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: '0.85rem', color: '#ccc' }}>
         Opening images — stills (pages, say), each held for a while, right before the clip
         {list.length < OPENING_IMAGES_MAX && <button type="button" onClick={add} style={small}>+ add an image</button>}
+        {list.length < OPENING_IMAGES_MAX && (
+          <label style={{ ...small, display: 'inline-block' }} title="Your own images (jpg/png/webp) — each one becomes a slide">
+            {uploading ? 'Uploading…' : '📁 upload your own'}
+            <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple style={{ display: 'none' }} onChange={upload} disabled={uploading} />
+          </label>
+        )}
       </div>
       {list.map((v, i) => {
-        const chosen = images.find(im => im.file === v.image);
+        const chosen = all.find(im => im.file === v.image);
         return (
           <div key={i} style={{ marginTop: 8, display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', paddingTop: i ? 8 : 0, borderTop: i ? '1px dashed #3a2f5c' : 'none' }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', ...grey }}>
               <span style={{ color: '#9a8fc0' }}>{i + 1}.</span>
               <select value={v.image} onChange={e => setAt(i, 'image', e.target.value)} style={{ ...input, maxWidth: 260 }} title="Which image to show">
                 <option value="">— choose an image —</option>
-                {images.map(im => <option key={im.file} value={im.file}>{im.file}</option>)}
+                {all.map(im => <option key={im.file} value={im.file}>{im.label ? `📁 ${im.label}` : im.file}</option>)}
               </select>
               <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="How long the image stays on screen">
                 for <input type="number" min={0.5} max={60} step={0.5} value={v.seconds} onChange={e => setAt(i, 'seconds', Number(e.target.value) || 3)} style={{ ...input, width: 70 }} /> s
@@ -2313,7 +2346,7 @@ function Reels() {
             )}
             {(openingLine1 || openingLine2) && <OpeningCardAnim value={openingAnim} onChange={setOpeningAnim} secs={openingSec} badge={soundBadge} />}
             <MessageCardEditor value={messageCard} onChange={setMessageCard} images={images} />
-            <OpeningImagesEditor value={openingImages} onChange={setOpeningImages} images={images} />
+            <OpeningImagesEditor key={comicId} value={openingImages} onChange={setOpeningImages} images={images} comicId={comicId} />
             {clipFile && <CueEditor comicId={comicId} src={`/projects/${comicId}/marketing/${clipFile}`} cues={cues} onChange={setCues} original={cueOriginal} onOriginal={setCueOriginal} cuts={cuts} onCuts={setCuts} />}
             {clipFile && <ZoomEditor value={zooms} onChange={setZooms} src={`/projects/${comicId}/marketing/${clipFile}`} />}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -2359,6 +2392,12 @@ function Reels() {
                 <button className="btn btn-secondary" disabled={busy} onClick={remix} style={{ padding: '0.45rem 1rem' }}
                         title="Re-apply audio to the last generated clip without paying for a new generation">
                   {busy ? 'Mixing…' : (/^(own-|challenge-|demo-)/.test(clipFile || '') ? '🔁 Apply audio & cards to this clip' : '🔁 Apply audio to last clip')}
+                </button>
+              )}
+              {!clipFile && openingImages.some(s => s.image) && (
+                <button className="btn btn-secondary" disabled={busy} onClick={remix} style={{ padding: '0.45rem 1rem' }}
+                        title="No clip: the reel is the opening images, one after another, then the cards (question, covers, sign-off) — free, no generation">
+                  {busy ? 'Making…' : '🎞 Make the reel from the images'}
                 </button>
               )}
             </div>

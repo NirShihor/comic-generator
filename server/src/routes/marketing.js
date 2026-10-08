@@ -1764,16 +1764,20 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
     for (const [i, still] of secs.openingImages.entries()) {
       parts.push(await openingImageSegment(tmp, comicId, still, run, { index: i, fadeIn: parts.length > 0 }));
     }
-    const main = path.join(tmp, 'main.mp4');
-    // After an opening/message card or a still, the clip fades in quickly rather than cutting hard.
-    const lastStill = secs.openingImages[secs.openingImages.length - 1];
-    const mainFade = (openingLine1 || openingLine2 || parts.length) ? `,fade=t=in:st=0:d=0.35:color=0x${(lastStill ? lastStill.background : '#6E40F0').slice(1)}` : '';
-    const zoom = zoomFilter(secs.zooms || [], FPS, W, H);
-    await run('ffmpeg', ['-y', '-i', videoPath,
-      '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS},setsar=1${zoom}${mainFade}`,
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-ar', '44100', '-ac', '2', main]);
-    parts.push(main);
+    // The clip — unless the reel is stills only (videoPath null: the opening
+    // images ARE the reel, followed by the usual cards).
+    if (videoPath) {
+      const main = path.join(tmp, 'main.mp4');
+      // After an opening/message card or a still, the clip fades in quickly rather than cutting hard.
+      const lastStill = secs.openingImages[secs.openingImages.length - 1];
+      const mainFade = (openingLine1 || openingLine2 || parts.length) ? `,fade=t=in:st=0:d=0.35:color=0x${(lastStill ? lastStill.background : '#6E40F0').slice(1)}` : '';
+      const zoom = zoomFilter(secs.zooms || [], FPS, W, H);
+      await run('ffmpeg', ['-y', '-i', videoPath,
+        '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS},setsar=1${zoom}${mainFade}`,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-ar', '44100', '-ac', '2', main]);
+      parts.push(main);
+    }
     for (let i = 0; i < cards.length; i++) {
       const [png, dur, cap] = cards[i];
       const seg = path.join(tmp, `card${i}.mp4`);
@@ -1923,18 +1927,28 @@ function parseAnim(src, keys) {
   }
   return out;
 }
-const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim() || parseMessageCard(body.messageCard));
+const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim() || parseMessageCard(body.messageCard) || parseOpeningImages(body).length);
 
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
 // paying for a new generation. Body: { comicId, file, voiceAudio: [..], ambient }
+// With no `file` and at least one opening image, the reel is made of the
+// stills alone (plus the cards): a page-by-page reel with no clip.
 router.post('/veo-remix', async (req, res) => {
   try {
     const { comicId, file, voiceAudio = [], ambient = 'duck' } = req.body;
-    if (!comicId || !file || !/^[\w.\-]+\.mp4$/.test(file)) return res.status(400).json({ error: 'comicId and a valid file are required' });
+    const stillsOnly = !file && parseOpeningImages(req.body).length > 0;
+    if (!comicId || (!stillsOnly && (!file || !/^[\w.\-]+\.mp4$/.test(file)))) return res.status(400).json({ error: 'comicId and a valid file are required' });
+    const { question = '', endCard = false } = req.body;
+    if (stillsOnly) {
+      const fin = path.join(PROJECTS_DIR, comicId, 'marketing', `stills-${Date.now()}-fin.mp4`);
+      await fs.mkdir(path.dirname(fin), { recursive: true });
+      await finishClip(comicId, null, question, fin, cardSecs(req.body));
+      const finName = path.basename(fin);
+      return res.json({ url: `/projects/${comicId}/marketing/${finName}`, file: finName });
+    }
     const src = path.join(PROJECTS_DIR, comicId, 'marketing', file);
     const name = `${file.replace(/\.mp4$/, '')}-mix-${Date.now()}.mp4`;
     const out = path.join(PROJECTS_DIR, comicId, 'marketing', name);
-    const { question = '', endCard = false } = req.body;
     const cues = parseCues(req.body.cues);
     const cuts = parseCuts(req.body.cuts);
     if (voiceAudio.length === 0 && ambient === 'keep' && !cues.length && !cuts.length && !question && !endCard && !hasOpening(req.body) && !parseZooms(req.body.zooms).length) return res.status(400).json({ error: 'Nothing to change' });
@@ -3312,4 +3326,4 @@ router.delete('/examples/:comicId/:pageId/publish', async (req, res) => {
 
 module.exports = router;
 // For tests (server/test/reelOpeningImage.test.js).
-router._openingImage = { parseOpeningImage, parseOpeningImages, openingImageSegment };
+router._openingImage = { parseOpeningImage, parseOpeningImages, openingImageSegment, finishClip, cardSecs };

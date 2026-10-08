@@ -7,7 +7,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const sharp = require('sharp');
 const execFileAsync = promisify(execFile);
-const { parseOpeningImage, parseOpeningImages, openingImageSegment } = require('../src/routes/marketing')._openingImage;
+const { parseOpeningImage, parseOpeningImages, openingImageSegment, finishClip, cardSecs } = require('../src/routes/marketing')._openingImage;
 
 test('opening image settings are validated and defaulted', () => {
   assert.strictEqual(parseOpeningImage(undefined), null);
@@ -70,6 +70,14 @@ test('the still renders to a 1080x1920 segment of the chosen length', async () =
       const f = await sharp(first).raw().toBuffer({ resolveWithObject: true });
       const p0 = [...f.data.slice((960 * f.info.width + 540) * f.info.channels, (960 * f.info.width + 540) * f.info.channels + 3)];
       assert.ok(p0[0] < 120, `first frame starts on the background colour, not the image: ${p0}`);
+      // A reel with no clip at all: the two stills, then the sign-off card.
+      const reel = path.join(tmp, 'reel.mp4');
+      const body = { openingImages: [{ image: 'ref:/uploads/_test-reel-still/page.png', seconds: 1.5 }, { image: 'ref:/uploads/_test-reel-still/page.png', seconds: 1, fit: 'cover' }], endCardSeconds: 2 };
+      await finishClip('comic-none', null, '', reel, cardSecs(body));
+      const rp = JSON.parse(await run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', reel]));
+      const rv = rp.streams.find(s => s.codec_type === 'video');
+      assert.strictEqual(`${rv.width}x${rv.height}`, '1080x1920');
+      assert.ok(Math.abs(parseFloat(rp.format.duration) - 4.5) < 0.25, `stills + sign-off: ${rp.format.duration}`);
     } finally { fs.rmSync(upDir, { recursive: true, force: true }); }
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
