@@ -1258,6 +1258,57 @@ function MessageCardPreview({ card, images }) {
   );
 }
 
+const OPENING_IMAGE_DEFAULT = { enabled: false, image: '', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, fade: true };
+// A still — one of the comic's images — held for a few seconds right before
+// the clip (after the opening and message cards, if any).
+function OpeningImageEditor({ value, onChange, images }) {
+  const v = value;
+  const set = (k, x) => onChange({ ...v, [k]: x });
+  const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem' };
+  const grey = { color: '#c4bdd8', fontSize: '0.8rem' };
+  const chosen = images.find(im => im.file === v.image);
+  return (
+    <div style={{ border: '1px solid #3a2f5c', borderRadius: 8, padding: '8px 10px', margin: '6px 0' }}>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc' }}>
+        <input type="checkbox" checked={v.enabled} onChange={e => set('enabled', e.target.checked)} />
+        Opening image — a still (a page, say) held for a while right before the clip
+      </label>
+      {v.enabled && (
+        <div style={{ marginTop: 8, display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', ...grey }}>
+            <select value={v.image} onChange={e => set('image', e.target.value)} style={{ ...input, maxWidth: 260 }} title="Which image to show">
+              <option value="">— choose an image —</option>
+              {images.map(im => <option key={im.file} value={im.file}>{im.file}</option>)}
+            </select>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="How long the image stays on screen">
+              for <input type="number" min={0.5} max={60} step={0.5} value={v.seconds} onChange={e => set('seconds', Number(e.target.value) || 3)} style={{ ...input, width: 70 }} /> s
+            </label>
+            <select value={v.fit} onChange={e => set('fit', e.target.value)} style={input} title="Fit the whole image inside the frame on the background colour, or fill the frame (edges cropped)">
+              <option value="inside">Whole image on a colour</option>
+              <option value="cover">Fill the frame</option>
+            </select>
+            {v.fit !== 'cover' && (
+              <>
+                <input type="color" value={v.background} onChange={e => set('background', e.target.value.toUpperCase())} title="Background colour" style={{ width: 34, height: 26, padding: 0, border: '1px solid #555', background: 'none' }} />
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Space around the image (px of the 1080×1920 frame)">
+                  margin <input type="number" min={0} max={300} step={10} value={v.margin} onChange={e => set('margin', Number(e.target.value) || 0)} style={{ ...input, width: 70 }} />
+                </label>
+              </>
+            )}
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Fade to the background colour at the end, so the clip fades in from it instead of cutting hard">
+              <input type="checkbox" checked={v.fade} onChange={e => set('fade', e.target.checked)} /> fade into the clip
+            </label>
+          </div>
+          {chosen && (
+            <div style={{ width: 90, height: 160, borderRadius: 6, background: v.background, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: v.fit === 'cover' ? 0 : Math.round(v.margin / 12) }} title="Roughly how it sits in the frame">
+              <img src={chosen.url} alt="" style={{ width: '100%', height: '100%', objectFit: v.fit === 'cover' ? 'cover' : 'contain' }} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function MessageCardEditor({ value, onChange, images }) {
   const v = value;
   const set = (k, x) => onChange({ ...v, [k]: x });
@@ -1897,6 +1948,7 @@ function Reels() {
   const [openingHold, setOpeningHold] = useState(0);
   const [openingAnim, setOpeningAnim] = useState(OPENING_ANIM_DEFAULT);
   const [messageCard, setMessageCard] = useState(MESSAGE_CARD_DEFAULT);
+  const [openingImage, setOpeningImage] = useState(OPENING_IMAGE_DEFAULT);   // a still held before the clip
   const [soundBadge, setSoundBadge] = useState(false);   // "Turn sound on" badge over the reel
   const [zooms, setZooms] = useState([]);                 // camera pushes on the clip (ZoomEditor)
   const [cues, setCues] = useState([]);                   // Quick audio clips placed on the clip (CueEditor)
@@ -1972,7 +2024,7 @@ function Reels() {
   const remix = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, openingImage, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -1999,7 +2051,7 @@ function Reels() {
     try {
       const r = await api.post(model.startsWith('sora') ? '/marketing/sora-clip' : '/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, mode, aspectRatio: '9:16', styleLock, resolution,
         voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, negativePrompt,
-        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
+        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, openingImage, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -2250,6 +2302,7 @@ function Reels() {
             )}
             {(openingLine1 || openingLine2) && <OpeningCardAnim value={openingAnim} onChange={setOpeningAnim} secs={openingSec} badge={soundBadge} />}
             <MessageCardEditor value={messageCard} onChange={setMessageCard} images={images} />
+            <OpeningImageEditor value={openingImage} onChange={setOpeningImage} images={images} />
             {clipFile && <CueEditor comicId={comicId} src={`/projects/${comicId}/marketing/${clipFile}`} cues={cues} onChange={setCues} original={cueOriginal} onOriginal={setCueOriginal} cuts={cuts} onCuts={setCuts} />}
             {clipFile && <ZoomEditor value={zooms} onChange={setZooms} src={`/projects/${comicId}/marketing/${clipFile}`} />}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

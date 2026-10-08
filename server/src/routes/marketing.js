@@ -1535,6 +1535,44 @@ async function messageCardSegment(tmp, comicId, card, run) {
   return layeredCardSegment(tmp, 'message', els, dur, {}, run, opts);
 }
 
+// A still shown before the clip: a comic image (a page, a panel, a generated
+// still) fitted inside the frame on a plain colour — or filling it — and held
+// for `seconds`, with a short fade to the background colour at the end so the
+// clip's own fade-in continues from it.
+async function openingImageSegment(tmp, comicId, still, run) {
+  const W = 1080, H = 1920, FPS = 25;
+  const src = await resolveRefImage(comicId, await exportDirOrNull(comicId), still.image);
+  const png = path.join(tmp, 'still.png');
+  const bg = still.background;
+  const rgb = { r: parseInt(bg.slice(1, 3), 16), g: parseInt(bg.slice(3, 5), 16), b: parseInt(bg.slice(5, 7), 16), alpha: 1 };
+  const margin = still.fit === 'cover' ? 0 : still.margin;
+  let img = sharp(src).resize(W - 2 * margin, H - 2 * margin, { fit: still.fit === 'cover' ? 'cover' : 'inside' });
+  if (margin) img = img.extend({ top: margin, bottom: margin, left: margin, right: margin, background: rgb });
+  await sharp({ create: { width: W, height: H, channels: 3, background: rgb } })
+    .composite([{ input: await img.png().toBuffer(), gravity: 'centre' }]).png().toFile(png);
+  const seg = path.join(tmp, 'still.mp4');
+  const fadeOut = still.fade && still.seconds > 0.6 ? `,fade=t=out:st=${(still.seconds - 0.35).toFixed(2)}:d=0.35:color=0x${bg.slice(1)}` : '';
+  await run('ffmpeg', ['-y', '-loop', '1', '-framerate', String(FPS), '-t', String(still.seconds), '-i', png,
+    '-f', 'lavfi', '-t', String(still.seconds), '-i', 'anullsrc=r=44100:cl=stereo',
+    '-vf', `scale=${W}:${H},setsar=1,format=yuv420p${fadeOut}`, '-map', '0:v', '-map', '1:a', '-t', String(still.seconds),
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-ar', '44100', '-ac', '2', seg]);
+  return seg;
+}
+// { image: comic image token, seconds 0.5–60, fit: 'inside' | 'cover', background '#RRGGBB', margin px, fade }
+function parseOpeningImage(src) {
+  if (!src || typeof src !== 'object' || src.enabled !== true) return null;
+  const image = String(src.image || '').slice(0, 300);
+  if (!image) return null;
+  return {
+    image,
+    seconds: Math.min(60, Math.max(0.5, Number(src.seconds) || 3)),
+    fit: src.fit === 'cover' ? 'cover' : 'inside',
+    background: /^#[0-9a-fA-F]{6}$/.test(String(src.background || '')) ? String(src.background).toUpperCase() : '#6E40F0',
+    margin: Math.min(300, Math.max(0, Math.round(Number(src.margin)) || 0)),
+    fade: src.fade !== false,
+  };
+}
+
 async function coversMosaicSegment(tmp, dur, run) {
   const W = 1080, H = 1920, FPS = 25;
   const fsSync = require('fs');
@@ -1711,9 +1749,11 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
     }
     // Optional message card (second slide) after the opening card.
     if (secs.messageCard && secs.messageCard.enabled) parts.push(await messageCardSegment(tmp, comicId, secs.messageCard, run));
+    // Optional still (a page of the comic, say) held for a while right before the clip.
+    if (secs.openingImage) parts.push(await openingImageSegment(tmp, comicId, secs.openingImage, run));
     const main = path.join(tmp, 'main.mp4');
     // After an opening/message card, the clip fades in quickly rather than cutting hard.
-    const mainFade = (openingLine1 || openingLine2 || parts.length) ? ',fade=t=in:st=0:d=0.35:color=0x6E40F0' : '';
+    const mainFade = (openingLine1 || openingLine2 || parts.length) ? `,fade=t=in:st=0:d=0.35:color=0x${(secs.openingImage ? secs.openingImage.background : '#6E40F0').slice(1)}` : '';
     const zoom = zoomFilter(secs.zooms || [], FPS, W, H);
     await run('ffmpeg', ['-y', '-i', videoPath,
       '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS},setsar=1${zoom}${mainFade}`,
@@ -1773,6 +1813,7 @@ const cardSecs = body => ({
   endAnim: parseAnim(body.endAnim, ['logo', 'tagline', 'caption', 'net', 'bottom']),
   openingAnim: parseAnim(body.openingAnim, ['logo', 'line1', 'squiggle', 'line2', 'badge']),
   messageCard: parseMessageCard(body.messageCard),
+  openingImage: parseOpeningImage(body.openingImage),
   soundBadge: body.soundBadge === true,
   zooms: parseZooms(body.zooms),
 });
@@ -3256,3 +3297,5 @@ router.delete('/examples/:comicId/:pageId/publish', async (req, res) => {
 });
 
 module.exports = router;
+// For tests (server/test/reelOpeningImage.test.js).
+router._openingImage = { parseOpeningImage, openingImageSegment };
