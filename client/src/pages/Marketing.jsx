@@ -1310,7 +1310,8 @@ function OpeningImagesEditor({ value, onChange, images, comicId }) {
           </label>
         )}
       </div>
-      {list.map((v, i) => {
+      {list.map((row, i) => {
+        const v = { ...OPENING_IMAGE_DEFAULT, ...row };   // rows made before a setting existed get its default
         const chosen = all.find(im => im.file === v.image);
         return (
           <div key={i} style={{ marginTop: 8, display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', paddingTop: i ? 8 : 0, borderTop: i ? '1px dashed #3a2f5c' : 'none' }}>
@@ -1334,9 +1335,19 @@ function OpeningImagesEditor({ value, onChange, images, comicId }) {
               <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Scale on top of the fit: 100% = exactly as the mode fits it; under 100% shrinks it (less cropped when filling), over 100% enlarges it (cropped around the focus)">
                 zoom <input type="number" min={25} max={400} step={5} value={v.zoom} onChange={e => setAt(i, 'zoom', Number(e.target.value) || 100)} style={{ ...input, width: 70 }} /> %
               </label>
-              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Which part to keep when the image is cropped: 0 = left/top, 50 = centre, 100 = right/bottom">
-                keep <input type="number" min={0} max={100} step={5} value={v.focusX} onChange={e => setAt(i, 'focusX', Number(e.target.value) || 0)} style={{ ...input, width: 60 }} title="across: 0 left … 100 right" />
-                × <input type="number" min={0} max={100} step={5} value={v.focusY} onChange={e => setAt(i, 'focusY', Number(e.target.value) || 0)} style={{ ...input, width: 60 }} title="down: 0 top … 100 bottom" /> %
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Which part of the image to keep when it is cropped">
+                keep
+                <select value={`${v.focusX},${v.focusY}`} onChange={e => { const [x, y] = e.target.value.split(',').map(Number); onChange(list.map((r, j) => (j === i ? { ...r, focusX: x, focusY: y } : r))); }} style={input}>
+                  <option value="50,50">the centre</option>
+                  <option value="50,0">the top</option>
+                  <option value="50,100">the bottom</option>
+                  <option value="0,50">the left</option>
+                  <option value="100,50">the right</option>
+                  <option value="0,0">the top-left</option>
+                  <option value="100,0">the top-right</option>
+                  <option value="0,100">the bottom-left</option>
+                  <option value="100,100">the bottom-right</option>
+                </select>
               </label>
               <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Fade to the background colour at the end (and in from it, after another slide), so what follows fades in instead of cutting hard">
                 <input type="checkbox" checked={v.fade} onChange={e => setAt(i, 'fade', e.target.checked)} /> fade
