@@ -1535,6 +1535,70 @@ async function messageCardSegment(tmp, comicId, card, run) {
   return layeredCardSegment(tmp, 'message', els, dur, {}, run, opts);
 }
 
+// A still shown before the clip: a comic image (a page, a panel, a generated
+// still) fitted inside the frame on a plain colour — or filling it — and held
+// for `seconds`. With `fade`, it ends with a short fade to its background
+// colour so what follows (the next still, or the clip) fades in from it, and
+// — when something came before it (`fadeIn`) — starts the same way.
+// `index` keeps several stills' files apart in `tmp`.
+async function openingImageSegment(tmp, comicId, still, run, { index = 0, fadeIn = false } = {}) {
+  const W = 1080, H = 1920, FPS = 25;
+  const src = await resolveRefImage(comicId, await exportDirOrNull(comicId), still.image);
+  const png = path.join(tmp, `still-${index}.png`);
+  const bg = still.background;
+  const rgb = { r: parseInt(bg.slice(1, 3), 16), g: parseInt(bg.slice(3, 5), 16), b: parseInt(bg.slice(5, 7), 16), alpha: 1 };
+  // The image sits in the frame minus the margin: scaled to fit inside it
+  // ('inside') or to cover it ('cover'), times `zoom`; whatever then overflows
+  // the box is cropped around the focus point (0–1 across and down).
+  const meta = await sharp(src).metadata();
+  const sideways = (meta.orientation || 1) >= 5;   // EXIF-rotated photos
+  const iw = sideways ? meta.height : meta.width, ih = sideways ? meta.width : meta.height;
+  const margin = still.margin, boxW = W - 2 * margin, boxH = H - 2 * margin;
+  const base = still.fit === 'cover' ? Math.max(boxW / iw, boxH / ih) : Math.min(boxW / iw, boxH / ih);
+  const w = Math.max(1, Math.round(iw * base * still.zoom)), h = Math.max(1, Math.round(ih * base * still.zoom));
+  let img = sharp(src).rotate().resize(w, h);
+  const cw = Math.min(w, boxW), ch = Math.min(h, boxH);
+  if (cw < w || ch < h) img = img.extract({ left: Math.round((w - cw) * still.focusX), top: Math.round((h - ch) * still.focusY), width: cw, height: ch });
+  await sharp({ create: { width: W, height: H, channels: 3, background: rgb } })
+    .composite([{ input: await img.png().toBuffer(), gravity: 'centre' }]).png().toFile(png);
+  const seg = path.join(tmp, `still-${index}.mp4`);
+  const fades = still.fade && still.seconds > 0.6;
+  const fadeOut = fades ? `,fade=t=out:st=${(still.seconds - 0.35).toFixed(2)}:d=0.35:color=0x${bg.slice(1)}` : '';
+  const fadeInF = fades && fadeIn ? `,fade=t=in:st=0:d=0.35:color=0x${bg.slice(1)}` : '';
+  await run('ffmpeg', ['-y', '-loop', '1', '-framerate', String(FPS), '-t', String(still.seconds), '-i', png,
+    '-f', 'lavfi', '-t', String(still.seconds), '-i', 'anullsrc=r=44100:cl=stereo',
+    '-vf', `scale=${W}:${H},setsar=1,format=yuv420p${fadeInF}${fadeOut}`, '-map', '0:v', '-map', '1:a', '-t', String(still.seconds),
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-ar', '44100', '-ac', '2', seg]);
+  return seg;
+}
+// One still: { image: comic image token, seconds 0.5–60, fit: 'inside' | 'cover',
+// background '#RRGGBB', margin px, zoom (percent in, factor out: 100 → 1),
+// focusX/focusY (percent in, 0–1 out: which part is kept when cropped), fade }
+function parseOpeningImage(src) {
+  if (!src || typeof src !== 'object' || src.enabled === false) return null;
+  const image = String(src.image || '').slice(0, 300);
+  if (!image) return null;
+  const pct = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v != null ? Math.min(100, Math.max(0, Number(v))) : d) / 100;
+  return {
+    image,
+    seconds: Math.min(60, Math.max(0.5, Number(src.seconds) || 3)),
+    fit: src.fit === 'cover' ? 'cover' : 'inside',
+    background: /^#[0-9a-fA-F]{6}$/.test(String(src.background || '')) ? String(src.background).toUpperCase() : '#6E40F0',
+    margin: Math.min(300, Math.max(0, Math.round(Number(src.margin)) || 0)),
+    zoom: Math.min(400, Math.max(25, Number(src.zoom) || 100)) / 100,
+    focusX: pct(src.focusX, 50),
+    focusY: pct(src.focusY, 50),
+    fade: src.fade !== false,
+  };
+}
+// The stills shown in order before the clip, at most 6: `openingImages` (a
+// list) — or the older single `openingImage` ({ enabled: true, … }).
+function parseOpeningImages(body) {
+  const list = Array.isArray(body.openingImages) ? body.openingImages
+    : body.openingImage && body.openingImage.enabled === true ? [body.openingImage] : [];
+  return list.slice(0, 6).map(parseOpeningImage).filter(Boolean);
+}
+
 async function coversMosaicSegment(tmp, dur, run) {
   const W = 1080, H = 1920, FPS = 25;
   const fsSync = require('fs');
@@ -1711,15 +1775,24 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
     }
     // Optional message card (second slide) after the opening card.
     if (secs.messageCard && secs.messageCard.enabled) parts.push(await messageCardSegment(tmp, comicId, secs.messageCard, run));
-    const main = path.join(tmp, 'main.mp4');
-    // After an opening/message card, the clip fades in quickly rather than cutting hard.
-    const mainFade = (openingLine1 || openingLine2 || parts.length) ? ',fade=t=in:st=0:d=0.35:color=0x6E40F0' : '';
-    const zoom = zoomFilter(secs.zooms || [], FPS, W, H);
-    await run('ffmpeg', ['-y', '-i', videoPath,
-      '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS},setsar=1${zoom}${mainFade}`,
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-ar', '44100', '-ac', '2', main]);
-    parts.push(main);
+    // Optional stills (pages of the comic, say), each held for a while, right before the clip.
+    for (const [i, still] of secs.openingImages.entries()) {
+      parts.push(await openingImageSegment(tmp, comicId, still, run, { index: i, fadeIn: parts.length > 0 }));
+    }
+    // The clip — unless the reel is stills only (videoPath null: the opening
+    // images ARE the reel, followed by the usual cards).
+    if (videoPath) {
+      const main = path.join(tmp, 'main.mp4');
+      // After an opening/message card or a still, the clip fades in quickly rather than cutting hard.
+      const lastStill = secs.openingImages[secs.openingImages.length - 1];
+      const mainFade = (openingLine1 || openingLine2 || parts.length) ? `,fade=t=in:st=0:d=0.35:color=0x${(lastStill ? lastStill.background : '#6E40F0').slice(1)}` : '';
+      const zoom = zoomFilter(secs.zooms || [], FPS, W, H);
+      await run('ffmpeg', ['-y', '-i', videoPath,
+        '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS},setsar=1${zoom}${mainFade}`,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-ar', '44100', '-ac', '2', main]);
+      parts.push(main);
+    }
     for (let i = 0; i < cards.length; i++) {
       const [png, dur, cap] = cards[i];
       const seg = path.join(tmp, `card${i}.mp4`);
@@ -1773,6 +1846,7 @@ const cardSecs = body => ({
   endAnim: parseAnim(body.endAnim, ['logo', 'tagline', 'caption', 'net', 'bottom']),
   openingAnim: parseAnim(body.openingAnim, ['logo', 'line1', 'squiggle', 'line2', 'badge']),
   messageCard: parseMessageCard(body.messageCard),
+  openingImages: parseOpeningImages(body),
   soundBadge: body.soundBadge === true,
   zooms: parseZooms(body.zooms),
 });
@@ -1868,18 +1942,28 @@ function parseAnim(src, keys) {
   }
   return out;
 }
-const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim() || parseMessageCard(body.messageCard));
+const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim() || parseMessageCard(body.messageCard) || parseOpeningImages(body).length);
 
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
 // paying for a new generation. Body: { comicId, file, voiceAudio: [..], ambient }
+// With no `file` and at least one opening image, the reel is made of the
+// stills alone (plus the cards): a page-by-page reel with no clip.
 router.post('/veo-remix', async (req, res) => {
   try {
     const { comicId, file, voiceAudio = [], ambient = 'duck' } = req.body;
-    if (!comicId || !file || !/^[\w.\-]+\.mp4$/.test(file)) return res.status(400).json({ error: 'comicId and a valid file are required' });
+    const stillsOnly = !file && parseOpeningImages(req.body).length > 0;
+    if (!comicId || (!stillsOnly && (!file || !/^[\w.\-]+\.mp4$/.test(file)))) return res.status(400).json({ error: 'comicId and a valid file are required' });
+    const { question = '', endCard = false } = req.body;
+    if (stillsOnly) {
+      const fin = path.join(PROJECTS_DIR, comicId, 'marketing', `stills-${Date.now()}-fin.mp4`);
+      await fs.mkdir(path.dirname(fin), { recursive: true });
+      await finishClip(comicId, null, question, fin, cardSecs(req.body));
+      const finName = path.basename(fin);
+      return res.json({ url: `/projects/${comicId}/marketing/${finName}`, file: finName });
+    }
     const src = path.join(PROJECTS_DIR, comicId, 'marketing', file);
     const name = `${file.replace(/\.mp4$/, '')}-mix-${Date.now()}.mp4`;
     const out = path.join(PROJECTS_DIR, comicId, 'marketing', name);
-    const { question = '', endCard = false } = req.body;
     const cues = parseCues(req.body.cues);
     const cuts = parseCuts(req.body.cuts);
     if (voiceAudio.length === 0 && ambient === 'keep' && !cues.length && !cuts.length && !question && !endCard && !hasOpening(req.body) && !parseZooms(req.body.zooms).length) return res.status(400).json({ error: 'Nothing to change' });
@@ -3256,3 +3340,5 @@ router.delete('/examples/:comicId/:pageId/publish', async (req, res) => {
 });
 
 module.exports = router;
+// For tests (server/test/reelOpeningImage.test.js).
+router._openingImage = { parseOpeningImage, parseOpeningImages, openingImageSegment, finishClip, cardSecs };

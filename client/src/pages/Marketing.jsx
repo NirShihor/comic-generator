@@ -1258,6 +1258,117 @@ function MessageCardPreview({ card, images }) {
   );
 }
 
+const OPENING_IMAGE_DEFAULT = { image: '', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, zoom: 100, focusX: 50, focusY: 50, fade: true };
+const OPENING_IMAGES_MAX = 6;
+// Stills — the comic's images, or your own uploaded pages — each held for a
+// few seconds, shown in order right before the clip (after the opening and
+// message cards, if any). With no clip at all, they ARE the reel.
+function OpeningImagesEditor({ value, onChange, images, comicId }) {
+  const list = value;
+  const [uploads, setUploads] = useState([]);   // your own images, this session: { file: 'upload:…', url, label }
+  const [uploading, setUploading] = useState(false);
+  const all = [...uploads, ...images];
+  const upload = async e => {
+    const files = [...(e.target.files || [])]; e.target.value = '';
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const added = [];
+      for (const f of files) {
+        const fd = new FormData(); fd.append('comicId', comicId); fd.append('image', f);
+        const r = await api.post('/marketing/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        added.push({ file: r.data.file, url: r.data.url, label: r.data.label });
+      }
+      setUploads(u => [...added, ...u]);
+      // Each uploaded page becomes a slide (filling empty rows first).
+      let l = [...list];
+      for (const a of added) {
+        const empty = l.findIndex(s => !s.image);
+        if (empty >= 0) l[empty] = { ...l[empty], image: a.file };
+        else if (l.length < OPENING_IMAGES_MAX) l.push({ ...(l[l.length - 1] || OPENING_IMAGE_DEFAULT), image: a.file });
+      }
+      onChange(l);
+    } catch (err) { alert(err.response?.data?.error || err.message); }
+    finally { setUploading(false); }
+  };
+  const setAt = (i, k, x) => onChange(list.map((s, j) => (j === i ? { ...s, [k]: x } : s)));
+  const remove = i => onChange(list.filter((_, j) => j !== i));
+  const move = (i, d) => { const l = [...list]; [l[i], l[i + d]] = [l[i + d], l[i]]; onChange(l); };
+  const add = () => onChange([...list, { ...(list[list.length - 1] || OPENING_IMAGE_DEFAULT), image: '' }]);   // a new one takes the last one's settings
+  const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem' };
+  const grey = { color: '#c4bdd8', fontSize: '0.8rem' };
+  const small = { ...input, padding: '0.15rem 0.45rem', cursor: 'pointer' };
+  return (
+    <div style={{ border: '1px solid #3a2f5c', borderRadius: 8, padding: '8px 10px', margin: '6px 0' }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: '0.85rem', color: '#ccc' }}>
+        Opening images — stills (pages, say), each held for a while, right before the clip
+        {list.length < OPENING_IMAGES_MAX && <button type="button" onClick={add} style={small}>+ add an image</button>}
+        {list.length < OPENING_IMAGES_MAX && (
+          <label style={{ ...small, display: 'inline-block' }} title="Your own images (jpg/png/webp) — each one becomes a slide">
+            {uploading ? 'Uploading…' : '📁 upload your own'}
+            <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple style={{ display: 'none' }} onChange={upload} disabled={uploading} />
+          </label>
+        )}
+      </div>
+      {list.map((row, i) => {
+        const v = { ...OPENING_IMAGE_DEFAULT, ...row };   // rows made before a setting existed get its default
+        const chosen = all.find(im => im.file === v.image);
+        return (
+          <div key={i} style={{ marginTop: 8, display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', paddingTop: i ? 8 : 0, borderTop: i ? '1px dashed #3a2f5c' : 'none' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', ...grey }}>
+              <span style={{ color: '#9a8fc0' }}>{i + 1}.</span>
+              <select value={v.image} onChange={e => setAt(i, 'image', e.target.value)} style={{ ...input, maxWidth: 260 }} title="Which image to show">
+                <option value="">— choose an image —</option>
+                {all.map(im => <option key={im.file} value={im.file}>{im.label ? `📁 ${im.label}` : im.file}</option>)}
+              </select>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="How long the image stays on screen">
+                for <input type="number" min={0.5} max={60} step={0.5} value={v.seconds} onChange={e => setAt(i, 'seconds', Number(e.target.value) || 3)} style={{ ...input, width: 70 }} /> s
+              </label>
+              <select value={v.fit} onChange={e => setAt(i, 'fit', e.target.value)} style={input} title="Start from the whole image fitting inside the frame (on the background colour), or from the image filling the frame (edges cropped) — then zoom from there">
+                <option value="inside">Whole image on a colour</option>
+                <option value="cover">Fill the frame</option>
+              </select>
+              <input type="color" value={v.background} onChange={e => setAt(i, 'background', e.target.value.toUpperCase())} title="Background colour" style={{ width: 34, height: 26, padding: 0, border: '1px solid #555', background: 'none' }} />
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Space kept clear around the image (px of the 1080×1920 frame) — in both modes">
+                margin <input type="number" min={0} max={300} step={10} value={v.margin} onChange={e => setAt(i, 'margin', Number(e.target.value) || 0)} style={{ ...input, width: 70 }} />
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Scale on top of the fit: 100% = exactly as the mode fits it; under 100% shrinks it (less cropped when filling), over 100% enlarges it (cropped around the focus)">
+                zoom <input type="number" min={25} max={400} step={5} value={v.zoom} onChange={e => setAt(i, 'zoom', Number(e.target.value) || 100)} style={{ ...input, width: 70 }} /> %
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Which part of the image to keep when it is cropped">
+                keep
+                <select value={`${v.focusX},${v.focusY}`} onChange={e => { const [x, y] = e.target.value.split(',').map(Number); onChange(list.map((r, j) => (j === i ? { ...r, focusX: x, focusY: y } : r))); }} style={input}>
+                  <option value="50,50">the centre</option>
+                  <option value="50,0">the top</option>
+                  <option value="50,100">the bottom</option>
+                  <option value="0,50">the left</option>
+                  <option value="100,50">the right</option>
+                  <option value="0,0">the top-left</option>
+                  <option value="100,0">the top-right</option>
+                  <option value="0,100">the bottom-left</option>
+                  <option value="100,100">the bottom-right</option>
+                </select>
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Fade to the background colour at the end (and in from it, after another slide), so what follows fades in instead of cutting hard">
+                <input type="checkbox" checked={v.fade} onChange={e => setAt(i, 'fade', e.target.checked)} /> fade
+              </label>
+              {i > 0 && <button type="button" onClick={() => move(i, -1)} style={small} title="Show earlier">↑</button>}
+              {i < list.length - 1 && <button type="button" onClick={() => move(i, 1)} style={small} title="Show later">↓</button>}
+              <button type="button" onClick={() => remove(i)} style={small} title="Remove this image">✕</button>
+            </div>
+            {chosen && (
+              <div style={{ width: 90, height: 160, borderRadius: 6, background: v.background, overflow: 'hidden', padding: Math.round(v.margin / 12), boxSizing: 'border-box' }} title="Roughly how it sits in the frame">
+                <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+                  <img src={chosen.url} alt="" style={{ width: '100%', height: '100%', objectFit: v.fit === 'cover' ? 'cover' : 'contain', objectPosition: `${v.focusX}% ${v.focusY}%`, transform: `scale(${(v.zoom || 100) / 100})`, transformOrigin: `${v.focusX}% ${v.focusY}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 function MessageCardEditor({ value, onChange, images }) {
   const v = value;
   const set = (k, x) => onChange({ ...v, [k]: x });
@@ -1849,10 +1960,14 @@ function Posters() {
   );
 }
 
+// A reel with no comic: your own images and clips live in a scratch project
+// folder of this name (projects/_own/marketing/), nothing else is loaded.
+const OWN = '_own';
 function Reels() {
   const [comics, setComics] = useState([]);
   const initial = new URLSearchParams(window.location.search);   // handed over from the comic's Challenge Reels tab
   const [comicId, setComicId] = useState(initial.get('comicId') || '');
+  const own = comicId === OWN;
   const [images, setImages] = useState([]);
   const [refs, setRefs] = useState([]);          // up to 3 directional images (tokens: file | upload:name | comic:id:file)
   const [refUrls, setRefUrls] = useState({});     // token -> preview url
@@ -1897,6 +2012,7 @@ function Reels() {
   const [openingHold, setOpeningHold] = useState(0);
   const [openingAnim, setOpeningAnim] = useState(OPENING_ANIM_DEFAULT);
   const [messageCard, setMessageCard] = useState(MESSAGE_CARD_DEFAULT);
+  const [openingImages, setOpeningImages] = useState([]);   // stills held before the clip, in order
   const [soundBadge, setSoundBadge] = useState(false);   // "Turn sound on" badge over the reel
   const [zooms, setZooms] = useState([]);                 // camera pushes on the clip (ZoomEditor)
   const [cues, setCues] = useState([]);                   // Quick audio clips placed on the clip (CueEditor)
@@ -1911,7 +2027,7 @@ function Reels() {
     // Keep a clip handed over from the comic's Challenge Reels tab while that
     // comic is still the selected one (React dev mode runs this effect twice).
     if (!(handoffRef.current && comicId === handoffRef.current)) { setClip(null); setClipFile(null); }
-    if (!comicId) return;
+    if (!comicId || comicId === OWN) return;
     api.get(`/marketing/${comicId}/images`).then(r => setImages(r.data.images)).catch(e => alert(e.response?.data?.error || e.message));
     api.get(`/marketing/${comicId}/audios`).then(r => setAudios(r.data.audios)).catch(() => setAudios([]));
     api.get(`/marketing/${comicId}/voices`).then(r => { setCast(r.data.voices); if (r.data.voices[0]) setLineVoice(r.data.voices[0].voiceId); }).catch(() => setCast([]));
@@ -1972,7 +2088,7 @@ function Reels() {
   const remix = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, openingImages, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
@@ -1999,13 +2115,31 @@ function Reels() {
     try {
       const r = await api.post(model.startsWith('sora') ? '/marketing/sora-clip' : '/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, mode, aspectRatio: '9:16', styleLock, resolution,
         voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, negativePrompt,
-        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
+        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, openingImages, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url); setClipFile(r.data.file);
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
   };
 
   const input = { width: '100%', padding: '0.5rem 0.7rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.95rem' };
+
+  // Your own video as the reel's base (instead of a generated clip).
+  const ownClipUpload = (
+    <label className="btn btn-secondary" title="Use a video of your own as the base instead of generating one — then add voices, subtitles and the cards below with 'Apply audio & cards'" style={{ padding: '0.55rem 1rem', cursor: busy ? 'default' : 'pointer' }}>
+      {busy ? '…' : own ? '📼 Use my own clip' : '📼 Or use my own clip'}
+      <input type="file" accept=".mp4,.mov,.m4v,.webm" style={{ display: 'none' }} disabled={busy}
+        onChange={async e => {
+          const f = e.target.files?.[0]; if (!f) return;
+          const fd = new FormData(); fd.append('comicId', comicId); fd.append('clip', f);
+          setBusy(true); setError(''); setClip(null);
+          try {
+            const r = await api.post('/marketing/upload-clip', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 600000 });
+            setClip(r.data.url); setClipFile(r.data.file);
+          } catch (err) { setError(err.response?.data?.error || err.message); }
+          finally { setBusy(false); e.target.value = ''; }
+        }} />
+    </label>
+  );
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: '1.5rem', alignItems: 'start' }}>
@@ -2017,6 +2151,7 @@ function Reels() {
         <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', marginBottom: 4 }}>1 · Comic</label>
         <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, maxWidth: 420 }}>
           <option value="">Choose a comic…</option>
+          <option value={OWN}>No comic — my own images / clip</option>
           <ComicOptions comics={comics} />
         </select>
 
@@ -2110,6 +2245,12 @@ function Reels() {
 
         {comicId && (
           <>
+            {own && (
+              <p style={{ color: '#c4bdd8', fontSize: '0.88rem', margin: '1rem 0 4px' }}>
+                No comic: upload your own clip below, or skip the clip and build the reel from your own images (step 5 → Opening images → 📁 upload your own).
+              </p>
+            )}
+            {!own && <>
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1rem 0 4px' }}>3 · Describe the clip</label>
             <textarea style={{ ...input, resize: 'vertical' }} rows={5} value={prompt} onChange={e => setPrompt(e.target.value)}
               placeholder="e.g. Slow cinematic push-in on the lone rider approaching the town of Santa Roja at dusk, hand-drawn western comic style matching the reference art, dust drifting, tense and quiet, no text on screen" />
@@ -2155,21 +2296,10 @@ function Reels() {
               <button className="btn btn-primary" disabled={busy || !prompt} onClick={generate} style={{ padding: '0.55rem 1.4rem' }}>
                 {busy ? 'Generating… (1–6 min)' : `🎞 Generate clip${model.startsWith('sora') ? ' (Sora)' : ''}`}
               </button>
-              <label className="btn btn-secondary" title="Use a video of your own as the base instead of generating one — then add voices, subtitles and the cards below with 'Apply audio & cards'" style={{ padding: '0.55rem 1rem', cursor: busy ? 'default' : 'pointer' }}>
-                {busy ? '…' : '📼 Or use my own clip'}
-                <input type="file" accept=".mp4,.mov,.m4v,.webm" style={{ display: 'none' }} disabled={busy}
-                  onChange={async e => {
-                    const f = e.target.files?.[0]; if (!f) return;
-                    const fd = new FormData(); fd.append('comicId', comicId); fd.append('clip', f);
-                    setBusy(true); setError(''); setClip(null);
-                    try {
-                      const r = await api.post('/marketing/upload-clip', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 600000 });
-                      setClip(r.data.url); setClipFile(r.data.file);
-                    } catch (err) { setError(err.response?.data?.error || err.message); }
-                    finally { setBusy(false); e.target.value = ''; }
-                  }} />
-              </label>
+              {ownClipUpload}
             </div>
+            </>}
+            {own && <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>{ownClipUpload}</div>}
             {error && <p style={{ color: '#f88', fontSize: '0.85rem' }}>{error}</p>}
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1.2rem 0 4px' }}>
               4 · Voice lines (optional) — the comic's own ElevenLabs audio, in order
@@ -2250,6 +2380,7 @@ function Reels() {
             )}
             {(openingLine1 || openingLine2) && <OpeningCardAnim value={openingAnim} onChange={setOpeningAnim} secs={openingSec} badge={soundBadge} />}
             <MessageCardEditor value={messageCard} onChange={setMessageCard} images={images} />
+            <OpeningImagesEditor key={comicId} value={openingImages} onChange={setOpeningImages} images={images} comicId={comicId} />
             {clipFile && <CueEditor comicId={comicId} src={`/projects/${comicId}/marketing/${clipFile}`} cues={cues} onChange={setCues} original={cueOriginal} onOriginal={setCueOriginal} cuts={cuts} onCuts={setCuts} />}
             {clipFile && <ZoomEditor value={zooms} onChange={setZooms} src={`/projects/${comicId}/marketing/${clipFile}`} />}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -2295,6 +2426,12 @@ function Reels() {
                 <button className="btn btn-secondary" disabled={busy} onClick={remix} style={{ padding: '0.45rem 1rem' }}
                         title="Re-apply audio to the last generated clip without paying for a new generation">
                   {busy ? 'Mixing…' : (/^(own-|challenge-|demo-)/.test(clipFile || '') ? '🔁 Apply audio & cards to this clip' : '🔁 Apply audio to last clip')}
+                </button>
+              )}
+              {!clipFile && openingImages.some(s => s.image) && (
+                <button className="btn btn-secondary" disabled={busy} onClick={remix} style={{ padding: '0.45rem 1rem' }}
+                        title="No clip: the reel is the opening images, one after another, then the cards (question, covers, sign-off) — free, no generation">
+                  {busy ? 'Making…' : '🎞 Make the reel from the images'}
                 </button>
               )}
             </div>
