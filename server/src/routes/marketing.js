@@ -1547,9 +1547,18 @@ async function openingImageSegment(tmp, comicId, still, run, { index = 0, fadeIn
   const png = path.join(tmp, `still-${index}.png`);
   const bg = still.background;
   const rgb = { r: parseInt(bg.slice(1, 3), 16), g: parseInt(bg.slice(3, 5), 16), b: parseInt(bg.slice(5, 7), 16), alpha: 1 };
-  const margin = still.fit === 'cover' ? 0 : still.margin;
-  let img = sharp(src).resize(W - 2 * margin, H - 2 * margin, { fit: still.fit === 'cover' ? 'cover' : 'inside' });
-  if (margin) img = img.extend({ top: margin, bottom: margin, left: margin, right: margin, background: rgb });
+  // The image sits in the frame minus the margin: scaled to fit inside it
+  // ('inside') or to cover it ('cover'), times `zoom`; whatever then overflows
+  // the box is cropped around the focus point (0–1 across and down).
+  const meta = await sharp(src).metadata();
+  const sideways = (meta.orientation || 1) >= 5;   // EXIF-rotated photos
+  const iw = sideways ? meta.height : meta.width, ih = sideways ? meta.width : meta.height;
+  const margin = still.margin, boxW = W - 2 * margin, boxH = H - 2 * margin;
+  const base = still.fit === 'cover' ? Math.max(boxW / iw, boxH / ih) : Math.min(boxW / iw, boxH / ih);
+  const w = Math.max(1, Math.round(iw * base * still.zoom)), h = Math.max(1, Math.round(ih * base * still.zoom));
+  let img = sharp(src).rotate().resize(w, h);
+  const cw = Math.min(w, boxW), ch = Math.min(h, boxH);
+  if (cw < w || ch < h) img = img.extract({ left: Math.round((w - cw) * still.focusX), top: Math.round((h - ch) * still.focusY), width: cw, height: ch });
   await sharp({ create: { width: W, height: H, channels: 3, background: rgb } })
     .composite([{ input: await img.png().toBuffer(), gravity: 'centre' }]).png().toFile(png);
   const seg = path.join(tmp, `still-${index}.mp4`);
@@ -1562,17 +1571,23 @@ async function openingImageSegment(tmp, comicId, still, run, { index = 0, fadeIn
     '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-ar', '44100', '-ac', '2', seg]);
   return seg;
 }
-// One still: { image: comic image token, seconds 0.5–60, fit: 'inside' | 'cover', background '#RRGGBB', margin px, fade }
+// One still: { image: comic image token, seconds 0.5–60, fit: 'inside' | 'cover',
+// background '#RRGGBB', margin px, zoom (percent in, factor out: 100 → 1),
+// focusX/focusY (percent in, 0–1 out: which part is kept when cropped), fade }
 function parseOpeningImage(src) {
   if (!src || typeof src !== 'object' || src.enabled === false) return null;
   const image = String(src.image || '').slice(0, 300);
   if (!image) return null;
+  const pct = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v != null ? Math.min(100, Math.max(0, Number(v))) : d) / 100;
   return {
     image,
     seconds: Math.min(60, Math.max(0.5, Number(src.seconds) || 3)),
     fit: src.fit === 'cover' ? 'cover' : 'inside',
     background: /^#[0-9a-fA-F]{6}$/.test(String(src.background || '')) ? String(src.background).toUpperCase() : '#6E40F0',
     margin: Math.min(300, Math.max(0, Math.round(Number(src.margin)) || 0)),
+    zoom: Math.min(400, Math.max(25, Number(src.zoom) || 100)) / 100,
+    focusX: pct(src.focusX, 50),
+    focusY: pct(src.focusY, 50),
     fade: src.fade !== false,
   };
 }

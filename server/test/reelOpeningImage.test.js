@@ -14,9 +14,9 @@ test('opening image settings are validated and defaulted', () => {
   assert.strictEqual(parseOpeningImage({ enabled: true }), null, 'no image → no slide');
   assert.strictEqual(parseOpeningImage({ enabled: false, image: 'page_1.jpg' }), null);
   assert.deepStrictEqual(parseOpeningImage({ enabled: true, image: 'page_1.jpg' }),
-    { image: 'page_1.jpg', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, fade: true });
-  assert.deepStrictEqual(parseOpeningImage({ enabled: true, image: 'ref:/uploads/x.png', seconds: 99, fit: 'cover', background: '#ffd23f', margin: 1000, fade: false }),
-    { image: 'ref:/uploads/x.png', seconds: 60, fit: 'cover', background: '#FFD23F', margin: 300, fade: false });
+    { image: 'page_1.jpg', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, zoom: 1, focusX: 0.5, focusY: 0.5, fade: true });
+  assert.deepStrictEqual(parseOpeningImage({ enabled: true, image: 'ref:/uploads/x.png', seconds: 99, fit: 'cover', background: '#ffd23f', margin: 1000, zoom: 900, focusX: 0, focusY: 120, fade: false }),
+    { image: 'ref:/uploads/x.png', seconds: 60, fit: 'cover', background: '#FFD23F', margin: 300, zoom: 4, focusX: 0, focusY: 1, fade: false });
   assert.strictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', seconds: 0.1, background: 'red' }).seconds, 0.5);
   assert.strictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', background: 'red' }).background, '#6E40F0');
 });
@@ -61,6 +61,16 @@ test('the still renders to a 1080x1920 segment of the chosen length', async () =
       const mid = px(540, 960), corner = px(10, 10);
       assert.ok(mid[0] > 200 && mid[1] < 60 && mid[2] < 60, `middle is red: ${mid}`);
       assert.ok(corner[0] < 40 && corner[1] < 60 && corner[2] > 30, `corner is the background: ${corner}`);
+      // Zoomed in past the frame and focused on the top-left, the image is
+      // cropped there: the top-left corner is now red, the bottom-right too
+      // (the box is 1080 wide; a 800x500 image at inside-fit x 3 is 3240x2025).
+      const zoomed = parseOpeningImage({ image: 'ref:/uploads/_test-reel-still/page.png', seconds: 0.5, zoom: 300, focusX: 0, focusY: 0, fade: false });
+      const zseg = await openingImageSegment(tmp, 'comic-none', zoomed, run, { index: 2 });
+      const zf = path.join(tmp, 'z.png');
+      await run('ffmpeg', ['-y', '-i', zseg, '-frames:v', '1', zf]);
+      const z = await sharp(zf).raw().toBuffer({ resolveWithObject: true });
+      const zpx = (x, y) => [...z.data.slice((y * z.info.width + x) * z.info.channels, (y * z.info.width + x) * z.info.channels + 3)];
+      assert.ok(zpx(5, 5)[0] > 200 && zpx(1075, 1915)[0] > 200, `zoomed still fills the frame: ${zpx(5, 5)} ${zpx(1075, 1915)}`);
       // A second still gets its own files and, following the first, fades in from its colour.
       const second = parseOpeningImage({ image: 'ref:/uploads/_test-reel-still/page.png', seconds: 1, fit: 'cover' });
       const seg2 = await openingImageSegment(tmp, 'comic-none', second, run, { index: 1, fadeIn: true });

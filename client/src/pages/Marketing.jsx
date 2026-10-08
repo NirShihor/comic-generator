@@ -1258,7 +1258,7 @@ function MessageCardPreview({ card, images }) {
   );
 }
 
-const OPENING_IMAGE_DEFAULT = { image: '', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, fade: true };
+const OPENING_IMAGE_DEFAULT = { image: '', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, zoom: 100, focusX: 50, focusY: 50, fade: true };
 const OPENING_IMAGES_MAX = 6;
 // Stills — the comic's images, or your own uploaded pages — each held for a
 // few seconds, shown in order right before the clip (after the opening and
@@ -1323,18 +1323,21 @@ function OpeningImagesEditor({ value, onChange, images, comicId }) {
               <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="How long the image stays on screen">
                 for <input type="number" min={0.5} max={60} step={0.5} value={v.seconds} onChange={e => setAt(i, 'seconds', Number(e.target.value) || 3)} style={{ ...input, width: 70 }} /> s
               </label>
-              <select value={v.fit} onChange={e => setAt(i, 'fit', e.target.value)} style={input} title="Fit the whole image inside the frame on the background colour, or fill the frame (edges cropped)">
+              <select value={v.fit} onChange={e => setAt(i, 'fit', e.target.value)} style={input} title="Start from the whole image fitting inside the frame (on the background colour), or from the image filling the frame (edges cropped) — then zoom from there">
                 <option value="inside">Whole image on a colour</option>
                 <option value="cover">Fill the frame</option>
               </select>
-              {v.fit !== 'cover' && (
-                <>
-                  <input type="color" value={v.background} onChange={e => setAt(i, 'background', e.target.value.toUpperCase())} title="Background colour" style={{ width: 34, height: 26, padding: 0, border: '1px solid #555', background: 'none' }} />
-                  <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Space around the image (px of the 1080×1920 frame)">
-                    margin <input type="number" min={0} max={300} step={10} value={v.margin} onChange={e => setAt(i, 'margin', Number(e.target.value) || 0)} style={{ ...input, width: 70 }} />
-                  </label>
-                </>
-              )}
+              <input type="color" value={v.background} onChange={e => setAt(i, 'background', e.target.value.toUpperCase())} title="Background colour" style={{ width: 34, height: 26, padding: 0, border: '1px solid #555', background: 'none' }} />
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Space kept clear around the image (px of the 1080×1920 frame) — in both modes">
+                margin <input type="number" min={0} max={300} step={10} value={v.margin} onChange={e => setAt(i, 'margin', Number(e.target.value) || 0)} style={{ ...input, width: 70 }} />
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Scale on top of the fit: 100% = exactly as the mode fits it; under 100% shrinks it (less cropped when filling), over 100% enlarges it (cropped around the focus)">
+                zoom <input type="number" min={25} max={400} step={5} value={v.zoom} onChange={e => setAt(i, 'zoom', Number(e.target.value) || 100)} style={{ ...input, width: 70 }} /> %
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Which part to keep when the image is cropped: 0 = left/top, 50 = centre, 100 = right/bottom">
+                keep <input type="number" min={0} max={100} step={5} value={v.focusX} onChange={e => setAt(i, 'focusX', Number(e.target.value) || 0)} style={{ ...input, width: 60 }} title="across: 0 left … 100 right" />
+                × <input type="number" min={0} max={100} step={5} value={v.focusY} onChange={e => setAt(i, 'focusY', Number(e.target.value) || 0)} style={{ ...input, width: 60 }} title="down: 0 top … 100 bottom" /> %
+              </label>
               <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Fade to the background colour at the end (and in from it, after another slide), so what follows fades in instead of cutting hard">
                 <input type="checkbox" checked={v.fade} onChange={e => setAt(i, 'fade', e.target.checked)} /> fade
               </label>
@@ -1343,8 +1346,10 @@ function OpeningImagesEditor({ value, onChange, images, comicId }) {
               <button type="button" onClick={() => remove(i)} style={small} title="Remove this image">✕</button>
             </div>
             {chosen && (
-              <div style={{ width: 90, height: 160, borderRadius: 6, background: v.background, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: v.fit === 'cover' ? 0 : Math.round(v.margin / 12) }} title="Roughly how it sits in the frame">
-                <img src={chosen.url} alt="" style={{ width: '100%', height: '100%', objectFit: v.fit === 'cover' ? 'cover' : 'contain' }} />
+              <div style={{ width: 90, height: 160, borderRadius: 6, background: v.background, overflow: 'hidden', padding: Math.round(v.margin / 12), boxSizing: 'border-box' }} title="Roughly how it sits in the frame">
+                <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+                  <img src={chosen.url} alt="" style={{ width: '100%', height: '100%', objectFit: v.fit === 'cover' ? 'cover' : 'contain', objectPosition: `${v.focusX}% ${v.focusY}%`, transform: `scale(${(v.zoom || 100) / 100})`, transformOrigin: `${v.focusX}% ${v.focusY}%` }} />
+                </div>
               </div>
             )}
           </div>
