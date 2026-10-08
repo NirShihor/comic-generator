@@ -1944,10 +1944,14 @@ function Posters() {
   );
 }
 
+// A reel with no comic: your own images and clips live in a scratch project
+// folder of this name (projects/_own/marketing/), nothing else is loaded.
+const OWN = '_own';
 function Reels() {
   const [comics, setComics] = useState([]);
   const initial = new URLSearchParams(window.location.search);   // handed over from the comic's Challenge Reels tab
   const [comicId, setComicId] = useState(initial.get('comicId') || '');
+  const own = comicId === OWN;
   const [images, setImages] = useState([]);
   const [refs, setRefs] = useState([]);          // up to 3 directional images (tokens: file | upload:name | comic:id:file)
   const [refUrls, setRefUrls] = useState({});     // token -> preview url
@@ -2007,7 +2011,7 @@ function Reels() {
     // Keep a clip handed over from the comic's Challenge Reels tab while that
     // comic is still the selected one (React dev mode runs this effect twice).
     if (!(handoffRef.current && comicId === handoffRef.current)) { setClip(null); setClipFile(null); }
-    if (!comicId) return;
+    if (!comicId || comicId === OWN) return;
     api.get(`/marketing/${comicId}/images`).then(r => setImages(r.data.images)).catch(e => alert(e.response?.data?.error || e.message));
     api.get(`/marketing/${comicId}/audios`).then(r => setAudios(r.data.audios)).catch(() => setAudios([]));
     api.get(`/marketing/${comicId}/voices`).then(r => { setCast(r.data.voices); if (r.data.voices[0]) setLineVoice(r.data.voices[0].voiceId); }).catch(() => setCast([]));
@@ -2103,6 +2107,24 @@ function Reels() {
 
   const input = { width: '100%', padding: '0.5rem 0.7rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.95rem' };
 
+  // Your own video as the reel's base (instead of a generated clip).
+  const ownClipUpload = (
+    <label className="btn btn-secondary" title="Use a video of your own as the base instead of generating one — then add voices, subtitles and the cards below with 'Apply audio & cards'" style={{ padding: '0.55rem 1rem', cursor: busy ? 'default' : 'pointer' }}>
+      {busy ? '…' : own ? '📼 Use my own clip' : '📼 Or use my own clip'}
+      <input type="file" accept=".mp4,.mov,.m4v,.webm" style={{ display: 'none' }} disabled={busy}
+        onChange={async e => {
+          const f = e.target.files?.[0]; if (!f) return;
+          const fd = new FormData(); fd.append('comicId', comicId); fd.append('clip', f);
+          setBusy(true); setError(''); setClip(null);
+          try {
+            const r = await api.post('/marketing/upload-clip', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 600000 });
+            setClip(r.data.url); setClipFile(r.data.file);
+          } catch (err) { setError(err.response?.data?.error || err.message); }
+          finally { setBusy(false); e.target.value = ''; }
+        }} />
+    </label>
+  );
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: '1.5rem', alignItems: 'start' }}>
       <div>
@@ -2113,6 +2135,7 @@ function Reels() {
         <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', marginBottom: 4 }}>1 · Comic</label>
         <select value={comicId} onChange={e => setComicId(e.target.value)} style={{ ...input, maxWidth: 420 }}>
           <option value="">Choose a comic…</option>
+          <option value={OWN}>No comic — my own images / clip</option>
           <ComicOptions comics={comics} />
         </select>
 
@@ -2206,6 +2229,12 @@ function Reels() {
 
         {comicId && (
           <>
+            {own && (
+              <p style={{ color: '#c4bdd8', fontSize: '0.88rem', margin: '1rem 0 4px' }}>
+                No comic: upload your own clip below, or skip the clip and build the reel from your own images (step 5 → Opening images → 📁 upload your own).
+              </p>
+            )}
+            {!own && <>
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1rem 0 4px' }}>3 · Describe the clip</label>
             <textarea style={{ ...input, resize: 'vertical' }} rows={5} value={prompt} onChange={e => setPrompt(e.target.value)}
               placeholder="e.g. Slow cinematic push-in on the lone rider approaching the town of Santa Roja at dusk, hand-drawn western comic style matching the reference art, dust drifting, tense and quiet, no text on screen" />
@@ -2251,21 +2280,10 @@ function Reels() {
               <button className="btn btn-primary" disabled={busy || !prompt} onClick={generate} style={{ padding: '0.55rem 1.4rem' }}>
                 {busy ? 'Generating… (1–6 min)' : `🎞 Generate clip${model.startsWith('sora') ? ' (Sora)' : ''}`}
               </button>
-              <label className="btn btn-secondary" title="Use a video of your own as the base instead of generating one — then add voices, subtitles and the cards below with 'Apply audio & cards'" style={{ padding: '0.55rem 1rem', cursor: busy ? 'default' : 'pointer' }}>
-                {busy ? '…' : '📼 Or use my own clip'}
-                <input type="file" accept=".mp4,.mov,.m4v,.webm" style={{ display: 'none' }} disabled={busy}
-                  onChange={async e => {
-                    const f = e.target.files?.[0]; if (!f) return;
-                    const fd = new FormData(); fd.append('comicId', comicId); fd.append('clip', f);
-                    setBusy(true); setError(''); setClip(null);
-                    try {
-                      const r = await api.post('/marketing/upload-clip', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 600000 });
-                      setClip(r.data.url); setClipFile(r.data.file);
-                    } catch (err) { setError(err.response?.data?.error || err.message); }
-                    finally { setBusy(false); e.target.value = ''; }
-                  }} />
-              </label>
+              {ownClipUpload}
             </div>
+            </>}
+            {own && <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>{ownClipUpload}</div>}
             {error && <p style={{ color: '#f88', fontSize: '0.85rem' }}>{error}</p>}
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1.2rem 0 4px' }}>
               4 · Voice lines (optional) — the comic's own ElevenLabs audio, in order
