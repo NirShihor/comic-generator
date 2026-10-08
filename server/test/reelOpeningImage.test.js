@@ -7,7 +7,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const sharp = require('sharp');
 const execFileAsync = promisify(execFile);
-const { parseOpeningImage, openingImageSegment } = require('../src/routes/marketing')._openingImage;
+const { parseOpeningImage, parseOpeningImages, openingImageSegment } = require('../src/routes/marketing')._openingImage;
 
 test('opening image settings are validated and defaulted', () => {
   assert.strictEqual(parseOpeningImage(undefined), null);
@@ -19,6 +19,17 @@ test('opening image settings are validated and defaulted', () => {
     { image: 'ref:/uploads/x.png', seconds: 60, fit: 'cover', background: '#FFD23F', margin: 300, fade: false });
   assert.strictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', seconds: 0.1, background: 'red' }).seconds, 0.5);
   assert.strictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', background: 'red' }).background, '#6E40F0');
+});
+
+test('several opening images come through in order, empty ones dropped, at most six', () => {
+  assert.deepStrictEqual(parseOpeningImages({}), []);
+  assert.deepStrictEqual(parseOpeningImages({ openingImages: 'nope' }), []);
+  const two = parseOpeningImages({ openingImages: [{ image: 'page_1.jpg', seconds: 2 }, { image: '' }, { image: 'page_2.jpg', seconds: 4, fit: 'cover' }] });
+  assert.deepStrictEqual(two.map(s => [s.image, s.seconds, s.fit]), [['page_1.jpg', 2, 'inside'], ['page_2.jpg', 4, 'cover']]);
+  assert.strictEqual(parseOpeningImages({ openingImages: Array.from({ length: 9 }, (_, i) => ({ image: `p${i}.jpg` })) }).length, 6);
+  // The older single-image shape still works.
+  assert.deepStrictEqual(parseOpeningImages({ openingImage: { enabled: true, image: 'page_1.jpg' } }).map(s => s.image), ['page_1.jpg']);
+  assert.deepStrictEqual(parseOpeningImages({ openingImage: { enabled: false, image: 'page_1.jpg' } }), []);
 });
 
 // Renders a real segment with ffmpeg: a landscape test image on a colour,
@@ -50,6 +61,15 @@ test('the still renders to a 1080x1920 segment of the chosen length', async () =
       const mid = px(540, 960), corner = px(10, 10);
       assert.ok(mid[0] > 200 && mid[1] < 60 && mid[2] < 60, `middle is red: ${mid}`);
       assert.ok(corner[0] < 40 && corner[1] < 60 && corner[2] > 30, `corner is the background: ${corner}`);
+      // A second still gets its own files and, following the first, fades in from its colour.
+      const second = parseOpeningImage({ image: 'ref:/uploads/_test-reel-still/page.png', seconds: 1, fit: 'cover' });
+      const seg2 = await openingImageSegment(tmp, 'comic-none', second, run, { index: 1, fadeIn: true });
+      assert.notStrictEqual(seg2, seg);
+      const first = path.join(tmp, 'first.png');
+      await run('ffmpeg', ['-y', '-i', seg2, '-frames:v', '1', first]);
+      const f = await sharp(first).raw().toBuffer({ resolveWithObject: true });
+      const p0 = [...f.data.slice((960 * f.info.width + 540) * f.info.channels, (960 * f.info.width + 540) * f.info.channels + 3)];
+      assert.ok(p0[0] < 120, `first frame starts on the background colour, not the image: ${p0}`);
     } finally { fs.rmSync(upDir, { recursive: true, force: true }); }
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
