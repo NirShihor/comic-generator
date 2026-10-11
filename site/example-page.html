@@ -105,7 +105,7 @@
   .gcall .label { color: #FFD23F; display: block; margin-bottom: 8px; }
   .gcall p { margin: 0 0 10px; font-size: 1rem; }
   .gcall .gx { font-family: system-ui, sans-serif; font-size: 0.98rem; background: rgba(0,0,0,0.22); border-radius: 12px; padding: 10px 14px; margin: 0; }
-  .hero-min .src { color: var(--muted); font-size: 1rem; }
+  .hero-min .src { font-size: 1rem; font-family: system-ui, sans-serif; font-weight: 700; }   /* the app connection, plainly */
   /* Study the Spanish: the page's text (transcript, words, notes), collapsed by default */
   .study { padding: 8px 24px 0; }
   .study h2 { font-size: clamp(1.4rem, 3vw, 1.9rem); margin: 30px 0 6px; }
@@ -138,6 +138,7 @@
   .cta:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--shadow); }
   .cta-link { font-family: system-ui, sans-serif; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
   .band { background: var(--band); color: var(--band-text); border-top: 3px solid var(--line); border-bottom: 3px solid var(--line); margin-top: 44px; }
+  .stage-wrap + .band { margin-top: 30px; }
   .band .wrap { padding: 52px 24px; }
   .band h2 { font-size: clamp(1.8rem, 4.4vw, 3rem); margin: 0 0 14px; }
   .band p { max-width: 62ch; margin: 0 0 22px; font-size: 1.05rem; }
@@ -171,29 +172,11 @@
 
 {{EXAMPLE:{{PG_SLUG}}|Every line is voiced — tap a bubble to listen, tap a word for its meaning.}}
 
+{{PG_BAND_TOP}}
 {{PG_STUDY}}
 {{PG_EXTRA}}
-
-<section class="band">
-  <div class="wrap">
-    <h2 class="display">This is only one page of the story.</h2>
-    <p>
-      In Comigo, the story continues. Read the next page, listen to the characters, reveal
-      translations when you need them and practise the Spanish you&rsquo;ve just encountered &mdash;
-      and discover more features.
-    </p>
-    <div class="cta-row">
-      <a class="cta" href="/go/app-store?from={{GO_FROM}}&amp;loc=band" target="_blank" rel="noopener nofollow">&#63743;&nbsp; Continue reading with Comigo</a>
-      <span class="cta-link" style="text-decoration: none; cursor: default;">Eligible new subscribers can try Comigo free for 7 days.</span>
-    </div>
-  </div>
-</section>
-
-<section class="wrap strip-head">
-  <span class="label eyebrow">Keep reading</span>
-  <h2 class="display">More Spanish comic pages</h2>
-</section>
-{{EXAMPLE_LINKS:{{PG_SLUG}}}}
+{{PG_BAND_BOTTOM}}
+{{EXAMPLE_MORE:{{PG_SLUG}}}}
 
 <footer>
   <div class="wrap">

@@ -41,7 +41,7 @@
    },
    "mainEntity": {
     "@type": "ItemList",
-    "numberOfItems": 11,
+    "numberOfItems": 5,
     "itemListOrder": "https://schema.org/ItemListOrderAscending",
     "itemListElement": [
      {
@@ -53,60 +53,24 @@
      {
       "@type": "ListItem",
       "position": 2,
-      "name": "Comprar ropa",
-      "url": "https://comigo.net/spanish-reading-practice/buying-clothes"
-     },
-     {
-      "@type": "ListItem",
-      "position": 3,
       "name": "Conociendo a Zik",
       "url": "https://comigo.net/spanish-reading-practice/meeting-zik"
      },
      {
       "@type": "ListItem",
+      "position": 3,
+      "name": "Invitar a alguien a salir",
+      "url": "https://comigo.net/spanish-reading-practice/asking-someone-out"
+     },
+     {
+      "@type": "ListItem",
       "position": 4,
-      "name": "En la habitación",
-      "url": "https://comigo.net/spanish-reading-practice/where-are-the-ghosts"
-     },
-     {
-      "@type": "ListItem",
-      "position": 5,
-      "name": "Los perros callejeros",
-      "url": "https://comigo.net/spanish-reading-practice/in-the-woods"
-     },
-     {
-      "@type": "ListItem",
-      "position": 6,
-      "name": "Operadora de emergencias",
-      "url": "https://comigo.net/spanish-reading-practice/emergency-call"
-     },
-     {
-      "@type": "ListItem",
-      "position": 7,
-      "name": "Pedir en el restaurante",
-      "url": "https://comigo.net/spanish-reading-practice/ordering-at-a-restaurant"
-     },
-     {
-      "@type": "ListItem",
-      "position": 8,
-      "name": "Un billete, por favor",
-      "url": "https://comigo.net/spanish-reading-practice/a-ticket-please"
-     },
-     {
-      "@type": "ListItem",
-      "position": 9,
       "name": "Un pueblo pequeño",
       "url": "https://comigo.net/spanish-reading-practice/a-small-town"
      },
      {
       "@type": "ListItem",
-      "position": 10,
-      "name": "Conteo y números",
-      "url": "https://comigo.net/spanish-reading-practice/counting-and-numbers"
-     },
-     {
-      "@type": "ListItem",
-      "position": 11,
+      "position": 5,
       "name": "Mantenerse a salvo",
       "url": "https://comigo.net/spanish-reading-practice/staying-safe"
      }
@@ -181,6 +145,34 @@
   .hero-min .eyebrow { color: var(--muted); display: block; margin-bottom: 12px; }
   .hero-min h1 { margin: 0 0 16px; font-size: clamp(1.9rem, 4vw, 2.7rem); }
   .hero-min p { max-width: 62ch; margin: 0 0 12px; font-size: 1.06rem; }
+  /* the app, in one glance: Comigo is an iPhone app — these pages are from it */
+  .app-intro { margin-top: 30px; }   /* the card's edge lines up with the hero text */
+  .app-card {
+    display: flow-root; position: relative;
+    background: var(--card); border: 3px solid var(--line); border-radius: 14px;
+    padding: 22px 22px 20px; box-shadow: 6px 6px 0 var(--shadow);
+    max-width: min(660px, 100% - 270px);   /* leaves room for the phone to stand beside it */
+  }
+  .app-card h2 { font-size: clamp(1.35rem, 2.6vw, 1.8rem); margin: 0 0 12px; }
+  .app-card p { margin: 0 0 8px; max-width: 58ch; }
+  .app-card .avail { font-family: system-ui, sans-serif; font-weight: 700; font-size: 0.95rem; color: var(--ink); }
+  .app-card .cta-row { margin-top: 16px; gap: 12px 16px; }
+  .app-card .cta { font-size: 0.95rem; padding: 11px 20px; }
+  /* the app screenshot floats right and, on wide screens, stands beside the
+     card — larger, just past its right edge, taller than it */
+  .app-card .shot { position: absolute; top: -128px; right: -250px; width: 220px; border-radius: 24px; box-shadow: 10px 10px 0 var(--shadow); }
+  .app-intro { margin-bottom: 64px; }
+  .app-more { display: none; margin: 0; }   /* narrow screens only (below) */
+  @media (max-width: 800px) {
+    .app-intro { margin-top: 18px; }
+    .app-intro { margin-bottom: 0; }
+    .app-card { padding: 18px 16px 16px; max-width: none; }
+    .app-card h2 { font-size: 1.3rem; }
+    .app-card .shot, .app-card .cta-link { display: none; }   /* the phone is for wide screens; the link moves beneath the card */
+    .app-more { display: block; margin: 18px 0 0; }
+    .app-card p { font-size: 1.02rem; }
+    .app-card .cta-row { flex-direction: column; align-items: flex-start; }
+  }
   .strip-head { padding: 34px 24px 6px; }
   .strip-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 0; }
   .strip-head .eyebrow { color: var(--accent); display: block; margin-bottom: 10px; }
@@ -296,6 +288,31 @@
     if (!a || !e.isTrusted) return;
     try { fetch(a.getAttribute('href'), { method: 'POST', keepalive: true, credentials: 'omit' }).catch(function () {}); } catch (err) {}
   });
+  // Count what happens on a reading exercise (first bubble opened, last
+  // bubble reached, a continuation card seen, another exercise opened): one
+  // same-origin POST per event, naming only the event, this page, the
+  // property the server allow-lists for it and the page's campaign tags —
+  // read from the App Store button's own link, so a campaign visit is
+  // counted as such. The exercise script fires each at most once per page
+  // view (in-memory flags). No cookies, storage or identifiers; the server
+  // drops anything it doesn't allow-list (siteAnalytics SITE_EVENTS).
+  var FROM_PAGE = '/spanish-reading-practice';
+  var ON_EXERCISE = /^\/(spanish-reading-practice|p)\/[a-z0-9-]+$/.test(FROM_PAGE);
+  window.comigoTrack = function (name, props) {
+    if (!ON_EXERCISE) return;
+    var q = 'e=' + name + '&from=' + encodeURIComponent(FROM_PAGE);
+    for (var k in (props || {})) q += '&' + k + '=' + encodeURIComponent(props[k]);
+    var btn = document.querySelector('a[href^="/go/app-store"]');
+    var m = btn && btn.getAttribute('href').match(/utm_[a-z]+=[^&]+/g);
+    if (m) q += '&' + m.join('&');
+    try { fetch('/site-event?' + q, { method: 'POST', keepalive: true, credentials: 'omit' }).catch(function () {}); } catch (err) {}
+  };
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href^="/spanish-reading-practice/"]') : null;
+    if (!a || !e.isTrusted) return;
+    var to = a.getAttribute('href').match(/^\/spanish-reading-practice\/([a-z0-9-]+)/);
+    if (to && to[1] !== FROM_PAGE.split('/').pop()) window.comigoTrack('next_exercise_clicked', { to_exercise: to[1] });
+  });
 </script>
 
 
@@ -307,16 +324,33 @@
     happening, read the Spanish and see how much of the story you can understand.
   </p>
   <p>
-    Choose from short Spanish stories for beginner and intermediate learners. Read a real page
-    from a Comigo comic, with translation and vocabulary help when you need it.
+    Try a real page from a Comigo comic below, exactly as it works in the app &mdash; with
+    translation and vocabulary help when you need it. Then continue the story in the app.
   </p>
 </section>
 
+<section class="wrap app-intro" id="app">
+  <div class="app-card">
+    <h2 class="display">Discover Comigo &mdash; the Spanish-learning app built around interactive comics.</h2>
+    <img class="shot" src="/demo-poster.jpg" width="720" height="1560" alt="The Comigo iPhone app, reading a comic page: tap a bubble to hear it, read it and understand it">
+    <p>
+      Read complete stories, listen to the characters, reveal translations and practise your
+      Spanish as the story unfolds.
+    </p>
+    <p class="avail">Available for iPhone. Try it free for 7 days.</p>
+    <div class="cta-row">
+      <a class="cta" href="/go/app-store?from=/spanish-reading-practice&amp;loc=hero" target="_blank" rel="noopener nofollow">&#63743;&nbsp; Get Comigo on the App Store</a>
+      <a class="cta-link" href="#pages">Or try a sample page below &darr;</a>
+    </div>
+  </div>
+  <p class="app-more"><a class="cta-link" href="#pages">Or try a sample page below &darr;</a></p>
+</section>
+
 <section class="wrap strip-head" id="pages">
-  <h2 class="display">Take a look at an example page</h2>
+  <h2 class="display">Try a page from the app</h2>
   <p>
-    Each one is a real page from a Comigo story, with every line voiced. Tap the bubbles to
-    listen and tap any word for its meaning.
+    Each one is a real page from a story in the Comigo app, with every line voiced. Tap the
+    bubbles to listen and tap any word for its meaning &mdash; then see how the story goes on in the app.
   </p>
 </section>
 <style>
@@ -350,15 +384,6 @@
       <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
-  <a class="ex-card" href="/spanish-reading-practice/buying-clothes">
-    <img loading="lazy" decoding="async" src="/assets/example-buying-clothes.cb1309c9.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="ex-level-pill">Beginner</span>
-      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Comprar ropa</span> <span class="alt-en" lang="en" aria-hidden="true">Buying clothes</span></h3>
-      <span class="ex-src" lang="es">La ladrona</span>
-      <span class="ex-go">Read and listen &rarr;</span>
-    </div>
-  </a>
   <a class="ex-card" href="/spanish-reading-practice/meeting-zik">
     <img loading="lazy" decoding="async" src="/assets/example-meeting-zik.c67392d4.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
@@ -368,48 +393,12 @@
       <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
-  <a class="ex-card" href="/spanish-reading-practice/where-are-the-ghosts">
-    <img loading="lazy" decoding="async" src="/assets/example-where-are-the-ghosts.f89d7639.webp" width="640" height="960" alt="">
+  <a class="ex-card" href="/spanish-reading-practice/asking-someone-out">
+    <img loading="lazy" decoding="async" src="/assets/example-asking-someone-out.b77fab7a.webp" width="640" height="960" alt="">
     <div class="ex-card-body">
       <span class="ex-level-pill">Beginner</span>
-      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">En la habitación</span> <span class="alt-en" lang="en" aria-hidden="true">In the room</span></h3>
-      <span class="ex-src" lang="es">Leer el ambiente</span>
-      <span class="ex-go">Read and listen &rarr;</span>
-    </div>
-  </a>
-  <a class="ex-card" href="/spanish-reading-practice/in-the-woods">
-    <img loading="lazy" decoding="async" src="/assets/example-in-the-woods.04e9eea7.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="ex-level-pill">Beginner</span>
-      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Los perros callejeros</span> <span class="alt-en" lang="en" aria-hidden="true">The Stray Dogs</span></h3>
-      <span class="ex-src" lang="es">Los perros callejeros</span>
-      <span class="ex-go">Read and listen &rarr;</span>
-    </div>
-  </a>
-  <a class="ex-card" href="/spanish-reading-practice/emergency-call">
-    <img loading="lazy" decoding="async" src="/assets/example-emergency-call.e714e4d1.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="ex-level-pill">Beginner</span>
-      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Operadora de emergencias</span> <span class="alt-en" lang="en" aria-hidden="true">Emergency dispatcher</span></h3>
-      <span class="ex-src" lang="es">Operadora de emergencias</span>
-      <span class="ex-go">Read and listen &rarr;</span>
-    </div>
-  </a>
-  <a class="ex-card" href="/spanish-reading-practice/ordering-at-a-restaurant">
-    <img loading="lazy" decoding="async" src="/assets/example-ordering-at-a-restaurant.3cf23298.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="ex-level-pill">Beginner</span>
-      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Pedir en el restaurante</span> <span class="alt-en" lang="en" aria-hidden="true">Ordering at the restaurant</span></h3>
-      <span class="ex-src" lang="es">Pedir en el restaurante</span>
-      <span class="ex-go">Read and listen &rarr;</span>
-    </div>
-  </a>
-  <a class="ex-card" href="/spanish-reading-practice/a-ticket-please">
-    <img loading="lazy" decoding="async" src="/assets/example-a-ticket-please.f6bbf299.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="ex-level-pill">Beginner</span>
-      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Un billete, por favor</span> <span class="alt-en" lang="en" aria-hidden="true">A ticket, please</span></h3>
-      <span class="ex-src" lang="es">La llave roja · Secretos en la ciudad</span>
+      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Invitar a alguien a salir</span> <span class="alt-en" lang="en" aria-hidden="true">Asking someone out</span></h3>
+      <span class="ex-src" lang="es">La mentira que sigue creciendo · Ollie dice</span>
       <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
@@ -419,15 +408,6 @@
       <span class="ex-level-pill">Beginner</span>
       <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Un pueblo pequeño</span> <span class="alt-en" lang="en" aria-hidden="true">A small town</span></h3>
       <span class="ex-src" lang="es">La carta negra · El rey negro</span>
-      <span class="ex-go">Read and listen &rarr;</span>
-    </div>
-  </a>
-  <a class="ex-card" href="/spanish-reading-practice/counting-and-numbers">
-    <img loading="lazy" decoding="async" src="/assets/example-counting-and-numbers.4ae62b03.webp" width="640" height="960" alt="">
-    <div class="ex-card-body">
-      <span class="ex-level-pill">Intermediate</span>
-      <h3 class="display ex-title alt-title"><span class="alt-es" lang="es">Conteo y números</span> <span class="alt-en" lang="en" aria-hidden="true">Counting and numbers</span></h3>
-      <span class="ex-src" lang="es">Conteo y números</span>
       <span class="ex-go">Read and listen &rarr;</span>
     </div>
   </a>
@@ -444,15 +424,15 @@
 
 <section class="band">
   <div class="wrap">
-    <h2 class="display">Every example is part of a longer story.</h2>
+    <h2 class="display">Enjoyed this? Continue the story in the Comigo iPhone app.</h2>
     <p>
-      In Comigo, the story continues. Read the next page, listen to the characters, reveal
-      translations when you need them and practise the Spanish you&rsquo;ve just encountered &mdash;
-      and discover more features.
+      Each page here is one page of a complete, interactive comic in the app. There you read the
+      whole story, with every line voiced, translations when you need them, and practice built
+      around what you&rsquo;ve just read.
     </p>
     <div class="cta-row">
       <a class="cta" href="/go/app-store?from=/spanish-reading-practice&amp;loc=band" target="_blank" rel="noopener nofollow">&#63743;&nbsp; Continue reading with Comigo</a>
-      <span class="cta-link" style="text-decoration: none; cursor: default;">Eligible new subscribers can try Comigo free for 7 days.</span>
+      <span class="cta-link" style="text-decoration: none; cursor: default; white-space: normal;">Eligible new subscribers can try Comigo free for 7 days.</span>
     </div>
   </div>
 </section>

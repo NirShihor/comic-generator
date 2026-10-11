@@ -1,0 +1,1099 @@
+{
+ "slug": "asking-someone-out",
+ "label": "Invitar a alguien a salir",
+ "labelEn": "Asking someone out",
+ "seoTitle": "A boy finds the courage: Intermediate Spanish Reading Practice",
+ "summary": "",
+ "imageAlt": "",
+ "comic": "LA MENTIRA QUE SIGUE CRECIENDO",
+ "collection": "OLLIE DICE",
+ "app": {
+  "comic": "LA MENTIRA QUE SIGUE CRECIENDO",
+  "comicEn": "THE LIE THAT KEEPS GROWING",
+  "collection": "OLLIE DICE",
+  "collectionEn": "OLLIE SAYS",
+  "page": 3,
+  "pages": 15
+ },
+ "level": "beginner",
+ "image": "example-asking-someone-out",
+ "width": 1024,
+ "height": 1536,
+ "publishedAt": "2026-10-04T10:42:02.445Z",
+ "bubbles": [
+  {
+   "x": 0.03178530107388053,
+   "y": 0.07600024335859307,
+   "w": 0.23339909482193588,
+   "h": 0.16113082641412696,
+   "panel": [
+    0,
+    0,
+    1,
+    0.4434
+   ],
+   "sentences": [
+    {
+     "es": "Ah... ¿podemos hacerlo el viernes mejor?",
+     "en": "Ah... can we do Friday instead?",
+     "g": "Ah is an interjection expressing realization or transition. Podemos is the present tense of poder, indicating ability or possibility, and hacerlo translates to 'do it,' with a direct pronoun meaning 'it.'",
+     "a": "{{AUD_ex-asking-someone-out-b1-1}}",
+     "words": [
+      {
+       "t": "Ah...",
+       "m": "ah",
+       "b": "ah",
+       "bm": "ah",
+       "s": 0,
+       "e": 1000,
+       "a": "{{AUD_ex-asking-someone-out-w-ah}}",
+       "ex": "In this sentence, \"ah\" is an interjection. It expresses a moment of realization or understanding. It often conveys a reaction to something that was just said or thought about, similar to how we might use \"oh\" or \"ah\" in English.\n\nHere, \"Ah...\" indicates that the speaker is reflecting on a previous point or suggestion before asking, \"¿podemos hacerlo el viernes mejor?\" which means \"can we do Friday instead?\" The interjection sets the tone for the question, showing that the speaker is considering a change in plans."
+      },
+      {
+       "t": "¿podemos",
+       "m": "we can",
+       "b": "poder",
+       "bm": "to be able",
+       "s": 1220,
+       "e": 1840,
+       "a": "{{AUD_ex-asking-someone-out-w-podemos}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-poder}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "puedo",
+         "a": "{{AUD_ex-asking-someone-out-w-puedo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "pude",
+         "a": "{{AUD_ex-asking-someone-out-w-pude}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "podía",
+         "a": "{{AUD_ex-asking-someone-out-w-podia-b0bdf7}}"
+        },
+        {
+         "label": "Future",
+         "text": "podré",
+         "a": "{{AUD_ex-asking-someone-out-w-podre-15a714}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "podría",
+         "a": "{{AUD_ex-asking-someone-out-w-podria-3e008c}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "pueda",
+         "a": "{{AUD_ex-asking-someone-out-w-pueda}}"
+        },
+        {
+         "label": "Command",
+         "text": "puedes",
+         "a": "{{AUD_ex-asking-someone-out-w-puedes}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "pudiendo",
+         "a": "{{AUD_ex-asking-someone-out-w-pudiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "podido",
+         "a": "{{AUD_ex-asking-someone-out-w-podido}}"
+        }
+       ],
+       "ex": "\"Podemos\" is the first-person plural form of the verb \"poder,\" which means \"to be able to\" or \"can.\" In this sentence, \"podemos\" translates to \"we can.\" It is used to express the ability or possibility of doing something, in this case, \"hacerlo\" (to do it).\n\nHere’s a short present-tense conjugation of \"poder\":\n- yo puedo\n- tú puedes\n- él/ella/usted puede\n- nosotros/nosotras podemos\n- vosotros/vosotras podéis\n- ellos/ellas/ustedes pueden\n\nIn the sentence \"Ah... ¿podemos hacerlo el viernes mejor?\", \"podemos\" is asking if the group (we) has the ability to do something on Friday instead. It connects the subject \"we\" to the action of doing, indicating a suggestion or request to change plans."
+      },
+      {
+       "t": "hacerlo",
+       "m": "to do it",
+       "b": "hacer",
+       "bm": "to do",
+       "s": 1893,
+       "e": 2240,
+       "a": "{{AUD_ex-asking-someone-out-w-hacerlo}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-hacer}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "hago",
+         "a": "{{AUD_ex-asking-someone-out-w-hago}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "hice",
+         "a": "{{AUD_ex-asking-someone-out-w-hice}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "hacía",
+         "a": "{{AUD_ex-asking-someone-out-w-hacia-9239e5}}"
+        },
+        {
+         "label": "Future",
+         "text": "haré",
+         "a": "{{AUD_ex-asking-someone-out-w-hare-0a2c6b}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "haría",
+         "a": "{{AUD_ex-asking-someone-out-w-haria-dcde3f}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "haga",
+         "a": "{{AUD_ex-asking-someone-out-w-haga}}"
+        },
+        {
+         "label": "Command",
+         "text": "haz",
+         "a": "{{AUD_ex-asking-someone-out-w-haz}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "haciendo",
+         "a": "{{AUD_ex-asking-someone-out-w-haciendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "hecho",
+         "a": "{{AUD_ex-asking-someone-out-w-hecho}}"
+        }
+       ],
+       "ex": "The word \"hacerlo\" is a verb form in this sentence. It comes from the infinitive verb \"hacer,\" which means \"to do\" or \"to make.\" In this context, \"hacerlo\" translates to \"do it,\" where \"lo\" is an object pronoun that refers to the action or task being discussed.\n\nIn terms of conjugation, \"hacer\" in the present tense is as follows:\n\n- yo hago\n- tú haces\n- él/ella/usted hace\n- nosotros/nosotras hacemos\n- ellos/ellas/ustedes hacen\n\nHere, \"hacerlo\" is used to ask if they can perform a certain action on Friday instead of another day. The phrase \"podemos hacerlo\" translates to \"can we do it,\" indicating a suggestion or request. The \"lo\" specifically points to the action they are considering, making it clear that they are talking about doing something specific on that day."
+      },
+      {
+       "t": "el",
+       "m": "the",
+       "b": "el",
+       "bm": "the",
+       "s": 2267,
+       "e": 2320,
+       "a": "{{AUD_ex-asking-someone-out-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-asking-someone-out-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-asking-someone-out-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-asking-someone-out-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-asking-someone-out-w-las}}"
+        }
+       ],
+       "ex": "In this sentence, \"el\" is a definite article in Spanish. It is used to specify a particular noun, which in this case is \"viernes\" (Friday). The article \"el\" translates to \"the\" in English, indicating that the speaker is referring to a specific day of the week.\n\nSo, \"el viernes\" means \"the Friday.\" The use of \"el\" helps to clarify that they are talking about that specific day, rather than any Friday. It connects directly to \"viernes\" to indicate which day they are discussing in the context of their plans."
+      },
+      {
+       "t": "viernes",
+       "m": "Friday",
+       "b": "viernes",
+       "bm": "Friday",
+       "s": 2373,
+       "e": 2800,
+       "a": "{{AUD_ex-asking-someone-out-w-viernes}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "viernes",
+         "a": "{{AUD_ex-asking-someone-out-w-viernes}}"
+        },
+        {
+         "label": "Plural",
+         "text": "viernes",
+         "a": "{{AUD_ex-asking-someone-out-w-viernes}}"
+        }
+       ],
+       "ex": "The word \"viernes\" is a noun in this sentence, specifically referring to the day of the week, Friday. In Spanish, days of the week are typically used in the masculine form, so \"viernes\" is masculine and singular.\n\nIn the sentence \"Ah... ¿podemos hacerlo el viernes mejor?\", \"viernes\" is the object of the preposition \"el,\" which means \"the.\" The phrase \"el viernes\" translates to \"Friday,\" indicating a specific day when the action can take place. The speaker is suggesting that doing something on Friday would be better than the current plan.\n\nOverall, \"viernes\" is essential here as it specifies the day being discussed, helping to clarify when the action can occur."
+      },
+      {
+       "t": "mejor?",
+       "m": "better",
+       "b": "bueno",
+       "bm": "good",
+       "s": 2867,
+       "e": 4400,
+       "a": "{{AUD_ex-asking-someone-out-w-mejor}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-bueno}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "bueno",
+         "a": "{{AUD_ex-asking-someone-out-w-bueno}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "buena",
+         "a": "{{AUD_ex-asking-someone-out-w-buena}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "buenos",
+         "a": "{{AUD_ex-asking-someone-out-w-buenos}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "buenas",
+         "a": "{{AUD_ex-asking-someone-out-w-buenas}}"
+        }
+       ],
+       "ex": "In this sentence, \"mejor\" is an adverb meaning \"better\" or \"instead.\" It is used to suggest a preference for doing something on Friday rather than another day. The phrase \"el viernes mejor\" translates to \"Friday better,\" indicating that the speaker thinks Friday is a more suitable option.\n\nAs an adverb, \"mejor\" modifies the idea of when to do the activity, emphasizing that Friday is a preferable choice. It connects to the verb \"hacerlo\" (to do it), implying that the speaker is proposing a change in plans to make them better. \n\nOverall, \"mejor\" plays a crucial role in expressing the speaker's desire for a more favorable arrangement."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.7424242424242424,
+   "y": 0.1590909090909091,
+   "w": 0.2,
+   "h": 0.08383838383838385,
+   "panel": [
+    0,
+    0,
+    1,
+    0.4434
+   ],
+   "sentences": [
+    {
+     "es": "No puedo el viernes.",
+     "en": "I can't on Friday.",
+     "g": "No puedo uses the present tense of poder in the first person to express inability. El viernes specifies the day, serving as the time reference for the refusal.",
+     "a": "{{AUD_ex-asking-someone-out-b2-1}}",
+     "words": [
+      {
+       "t": "No",
+       "m": "no",
+       "b": "no",
+       "bm": "no",
+       "s": 0,
+       "e": 160,
+       "a": "{{AUD_ex-asking-someone-out-w-no}}",
+       "ex": "In this sentence, \"no\" is an adverb. Its role is to negate the verb \"puedo,\" which means \"I can.\" By placing \"no\" before the verb, it changes the meaning to \"I can't.\"\n\nThe infinitive form of \"puedo\" is \"poder.\" Here’s a short present-tense conjugation:\n\n- yo puedo\n- tú puedes\n- él/ella/usted puede\n- nosotros/nosotras podemos\n- ellos/ellas/ustedes pueden\n\nSo, in \"No puedo el viernes,\" \"no\" is essential for expressing the inability to do something on Friday. It clearly indicates that the speaker is saying they cannot do whatever is implied, emphasizing the negative."
+      },
+      {
+       "t": "puedo",
+       "m": "can",
+       "b": "poder",
+       "bm": "to be able",
+       "s": 213,
+       "e": 480,
+       "a": "{{AUD_ex-asking-someone-out-w-puedo}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-poder}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "puedo",
+         "a": "{{AUD_ex-asking-someone-out-w-puedo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "pude",
+         "a": "{{AUD_ex-asking-someone-out-w-pude}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "podía",
+         "a": "{{AUD_ex-asking-someone-out-w-podia-b0bdf7}}"
+        },
+        {
+         "label": "Future",
+         "text": "podré",
+         "a": "{{AUD_ex-asking-someone-out-w-podre-15a714}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "podría",
+         "a": "{{AUD_ex-asking-someone-out-w-podria-3e008c}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "pueda",
+         "a": "{{AUD_ex-asking-someone-out-w-pueda}}"
+        },
+        {
+         "label": "Command",
+         "text": "puedes",
+         "a": "{{AUD_ex-asking-someone-out-w-puedes}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "pudiendo",
+         "a": "{{AUD_ex-asking-someone-out-w-pudiendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "podido",
+         "a": "{{AUD_ex-asking-someone-out-w-podido}}"
+        }
+       ],
+       "ex": "\"puedo\" is a verb form in this sentence. It comes from the infinitive \"poder,\" which means \"to be able to\" or \"can.\" In the present tense, \"poder\" is conjugated as follows:\n\n- yo puedo\n- tú puedes\n- él/ella/usted puede\n- nosotros/nosotras podemos\n- ellos/ellas/ustedes pueden\n\nIn the sentence \"No puedo el viernes,\" \"puedo\" is the first-person singular form, meaning \"I can\" or \"I am able.\" The word \"No\" at the beginning negates it, so together, \"No puedo\" translates to \"I can't.\" \n\nThe phrase \"el viernes\" specifies the time when the speaker is unable to do something, indicating that the inability is related to Friday. So, \"puedo\" is crucial here as it expresses the speaker's capacity or lack thereof regarding an action on that specific day."
+      },
+      {
+       "t": "el",
+       "m": "the",
+       "b": "el",
+       "bm": "the",
+       "s": 507,
+       "e": 560,
+       "a": "{{AUD_ex-asking-someone-out-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-asking-someone-out-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-asking-someone-out-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-asking-someone-out-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-asking-someone-out-w-las}}"
+        }
+       ],
+       "ex": "In this sentence, \"el\" is a definite article in Spanish. It translates to \"the\" in English and is used to specify a particular noun. Here, \"el\" is connected to the noun \"viernes,\" which means \"Friday.\" \n\nThe phrase \"el viernes\" translates to \"the Friday,\" but in English, we often drop the article when referring to days of the week. So, \"No puedo el viernes\" means \"I can't on Friday.\" The article \"el\" is necessary in Spanish to indicate that you are talking about a specific day."
+      },
+      {
+       "t": "viernes.",
+       "m": "Friday",
+       "b": "viernes",
+       "bm": "Friday",
+       "s": 613,
+       "e": 1280,
+       "a": "{{AUD_ex-asking-someone-out-w-viernes}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "viernes",
+         "a": "{{AUD_ex-asking-someone-out-w-viernes}}"
+        },
+        {
+         "label": "Plural",
+         "text": "viernes",
+         "a": "{{AUD_ex-asking-someone-out-w-viernes}}"
+        }
+       ],
+       "ex": "The word \"viernes\" is a noun in this sentence, specifically a day of the week. It translates to \"Friday\" in English. In the sentence \"No puedo el viernes,\" it serves as the object of the verb \"puedo\" (I can), indicating the specific day when the speaker is unable to do something.\n\nIn this context, \"viernes\" is important because it specifies the time frame of the inability. The phrase means \"I can't on Friday,\" clearly indicating that the speaker is referring to that particular day. It helps to clarify when the action cannot take place."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.6681818181818182,
+   "y": 0.2762626262626262,
+   "w": 0.2,
+   "h": 0.1,
+   "panel": [
+    0,
+    0,
+    1,
+    0.4434
+   ],
+   "sentences": [
+    {
+     "es": "Vamos a casa de mi tía.",
+     "en": "We are going to my aunt.",
+     "g": "Vamos is the present tense of ir, meaning 'we are going.' The phrase 'a casa de' indicates direction and shows possession with 'mi tía' meaning 'my aunt.'",
+     "a": "{{AUD_ex-asking-someone-out-b3-1}}",
+     "words": [
+      {
+       "t": "Vamos",
+       "m": "we are going",
+       "b": "ir",
+       "bm": "to go",
+       "s": 0,
+       "e": 480,
+       "a": "{{AUD_ex-asking-someone-out-w-vamos}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-ir}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "voy",
+         "a": "{{AUD_ex-asking-someone-out-w-voy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "fui",
+         "a": "{{AUD_ex-asking-someone-out-w-fui}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "iba",
+         "a": "{{AUD_ex-asking-someone-out-w-iba}}"
+        },
+        {
+         "label": "Future",
+         "text": "iré",
+         "a": "{{AUD_ex-asking-someone-out-w-ire-396487}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "iría",
+         "a": "{{AUD_ex-asking-someone-out-w-iria-755fca}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "vaya",
+         "a": "{{AUD_ex-asking-someone-out-w-vaya}}"
+        },
+        {
+         "label": "Command",
+         "text": "ve",
+         "a": "{{AUD_ex-asking-someone-out-w-ve}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "yendo",
+         "a": "{{AUD_ex-asking-someone-out-w-yendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "ido",
+         "a": "{{AUD_ex-asking-someone-out-w-ido}}"
+        }
+       ],
+       "ex": "\"Vamos\" is the first-person plural form of the verb \"ir,\" which means \"to go.\" In this sentence, \"Vamos\" translates to \"We are going.\" It indicates that the speaker and at least one other person are moving towards a destination.\n\nThe present tense conjugation of \"ir\" for the first-person plural is as follows:\n- yo voy\n- tú vas\n- él/ella/usted va\n- nosotros/nosotras vamos\n- vosotros/vosotras vais\n- ellos/ellas/ustedes van\n\nIn the sentence \"Vamos a casa de mi tía,\" \"vamos\" serves as the main verb, expressing the action of going. It sets the context for the destination, which is \"a casa de mi tía\" (to my aunt's house). This word is essential for conveying who is performing the action and establishes the collective movement towards the specified location."
+      },
+      {
+       "t": "a",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 640,
+       "e": 800,
+       "a": "{{AUD_ex-asking-someone-out-w-a}}",
+       "ex": "In this sentence, \"a\" is a preposition. It connects the action of going (\"vamos\") to the destination, which is \"casa de mi tía\" (my aunt's house). \n\nThe preposition \"a\" indicates direction or movement towards a place. Here, it tells us where the action of going is directed: \"a casa\" means \"to the house.\" So, \"Vamos a casa de mi tía\" translates to \"We are going to my aunt's house,\" showing the destination of the action."
+      },
+      {
+       "t": "casa",
+       "m": "house",
+       "b": "casa",
+       "bm": "house",
+       "s": 880,
+       "e": 1200,
+       "a": "{{AUD_ex-asking-someone-out-w-casa}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "casa",
+         "a": "{{AUD_ex-asking-someone-out-w-casa}}"
+        },
+        {
+         "label": "Plural",
+         "text": "casas",
+         "a": "{{AUD_ex-asking-someone-out-w-casas}}"
+        }
+       ],
+       "ex": "In this sentence, \"casa\" is a noun meaning \"house.\" It is the object of the preposition \"a,\" which indicates direction or destination. The phrase \"a casa\" translates to \"to the house,\" specifying where you are going.\n\nThe full phrase \"a casa de mi tía\" means \"to my aunt's house.\" Here, \"casa\" is modified by the prepositional phrase \"de mi tía,\" which tells us whose house it is. So, \"casa\" is essential for understanding the destination of the action \"vamos\" (we are going)."
+      },
+      {
+       "t": "de",
+       "m": "of",
+       "b": "de",
+       "bm": "of",
+       "s": 1253,
+       "e": 1360,
+       "a": "{{AUD_ex-asking-someone-out-w-de}}",
+       "ex": "The word \"de\" in the sentence \"Vamos a casa de mi tía\" is a preposition. It connects the noun \"casa\" (house) to \"mi tía\" (my aunt), indicating possession. In English, we would say \"my aunt's house,\" but in Spanish, it is structured as \"casa de mi tía,\" which literally translates to \"house of my aunt.\"\n\nHere, \"de\" shows that the house belongs to your aunt. It's essential for clarifying whose house you are going to. Without \"de,\" the sentence would be incomplete and unclear about the relationship between the house and your aunt."
+      },
+      {
+       "t": "mi",
+       "m": "my",
+       "b": "mi",
+       "bm": "my",
+       "s": 1413,
+       "e": 1520,
+       "a": "{{AUD_ex-asking-someone-out-w-mi}}",
+       "ex": "In this sentence, \"mi\" is a possessive adjective. It indicates ownership or relation, specifically showing that the aunt belongs to the speaker. In English, it translates to \"my.\"\n\n\"Mi\" modifies the noun \"tía,\" which means \"aunt.\" So, in the phrase \"mi tía,\" it tells us whose aunt is being referred to. The use of \"mi\" is essential here to clarify that the aunt is the speaker's relative.\n\nPossessive adjectives like \"mi\" agree in number with the noun they modify, but they do not change for gender. In this case, \"tía\" is singular and feminine, and \"mi\" remains the same regardless."
+      },
+      {
+       "t": "tía.",
+       "m": "aunt",
+       "b": "tía",
+       "bm": "aunt",
+       "s": 1560,
+       "e": 2160,
+       "a": "{{AUD_ex-asking-someone-out-w-tia-9eaecd}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "tía",
+         "a": "{{AUD_ex-asking-someone-out-w-tia-9eaecd}}"
+        },
+        {
+         "label": "Plural",
+         "text": "tías",
+         "a": "{{AUD_ex-asking-someone-out-w-tias-9ca90b}}"
+        }
+       ],
+       "ex": "The word \"tía\" is a noun in this sentence. It means \"aunt\" in English and is used here to identify a family member. In the sentence \"Vamos a casa de mi tía,\" it specifies whose house they are going to, indicating that it is the speaker's aunt's house.\n\nIn Spanish, nouns like \"tía\" are often accompanied by possessive adjectives, which in this case is \"mi,\" meaning \"my.\" So, \"mi tía\" translates to \"my aunt.\" The structure \"casa de mi tía\" means \"house of my aunt,\" showing possession and connection to the speaker's family."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.45166144337522207,
+   "y": 0.2994949494949495,
+   "w": 0.18455590112834377,
+   "h": 0.1,
+   "panel": [
+    0,
+    0,
+    1,
+    0.4434
+   ],
+   "sentences": [
+    {
+     "es": "No importa...",
+     "en": "Never mind...",
+     "g": "No importa is an idiomatic expression meaning 'it doesn't matter.' The phrase implies a sense of dismissing an issue rather than a literal translation.",
+     "a": "{{AUD_ex-asking-someone-out-b4-1}}",
+     "words": [
+      {
+       "t": "No",
+       "m": "no",
+       "b": "no",
+       "bm": "no",
+       "s": 0,
+       "e": 160,
+       "a": "{{AUD_ex-asking-someone-out-w-no}}",
+       "ex": "In this sentence, \"no\" is an adverb that means \"not.\" It is used to negate the verb \"importa,\" which means \"matters\" or \"is important.\" So, \"no importa\" translates to \"does not matter\" or \"never mind.\"\n\nThe presence of \"no\" indicates that whatever is being discussed is not significant or should be disregarded. It emphasizes the idea of dismissing any concern or importance regarding the situation. In this context, it helps convey a sense of reassurance or indifference."
+      },
+      {
+       "t": "importa...",
+       "m": "matter",
+       "b": "importar",
+       "bm": "to matter",
+       "s": 229,
+       "e": 2080,
+       "a": "{{AUD_ex-asking-someone-out-w-importa}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-importar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "importo",
+         "a": "{{AUD_ex-asking-someone-out-w-importo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "importé",
+         "a": "{{AUD_ex-asking-someone-out-w-importe-4691cc}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "importaba",
+         "a": "{{AUD_ex-asking-someone-out-w-importaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "importaré",
+         "a": "{{AUD_ex-asking-someone-out-w-importare-c6e069}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "importaría",
+         "a": "{{AUD_ex-asking-someone-out-w-importaria-6c8b83}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "importe",
+         "a": "{{AUD_ex-asking-someone-out-w-importe}}"
+        },
+        {
+         "label": "Command",
+         "text": "importa",
+         "a": "{{AUD_ex-asking-someone-out-w-importa}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "importando",
+         "a": "{{AUD_ex-asking-someone-out-w-importando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "importado",
+         "a": "{{AUD_ex-asking-someone-out-w-importado}}"
+        }
+       ],
+       "ex": "The word \"importa\" is a verb in the present tense, coming from the infinitive \"importar,\" which means \"to matter\" or \"to be important.\" In this sentence, \"No importa...\" translates to \"Never mind...\" or \"It doesn't matter...\" Here, \"importa\" is used to express that something is not significant or relevant.\n\nIn the present tense, \"importar\" is conjugated as follows:\n\n- yo importo\n- tú importas\n- él/ella/usted importa\n- nosotros/nosotras importamos\n- ellos/ellas/ustedes importan\n\nIn this case, \"importa\" is the third person singular form, referring to an unspecified subject, which is common in expressions of indifference or dismissal. The phrase \"No importa\" conveys a sense of letting go of a concern or issue."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.12121212121212124,
+   "y": 0.33282828282828286,
+   "w": 0.2,
+   "h": 0.1,
+   "panel": [
+    0,
+    0,
+    1,
+    0.4434
+   ],
+   "sentences": [
+    {
+     "es": "No, no... ¡El sábado está bien!",
+     "en": "No, no... Saturday is fine!",
+     "g": "The repetition of 'no' emphasizes the negation. ¡Está bien! indicates agreement, with está being the present tense of estar.",
+     "a": "{{AUD_ex-asking-someone-out-b5-1}}",
+     "words": [
+      {
+       "t": "No,",
+       "m": "no",
+       "b": "no",
+       "bm": "no",
+       "s": 0,
+       "e": 320,
+       "a": "{{AUD_ex-asking-someone-out-w-no}}",
+       "ex": "In this sentence, \"no\" is an adverb used to express negation. It translates to \"no\" in English and is used to indicate disagreement or denial. Here, it appears twice: the first \"no\" likely responds to a question or suggestion, while the second \"no\" emphasizes the speaker's certainty about their answer.\n\nThe structure \"No, no...\" sets a tone of refusal or correction before the speaker affirms that \"El sábado está bien,\" meaning \"Saturday is fine.\" The repetition of \"no\" adds emphasis, showing that the speaker is firm in their response."
+      },
+      {
+       "t": "no...",
+       "m": "no",
+       "b": "no",
+       "bm": "no",
+       "s": 373,
+       "e": 680,
+       "a": "{{AUD_ex-asking-someone-out-w-no}}",
+       "ex": "In this sentence, \"no\" is an adverb used to express negation. It appears twice: the first \"no\" is likely responding to a question or suggestion, indicating disagreement or refusal. The second \"no\" reinforces this negation, emphasizing the speaker's certainty or insistence.\n\nThe role of \"no\" here is to clarify that the speaker does not agree with whatever was previously mentioned. It helps to create a clear and strong response, making it clear that they are not in favor of the alternative being discussed. \n\nSo, in this context, \"no\" serves as a crucial part of the speaker's communication, helping to convey their feelings about the situation regarding Saturday."
+      },
+      {
+       "t": "¡El",
+       "m": "the",
+       "b": "el",
+       "bm": "the",
+       "s": 780,
+       "e": 960,
+       "a": "{{AUD_ex-asking-someone-out-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-asking-someone-out-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-asking-someone-out-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-asking-someone-out-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-asking-someone-out-w-las}}"
+        }
+       ],
+       "ex": "In this sentence, \"el\" is a definite article in Spanish, which translates to \"the\" in English. It is used to specify a particular noun, in this case, \"sábado,\" which means \"Saturday.\" \n\nThe phrase \"El sábado\" translates to \"The Saturday,\" indicating that the speaker is referring to a specific day of the week. In Spanish, definite articles agree in gender and number with the nouns they modify. \"Sábado\" is a masculine singular noun, so the article \"el\" is appropriately used here.\n\nOverall, \"el\" helps clarify which day the speaker is discussing, making the sentence clear and specific."
+      },
+      {
+       "t": "sábado",
+       "m": "Saturday",
+       "b": "sábado",
+       "bm": "Saturday",
+       "s": 1017,
+       "e": 1360,
+       "a": "{{AUD_ex-asking-someone-out-w-sabado-dc123b}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "sábado",
+         "a": "{{AUD_ex-asking-someone-out-w-sabado-dc123b}}"
+        },
+        {
+         "label": "Plural",
+         "text": "sábados",
+         "a": "{{AUD_ex-asking-someone-out-w-sabados-c58e99}}"
+        }
+       ],
+       "ex": "The word \"sábado\" is a noun in this sentence. It refers to the day of the week, specifically \"Saturday.\" In the context of the sentence, it serves as the subject, indicating which day is being discussed. \n\nThe phrase \"El sábado\" translates to \"Saturday\" in English, and the definite article \"El\" specifies that it is a particular Saturday being referred to. The sentence overall expresses that Saturday is an acceptable option, as indicated by \"está bien,\" meaning \"is fine.\" \n\nSo, in this sentence, \"sábado\" is crucial because it identifies the specific day that is being considered or discussed."
+      },
+      {
+       "t": "está",
+       "m": "is",
+       "b": "estar",
+       "bm": "to be",
+       "s": 1408,
+       "e": 1600,
+       "a": "{{AUD_ex-asking-someone-out-w-esta-093ed6}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-estar}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "estoy",
+         "a": "{{AUD_ex-asking-someone-out-w-estoy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "estuve",
+         "a": "{{AUD_ex-asking-someone-out-w-estuve}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "estaba",
+         "a": "{{AUD_ex-asking-someone-out-w-estaba}}"
+        },
+        {
+         "label": "Future",
+         "text": "estaré",
+         "a": "{{AUD_ex-asking-someone-out-w-estare-ef494e}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "estaría",
+         "a": "{{AUD_ex-asking-someone-out-w-estaria-62ba70}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "esté",
+         "a": "{{AUD_ex-asking-someone-out-w-este-39081b}}"
+        },
+        {
+         "label": "Command",
+         "text": "está",
+         "a": "{{AUD_ex-asking-someone-out-w-esta-093ed6}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "estando",
+         "a": "{{AUD_ex-asking-someone-out-w-estando}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "estado",
+         "a": "{{AUD_ex-asking-someone-out-w-estado}}"
+        }
+       ],
+       "ex": "The word \"está\" is a verb form in this sentence. It is the third person singular present tense of the verb \"estar,\" which means \"to be.\" In this context, \"está\" is used to express a state or condition, indicating that \"Saturday\" is in a satisfactory or acceptable state.\n\nHere’s a short conjugation table for \"estar\" in the present tense:\n\n- yo estoy\n- tú estás\n- él/ella/usted está\n- nosotros/nosotras estamos\n- ellos/ellas/ustedes están\n\nIn the sentence \"El sábado está bien,\" \"está\" connects the subject \"El sábado\" (Saturday) to the adjective \"bien\" (fine). It tells us that Saturday is in a good condition, which is the main point being communicated."
+      },
+      {
+       "t": "bien!",
+       "m": "fine",
+       "b": "bien",
+       "bm": "fine",
+       "s": 1632,
+       "e": 3200,
+       "a": "{{AUD_ex-asking-someone-out-w-bien}}",
+       "ex": "In this sentence, \"bien\" is an adverb. It modifies the subject \"El sábado\" (Saturday) and describes its condition or quality. Here, \"bien\" means \"fine\" or \"good,\" indicating that Saturday is a suitable or acceptable option.\n\nThe structure of the sentence is straightforward: \"El sábado\" is the subject, and \"está\" is the verb (from \"estar,\" meaning \"to be\"). The adverb \"bien\" complements the verb, providing more information about how Saturday is perceived. \n\nSo, in this context, \"bien\" is used to express approval or satisfaction regarding Saturday, making it clear that the speaker thinks it's a good choice."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.4869597080778608,
+   "y": 0.4949074548203663,
+   "w": 0.15335331111700584,
+   "h": 0.14250832268249977,
+   "panel": [
+    0,
+    0.4434,
+    1,
+    0.5566
+   ],
+   "sentences": [
+    {
+     "es": "Iré a tu casa a las siete.",
+     "en": "I'll come to your house at seven.",
+     "g": "Iré is the simple future tense of ir, meaning 'I will go.' A las siete specifies a time, indicating when the action will take place.",
+     "a": "{{AUD_ex-asking-someone-out-b6-1}}",
+     "words": [
+      {
+       "t": "Iré",
+       "m": "I will go",
+       "b": "ir",
+       "bm": "to go",
+       "s": 0,
+       "e": 400,
+       "a": "{{AUD_ex-asking-someone-out-w-ire-396487}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-ir}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "voy",
+         "a": "{{AUD_ex-asking-someone-out-w-voy}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "fui",
+         "a": "{{AUD_ex-asking-someone-out-w-fui}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "iba",
+         "a": "{{AUD_ex-asking-someone-out-w-iba}}"
+        },
+        {
+         "label": "Future",
+         "text": "iré",
+         "a": "{{AUD_ex-asking-someone-out-w-ire-396487}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "iría",
+         "a": "{{AUD_ex-asking-someone-out-w-iria-755fca}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "vaya",
+         "a": "{{AUD_ex-asking-someone-out-w-vaya}}"
+        },
+        {
+         "label": "Command",
+         "text": "ve",
+         "a": "{{AUD_ex-asking-someone-out-w-ve}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "yendo",
+         "a": "{{AUD_ex-asking-someone-out-w-yendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "ido",
+         "a": "{{AUD_ex-asking-someone-out-w-ido}}"
+        }
+       ],
+       "ex": "The word \"iré\" is a verb in the first person singular future tense form of the verb \"ir,\" which means \"to go.\" In this sentence, \"iré\" translates to \"I will go.\" It indicates a future action, showing that the speaker is planning to go to the listener's house.\n\nHere's a short conjugation table for the verb \"ir\" in the present tense:\n\n- yo voy (I go)\n- tú vas (you go)\n- él/ella va (he/she goes)\n\nIn the sentence \"Iré a tu casa a las siete,\" \"iré\" is essential because it expresses the speaker's intention to go somewhere in the future, specifically to \"tu casa\" (your house). This sets the context for the time of the visit, which is \"a las siete\" (at seven)."
+      },
+      {
+       "t": "a",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 440,
+       "e": 480,
+       "a": "{{AUD_ex-asking-someone-out-w-a}}",
+       "ex": "In this sentence, \"a\" is a preposition. It connects the action of going (\"Iré\") to its destination, which is \"tu casa\" (your house). The preposition \"a\" indicates direction or movement toward a place.\n\nThe first instance of \"a\" is used to express where the speaker is going: \"Iré a tu casa\" means \"I'll go to your house.\" The second \"a\" specifies the time: \"a las siete\" translates to \"at seven.\" Here, it indicates the specific time when the action will take place. \n\nSo, \"a\" is essential in both parts of the sentence, linking the verb to the location and the time."
+      },
+      {
+       "t": "tu",
+       "m": "your",
+       "b": "tu",
+       "bm": "your",
+       "s": 533,
+       "e": 640,
+       "a": "{{AUD_ex-asking-someone-out-w-tu}}",
+       "ex": "In this sentence, \"tu\" is a possessive adjective. It is used to indicate ownership, specifically referring to \"your\" in English. It modifies the noun \"casa,\" meaning \"house,\" so together they form \"tu casa,\" which translates to \"your house.\"\n\n\"Tu\" is in the singular form and is used when speaking informally to someone you know well. It connects directly to the person being addressed, showing that the house belongs to them. In this context, it emphasizes the relationship between the speaker and the listener, making it clear that the speaker is referring to the listener's house."
+      },
+      {
+       "t": "casa",
+       "m": "house",
+       "b": "casa",
+       "bm": "house",
+       "s": 704,
+       "e": 960,
+       "a": "{{AUD_ex-asking-someone-out-w-casa}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "casa",
+         "a": "{{AUD_ex-asking-someone-out-w-casa}}"
+        },
+        {
+         "label": "Plural",
+         "text": "casas",
+         "a": "{{AUD_ex-asking-someone-out-w-casas}}"
+        }
+       ],
+       "ex": "The word \"casa\" is a noun in this sentence. It means \"house\" in English. In the context of the sentence \"Iré a tu casa a las siete,\" \"casa\" is the object of the preposition \"a,\" which means \"to.\" \n\nHere, \"tu\" is a possessive adjective meaning \"your,\" indicating that the house belongs to the person being addressed. So, \"tu casa\" translates to \"your house.\" The sentence as a whole expresses the speaker's intention to go to the listener's house at a specific time, \"a las siete,\" which means \"at seven.\" \n\nIn summary, \"casa\" is essential for identifying the location the speaker is referring to, making it clear that they are talking about the listener's home."
+      },
+      {
+       "t": "a",
+       "m": "to",
+       "b": "a",
+       "bm": "to",
+       "s": 1120,
+       "e": 1280,
+       "a": "{{AUD_ex-asking-someone-out-w-a}}",
+       "ex": "In this sentence, \"a\" is a preposition. It connects the verb \"iré\" (I will go) to the noun phrase \"tu casa\" (your house). The preposition \"a\" indicates direction or destination, showing where the action of going is directed.\n\nThe first \"a\" in \"Iré a tu casa\" translates to \"to,\" indicating that the speaker will go to the listener's house. The second \"a\" in \"a las siete\" translates to \"at,\" specifying the time of the action. Both uses of \"a\" help clarify the destination and timing of the speaker's plans."
+      },
+      {
+       "t": "las",
+       "m": "the",
+       "b": "el",
+       "bm": "the",
+       "s": 1340,
+       "e": 1520,
+       "a": "{{AUD_ex-asking-someone-out-w-las}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-el}}",
+       "forms": [
+        {
+         "label": "Masc. sing.",
+         "text": "el",
+         "a": "{{AUD_ex-asking-someone-out-w-el}}"
+        },
+        {
+         "label": "Fem. sing.",
+         "text": "la",
+         "a": "{{AUD_ex-asking-someone-out-w-la}}"
+        },
+        {
+         "label": "Masc. plural",
+         "text": "los",
+         "a": "{{AUD_ex-asking-someone-out-w-los}}"
+        },
+        {
+         "label": "Fem. plural",
+         "text": "las",
+         "a": "{{AUD_ex-asking-someone-out-w-las}}"
+        }
+       ],
+       "ex": "In this sentence, \"las\" is a definite article in Spanish. It is used to indicate a specific time, referring to \"siete\" (seven). The phrase \"a las siete\" translates to \"at seven,\" where \"las\" is necessary to specify the hour.\n\n\"Las\" is the plural form of the definite article \"la,\" which is used for feminine nouns. Here, it connects to \"siete,\" which is treated as a feminine noun in this context. So, \"las\" helps to clarify that you are talking about a specific time, making the sentence clear and precise."
+      },
+      {
+       "t": "siete.",
+       "m": "seven",
+       "b": "siete",
+       "bm": "seven",
+       "s": 1560,
+       "e": 3040,
+       "a": "{{AUD_ex-asking-someone-out-w-siete}}",
+       "forms": [
+        {
+         "label": "Singular",
+         "text": "siete",
+         "a": "{{AUD_ex-asking-someone-out-w-siete}}"
+        },
+        {
+         "label": "Plural",
+         "text": "sietes",
+         "a": "{{AUD_ex-asking-someone-out-w-sietes}}"
+        }
+       ],
+       "ex": "The word \"siete\" in this sentence is a numeral, specifically a cardinal number. It means \"seven\" in English. In the context of the sentence \"Iré a tu casa a las siete,\" it indicates the specific time when the action will take place.\n\nHere, \"siete\" functions as a noun, referring to the hour of the day. It is used to tell the listener when the speaker will arrive at their house. The phrase \"a las siete\" translates to \"at seven,\" showing that the time is being specified. This is important for understanding when the action of going to the house will occur."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "x": 0.3378787878787879,
+   "y": 0.7510101010101009,
+   "w": 0.2,
+   "h": 0.1,
+   "panel": [
+    0,
+    0.4434,
+    1,
+    0.5566
+   ],
+   "sentences": [
+    {
+     "es": "Nos vemos entonces.",
+     "en": "See you then.",
+     "g": "Nos vemos means 'we'll see each other.' This is a common way to say goodbye or to indicate a future meeting.",
+     "a": "{{AUD_ex-asking-someone-out-b7-1}}",
+     "words": [
+      {
+       "t": "Nos",
+       "m": "us",
+       "b": "nos",
+       "bm": "us",
+       "s": 0,
+       "e": 200,
+       "a": "{{AUD_ex-asking-someone-out-w-nos}}",
+       "ex": "In the sentence \"Nos vemos entonces,\" the word \"nos\" is a reflexive pronoun. It refers to the subject of the sentence, which is implied to be \"we\" or \"us.\" The pronoun \"nos\" indicates that the action of the verb is being done to ourselves, meaning that we are seeing each other.\n\nThe verb here is \"ver,\" which means \"to see.\" The specific form used is \"vemos,\" which is the first-person plural present tense conjugation. Here’s a short conjugation table for \"ver\" in the present tense:\n\n- yo veo\n- tú ves\n- él/ella/usted ve\n- nosotros/nosotras vemos\n- vosotros/vosotras veis\n- ellos/ellas/ustedes ven\n\nSo, \"Nos vemos\" translates to \"We see each other\" or more commonly \"See you.\" The addition of \"entonces\" means \"then,\" giving a sense of when this meeting will happen. Overall, \"nos\" is essential for indicating that the action is mutual among the speakers."
+      },
+      {
+       "t": "vemos",
+       "m": "we see",
+       "b": "ver",
+       "bm": "to see",
+       "s": 220,
+       "e": 400,
+       "a": "{{AUD_ex-asking-someone-out-w-vemos}}",
+       "ba": "{{AUD_ex-asking-someone-out-w-ver}}",
+       "forms": [
+        {
+         "label": "Present",
+         "text": "veo",
+         "a": "{{AUD_ex-asking-someone-out-w-veo}}"
+        },
+        {
+         "label": "Preterite",
+         "text": "vi",
+         "a": "{{AUD_ex-asking-someone-out-w-vi}}"
+        },
+        {
+         "label": "Imperfect",
+         "text": "veía",
+         "a": "{{AUD_ex-asking-someone-out-w-veia-614122}}"
+        },
+        {
+         "label": "Future",
+         "text": "veré",
+         "a": "{{AUD_ex-asking-someone-out-w-vere-26ad8d}}"
+        },
+        {
+         "label": "Conditional",
+         "text": "vería",
+         "a": "{{AUD_ex-asking-someone-out-w-veria-ffc767}}"
+        },
+        {
+         "label": "Subjunctive",
+         "text": "vea",
+         "a": "{{AUD_ex-asking-someone-out-w-vea}}"
+        },
+        {
+         "label": "Command",
+         "text": "ve",
+         "a": "{{AUD_ex-asking-someone-out-w-ve}}"
+        },
+        {
+         "label": "Gerund",
+         "text": "viendo",
+         "a": "{{AUD_ex-asking-someone-out-w-viendo}}"
+        },
+        {
+         "label": "Past Participle",
+         "text": "visto",
+         "a": "{{AUD_ex-asking-someone-out-w-visto}}"
+        }
+       ],
+       "ex": "The word \"vemos\" is a verb form in this sentence. It comes from the infinitive verb \"ver,\" which means \"to see.\" In the present tense, the conjugation for \"ver\" is:\n\n- yo veo\n- tú ves\n- él/ella/usted ve\n- nosotros/nosotras vemos\n- vosotros/vosotras veis\n- ellos/ellas/ustedes ven\n\nIn the sentence \"Nos vemos entonces,\" \"vemos\" is the first-person plural form (we see) of the verb \"ver.\" Here, it is used in a reflexive way with the pronoun \"nos,\" which means \"ourselves.\" So, \"nos vemos\" translates to \"we see each other\" or \"see you.\"\n\nThe phrase \"Nos vemos\" is a common way to say goodbye, implying that the speaker and the listener will meet again. The word \"entonces\" means \"then,\" indicating when they will see each other again."
+      },
+      {
+       "t": "entonces.",
+       "m": "then",
+       "b": "entonces",
+       "bm": "then",
+       "s": 480,
+       "e": 2000,
+       "a": "{{AUD_ex-asking-someone-out-w-entonces}}",
+       "ex": "The word \"entonces\" in the sentence \"Nos vemos entonces\" is an adverb. It translates to \"then\" in English and is used to indicate a point in time, often referring to a future moment that has been previously discussed or implied.\n\nIn this context, \"entonces\" connects the idea of seeing each other with a specific time frame. It suggests that the meeting will happen at a later time, which is understood from the conversation. The phrase as a whole means \"See you then,\" confirming the intention to meet at that future point.\n\nSo, \"entonces\" serves to clarify when the action of \"ver\" (to see) will take place, making the sentence more precise."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

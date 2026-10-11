@@ -87,10 +87,18 @@ def main():
         rows.append((url, p.title, h1[0] if h1 else '', p.canonical))
     for v, us in list(titles.items()) + list(descs.items()):
         if v and len(us) > 1: problems.append(f'duplicate title/description on {", ".join(us)}: {v[:60]}')
-    hub = Page(); hub.feed(open(os.path.join(here, 'spanish-reading-practice.html')).read())
+    # No orphan exercises: every exercise has a crawlable inbound link from
+    # ANOTHER indexed page (the hub lists only the real samples of comics in
+    # the app; the rest are reached from the exercise pages' secondary links).
+    inbound = {}
+    for url, f in pages:
+        p = Page(); p.feed(open(f).read())
+        for href in p.links:
+            path = href.split('#')[0].split('?')[0]
+            if path != url: inbound.setdefault(path, set()).add(url)
     for url, _ in pages:
-        if url.startswith(EX_BASE + '/') and url not in hub.links:
-            problems.append(f'{url} is not linked from /spanish-reading-practice')
+        if url.startswith(EX_BASE + '/') and not inbound.get(url):
+            problems.append(f'{url} has no inbound link from another indexed page')
     # Redirects: each old URL points straight at a live page (no chains), and
     # nothing redirected is still a page of its own.
     for old, new in redirects.items():

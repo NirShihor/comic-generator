@@ -166,17 +166,21 @@ def expand_examples(html, own_slug=None):
         comic, coll = sentence_case(data.get('comic')), sentence_case(data.get('collection'))
         alt = data.get('imageAlt') or (f"A page from {comic or 'an original Comigo comic'}"
                                        + (f" ({coll})" if coll else '') + ', an original Comigo Spanish comic.')
-        blob = json.dumps({'bubbles': data.get('bubbles', []), 'hotspots': data.get('hotspots', [])}, ensure_ascii=False).replace('</', '<\\/')
+        # On its own page the comic is a sample of the app: the last bubble ends
+        # it with where the story goes on (site/example-stage.html, data.end).
+        blob = json.dumps({'bubbles': data.get('bubbles', []), 'hotspots': data.get('hotspots', []),
+                           **({'end': sample_end(data)} if own else {})}, ensure_ascii=False).replace('</', '<\\/')
         htag = 'h2' if own else 'h3'
         hot_word = ' or a <span class="hot-word">hotspot</span>' if data.get('hotspots') else ''
+        head = 'Try it &mdash; this is how the app works' if own else f'Click on a bubble{hot_word}'
         load = 'fetchpriority="high" decoding="async"' if own else 'loading="lazy" decoding="async"'
         link = ('' if own else
                 f'<p class="wrap stage-link"><a href="{ex_url(slug)}">Read &ldquo;{e(page_label(data))}&rdquo; as a full '
                 'exercise, with the transcript, vocabulary and translation &rarr;</a></p>\n')
         return (f'<section class="wrap stage-wrap">\n'
-                f'  <{htag} class="display stage-head">Click on a bubble{hot_word}</{htag}>\n'
+                f'  <{htag} class="display stage-head">{head}</{htag}>\n'
                 + (f'  <p class="stage-note">{e(note)}</p>\n' if note else '') +
-                f'  <div class="stage" data-ex="{e(slug)}">\n'
+                f'  <div class="stage" data-ex="{e(slug)}"{" data-own" if own else ""}>\n'
                 f'    <img {load} src="{{{{IMG_{data["image"]}}}}}" alt="{e(alt)}">\n'
                 + '\n'.join(spots) + '\n'
                 '    <div class="popup" hidden><button class="popup-x" aria-label="Close">✕</button><div class="popup-body"></div></div>\n'
@@ -188,6 +192,27 @@ def expand_examples(html, own_slug=None):
                 '</section>\n' + link)
     html = re.sub(r'\{\{EXAMPLE:([\w-]+)(?:\|([^}]*))?\}\}', one, html)
     return html, used
+
+# An exercise is either a REAL SAMPLE of a comic in the app (x['app']: the
+# comic, its collection and the page — stamped at publish time from the
+# reader's catalogue plus a verbatim match of the page's lines, see
+# server/src/routes/marketing.js) or a WEBSITE-ONLY exercise (x['app'] is
+# null: an example comic, or a page written for the site). Only a real
+# sample may say "continue this story in the app".
+def in_app(x):
+    return bool(x.get('app') and x['app'].get('comic'))
+
+def app_title_html(x):
+    a = x['app']
+    e = lambda t: html_escape(str(t or ''), quote=True)
+    return f'<i lang="es">{e(sentence_case(a["comic"]))}</i>' + (f' ({e(sentence_case(a["comicEn"]))})' if a.get('comicEn') else '')
+
+# What the last bubble says (the end of the sample) — the story continues in
+# the app, by name when this page is really from it.
+def sample_end(x):
+    if in_app(x):
+        return {'head': 'Want to know what happens next?', 'line': f'Continue {app_title_html(x)} in the Comigo app.', 'cta': 'Get Comigo on the App Store'}
+    return {'head': 'Enjoy learning Spanish this way?', 'line': 'Discover complete interactive comic stories in the Comigo app.', 'cta': 'Get Comigo on the App Store'}
 
 LEVELS = {'beginner': 0, 'intermediate': 1, 'advanced': 2}
 # ElevenLabs delivery tags ("[whispering]", "[pause]") sometimes survive in a
@@ -252,10 +277,11 @@ def alt_title(tag, es, en):
     return (f'<{tag} class="display alt-title"><span class="alt-es" lang="es">{e(es)}</span> '
             f'<span class="alt-en" lang="en" aria-hidden="true">{e(en)}</span></{tag}>')
 
-# {{EXAMPLE_LIST_LD}} -> structured data for the Reading practice library: the
-# page as a CollectionPage whose ItemList is every exercise, in page order.
+# {{EXAMPLE_LIST_LD}} -> structured data for the Reading practice hub: the
+# page as a CollectionPage whose ItemList is the exercises it features — the
+# real samples of comics in the app, in page order.
 def example_list_ld():
-    items = load_examples()
+    items = [x for x in load_examples() if in_app(x)]
     data = {'@context': 'https://schema.org', '@graph': [
         {'@type': 'CollectionPage', '@id': SITE_URL + '/spanish-reading-practice#collection',
          'url': SITE_URL + '/spanish-reading-practice', 'name': 'Spanish reading practice with comics',
@@ -310,7 +336,8 @@ def ex_card(x, htag):
 def related(slug, items):
     me = next((x for x in items if x['slug'] == slug), {})
     others = [x for x in items if x['slug'] != slug]
-    rank = lambda x: (0 if me.get('collection') and x.get('collection') == me.get('collection') else
+    rank = lambda x: (0 if not in_app(x) else -1,     # real samples of the app before website-only pages
+                      0 if me.get('collection') and x.get('collection') == me.get('collection') else
                       1 if x.get('level') == me.get('level') else 2)
     return sorted(others, key=rank)[:RELATED_MAX]      # stable: library order within each rank
 
@@ -323,15 +350,51 @@ def expand_links(html):
         if slug:
             body = '<section class="wrap ex-links">\n' + '\n'.join(ex_card(x, 'h3') for x in related(slug, items)) + '\n</section>'
         else:
-            # One grid: beginner pages first, intermediate after them (the order
-            # load_examples gives); each card carries its own level label.
-            body = '<section class="wrap ex-links">\n' + '\n'.join(ex_card(x, 'h3') for x in items) + '\n</section>'
+            # One grid of the REAL SAMPLES (pages of comics in the app) in library
+            # order; each card carries its own level label. Website-only
+            # exercises are not listed on the hub (they stay live and indexed).
+            body = '<section class="wrap ex-links">\n' + '\n'.join(ex_card(x, 'h3') for x in items if in_app(x)) + '\n</section>'
         if not items:
             return ''
         css = '' if used else LINKS_CSS
         used = True
         return css + body
-    return re.sub(r'\{\{EXAMPLE_LINKS(?::([\w-]+))?\}\}', one, html)
+    html = re.sub(r'\{\{EXAMPLE_LINKS(?::([\w-]+))?\}\}', one, html)
+    return re.sub(r'\{\{EXAMPLE_MORE:([\w-]+)\}\}', lambda m: more_links(m.group(1)), html)
+
+# {{EXAMPLE_MORE:slug}} -> secondary links from an exercise page: plain text
+# links after the app proposition, never a grid of invitations to keep
+# reading for free. Up to 3 real samples (the most related first) plus ONE
+# website-only exercise, so that every website-only page — never listed on
+# the hub — still has an inbound link from an indexed page: each real sample
+# links to a different website-only page (rotating through them), and the
+# website-only pages link to each other in a ring, which reaches them all.
+MORE_MAX = 4
+MORE_CSS = """<style>
+  .more-pages { padding: 26px 24px 0; font-family: system-ui, sans-serif; }
+  .more-pages h2 { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .more-pages ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 0.95rem; }
+  .more-pages a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  .more-pages .lvl { color: var(--muted); font-size: 0.82rem; }
+</style>
+"""
+def more_links(slug):
+    e = lambda t: html_escape(str(t or ''), quote=True)
+    items = load_examples()
+    samples, site_only = [x for x in items if in_app(x)], [x for x in items if not in_app(x)]
+    me = next((x for x in items if x['slug'] == slug), None)
+    if not me:
+        return ''
+    picks = [x for x in related(slug, items) if in_app(x)][:MORE_MAX - 1]
+    if site_only:
+        picks.append(site_only[samples.index(me) % len(site_only)] if in_app(me)
+                     else site_only[(site_only.index(me) + 1) % len(site_only)])
+    picks, head = picks[:MORE_MAX], 'More sample pages'
+    if not picks:
+        return ''
+    li = '\n'.join(f'    <li><a href="{ex_url(e(x["slug"]))}">{e(page_label(x))}</a>'
+                    + (f' <span class="lvl">&middot; {e((x.get("level") or "").capitalize())}</span>' if x.get('level') else '') + '</li>' for x in picks)
+    return MORE_CSS + f'<nav class="wrap more-pages" aria-label="{head}">\n  <h2>{head}</h2>\n  <ul>\n{li}\n  </ul>\n</nav>'
 
 # Unlisted pages carry their recipient's campaign tags on every internal link
 # (the server does the same for ad visitors from the request's query string),
@@ -511,12 +574,37 @@ def lastmod_for(url, fp, first_seen=None):
 
 page_tmpl = open(os.path.join(here, 'example-page.html')).read()
 examples = load_examples()
+def band_section(x):
+    e = lambda t: html_escape(str(t or ''), quote=True)
+    if in_app(x):
+        a = x['app']
+        head = 'Want to know what happens next?'
+        body = (f'This was page {a["page"]} of {a["pages"]}. Continue {app_title_html(x)} in the Comigo iPhone app: every page voiced, '
+                'translations when you need them, and practice built around what you&rsquo;ve just read.')
+        cta = 'Continue the story on the App Store'
+    else:
+        head = 'Enjoy learning Spanish this way?'
+        body = ('Discover complete, interactive comic stories in the Comigo iPhone app: every line voiced, translations '
+                'when you need them, and practice built around what you&rsquo;ve just read.')
+        cta = 'Get Comigo on the App Store'
+    return ('<section class="band">\n  <div class="wrap">\n'
+            f'    <h2 class="display">{head}</h2>\n    <p>{body}</p>\n'
+            '    <div class="cta-row">\n'
+            f'      <a class="cta" href="/go/app-store?from={{{{GO_FROM}}}}&amp;loc=band" target="_blank" rel="noopener nofollow">&#63743;&nbsp; {cta}</a>\n'
+            '      <span class="cta-link" style="text-decoration: none; cursor: default;">Eligible new subscribers can try Comigo free for 7 days.</span>\n'
+            '    </div>\n  </div>\n</section>\n')
 def build_example_page(x, unlisted=False):
     e = lambda t: html_escape(str(t or ''), quote=True)
     label, level = page_label(x), (x.get('level') or '')
     comic, coll = sentence_case(x.get('comic')), sentence_case(x.get('collection'))
-    src = (f'A page from <i lang="es">{e(comic)}</i>' + (f', in the <i lang="es">{e(coll)}</i> collection' if coll else '')
-           + ' &mdash; an original Comigo comic, voiced line by line.') if comic else 'A page from an original Comigo comic, voiced line by line.'
+    # The page is a sample of the iPhone app: of a named story when it really
+    # is one of its pages, otherwise a free exercise from the app's makers.
+    if in_app(x):
+        a = x['app']
+        src = (f'A page from {app_title_html(x)}' + (f', in the <i lang="es">{e(coll)}</i> collection' if coll else '')
+               + f' &mdash; page {a["page"]} of {a["pages"]} in the Comigo iPhone app. Try it here.')
+    else:
+        src = 'A free Spanish reading exercise from Comigo &mdash; the iPhone app that teaches Spanish through complete, interactive comics. Try it here.'
     intro = (f'<p>{e(x["summary"])}</p>\n  <p class="src">{src}</p>' if x.get('summary') else f'<p>{src}</p>')
     if unlisted and x.get('personalLine'):
         # The short personal line for the recipient, above everything else.
@@ -565,6 +653,12 @@ def build_example_page(x, unlisted=False):
         'PG_H1': alt_title('h1', label, x.get('labelEn')),
         'PG_EYEBROW': e(f'{level.capitalize()} · Spanish reading practice' if level else 'Spanish reading practice'),
         'PG_INTRO': intro, 'PG_STUDY': study_section(x), 'PG_EXTRA': extra,
+        # The continuation band: for a real sample, straight after the comic
+        # (the story goes on in the app, by name); for a website-only
+        # exercise, after the study material, inviting the reader to the app's
+        # complete stories — never claiming this one continues there.
+        'PG_BAND_TOP': band_section(x) if in_app(x) else '',
+        'PG_BAND_BOTTOM': '' if in_app(x) else band_section(x),
     }
     if unlisted:
         vals['PG_BREADCRUMB_LD'] = ''   # a private page: no structured data, nothing for search

@@ -264,6 +264,31 @@
     if (!a || !e.isTrusted) return;
     try { fetch(a.getAttribute('href'), { method: 'POST', keepalive: true, credentials: 'omit' }).catch(function () {}); } catch (err) {}
   });
+  // Count what happens on a reading exercise (first bubble opened, last
+  // bubble reached, a continuation card seen, another exercise opened): one
+  // same-origin POST per event, naming only the event, this page, the
+  // property the server allow-lists for it and the page's campaign tags —
+  // read from the App Store button's own link, so a campaign visit is
+  // counted as such. The exercise script fires each at most once per page
+  // view (in-memory flags). No cookies, storage or identifiers; the server
+  // drops anything it doesn't allow-list (siteAnalytics SITE_EVENTS).
+  var FROM_PAGE = '/learn-spanish-with-comics';
+  var ON_EXERCISE = /^\/(spanish-reading-practice|p)\/[a-z0-9-]+$/.test(FROM_PAGE);
+  window.comigoTrack = function (name, props) {
+    if (!ON_EXERCISE) return;
+    var q = 'e=' + name + '&from=' + encodeURIComponent(FROM_PAGE);
+    for (var k in (props || {})) q += '&' + k + '=' + encodeURIComponent(props[k]);
+    var btn = document.querySelector('a[href^="/go/app-store"]');
+    var m = btn && btn.getAttribute('href').match(/utm_[a-z]+=[^&]+/g);
+    if (m) q += '&' + m.join('&');
+    try { fetch('/site-event?' + q, { method: 'POST', keepalive: true, credentials: 'omit' }).catch(function () {}); } catch (err) {}
+  };
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href^="/spanish-reading-practice/"]') : null;
+    if (!a || !e.isTrusted) return;
+    var to = a.getAttribute('href').match(/^\/spanish-reading-practice\/([a-z0-9-]+)/);
+    if (to && to[1] !== FROM_PAGE.split('/').pop()) window.comigoTrack('next_exercise_clicked', { to_exercise: to[1] });
+  });
 </script>
 
 
@@ -528,6 +553,18 @@
   }
   .ex-nav button:disabled { background: #C9C7D6; cursor: default; }
   .ex-nav span { font-weight: 700; color: #6B6982; font-size: 0.95rem; }
+  /* End of the sample (last bubble): the story goes on in the app. */
+  .ex-end {
+    margin: 14px 0 0; padding: 14px 16px 16px; border-radius: 14px;
+    background: #6E40F0; color: #FFFFFF; text-align: center;
+  }
+  .ex-end b { display: block; font-size: 1.08rem; margin-bottom: 4px; }
+  .ex-end p { margin: 0 0 12px; font-size: 0.95rem; }
+  .ex-end p i { font-style: italic; }
+  .ex-end a {
+    display: inline-block; background: #FFFFFF; color: #6E40F0; font-weight: 800; font-size: 0.95rem;
+    border-radius: 12px; padding: 10px 18px; text-decoration: none; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  }
   .ex-sheet[hidden], .popup[hidden], .word-card[hidden] { display: none; }
   .ex-sheet .sh-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #E2E0EC; }
   .ex-sheet .sh-head b { font-size: 1.15rem; }
@@ -947,6 +984,29 @@
       if (b) { ev.stopPropagation(); playSrc(b.dataset.snd); }
     });
     var hotspots = Array.prototype.slice.call(stage.querySelectorAll('.hotspot'));
+    // What happens on this exercise page, counted once per page view each
+    // (plain flags — nothing stored): the first bubble opened, the last one
+    // reached, the continuation cards seen. Only on an exercise's own page.
+    var own = stage.hasAttribute('data-own');
+    var sent = {};
+    function track(name, props) {
+      if (!own || sent[name + (props && props.button || '')] || !window.comigoTrack) return;
+      sent[name + (props && props.button || '')] = true;
+      window.comigoTrack(name, props);
+    }
+    // The last bubble ends the sample: the story (or the stories) continue
+    // in the app. The link is the page's band button, repositioned.
+    function endCard() {
+      if (!data.end) return;
+      var band = document.querySelector('a[href*="loc=band"]');
+      if (!band) return;
+      var card = document.createElement('div');
+      card.className = 'ex-end';
+      card.innerHTML = '<b>' + esc(data.end.head) + '</b><p>' + data.end.line + '</p>'
+        + '<a href="' + band.getAttribute('href').replace('loc=band', 'loc=stage') + '" target="_blank" rel="noopener nofollow">' + esc(data.end.cta) + '</a>';
+      body.appendChild(card);
+      track('cta_seen', { button: 'stage' });
+    }
     function navRow(i) {
       if (hotspots.length < 2) return;
       var nav = document.createElement('div');
@@ -973,6 +1033,8 @@
       var b = data.bubbles[+h.dataset.i] || { sentences: [] };
       popup.classList.remove('slides');
       renderBubble(b);
+      track('exercise_engaged');
+      if (i === hotspots.length - 1) { endCard(); track('exercise_completed'); }
       navRow(i);
       popupRef = bubbleRef(h);
       popup.hidden = false;
@@ -990,6 +1052,13 @@
     hotspots.forEach(function (h, i) {
       h.addEventListener('click', function () { openBubble(i); });
     });
+    var bandEl = own && document.querySelector('.band');
+    if (bandEl && 'IntersectionObserver' in window) {
+      var bandIo = new IntersectionObserver(function (entries) {
+        if (entries.some(function (e) { return e.isIntersecting; })) { bandIo.disconnect(); track('cta_seen', { button: 'band' }); }
+      }, { threshold: 0.4 });
+      bandIo.observe(bandEl);
+    }
 
     // Arrival cue: the hand sits at bubble 1's bottom-right corner, pointing
     // up-left into it; it starts when the comic is mostly on screen and is

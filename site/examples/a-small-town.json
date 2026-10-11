@@ -7,6 +7,14 @@
  "imageAlt": "Three comic panels in the New Mexico desert in 1883: a cowboy on a black horse rides along a dusty road past cacti, thinking to himself, and arrives at the wooden sign of the small town of Santa Roja, with a saloon behind it.",
  "comic": "LA CARTA NEGRA",
  "collection": "EL REY NEGRO",
+ "app": {
+  "comic": "LA CARTA NEGRA",
+  "comicEn": "THE BLACK CARD",
+  "collection": "EL REY NEGRO",
+  "collectionEn": "THE BLACK KING",
+  "page": 1,
+  "pages": 17
+ },
  "level": "beginner",
  "image": "example-a-small-town",
  "width": 1024,
