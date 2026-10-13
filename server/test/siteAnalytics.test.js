@@ -150,6 +150,7 @@ async function withServer(fn) {
   const app = express();
   app.use((req, res, next) => {
     if (req.path === '/go/app-store') return sa.appStore(req, res, send);
+    if (req.path === '/site-event') return sa.siteEventBeacon(req, res, send);
     if (req.path === '/spanish-reading-practice') return sa.servePage(req, res, '<a href="/spanish-reading-practice/meeting-zik">x</a>', { pageType: 'hub' }, send);
     if (req.path === '/learn') return sa.servePage(req, res, '<a href="/">x</a>', { pageType: 'other' }, send);
     if (req.path === '/missing') { res.status(404); return sa.servePage(req, res, '<a href="/">x</a>', { pageType: 'other' }, send); }   // as index.js's 404 fallback
@@ -241,6 +242,50 @@ test('POST /go/app-store is the only thing that counts a tap: one genuine same-o
     assert.strictEqual(events[1].properties.from_campaign, false);
     assert.strictEqual(events[1].properties.apple_campaign, null);
     assert.strictEqual(events[1].properties.button, 'hero');
+  });
+});
+
+test('exercise events: allow-listed names and properties only, one event per genuine same-origin POST, never on GET', async () => {
+  await withServer(async (base, events) => {
+    const EX = '/spanish-reading-practice/meeting-zik';
+    const UTM = 'utm_source=google&utm_medium=cpc&utm_campaign=google-reading-practice';
+    // The four events the page sends, each from a trusted action.
+    for (const q of ['e=exercise_engaged', 'e=exercise_completed', 'e=cta_seen&button=stage', 'e=cta_seen&button=band', 'e=next_exercise_clicked&to_exercise=a-small-town']) {
+      const res = await tap(`${base}/site-event?${q}&from=${EX}&${UTM}&gclid=abc`);
+      assert.strictEqual(res.status, 204);
+      assert.strictEqual(res.headers.get('set-cookie'), null);
+      assert.strictEqual(res.headers.get('location'), null);
+    }
+    await settle();
+    assert.deepStrictEqual(events.map(e => e.name), ['exercise_engaged', 'exercise_completed', 'cta_seen', 'cta_seen', 'next_exercise_clicked']);
+    const common = { surface: 'website', from_page: EX, page_type: 'exercise', exercise: 'meeting-zik', ...GOOGLE, from_campaign: true };
+    assert.deepStrictEqual(events[0].properties, common);
+    assert.deepStrictEqual(events[2].properties, { ...common, button: 'stage' });
+    assert.deepStrictEqual(events[3].properties, { ...common, button: 'band' });
+    assert.deepStrictEqual(events[4].properties, { ...common, to_exercise: 'a-small-town' });
+    assert.ok(!JSON.stringify(events).includes('abc'), 'gclid never recorded');
+    // An unknown event, an unknown/invalid property, a GET, a cross-site POST and a bot: answered, never counted.
+    events.length = 0;
+    await tap(`${base}/site-event?e=visitor_fingerprinted&from=${EX}`);
+    await tap(`${base}/site-event?e=cta_seen&button=sidebar&from=${EX}&ip=1.2.3.4`);
+    await tap(`${base}/site-event?e=next_exercise_clicked&to_exercise=../../etc&from=${EX}`);
+    assert.strictEqual((await get(`${base}/site-event?e=exercise_engaged&from=${EX}`)).status, 405);
+    await request(`${base}/site-event?e=exercise_engaged&from=${EX}`, { method: 'POST', headers: { 'user-agent': SAFARI, ...TAP, 'sec-fetch-site': 'cross-site' } });
+    await tap(`${base}/site-event?e=exercise_engaged&from=${EX}`, 'Mozilla/5.0 (compatible; bingbot/2.0)');
+    await settle();
+    // the two with a bad property still count the event itself, without the property
+    assert.deepStrictEqual(events.map(e => [e.name, e.properties.button, e.properties.to_exercise, e.properties.ip]),
+      [['cta_seen', undefined, undefined, undefined], ['next_exercise_clicked', undefined, undefined, undefined]]);
+  });
+});
+
+test('the end-of-sample card\'s button (loc=stage) is a counted App Store tap like the others', async () => {
+  await withServer(async (base, events) => {
+    await tap(`${base}/go/app-store?from=/spanish-reading-practice/a-small-town&loc=stage`);
+    await settle();
+    assert.strictEqual(events.length, 1);
+    assert.strictEqual(events[0].properties.button, 'stage');
+    assert.strictEqual(events[0].properties.exercise, 'a-small-town');
   });
 });
 

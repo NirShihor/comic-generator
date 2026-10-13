@@ -1,6 +1,9 @@
 // Aggregate, server-side measurement for comigo.net (the Google Search Ads
-// experiment): how often the reading-practice pages are viewed, and how often
-// the App Store buttons are tapped and where from — COUNTS only.
+// experiment): how often the reading-practice pages are viewed, how often
+// the App Store buttons are tapped and where from, and what happens on an
+// exercise page (first bubble opened, last bubble reached, a continuation
+// CTA seen, another exercise opened) — COUNTS only. There is deliberately no
+// visitor identifier, so these are aggregate event counts, never journeys.
 //
 // Nothing is stored on or read from the visitor's device (no cookies, no
 // browser storage, no identifiers), and nothing identifies or recognises a
@@ -26,7 +29,20 @@ const APPLE_PROVIDER_TOKEN = '128624331';
 const APPLE_CAMPAIGNS = { 'google-reading-practice': 'GoogleSearch' };
 const DISTINCT_ID = 'comigo-website';
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
-const BUTTON_LOCATIONS = new Set(['nav', 'menu', 'hero', 'band']);
+const BUTTON_LOCATIONS = new Set(['nav', 'menu', 'hero', 'band', 'stage']);   // stage = the end-of-sample card inside the comic
+
+// What visitors do on a reading exercise, as COUNTS (the page's script POSTs
+// /site-event?e=<name>&from=<page>… once per page view per event, guarded
+// in memory; nothing is stored). Event → its own allowed properties, each a
+// validator; anything else in the request is ignored, an unknown event is
+// answered and dropped. Names and properties are allow-listed HERE first:
+// the page can only ever send what this table accepts.
+const SITE_EVENTS = {
+  exercise_engaged: {},                                        // first bubble opened in this page view
+  exercise_completed: {},                                      // final bubble reached in this page view
+  cta_seen: { button: v => BUTTON_LOCATIONS.has(v) },           // a continuation CTA entered the viewport (band | stage)
+  next_exercise_clicked: { to_exercise: v => /^[a-z0-9-]{1,80}$/.test(v) },   // a link to another free exercise
+};
 
 /** Only the five utm_* tags, each a short plain token; everything else (gclid…) is dropped. */
 function cleanUtm(query) {
@@ -143,6 +159,22 @@ function ctaClickEvent({ from, loc, utm }) {
   };
 }
 
+/** The event for a visitor's action on an exercise page (null when the name isn't allow-listed). */
+function siteEvent({ name, from, props, utm }) {
+  const spec = SITE_EVENTS[name];
+  if (!spec) return null;
+  const fromPage = cleanFrom(from);
+  const own = {};
+  for (const [k, ok] of Object.entries(spec)) {
+    const v = props && props[k];
+    if (typeof v === 'string' && ok(v)) own[k] = v;
+  }
+  return {
+    name,
+    properties: { surface: 'website', from_page: fromPage, ...pageKind(fromPage), ...own, ...campaignProps(utm) },
+  };
+}
+
 /**
  * Send one event to PostHog: fixed distinct_id, no person profile, no GeoIP,
  * no visitor data. Production server only (Fly), to the Production project;
@@ -220,7 +252,25 @@ function appStore(req, res, send) {
   res.redirect(302, appStoreTarget(cleanUtm(req.query)));
 }
 
+/**
+ * /site-event?e=<name>&from=<page>[&button=…][&to_exercise=…][&utm_…] — the
+ * page script's beacon for what happens on an exercise page. POST from a
+ * trusted click/observer only (the same Fetch Metadata check as a tap);
+ * anything else, and any event or property not in SITE_EVENTS, is answered
+ * with 204 and never counted. Nothing is ever redirected or stored.
+ */
+function siteEventBeacon(req, res, send) {
+  res.set('Cache-Control', 'no-store');
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  if (req.method !== 'POST') return res.status(405).end();
+  if (countableTap(req)) {
+    const event = siteEvent({ name: String(req.query.e || ''), from: req.query.from, props: req.query, utm: cleanUtm(req.query) });
+    if (event) Promise.resolve(send(event)).catch(() => {});
+  }
+  return res.status(204).end();
+}
+
 module.exports = {
-  APP_STORE_URL, APPLE_CAMPAIGNS, DISTINCT_ID, cleanUtm, campaignQuery, isBot, countable, countableTap, addUtmToLinks, bakedUtm, appStoreTarget,
-  pageViewEvent, ctaClickEvent, makeSender, servePage, appStore,
+  APP_STORE_URL, APPLE_CAMPAIGNS, DISTINCT_ID, BUTTON_LOCATIONS, SITE_EVENTS, cleanUtm, campaignQuery, isBot, countable, countableTap, addUtmToLinks, bakedUtm, appStoreTarget,
+  pageViewEvent, ctaClickEvent, siteEvent, makeSender, servePage, appStore, siteEventBeacon,
 };

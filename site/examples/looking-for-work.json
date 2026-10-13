@@ -7,6 +7,14 @@
  "imageAlt": "A comic page: a teenage boy with a backpack walks past a café and a bookshop on a sunny street, thinking he must find work; a café owner turns him down, and in the bookshop a woman listens as he says he loves books.",
  "comic": "PRIMER TURNO",
  "collection": "EL RESTAURANTE",
+ "app": {
+  "comic": "PRIMER TURNO",
+  "comicEn": "FIRST SHIFT",
+  "collection": "EL RESTAURANTE",
+  "collectionEn": "THE RESTAURANT",
+  "page": 3,
+  "pages": 13
+ },
  "level": "beginner",
  "image": "example-looking-for-work",
  "width": 1024,

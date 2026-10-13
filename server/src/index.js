@@ -111,6 +111,8 @@ app.use((req, res, next) => {
     // visitors, the plain App Store page otherwise) without counting; the
     // page's script POSTs the same URL on a real tap, which is what's counted.
     if (req.path === '/go/app-store') return siteAnalytics.appStore(req, res, siteEventSend);
+    // What visitors do on an exercise page (allow-listed counts, services/siteAnalytics SITE_EVENTS).
+    if (req.path === '/site-event') return siteAnalytics.siteEventBeacon(req, res, siteEventSend);
     if (req.path === '/favicon.png' || req.path === '/favicon.ico') {
       return res.sendFile(path.join(SITE_DIR, 'favicon.png'));
     }

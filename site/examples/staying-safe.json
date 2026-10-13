@@ -7,6 +7,14 @@
  "imageAlt": "A black-and-white comic page: four worn-out men in a dark shelter talk about staying together to keep each other safe; one asks how they should do it, and another tells him to leave the details to him.",
  "comic": "UNA ALIANZA IMPROBABLE",
  "collection": "EL SUPERVIVIENTE",
+ "app": {
+  "comic": "UNA ALIANZA IMPROBABLE",
+  "comicEn": "AN UNLIKELY PARTNERSHIP",
+  "collection": "EL SUPERVIVIENTE",
+  "collectionEn": "THE SURVIVOR",
+  "page": 6,
+  "pages": 11
+ },
  "level": "intermediate",
  "image": "example-staying-safe",
  "width": 1024,

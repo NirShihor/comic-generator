@@ -74,4 +74,29 @@
     if (!a || !e.isTrusted) return;
     try { fetch(a.getAttribute('href'), { method: 'POST', keepalive: true, credentials: 'omit' }).catch(function () {}); } catch (err) {}
   });
+  // Count what happens on a reading exercise (first bubble opened, last
+  // bubble reached, a continuation card seen, another exercise opened): one
+  // same-origin POST per event, naming only the event, this page, the
+  // property the server allow-lists for it and the page's campaign tags —
+  // read from the App Store button's own link, so a campaign visit is
+  // counted as such. The exercise script fires each at most once per page
+  // view (in-memory flags). No cookies, storage or identifiers; the server
+  // drops anything it doesn't allow-list (siteAnalytics SITE_EVENTS).
+  var FROM_PAGE = '{{GO_FROM}}';
+  var ON_EXERCISE = /^\/(spanish-reading-practice|p)\/[a-z0-9-]+$/.test(FROM_PAGE);
+  window.comigoTrack = function (name, props) {
+    if (!ON_EXERCISE) return;
+    var q = 'e=' + name + '&from=' + encodeURIComponent(FROM_PAGE);
+    for (var k in (props || {})) q += '&' + k + '=' + encodeURIComponent(props[k]);
+    var btn = document.querySelector('a[href^="/go/app-store"]');
+    var m = btn && btn.getAttribute('href').match(/utm_[a-z]+=[^&]+/g);
+    if (m) q += '&' + m.join('&');
+    try { fetch('/site-event?' + q, { method: 'POST', keepalive: true, credentials: 'omit' }).catch(function () {}); } catch (err) {}
+  };
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href^="/spanish-reading-practice/"]') : null;
+    if (!a || !e.isTrusted) return;
+    var to = a.getAttribute('href').match(/^\/spanish-reading-practice\/([a-z0-9-]+)/);
+    if (to && to[1] !== FROM_PAGE.split('/').pop()) window.comigoTrack('next_exercise_clicked', { to_exercise: to[1] });
+  });
 </script>

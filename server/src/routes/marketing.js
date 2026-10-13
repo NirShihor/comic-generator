@@ -3260,9 +3260,29 @@ router.post('/examples/:comicId/:pageId/publish', async (req, res) => {
     }
 
     const meta = await require('sharp')(imgSrc).metadata();
+    // A real sample of a comic that is in the app (in the reader's catalog:
+    // published, not an example comic) AND whose lines are all on one of its
+    // story pages → the site page can say "continue this story in the app".
+    // Anything else (an example comic, an unpublished comic, a page written
+    // for the site) is a website-only exercise: `app` is null.
+    let app = null;
+    if (comic.published && !comic.isExample) {
+      const norm = t => String(t || '').toLowerCase().replace(/\[[^\]]*\]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+      const lines = (page.bubbles || []).flatMap(b => (b.sentences || []).map(s => norm(s.text))).filter(Boolean);
+      const storyPage = (comic.pages || []).find(pg => {
+        const set = new Set((pg.bubbles || []).flatMap(b => (b.sentences || []).map(s => norm(s.text))));
+        return lines.length > 0 && lines.every(l => set.has(l));
+      });
+      if (storyPage) {
+        const coll = comic.collectionId ? await require('../models/Collection').findOne({ id: comic.collectionId }, { titleEn: 1 }).lean() : null;
+        app = { comic: comic.title || '', comicEn: comic.titleEn || '', collection: comic.collectionTitle || '', collectionEn: coll?.titleEn || '',
+          page: storyPage.pageNumber, pages: (comic.pages || []).length + (comic.cover?.image ? 1 : 0) };   // as the app's catalog counts
+      }
+    }
     const data = {
       slug, label: page.exampleTitle || page.exampleLabel || '', labelEn: page.exampleTitleEn || '',
       seoTitle: page.exampleSeoTitle || '', summary: page.exampleSummary || '', imageAlt: page.exampleImageAlt || '', comic: comic.title || '', collection: comic.collectionTitle || '',
+      app,
       level: comic.level || '',
       image: `example-${slug}`, width: meta.width, height: meta.height,
       publishedAt: new Date().toISOString(),
