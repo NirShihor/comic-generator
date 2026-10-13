@@ -22,6 +22,13 @@ const FULL = {   // every event with its complete allowed property set
   aggregate_locked_content_tapped: { comic_id: 'comic-9', collection_id: 'col-1' },
   aggregate_paywall_viewed: { source: 'comic_locked' },
   aggregate_trial_offer_viewed: { source: 'settings', product_id: 'com.comigo.unlimited.monthly' },
+  aggregate_landing_viewed: { returning: false, trial_offer_shown: true },
+  aggregate_landing_cta_tapped: { cta: 'start_trial', trial_offer_shown: true },
+  aggregate_paywall_dismissed: { source: 'landing_screen', mode: 'free_trial' },
+  aggregate_purchase_attempted: { source: 'comic_locked', mode: 'free_trial', product_id: 'com.comigo.unlimited.monthly' },
+  aggregate_purchase_result: { source: 'landing_screen', product_id: 'com.comigo.unlimited.monthly', result: 'cancelled' },
+  aggregate_trial_started: { product_id: 'com.comigo.unlimited.monthly', source: 'landing_screen' },
+  aggregate_onboarding_step: { step: 'level_selected' },
 };
 const batch = (events, environment = 'production') => ({ environment, events });
 
@@ -72,6 +79,25 @@ test('types, enumerations, ranges and required properties are enforced', () => {
     ['aggregate_app_opened', { access_model: 'old' }],
     ['aggregate_app_opened', { app_version: '1.1.1 (203)' }],
     ['aggregate_app_opened', { comic_id: 'comic-1' }],                                                      // not this event's property
+    // Trial-conversion stages: closed enumerations only, no free text ever.
+    ['aggregate_landing_viewed', { returning: 'no', trial_offer_shown: true }],
+    ['aggregate_landing_viewed', { returning: false }],                                                     // trial_offer_shown required
+    ['aggregate_landing_cta_tapped', { cta: 'buy_now' }],
+    ['aggregate_landing_cta_tapped', { trial_offer_shown: true }],                                           // cta required
+    ['aggregate_paywall_dismissed', { source: 'landing_screen', mode: 'trial' }],
+    ['aggregate_paywall_dismissed', { source: 'landing_screen' }],                                           // mode required
+    ['aggregate_purchase_attempted', { source: 'comic_locked', product_id: 'com.comigo.unlimited.monthly', mode: 'lifetime' }],
+    ['aggregate_purchase_attempted', { mode: 'free_trial', product_id: 'com.comigo.unlimited.monthly' }],   // source required
+    ['aggregate_purchase_result', { product_id: 'com.comigo.unlimited.monthly', result: 'error' }],
+    ['aggregate_purchase_result', { product_id: 'com.comigo.unlimited.monthly', result: 'failed', error: 'StoreKit 2' }], // no error text
+    ['aggregate_purchase_result', { product_id: 'com.comigo.unlimited.monthly', result: 'failed', message: 'x' }],
+    ['aggregate_purchase_result', { source: 'landing_screen', result: 'success' }],                         // product_id required
+    ['aggregate_trial_started', { source: 'landing_screen' }],                                               // product_id required
+    ['aggregate_trial_started', { product_id: 'com.comigo.unlimited.monthly', transaction_id: '2000000123' }], // never a transaction id
+    ['aggregate_trial_started', { product_id: 'com.comigo.unlimited.monthly', app_account_token: 'abc' }],
+    ['aggregate_onboarding_step', { step: 'signed_up' }],
+    ['aggregate_onboarding_step', { step: 'level_selected', spanish_level: 'beginner' }],                   // the level itself is not counted
+    ['aggregate_onboarding_step', {}],
   ];
   for (const [name, properties] of bad) assert.strictEqual(t.validateEvent({ name, properties }), null, `${name} ${JSON.stringify(properties)}`);
   assert.strictEqual(t.validateEvent({ name: 'aggregate_app_opened', properties: [] }), null);
@@ -79,6 +105,12 @@ test('types, enumerations, ranges and required properties are enforced', () => {
   assert.strictEqual(t.validateEvent(null), null);
   assert.strictEqual(t.validateEvent({ name: '__proto__', properties: {} }), null);
   assert.ok(t.validateEvent({ name: 'aggregate_app_opened' }), 'properties may be omitted');
+  assert.ok(t.validateEvent({ name: 'aggregate_trial_started', properties: { product_id: 'com.comigo.unlimited.monthly' } }), 'source is optional: Transaction.updates has none');
+  assert.ok(t.validateEvent({ name: 'aggregate_purchase_result', properties: { product_id: 'com.comigo.unlimited.lifetime', result: 'success' } }), 'source optional');
+  assert.ok(t.validateEvent({ name: 'aggregate_landing_cta_tapped', properties: { cta: 'get_started' } }), 'trial_offer_shown optional');
+  for (const result of ['success', 'cancelled', 'pending', 'failed']) {
+    assert.ok(t.validateEvent({ name: 'aggregate_purchase_result', properties: { product_id: 'com.comigo.unlimited.monthly', result, source: 'comic_locked' } }), result);
+  }
 });
 
 test('a batch needs a known environment, 1–50 valid events, and at most 8 KB', () => {
