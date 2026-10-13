@@ -32,6 +32,13 @@ const PRACTICE_TYPES = ['quiz', 'speaking', 'listening', 'repeat_practice', 'tra
 const PAYWALL_SOURCES = ['comic_locked', 'settings', 'trial_expired', 'landing_screen'];
 const ENTITLEMENTS = ['free', 'trial', 'subscribed', 'lifetime'];
 const ACCESS_MODELS = ['legacy', 'new_model'];
+// Trial-conversion stages (1.2.2): every value a closed enumeration, so a
+// stage count can never carry an outcome's error text or anything typed.
+const LANDING_CTAS = ['get_started', 'continue_learning', 'start_trial'];
+const PAYWALL_MODES = ['free_trial', 'subscribe', 'trial_expired'];
+const PURCHASE_RESULTS = ['success', 'cancelled', 'pending', 'failed'];
+const ONBOARDING_STEPS = ['level_selected', 'creator_message_opened', 'library_first_viewed'];
+const bool = v => typeof v === 'boolean';
 
 // Properties every event may carry (all optional).
 const COMMON = {
@@ -55,6 +62,16 @@ const SCHEMA = {
   aggregate_locked_content_tapped: { props: { comic_id: id, collection_id: id }, required: ['comic_id'] },
   aggregate_paywall_viewed: { props: { source: oneOf(PAYWALL_SOURCES) }, required: ['source'] },
   aggregate_trial_offer_viewed: { props: { source: oneOf(PAYWALL_SOURCES), product_id: id }, required: ['source', 'product_id'] },
+  // Stage counts between first launch and a trial. These are counts of
+  // moments, not of people: nothing links one stage's event to another's.
+  aggregate_landing_viewed: { props: { returning: bool, trial_offer_shown: bool }, required: ['returning', 'trial_offer_shown'] },
+  aggregate_landing_cta_tapped: { props: { cta: oneOf(LANDING_CTAS), trial_offer_shown: bool }, required: ['cta'] },
+  aggregate_paywall_dismissed: { props: { source: oneOf(PAYWALL_SOURCES), mode: oneOf(PAYWALL_MODES) }, required: ['source', 'mode'] },
+  aggregate_purchase_attempted: { props: { source: oneOf(PAYWALL_SOURCES), mode: oneOf(PAYWALL_MODES), product_id: id }, required: ['source', 'product_id'] },
+  aggregate_purchase_result: { props: { source: oneOf(PAYWALL_SOURCES), product_id: id, result: oneOf(PURCHASE_RESULTS) }, required: ['product_id', 'result'] },
+  // A verified StoreKit trial transaction — counted with or without analytics consent.
+  aggregate_trial_started: { props: { product_id: id, source: oneOf(PAYWALL_SOURCES) }, required: ['product_id'] },
+  aggregate_onboarding_step: { props: { step: oneOf(ONBOARDING_STEPS) }, required: ['step'] },
 };
 
 /**
