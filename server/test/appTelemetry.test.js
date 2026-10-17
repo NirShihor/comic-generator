@@ -17,7 +17,7 @@ const FULL = {   // every event with its complete allowed property set
   aggregate_comic_completed: { comic_id: 'comic-1', comic_name: 'La casa', collection_id: 'col-2', level: 'beginner' },
   aggregate_audio_played: { comic_id: 'comic-1', page_number: 2, audio_type: 'word' },
   aggregate_translation_revealed: { comic_id: 'comic-1', page_number: 2 },
-  aggregate_practice_started: { comic_id: 'comic-1', practice_type: 'read_speak' },
+  aggregate_practice_started: { comic_id: 'comic-1', practice_type: 'read_speak', access: 'preview' },
   aggregate_practice_completed: { comic_id: 'comic-1', practice_type: 'quiz' },
   aggregate_locked_content_tapped: { comic_id: 'comic-9', collection_id: 'col-1' },
   aggregate_paywall_viewed: { source: 'comic_locked' },
