@@ -29,7 +29,7 @@ const oneOf = list => v => typeof v === 'string' && list.includes(v);
 const LEVELS = ['beginner', 'intermediate', 'advanced', 'mixed', 'unknown'];
 const AUDIO_TYPES = ['sentence', 'word'];
 const PRACTICE_TYPES = ['quiz', 'speaking', 'listening', 'repeat_practice', 'translate_speak', 'repeat_listen', 'origin_listen', 'key_phrases', 'read_speak'];
-const PAYWALL_SOURCES = ['comic_locked', 'settings', 'trial_expired', 'landing_screen'];
+const PAYWALL_SOURCES = ['comic_locked', 'settings', 'trial_expired', 'landing_screen', 'preview_limit'];
 const ENTITLEMENTS = ['free', 'trial', 'subscribed', 'lifetime'];
 const ACCESS_MODELS = ['legacy', 'new_model'];
 // Trial-conversion stages (1.2.2): every value a closed enumeration, so a
@@ -38,6 +38,9 @@ const LANDING_CTAS = ['get_started', 'continue_learning', 'start_trial'];
 const PAYWALL_MODES = ['free_trial', 'subscribe', 'trial_expired'];
 const PURCHASE_RESULTS = ['success', 'cancelled', 'pending', 'failed'];
 const ONBOARDING_STEPS = ['level_selected', 'creator_message_opened', 'library_first_viewed'];
+// Free preview (1.2.2): the cover and the first three story pages of any comic
+// are free; `access` says whether a comic was opened in full or as that preview.
+const COMIC_ACCESS = ['full', 'preview'];
 const bool = v => typeof v === 'boolean';
 
 // Properties every event may carry (all optional).
@@ -52,7 +55,7 @@ const COMMON = {
 const SCHEMA = {
   aggregate_app_opened: { props: {} },
   aggregate_collection_viewed: { props: { collection_id: id, collection_name: name, level: oneOf(LEVELS) } },
-  aggregate_comic_started: { props: { comic_id: id, comic_name: name, collection_id: id, level: oneOf(LEVELS), is_free: v => typeof v === 'boolean' }, required: ['comic_id'] },
+  aggregate_comic_started: { props: { comic_id: id, comic_name: name, collection_id: id, level: oneOf(LEVELS), is_free: v => typeof v === 'boolean', access: oneOf(COMIC_ACCESS) }, required: ['comic_id'] },
   aggregate_comic_page_viewed: { props: { comic_id: id, page_number: int(1, 500), total_pages: int(1, 500) }, required: ['comic_id', 'page_number', 'total_pages'] },
   aggregate_comic_completed: { props: { comic_id: id, comic_name: name, collection_id: id, level: oneOf(LEVELS) }, required: ['comic_id'] },
   aggregate_audio_played: { props: { comic_id: id, page_number: int(1, 500), audio_type: oneOf(AUDIO_TYPES) }, required: ['comic_id', 'audio_type'] },
@@ -72,6 +75,8 @@ const SCHEMA = {
   // A verified StoreKit trial transaction — counted with or without analytics consent.
   aggregate_trial_started: { props: { product_id: id, source: oneOf(PAYWALL_SOURCES) }, required: ['product_id'] },
   aggregate_onboarding_step: { props: { step: oneOf(ONBOARDING_STEPS) }, required: ['step'] },
+  // A preview reader tried to turn past the free pages (once per reading session).
+  aggregate_preview_limit_reached: { props: { comic_id: id, collection_id: id, level: oneOf(LEVELS) }, required: ['comic_id'] },
 };
 
 /**

@@ -12,7 +12,7 @@ const COMMON = { app_version: '1.1.1', build_number: '204', entitlement: 'free',
 const FULL = {   // every event with its complete allowed property set
   aggregate_app_opened: {},
   aggregate_collection_viewed: { collection_id: 'col-1', collection_name: 'EL REY NEGRO', level: 'beginner' },
-  aggregate_comic_started: { comic_id: 'comic-58336632', comic_name: 'Operadora de emergencias', collection_id: 'col-1', level: 'intermediate', is_free: true },
+  aggregate_comic_started: { comic_id: 'comic-58336632', comic_name: 'Operadora de emergencias', collection_id: 'col-1', level: 'intermediate', is_free: true, access: 'preview' },
   aggregate_comic_page_viewed: { comic_id: 'comic-1', page_number: 3, total_pages: 14 },
   aggregate_comic_completed: { comic_id: 'comic-1', comic_name: 'La casa', collection_id: 'col-2', level: 'beginner' },
   aggregate_audio_played: { comic_id: 'comic-1', page_number: 2, audio_type: 'word' },
@@ -29,6 +29,7 @@ const FULL = {   // every event with its complete allowed property set
   aggregate_purchase_result: { source: 'landing_screen', product_id: 'com.comigo.unlimited.monthly', result: 'cancelled' },
   aggregate_trial_started: { product_id: 'com.comigo.unlimited.monthly', source: 'landing_screen' },
   aggregate_onboarding_step: { step: 'level_selected' },
+  aggregate_preview_limit_reached: { comic_id: 'comic-58336632', collection_id: 'col-1', level: 'intermediate' },
 };
 const batch = (events, environment = 'production') => ({ environment, events });
 
@@ -98,6 +99,10 @@ test('types, enumerations, ranges and required properties are enforced', () => {
     ['aggregate_onboarding_step', { step: 'signed_up' }],
     ['aggregate_onboarding_step', { step: 'level_selected', spanish_level: 'beginner' }],                   // the level itself is not counted
     ['aggregate_onboarding_step', {}],
+    ['aggregate_comic_started', { comic_id: 'comic-1', access: 'trial' }],                                   // access is full|preview
+    ['aggregate_preview_limit_reached', { collection_id: 'col-1' }],                                         // comic_id required
+    ['aggregate_preview_limit_reached', { comic_id: 'comic-1', page_number: 5 }],                            // the limit is fixed, not reported
+    ['aggregate_paywall_viewed', { source: 'page_4' }],
   ];
   for (const [name, properties] of bad) assert.strictEqual(t.validateEvent({ name, properties }), null, `${name} ${JSON.stringify(properties)}`);
   assert.strictEqual(t.validateEvent({ name: 'aggregate_app_opened', properties: [] }), null);
