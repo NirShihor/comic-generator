@@ -8,6 +8,7 @@ const sharp = require('sharp');
 const Comic = require('../models/Comic');
 const Collection = require('../models/Collection');
 const { sanitizeTitle, transformToReaderFormat } = require('../services/readerFormat');
+const { coverListing } = require('../services/coverListing');
 const { generateFlowReply } = require('../services/flowPractice');
 const { generateSpeech, generateSpeechTimed } = require('../services/tts');
 const { objectStoreEnabled, bundleExists, presignedBundleUrl } = require('../services/objectStore');
@@ -444,6 +445,22 @@ router.get('/comics/:id/bundle', async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({ error: error.message });
     }
+  }
+});
+
+// GET /api/reader/covers — every comic's cover for the reader's end-of-preview
+// mosaic: published first in catalogue order, then the unpublished ones that
+// fill the page out. Covers only (served by /cover-thumbnail); nothing here
+// lets a reader open an unpublished comic.
+router.get('/covers', async (req, res) => {
+  try {
+    const comics = await Comic.find({ isExample: { $ne: true } },
+      { id: 1, published: 1, order: 1, createdAt: 1, 'cover.image': 1, 'cover.bakedImage': 1, isExample: 1 }).lean();
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.json({ covers: coverListing(comics) });
+  } catch (error) {
+    console.error('Covers listing error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
