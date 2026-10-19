@@ -7,8 +7,8 @@
  "https://comigo.net/examples/ordering-at-the-restaurant": "redirect:/spanish-reading-practice/ordering-at-a-restaurant",
  "https://comigo.net/examples/staying-safe": "redirect:/spanish-reading-practice/staying-safe",
  "https://comigo.net/learn-spanish-with-comics": "c3eac96b681edf9b",
- "https://comigo.net/privacy": "064afc3a6cf93fce",
- "https://comigo.net/spanish-reading-practice": "0c346bb84dbcf981",
+ "https://comigo.net/privacy": "9ba6d8659578d9ba",
+ "https://comigo.net/spanish-reading-practice": "b08c3e9b8adfebf4",
  "https://comigo.net/spanish-reading-practice/a-small-town": "9a77bf9edcc55c03",
  "https://comigo.net/spanish-reading-practice/a-ticket-please": "69b093e51f3d4c99",
  "https://comigo.net/spanish-reading-practice/asking-someone-out": "783460473c4f865c",
@@ -22,7 +22,7 @@
  "https://comigo.net/spanish-reading-practice/meeting-zik": "21f34541b86ece6f",
  "https://comigo.net/spanish-reading-practice/ordering-at-a-restaurant": "fb67e7182e7027b3",
  "https://comigo.net/spanish-reading-practice/ordering-at-the-restaurant": "redirect:/spanish-reading-practice/ordering-at-a-restaurant",
- "https://comigo.net/spanish-reading-practice/staying-safe": "bdaad5b2b9bc1aa6",
+ "https://comigo.net/spanish-reading-practice/staying-safe": "redirect:/spanish-reading-practice",
  "https://comigo.net/spanish-reading-practice/where-are-the-ghosts": "ac3e12bbd4ee3f36",
  "https://comigo.net/visual-learning-language": "21d9bce4d9538783"
 }
