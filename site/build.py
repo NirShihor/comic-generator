@@ -212,7 +212,7 @@ def app_title_html(x):
 def sample_end(x):
     if in_app(x):
         return {'head': 'Want to know what happens next?', 'line': f'Continue {app_title_html(x)} in the Comigo app.', 'cta': 'Get Comigo on the App Store'}
-    return {'head': 'Enjoy learning Spanish this way?', 'line': 'Discover complete interactive comic stories in the Comigo app.', 'cta': 'Get Comigo on the App Store'}
+    return {'head': 'Ready for a whole story?', 'line': '27 complete, interactive comic stories are waiting in the Comigo app.', 'cta': 'Get Comigo on the App Store'}
 
 LEVELS = {'beginner': 0, 'intermediate': 1, 'advanced': 2}
 # ElevenLabs delivery tags ("[whispering]", "[pause]") sometimes survive in a
@@ -439,6 +439,10 @@ def build(tmpl_name, out_name, html=None, nav_slug=None, own_slug=None, utm=None
     html = html.replace('{{GO_FROM}}', page_path)
     html = html.replace('<title>', '<meta name="robots" content="noindex, nofollow">\n<title>' if noindex else
                         '<meta name="robots" content="max-image-preview:large">\n<title>', 1)
+    # Apple's Smart App Banner: Safari on iPhone shows a native "View in the
+    # App Store" bar above the page. It knows only the app id (no campaign
+    # token), so the page's own App Store buttons stay as they are.
+    html = html.replace('<title>', '<meta name="apple-itunes-app" content="app-id=6760253260">\n<title>', 1)
     if utm:
         html = tag_links(html, utm)
     out = re.sub(r'poster="\{\{IMG_([\w-]+)\}\}"', poster_repl, html)
@@ -485,6 +489,13 @@ STOP = set('a al ante con de del el ella en es la las lo los me mi mis no nos o 
 def seo_title(x):
     level = (x.get('level') or '').capitalize()
     base = x.get('seoTitle') or f"{x.get('labelEn') or page_label(x)}: {level + ' ' if level else ''}Spanish Reading Practice"
+    # The level word in a hand-written title follows the page's actual level
+    # (the comic's level in the app), and every page says "comic": each one is
+    # a drawn comic page, whether from a story in the app or made for the site.
+    if level:
+        base = re.sub(r'\b(Beginner|Intermediate|Advanced) (Spanish|Reading)\b', lambda m: f'{level} {m.group(2)}', base)
+    if 'comic' not in base.lower():
+        base = base.replace('Spanish Reading Practice', 'Spanish Comic, Reading Practice')
     return f'{base} | Comigo'
 
 def seo_desc(x):
@@ -579,13 +590,14 @@ def band_section(x):
     if in_app(x):
         a = x['app']
         head = 'Want to know what happens next?'
-        body = (f'This was page {a["page"]} of {a["pages"]}. Continue {app_title_html(x)} in the Comigo iPhone app: every page voiced, '
-                'translations when you need them, and practice built around what you&rsquo;ve just read.')
+        left = a["pages"] - a["page"]
+        body = (f'This was page {a["page"]} of {a["pages"]} &mdash; the other {left} pages of {app_title_html(x)} are in the Comigo iPhone app, '
+                'every page voiced, translations when you need them, and practice built around what you&rsquo;ve just read.')
         cta = 'Continue the story on the App Store'
     else:
-        head = 'Enjoy learning Spanish this way?'
-        body = ('Discover complete, interactive comic stories in the Comigo iPhone app: every line voiced, translations '
-                'when you need them, and practice built around what you&rsquo;ve just read.')
+        head = 'Ready for a whole story?'
+        body = ('This page was made for the website. The Comigo iPhone app has 27 complete, interactive comic stories for beginner '
+                'and intermediate learners: every line voiced, translations when you need them, and practice built around what you&rsquo;ve just read.')
         cta = 'Get Comigo on the App Store'
     return ('<section class="band">\n  <div class="wrap">\n'
             f'    <h2 class="display">{head}</h2>\n    <p>{body}</p>\n'
