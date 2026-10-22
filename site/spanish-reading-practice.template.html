@@ -118,6 +118,7 @@
   .ex-count { padding: 22px 24px 0; }
   .ex-count p { margin: 0; font-size: clamp(1.6rem, 3.4vw, 2.3rem); line-height: 1.15; color: var(--ink); }
   .ex-count .ex-count-n { color: #A3A3F0; }   /* a lighter tint of --accent */
+  .ex-count .ex-count-link { color: inherit; text-decoration: underline; text-decoration-color: #A3A3F0; text-underline-offset: 6px; text-decoration-thickness: 3px; }
   .stage-note { color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.88rem; margin: 0 0 14px; text-align: center; }
   .more-links { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
   @media (max-width: 800px) {
@@ -193,7 +194,7 @@
 </section>
 {{EXAMPLE_LINKS}}
 <section class="wrap ex-count">
-  <p class="display"><span class="ex-count-n">27 comics</span> to choose from with a total of <span class="ex-count-n">520 pages</span> and more coming soon.</p>
+  <p class="display"><a class="ex-count-link" href="/spanish-comics-for-beginners"><span class="ex-count-n">27 comics</span> to choose from</a> with a total of <span class="ex-count-n">520 pages</span> and more coming soon.</p>
 </section>
 
 <section class="band">
