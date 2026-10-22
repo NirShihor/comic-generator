@@ -262,6 +262,9 @@
   }
   .nav-links .nav-cta:hover { text-decoration: none; transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--shadow); }
   .nav-menu { display: none; }
+  /* six entries now: let them wrap under the logo line on narrow desktops rather than overflow */
+  .nav-links { flex-wrap: wrap; justify-content: flex-end; row-gap: 10px; }
+  @media (max-width: 1024px) { .nav-links { gap: 16px; } .nav-links a { font-size: 1rem; } }
   @media (max-width: 800px) {
     .site-nav { justify-content: center; padding: 0 24px 2px; }
     .site-nav .nav-logo img { height: 110px; }
@@ -295,6 +298,7 @@
   <nav class="nav-links" aria-label="Main">
     <a href="/" data-nav="index">Home</a>
     <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics">How it works</a>
+    <a href="/spanish-comics-for-beginners" data-nav="spanish-comics-for-beginners">Comics</a>
     <a href="/spanish-reading-practice" data-nav="spanish-reading-practice" aria-current="page">Reading practice</a>
     <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
     <a class="nav-cta" href="/go/app-store?from=/spanish-reading-practice/in-the-woods&amp;loc=nav" target="_blank" rel="noopener nofollow">&#63743;&nbsp; Get the app</a>
@@ -304,6 +308,7 @@
     <nav class="menu-panel" aria-label="Main">
       <a href="/" data-nav="index">Home</a>
       <a href="/learn-spanish-with-comics" data-nav="learn-spanish-with-comics">How it works</a>
+      <a href="/spanish-comics-for-beginners" data-nav="spanish-comics-for-beginners">Comics</a>
     <a href="/spanish-reading-practice" data-nav="spanish-reading-practice" aria-current="page">Reading practice</a>
       <a href="/visual-learning-language" data-nav="visual-learning-language">Why visuals help</a>
       <a class="nav-cta" href="/go/app-store?from=/spanish-reading-practice/in-the-woods&amp;loc=menu" target="_blank" rel="noopener nofollow">&#63743;&nbsp; Get the app</a>
