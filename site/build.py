@@ -3,8 +3,16 @@
 as data URIs, producing a single self-contained site/index.html.
 
 Usage: python3 site/build.py
+
+Publishing workflow note — the comics catalogue page (/spanish-comics-for-beginners)
+is built from site/catalog.json, a snapshot of the reader's catalogue. Whenever a new
+comic or episode is published to the app, refresh it from the running server and
+rebuild before deploying:
+
+    curl -s http://localhost:3001/api/reader/catalog | python3 site/catalog-snapshot.py
+    python3 site/build.py
 """
-import hashlib, json, re, os, subprocess, sys, time
+import hashlib, json, re, os, subprocess, sys, time, unicodedata
 from html import escape as html_escape
 
 here = os.path.dirname(os.path.abspath(__file__))
@@ -212,7 +220,7 @@ def app_title_html(x):
 def sample_end(x):
     if in_app(x):
         return {'head': 'Want to know what happens next?', 'line': f'Continue {app_title_html(x)} in the Comigo app.', 'cta': 'Get Comigo on the App Store'}
-    return {'head': 'Enjoy learning Spanish this way?', 'line': 'Discover complete interactive comic stories in the Comigo app.', 'cta': 'Get Comigo on the App Store'}
+    return {'head': 'Ready for a whole story?', 'line': '27 complete, interactive comic stories are waiting in the Comigo app.', 'cta': 'Get Comigo on the App Store'}
 
 LEVELS = {'beginner': 0, 'intermediate': 1, 'advanced': 2}
 # ElevenLabs delivery tags ("[whispering]", "[pause]") sometimes survive in a
@@ -412,9 +420,91 @@ def tag_links(html, utm):
         return f'href="{path}{sep}{qs}{frag}"'
     return re.sub(r'href="(/(?!/|assets/)[^"#]*)(#[^"]*)?"', one, html)
 
+# The comics catalogue page (/spanish-comics-for-beginners): one row per
+# series with its cover and episodes, built from site/catalog.json — a
+# snapshot of the reader's catalogue (GET /api/reader/catalog, grouped by
+# collection; refresh it when comics are added). Episodes are not links:
+# the complete stories are read in the app, and the only reading on the
+# site stays the four real samples. Levels are the app's own, per episode.
+def load_catalog():
+    p = os.path.join(here, 'catalog.json')
+    return json.load(open(p))['series'] if os.path.exists(p) else []
+
+def strip_accents(t):
+    return ''.join(c for c in unicodedata.normalize('NFKD', t) if not unicodedata.combining(c))
+
+def cover_asset(series_id):
+    """site/assets/col-<collection id>.jpg (accents stripped; some ids were cut short when exported)."""
+    want = 'col-' + strip_accents(series_id)
+    names = sorted(f[:-4] for f in os.listdir(os.path.join(here, 'assets')) if f.startswith('col-') and f.endswith('.jpg'))
+    if want in names:
+        return want
+    hits = [n for n in names if want.startswith(n)]
+    return hits[0] if hits else None
+
+def catalog_section(series):
+    e = lambda t: html_escape(str(t or ''), quote=True)
+    rows = []
+    for sr in series:
+        cover = cover_asset(sr['id'])
+        if not cover:
+            sys.exit(f'no cover asset for series {sr["id"]}')
+        title, title_en = sentence_case(sr['title']), sentence_case(sr.get('titleEn'))
+        eps = []
+        for ep in sr['episodes']:
+            lvl = (ep.get('level') or 'beginner').lower()
+            eps.append('      <li>'
+                       f'<span class="n">{ep.get("episode") or ""}</span> '
+                       f'<span class="t" lang="es">{e(sentence_case(ep["title"]))}</span> '
+                       + (f'<span class="en">{e(sentence_case(ep.get("titleEn")))}</span> ' if ep.get('titleEn') else '')
+                       + (f'<span class="pages">{ep["pages"]} pages</span> ' if ep.get('pages') else '')
+                       + f'<span class="lvl {lvl}">{lvl.capitalize()}</span></li>')
+        rows.append(f'  <article class="series-row" id="{e(strip_accents(sr["id"]).replace("_", "-"))}">\n'
+                    f'    <img class="cover" loading="lazy" decoding="async" src="{{{{IMG_{cover}}}}}" alt="{e("Cover of " + title + (f" ({title_en})" if title_en else ""))}">\n'
+                    '    <div class="series-meta">\n'
+                    f'      <h2 class="display"><span lang="es">{e(title)}</span>' + (f' <span class="en">{e(title_en)}</span>' if title_en else '') + '</h2>\n'
+                    + (f'      <p class="blurb">{e(sr["description"])}</p>\n' if sr.get('description') else '')
+                    + '      <ol class="episodes">\n' + '\n'.join(eps) + '\n      </ol>\n'
+                    '    </div>\n  </article>')
+    return '\n'.join(rows)
+
+def catalog_summary(series):
+    eps = [ep for sr in series for ep in sr['episodes']]
+    by = {}
+    for ep in eps:
+        by[(ep.get('level') or 'beginner').lower()] = by.get((ep.get('level') or 'beginner').lower(), 0) + 1
+    levels = ' &middot; '.join(f'{by[l]} {l}' for l in ('beginner', 'intermediate', 'advanced') if by.get(l))
+    return f'{len(series)} series &middot; {len(eps)} episodes &middot; {levels}'
+
+def catalog_ld(series):
+    data = {'@context': 'https://schema.org', '@graph': [
+        {'@type': 'CollectionPage', '@id': SITE_URL + '/spanish-comics-for-beginners#collection',
+         'url': SITE_URL + '/spanish-comics-for-beginners', 'name': 'Spanish comics for beginners and intermediate learners',
+         'inLanguage': 'en', 'about': {'@type': 'Thing', 'name': 'Spanish language'},
+         'isPartOf': {'@id': SITE_URL + '/#website'},
+         'mainEntity': {'@type': 'ItemList', 'numberOfItems': len(series), 'itemListOrder': 'https://schema.org/ItemListOrderAscending',
+                        'itemListElement': [{'@type': 'ListItem', 'position': i + 1,
+                                             'item': {'@type': 'CreativeWorkSeries', 'name': sentence_case(sr['title']), 'inLanguage': 'es',
+                                                      **({'alternateName': sentence_case(sr['titleEn'])} if sr.get('titleEn') else {}),
+                                                      **({'description': sr['description']} if sr.get('description') else {})}}
+                                            for i, sr in enumerate(series)]}},
+    ]}
+    return '<script type="application/ld+json">\n' + json.dumps(data, ensure_ascii=False, indent=1) + '\n</script>'
+
+def expand_catalog(html):
+    if '{{CATALOG' not in html:
+        return html
+    series = load_catalog()
+    if not series:
+        sys.exit('site/catalog.json is missing or empty (snapshot of GET /api/reader/catalog)')
+    return (html.replace('{{CATALOG_LD}}', catalog_ld(series))
+                .replace('{{CATALOG_SUMMARY}}', catalog_summary(series))
+                .replace('{{CATALOG}}', catalog_section(series)))
+
 def build(tmpl_name, out_name, html=None, nav_slug=None, own_slug=None, utm=None, noindex=False):
     if html is None:
         html = open(os.path.join(here, tmpl_name)).read()
+    html = expand_catalog(html)
     html = expand_links(html)
     html = html.replace('{{EXAMPLE_LIST_LD}}', example_list_ld())
     html, has_examples = expand_examples(html, own_slug)
@@ -439,6 +529,10 @@ def build(tmpl_name, out_name, html=None, nav_slug=None, own_slug=None, utm=None
     html = html.replace('{{GO_FROM}}', page_path)
     html = html.replace('<title>', '<meta name="robots" content="noindex, nofollow">\n<title>' if noindex else
                         '<meta name="robots" content="max-image-preview:large">\n<title>', 1)
+    # Apple's Smart App Banner: Safari on iPhone shows a native "View in the
+    # App Store" bar above the page. It knows only the app id (no campaign
+    # token), so the page's own App Store buttons stay as they are.
+    html = html.replace('<title>', '<meta name="apple-itunes-app" content="app-id=6760253260">\n<title>', 1)
     if utm:
         html = tag_links(html, utm)
     out = re.sub(r'poster="\{\{IMG_([\w-]+)\}\}"', poster_repl, html)
@@ -485,6 +579,13 @@ STOP = set('a al ante con de del el ella en es la las lo los me mi mis no nos o 
 def seo_title(x):
     level = (x.get('level') or '').capitalize()
     base = x.get('seoTitle') or f"{x.get('labelEn') or page_label(x)}: {level + ' ' if level else ''}Spanish Reading Practice"
+    # The level word in a hand-written title follows the page's actual level
+    # (the comic's level in the app), and every page says "comic": each one is
+    # a drawn comic page, whether from a story in the app or made for the site.
+    if level:
+        base = re.sub(r'\b(Beginner|Intermediate|Advanced) (Spanish|Reading)\b', lambda m: f'{level} {m.group(2)}', base)
+    if 'comic' not in base.lower():
+        base = base.replace('Spanish Reading Practice', 'Spanish Comic, Reading Practice')
     return f'{base} | Comigo'
 
 def seo_desc(x):
@@ -579,13 +680,14 @@ def band_section(x):
     if in_app(x):
         a = x['app']
         head = 'Want to know what happens next?'
-        body = (f'This was page {a["page"]} of {a["pages"]}. Continue {app_title_html(x)} in the Comigo iPhone app: every page voiced, '
-                'translations when you need them, and practice built around what you&rsquo;ve just read.')
+        left = a["pages"] - a["page"]
+        body = (f'This was page {a["page"]} of {a["pages"]} &mdash; the other {left} pages of {app_title_html(x)} are in the Comigo iPhone app, '
+                'every page voiced, translations when you need them, and practice built around what you&rsquo;ve just read.')
         cta = 'Continue the story on the App Store'
     else:
-        head = 'Enjoy learning Spanish this way?'
-        body = ('Discover complete, interactive comic stories in the Comigo iPhone app: every line voiced, translations '
-                'when you need them, and practice built around what you&rsquo;ve just read.')
+        head = 'Ready for a whole story?'
+        body = ('This page was made for the website. The Comigo iPhone app has 27 complete, interactive comic stories for beginner '
+                'and intermediate learners: every line voiced, translations when you need them, and practice built around what you&rsquo;ve just read.')
         cta = 'Get Comigo on the App Store'
     return ('<section class="band">\n  <div class="wrap">\n'
             f'    <h2 class="display">{head}</h2>\n    <p>{body}</p>\n'
@@ -714,6 +816,8 @@ for tmpl in sorted(f for f in os.listdir(here) if f.endswith('.template.html')):
     if '{{EXAMPLE_LINKS}}' in text:
         parts.append(json.dumps([{k: x.get(k) for k in ('slug', 'label', 'labelEn', 'level', 'comic', 'collection')} for x in examples],
                                 sort_keys=True, ensure_ascii=False))
+    if '{{CATALOG}}' in text:
+        parts.append(json.dumps(load_catalog(), sort_keys=True, ensure_ascii=False))
     url = SITE_URL + ('/' if name == 'index' else '/' + name)
     index_manifest[url] = fingerprint(*parts)
     lastmod_for(url, index_manifest[url])

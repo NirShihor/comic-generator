@@ -1,0 +1,319 @@
+{
+ "series": [
+  {
+   "id": "el_rey_negro",
+   "title": "EL REY NEGRO",
+   "titleEn": "THE BLACK KING",
+   "description": "A man turned gunslinger searching for answers and payback...",
+   "episodes": [
+    {
+     "episode": 1,
+     "title": "LA CARTA NEGRA",
+     "titleEn": "THE BLACK CARD",
+     "level": "beginner",
+     "pages": 17,
+     "minutes": 34,
+     "description": "A gunslinger is looking for payback at all costs..."
+    },
+    {
+     "episode": 2,
+     "title": "EN EL SENDERO",
+     "titleEn": "ON THE TRAIL",
+     "level": "beginner",
+     "pages": 12,
+     "minutes": 24,
+     "description": "The chase after the Black King is intensifying..."
+    },
+    {
+     "episode": 3,
+     "title": "MUY CERCA",
+     "titleEn": "SO VERY CLOSE",
+     "level": "beginner",
+     "pages": 14,
+     "minutes": 28,
+     "description": "Mateo feels the revenge and closure are not far, but..."
+    }
+   ]
+  },
+  {
+   "id": "ollie_dice",
+   "title": "OLLIE DICE",
+   "titleEn": "OLLIE SAYS",
+   "description": "A small dog helps a young girl with his simple, natural wisdom.",
+   "episodes": [
+    {
+     "episode": 1,
+     "title": "EL DESCUBRIMIENTO",
+     "titleEn": "THE DISCOVERY",
+     "level": "beginner",
+     "pages": 13,
+     "minutes": 26,
+     "description": "A young girl makes a stark discovery involving her dog."
+    },
+    {
+     "episode": 2,
+     "title": "LA MENTIRA QUE SIGUE CRECIENDO",
+     "titleEn": "THE LIE THAT KEEPS GROWING",
+     "level": "beginner",
+     "pages": 15,
+     "minutes": 30,
+     "description": "A dog can sometimes see where things have gone wrong for a young human..."
+    },
+    {
+     "episode": 3,
+     "title": "UN ÉXITO DE UN AMIGO",
+     "titleEn": "A FRIEND'S SUCCESS",
+     "level": "intermediate",
+     "pages": 13,
+     "minutes": 26,
+     "description": "Seeing someone close doing really well can be a challenge."
+    }
+   ]
+  },
+  {
+   "id": "los_vientos_del_tiempo",
+   "title": "LOS VIENTOS DEL TIEMPO",
+   "titleEn": "THE WINDS OF TIME",
+   "description": "A young boy becomes lost in an unusual way...",
+   "episodes": [
+    {
+     "episode": 1,
+     "title": "LA MÁQUINA",
+     "titleEn": "THE MACHINE",
+     "level": "beginner",
+     "pages": 16,
+     "minutes": 32,
+     "description": "A young boy finds out what his grandfather has been building..."
+    },
+    {
+     "episode": 2,
+     "title": "EL INTENTO DE RESCATE",
+     "titleEn": "THE RESCUE ATTEMPT",
+     "level": "beginner",
+     "pages": 12,
+     "minutes": 24,
+     "description": "Grandad to the rescue... but will he make it in time?"
+    },
+    {
+     "episode": 3,
+     "title": "LA AYUDA VIENE EN CAMINO",
+     "titleEn": "HELP IS COMING",
+     "level": "beginner",
+     "pages": 13,
+     "minutes": 26,
+     "description": "Rescuers are doing their best to help two young lost souls..."
+    }
+   ]
+  },
+  {
+   "id": "la_mensajera",
+   "title": "LA MENSAJERA",
+   "titleEn": "THE MESSENGER",
+   "description": "A woman brave enough to risk all and help change the course of WW2.",
+   "episodes": [
+    {
+     "episode": 1,
+     "title": "LA OFERTA",
+     "titleEn": "THE OFFER",
+     "level": "intermediate",
+     "pages": 12,
+     "minutes": 24,
+     "description": "A brave young woman takes a central part in allied WW2 campaign."
+    },
+    {
+     "episode": 2,
+     "title": "PREPARÁNDOSE",
+     "titleEn": "GETTING READY",
+     "level": "intermediate",
+     "pages": 13,
+     "minutes": 26,
+     "description": "Preparation for a dangerous mission takes time and immense effort..."
+    }
+   ]
+  },
+  {
+   "id": "el_superviviente",
+   "title": "EL SUPERVIVIENTE",
+   "titleEn": "THE SURVIVOR",
+   "description": "A man and a lonely boy find one another in a dangerous futuristic world.",
+   "episodes": [
+    {
+     "episode": 1,
+     "title": "LA CASA EN LA COLINA",
+     "titleEn": "THE HOUSE ON THE HILL",
+     "level": "beginner",
+     "pages": 11,
+     "minutes": 22,
+     "description": "A man is doing his best to survive in a dangerous, apocalyptic world"
+    },
+    {
+     "episode": 2,
+     "title": "UN PELIGRO A LA VEZ",
+     "titleEn": "ONE DANGER AT A TIME",
+     "level": "beginner",
+     "pages": 13,
+     "minutes": 26,
+     "description": "In a world full of danger, there are multiple challenges for survival..."
+    },
+    {
+     "episode": 3,
+     "title": "UNA ALIANZA IMPROBABLE",
+     "titleEn": "AN UNLIKELY PARTNERSHIP",
+     "level": "intermediate",
+     "pages": 11,
+     "minutes": 22,
+     "description": "A man and a partially immune boy work together with a group of infected."
+    }
+   ]
+  },
+  {
+   "id": "los_ninos_es_las_sombras",
+   "title": "LOS NIÑOS EN LAS SOMBRAS",
+   "titleEn": "THE CHILDREN IN THE SHADOWS",
+   "description": "In a harsh, futuristic reality, a man discovers the truth about a childless world...",
+   "episodes": [
+    {
+     "episode": 1,
+     "title": "LA BIBLIOTECA",
+     "titleEn": "THE LIBRARY",
+     "level": "beginner",
+     "pages": 14,
+     "minutes": 28,
+     "description": "A group of children are looking for a way out in a utopian world."
+    },
+    {
+     "episode": 2,
+     "title": "LA VISITA",
+     "titleEn": "THE VISIT",
+     "level": "beginner",
+     "pages": 14,
+     "minutes": 28,
+     "description": "The big day arrives, bringing fear but also something else..."
+    },
+    {
+     "episode": 3,
+     "title": "LA REVELACIÓN",
+     "titleEn": "THE REALISATION",
+     "level": "beginner",
+     "pages": 14,
+     "minutes": 28,
+     "description": "Hugo and Natalia discover a painful truth."
+    }
+   ]
+  },
+  {
+   "id": "la_batalla_después_de_la_guerra",
+   "title": "LA BATALLA DESPUÉS DE LA GUERRA",
+   "titleEn": "THE BATTLE AFTER THE WAR",
+   "description": "A WW1 soldier arrives at an estate house for a period of recovery and finds himself in the center of a conflict.",
+   "episodes": [
+    {
+     "episode": 1,
+     "title": "LA CASA",
+     "titleEn": "THE HOUSE",
+     "level": "beginner",
+     "pages": 16,
+     "minutes": 32,
+     "description": "A troubled soldier arrives at a recovery estate house"
+    },
+    {
+     "episode": 2,
+     "title": "BUENAS Y MALAS DECISIONES",
+     "titleEn": "GOOD AND BAD DECISIONS",
+     "level": "intermediate",
+     "pages": 11,
+     "minutes": 22,
+     "description": "Sometimes, bad decisions are also good. But only some are..."
+    },
+    {
+     "episode": 3,
+     "title": "PLANES MALVADOS",
+     "titleEn": "EVIL PLANS",
+     "level": "intermediate",
+     "pages": 13,
+     "minutes": 26,
+     "description": "Revenge is a dangerous motivator..."
+    }
+   ]
+  },
+  {
+   "id": "el_restaurante",
+   "title": "EL RESTAURANTE",
+   "titleEn": "THE RESTAURANT",
+   "description": "A young boy gets a job at a restaurant and gets involved in more than just waiting tables...",
+   "episodes": [
+    {
+     "episode": 1,
+     "title": "PRIMER TURNO",
+     "titleEn": "FIRST SHIFT",
+     "level": "beginner",
+     "pages": 13,
+     "minutes": 26,
+     "description": "A teenager embarks on a new path and finds himself in a complicated situation."
+    },
+    {
+     "episode": 2,
+     "title": "LA VERDAD",
+     "titleEn": "THE TRUTH",
+     "level": "beginner",
+     "pages": 12,
+     "minutes": 24,
+     "description": "Leo learns the truth about Sofia."
+    },
+    {
+     "episode": 3,
+     "title": "LA ELECCIÓN",
+     "titleEn": "THE CHOICE",
+     "level": "beginner",
+     "pages": 13,
+     "minutes": 26,
+     "description": "Leo makes a brave choice..."
+    }
+   ]
+  },
+  {
+   "id": "el_visitante",
+   "title": "EL VISITANTE",
+   "titleEn": "THE VISITOR",
+   "description": "A young girl and her family receive an unexpected visitor...",
+   "episodes": [
+    {
+     "episode": 1,
+     "title": "LA LLEGADA",
+     "titleEn": "THE ARRIVAL",
+     "level": "beginner",
+     "pages": 9,
+     "minutes": 18,
+     "description": "A little girl has an encounter with a very unexpected guest"
+    },
+    {
+     "episode": 2,
+     "title": "CONOCER A LOS PADRES",
+     "titleEn": "MEET THE PARENTS",
+     "level": "beginner",
+     "pages": 10,
+     "minutes": 20,
+     "description": "Zik is meeting other people"
+    },
+    {
+     "episode": 3,
+     "title": "ZIK DESAYUNA",
+     "titleEn": "ZIK EATS BREAKFAST",
+     "level": "beginner",
+     "pages": 14,
+     "minutes": 28,
+     "description": "Aliens need to eat too..."
+    },
+    {
+     "episode": 4,
+     "title": "EL SECRETO DEL JARDÍN",
+     "titleEn": "THE SECRET OF THE GARDEN",
+     "level": "beginner",
+     "pages": 13,
+     "minutes": 26,
+     "description": "Alien tracks need to be covered before all is lost..."
+    }
+   ]
+  }
+ ]
+}

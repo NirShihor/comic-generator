@@ -172,7 +172,10 @@ async function getDirectorySize(dirPath) {
   return totalSize;
 }
 
-// GET /api/reader/catalog — list published comics for the reader app store
+// GET /api/reader/catalog — list published comics for the reader app store.
+// The website's comics catalogue page is a snapshot of this response
+// (site/catalog.json, via site/catalog-snapshot.py): refresh it and rebuild
+// the site whenever a comic or episode is published, or the page goes stale.
 // Public: the global admin notebook (grammar pages) for the reader app.
 router.get('/notebook', async (req, res) => {
   try {
