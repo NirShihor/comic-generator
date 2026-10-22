@@ -3,6 +3,14 @@
 as data URIs, producing a single self-contained site/index.html.
 
 Usage: python3 site/build.py
+
+Publishing workflow note — the comics catalogue page (/spanish-comics-for-beginners)
+is built from site/catalog.json, a snapshot of the reader's catalogue. Whenever a new
+comic or episode is published to the app, refresh it from the running server and
+rebuild before deploying:
+
+    curl -s http://localhost:3001/api/reader/catalog | python3 site/catalog-snapshot.py
+    python3 site/build.py
 """
 import hashlib, json, re, os, subprocess, sys, time, unicodedata
 from html import escape as html_escape
