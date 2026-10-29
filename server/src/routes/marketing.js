@@ -58,25 +58,66 @@ async function exportImagesDir(comicId) {
 }
 
 // GET /api/marketing/:comicId/images — export images usable as poster art.
+// GET /api/marketing/:comicId/clips — the videos in the comic's marketing
+// folder, newest first, so an earlier clip (generated, uploaded or a finished
+// reel) can be picked up again as the base of a new reel.
+router.get('/:comicId/clips', async (req, res) => {
+  try {
+    const { comicId } = req.params;
+    if (!/^[\w\-]+$/.test(comicId)) return res.status(400).json({ error: 'Bad comic id' });
+    const dir = path.join(PROJECTS_DIR, comicId, 'marketing');
+    let names = [];
+    try { names = (await fs.readdir(dir)).filter(f => /\.(mp4|mov|m4v|webm)$/i.test(f)); } catch { /* none */ }
+    const clips = [];
+    for (const f of names) {
+      const st = await fs.stat(path.join(dir, f));
+      const kind = /-fin\.mp4$/i.test(f) ? 'finished reel' : /-mix\.mp4$/i.test(f) ? 'with voices' : /^veo-/.test(f) ? 'generated' : /^own-/.test(f) ? 'uploaded' : 'clip';
+      clips.push({ file: f, url: `/projects/${comicId}/marketing/${f}`, kind, bytes: st.size, at: st.mtime });
+    }
+    clips.sort((a, b) => new Date(b.at) - new Date(a.at));
+    res.json({ clips });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
 router.get('/:comicId/images', async (req, res) => {
   try {
-    const { slug, dir } = await exportImagesDir(req.params.comicId);
-    const files = (await fs.readdir(dir)).filter(f =>
-      /\.(jpg|png)$/i.test(f) && !f.includes('empty_bubbles'));
-    // Full pages first, then panels, no-text variants last within each group.
-    const rank = f => (f.match(/_p\d+\.(jpg|png)$/i) ? 0 : f.includes('cover') ? 1 : 2) + (f.includes('no_text') ? 0.5 : 0);
-    files.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-    res.json({
-      images: files.map(f => ({
-        file: f,
-        url: `/projects/${req.params.comicId}/export/${slug}/images/${f}`
-      }))
-    });
+    // Baked reel pages (comic.reelPages — made for reels, never exported) come
+    // first, straight from the comic's images folder, as "page:<file>" tokens.
+    const reelPages = await bakedReelPages(req.params.comicId);
+    let exported = [];
+    try {
+      const { slug, dir } = await exportImagesDir(req.params.comicId);
+      const files = (await fs.readdir(dir)).filter(f =>
+        /\.(jpg|png)$/i.test(f) && !f.includes('empty_bubbles'));
+      // Full pages first, then panels, no-text variants last within each group.
+      const rank = f => (f.match(/_p\d+\.(jpg|png)$/i) ? 0 : f.includes('cover') ? 1 : 2) + (f.includes('no_text') ? 0.5 : 0);
+      files.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+      exported = files.map(f => ({ file: f, url: `/projects/${req.params.comicId}/export/${slug}/images/${f}` }));
+    } catch (e) {
+      if (reelPages.length === 0) throw e;   // nothing at all to offer: say why
+    }
+    res.json({ images: [...reelPages, ...exported] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// A baked page file name in projects/<id>/images (no paths, no tricks).
+const REEL_PAGE_FILE = /^[\w\-]+_p\d+_baked\.(png|jpg)$/i;
+// The comic's baked reel pages as picker entries: { file: "page:<file>", url,
+// label } — the baked PNG of each reel page (pageNumber 2001+, see
+// POST /comics/:id/reel-pages) that exists under projects/<id>/images.
+async function bakedReelPages(comicId) {
+  const comic = await Comic.findOne({ id: comicId }, { reelPages: 1 }).lean();
+  const out = [];
+  for (const pg of [...(comic?.reelPages || [])].sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0))) {
+    const name = path.basename(String(pg.bakedImage || ''));
+    if (!pg.bakedImage || !REEL_PAGE_FILE.test(name)) continue;
+    try { await fs.access(path.join(PROJECTS_DIR, comicId, 'images', name)); } catch { continue; }
+    out.push({ file: `page:${name}`, url: `/projects/${comicId}/images/${name}`, label: `${pg.reelLabel || `Reel page ${pg.pageNumber}`} (baked)` });
+  }
+  return out;
+}
 // GET /api/marketing/:comicId/style-images — every reference image the comic's
 // art was made from (master style, character sheets, location sheets — from
 // the collection's prompt settings, else the comic's) plus marketing images
@@ -112,6 +153,23 @@ router.get('/:comicId/style-images', async (req, res) => {
       { kind: 'generated', label: 'Generated for marketing', images: generated },
       { kind: 'uploads', label: 'Uploaded', images: uploads },
     ] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/marketing/:comicId/uploaded-images — the user's own images in this
+// project's marketing/uploads (newest first), for the pickers; works for the
+// no-comic scratch project too. { file: "upload:<name>", url, label }
+router.get('/:comicId/uploaded-images', async (req, res) => {
+  try {
+    const { comicId } = req.params;
+    if (!/^[\w-]+$/.test(comicId)) return res.status(400).json({ error: 'Bad comic id' });
+    const dir = path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads');
+    let names = [];
+    try { names = (await fs.readdir(dir)).filter(f => /\.(png|jpe?g|webp)$/i.test(f)); } catch { return res.json({ images: [] }); }
+    const withTime = await Promise.all(names.map(async f => ({ f, t: (await fs.stat(path.join(dir, f))).mtimeMs })));
+    res.json({ images: withTime.sort((a, b) => b.t - a.t).map(({ f }) => ({ file: `upload:${f}`, url: `/projects/${comicId}/marketing/uploads/${f}`, label: f.replace(/^\d+-/, '') })) });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -314,7 +372,9 @@ router.get('/:comicId/audios', async (req, res) => {
               page: page.pageNumber, text: sent.text,
               translation: sent.translation || '',
               file: `${sent.audioUrl}.mp3`,
-              ...(sent.translationAudioUrl && { translationFile: `${sent.translationAudioUrl}.mp3` })
+              // playable in the browser (the export dir is static under /projects)
+              url: `/projects/${req.params.comicId}/export/${slug}/audio/${sent.audioUrl}.mp3`,
+              ...(sent.translationAudioUrl && { translationFile: `${sent.translationAudioUrl}.mp3`, translationUrl: `/projects/${req.params.comicId}/export/${slug}/audio/${sent.translationAudioUrl}.mp3` })
             });
       };
       walk(page.bubbles);
@@ -337,7 +397,7 @@ router.post('/reel', async (req, res) => {
   const os = require('os');
   const run = (cmd, args) => new Promise((resolve, reject) =>
     execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
-      err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+      err ? reject(new Error(String(se || err.message).trim().split("\n").slice(-30).join("\n"))) : resolve(so)));
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'reel-'));
   try {
     const { comicId, segments = [], question = '' } = req.body;
@@ -531,21 +591,23 @@ router.post('/upload-clip', clipUpload.single('clip'), async (req, res) => {
 // baked Spanish text — or just a green highlight — appears while its audio
 // plays), then a violet prompt slide, then the ENGLISH run (English written
 // into the bubbles — or a highlight — while the English audio plays).
-// Body: { comicId, pageId, introFile?, spanish: { on, showText, gap, hold },
-//         prompt: { on, line1, line2, seconds }, english: { on, showText, gap, hold } }
+// Body: { comicId, pageId, introFile?, spanish: { on, showText, gap, hold, silent },
+//         prompt: { on, line1, line2, seconds }, english: { on, showText, gap, hold, silent } }
+// `silent`: the run keeps its timing (each bubble held for its line) but the
+// lines are left out — for a reel narrated afterwards in Marketing.
 router.post('/challenge-reel', async (req, res) => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'challenge-'));
   try {
     const { execFile } = require('child_process');
     const fsSync = require('fs');
     const run = (cmd, args) => new Promise((resolve, reject) =>
-      execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) => err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+      execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) => err ? reject(new Error(String(se || err.message).trim().split("\n").slice(-30).join("\n"))) : resolve(so)));
     const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const num = (v, d, lo, hi) => Math.min(hi, Math.max(lo, Number.isFinite(Number(v)) ? Number(v) : d));
     const { comicId, pageId } = req.body;
     if (!comicId || !pageId) return res.status(400).json({ error: 'comicId and pageId are required' });
     const introFile = req.body.introFile && /^[\w.\-]+\.mp4$/.test(req.body.introFile) ? req.body.introFile : null;
-    const sp = { on: req.body.spanish?.on !== false, showText: req.body.spanish?.showText !== false, gap: num(req.body.spanish?.gap, 0.6, 0, 5), hold: num(req.body.spanish?.hold, 1.0, 0, 10),
+    const sp = { on: req.body.spanish?.on !== false, showText: req.body.spanish?.showText !== false, gap: num(req.body.spanish?.gap, 0.6, 0, 5), hold: num(req.body.spanish?.hold, 1.0, 0, 10), silent: req.body.spanish?.silent === true,
       // word popups (the reader's word card: word, meaning, base form) — { bubbleId: [wordIndex...] }
       words: req.body.spanish?.words && typeof req.body.spanish.words === 'object' ? req.body.spanish.words : {},
       popupDelay: num(req.body.spanish?.popupDelay, 1.0, 0, 5), popupHold: num(req.body.spanish?.popupHold, 2.5, 0.5, 10) };
@@ -562,7 +624,7 @@ router.post('/challenge-reel', async (req, res) => {
       bg: ['page', 'gradient', 'black', 'white'].includes(req.body.prompt?.bg) ? req.body.prompt.bg : 'page',
       // the bubble text is typed in, line by line, while its line is read
       typewriter: req.body.prompt?.typewriter === true };
-    const en = { on: req.body.english?.on !== false, showText: req.body.english?.showText !== false, gap: num(req.body.english?.gap, 0.6, 0, 5), hold: num(req.body.english?.hold, 1.0, 0, 10) };
+    const en = { on: req.body.english?.on !== false, showText: req.body.english?.showText !== false, gap: num(req.body.english?.gap, 0.6, 0, 5), hold: num(req.body.english?.hold, 1.0, 0, 10), silent: req.body.english?.silent === true };
     const W = 1080, H = 1920, FPS = 25;
     console.log('[challenge-reel]', comicId, pageId, JSON.stringify({ spanish: sp, prompt: pr, english: en, introFile }));
     const mdir = path.join(PROJECTS_DIR, comicId, 'marketing');
@@ -628,8 +690,9 @@ router.post('/challenge-reel', async (req, res) => {
         `<text x="${r.w / 2}" y="${(r.h - totalH) / 2 + i * lineH + size * 0.95}" text-anchor="middle" font-family="${family}, ${BUBBLE_FONT}, Helvetica, sans-serif" font-size="${size}" font-weight="${fontId === 'bangers' || fontId === 'permanent-marker' ? 400 : 700}" fill="#111111">${esc(l)}</text>`).join('')}</svg>`)).png().toFile(out);
       return out;
     };
-    // One run: base page + per-bubble overlay (kept, or shown only while it speaks) + audio.
-    const runSegment = async (name, items, gap, hold) => {
+    // One run: base page + per-bubble overlay (kept, or shown only while it speaks) + audio
+    // (`silent`: the lines still pace the bubbles, but are not heard).
+    const runSegment = async (name, items, gap, hold, silent = false) => {
       let t = 0.6;
       for (const it of items) { it.start = t; it.len = await audioLen(it.audio); t += it.len + (it.extraDur || 0) + gap; }
       const dur = t - gap + hold;
@@ -650,7 +713,7 @@ router.post('/challenge-reel', async (req, res) => {
         chain.push(`${cur}[t${k}]overlay=${ov.x}:${ov.y}:enable='${ov.enable}':format=auto${out}`); cur = out;
       });
       chain.push(`${cur}format=yuv420p,setsar=1[v]`);
-      const withAudio = items.filter(it => it.audio);
+      const withAudio = silent ? [] : items.filter(it => it.audio);
       const first = 2 + overlays.length;
       withAudio.forEach(it => args.push('-i', it.audio));
       const achain = [`anullsrc=r=44100:cl=stereo,atrim=0:${dur.toFixed(2)}[sil]`]; let amix = '[sil]';
@@ -716,7 +779,7 @@ router.post('/challenge-reel', async (req, res) => {
         }
         items.push(item);
       }
-      parts.push(await runSegment('spanish', items, sp.gap, sp.hold));
+      parts.push(await runSegment('spanish', items, sp.gap, sp.hold, sp.silent));
     }
     if (pr.on && pr.style === 'page' && !pr.pageId) return res.status(400).json({ error: 'Choose the slide page in the Prompt slide row (or switch the style to a generated slide)' });
     if (pr.on && pr.style === 'page' && pr.pageId) {
@@ -887,7 +950,7 @@ router.post('/challenge-reel', async (req, res) => {
         if (en.showText && !text) continue;
         items.push({ r, audio: audioFile(sen.translationAudioUrl), png: en.showText ? await textPng(`en${i}.png`, text, r, b.fontId) : await highlightPng(`enh${i}.png`, r), transient: !en.showText });
       }
-      if (items.length) parts.push(await runSegment('english', items, en.gap, en.hold));
+      if (items.length) parts.push(await runSegment('english', items, en.gap, en.hold, en.silent));
     }
     if (parts.length === 0) return res.status(400).json({ error: 'Nothing to build — turn on at least one part' });
     const name = `challenge-${req.body.noSave ? 'check-' : ''}${Date.now()}.mp4`;
@@ -932,7 +995,7 @@ router.post('/phone-frame', async (req, res) => {
   try {
     const { execFile } = require('child_process');
     const run = (cmd, args) => new Promise((resolve, reject) =>
-      execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) => err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+      execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) => err ? reject(new Error(String(se || err.message).trim().split("\n").slice(-30).join("\n"))) : resolve(so)));
     const { comicId, file } = req.body;
     if (!comicId || !file || !/^[\w.\-]+\.mp4$/.test(file)) return res.status(400).json({ error: 'comicId and a valid file are required' });
     const margin = Math.min(25, Math.max(2, Number(req.body.margin) || 7)) / 100;
@@ -1034,7 +1097,7 @@ router.post('/inset', async (req, res) => {
   try {
     const { execFile } = require('child_process');
     const run = (cmd, args) => new Promise((resolve, reject) =>
-      execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) => err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+      execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) => err ? reject(new Error(String(se || err.message).trim().split("\n").slice(-30).join("\n"))) : resolve(so)));
     const { comicId, file } = req.body;
     if (!comicId || !file || !/^[\w.\-]+\.mp4$/.test(file)) return res.status(400).json({ error: 'comicId and a valid file are required' });
     const margin = Math.min(25, Math.max(0, Number(req.body.margin) || 0)) / 100;
@@ -1190,7 +1253,7 @@ async function retimeClip(videoPath, cues, cuts, outPath) {
   const { execFile } = require('child_process');
   const run = (cmd, args) => new Promise((resolve, reject) =>
     execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
-      err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+      err ? reject(new Error(String(se || err.message).trim().split("\n").slice(-30).join("\n"))) : resolve(so)));
   const total = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', videoPath]));
   const hasAudio = (await run('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', videoPath])).trim() !== '';
   const { stops } = timeline(cues, cuts);
@@ -1233,7 +1296,7 @@ async function mixCuesOnto(comicId, videoPath, cues, original, outPath) {
   const { execFile } = require('child_process');
   const run = (cmd, args) => new Promise((resolve, reject) =>
     execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
-      err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+      err ? reject(new Error(String(se || err.message).trim().split("\n").slice(-30).join("\n"))) : resolve(so)));
   const dir = path.join(PROJECTS_DIR, comicId, 'quick-audio');
   const total = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', videoPath]));
   const hasAudio = (await run('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', videoPath])).trim() !== '';
@@ -1261,32 +1324,51 @@ async function mixCuesOnto(comicId, videoPath, cues, original, outPath) {
     '-t', total.toFixed(3), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-movflags', '+faststart', outPath]);
 }
 
+// A voice line's file on disk: "upload:<name>" = the user's own audio (or a
+// line spoken here) in marketing/uploads; otherwise a comic export audio file.
+async function voiceLinePath(comicId, f) {
+  f = String(f || '');
+  if (f.startsWith('upload:')) {
+    const n = f.slice(7);
+    if (!/^[\w.\-]+$/i.test(n)) throw new Error('Bad upload filename');
+    return path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads', n);
+  }
+  if (!/^[\w.\-áéíóúñü]+$/i.test(f)) throw new Error('Bad audio filename');
+  const { slug } = await exportImagesDir(comicId);
+  return path.join(PROJECTS_DIR, comicId, 'export', slug, 'audio', f);
+}
+const VOICE_LINES_START = 0.5, VOICE_LINES_GAP = 0.35;   // the voices' timeline over a clip
+// The pause before a line: its own `gap` (seconds, 0–30) when set, otherwise
+// the defaults — 0.5 s before the first line, 0.35 s between lines.
+const voiceLineGap = (item, i) => {
+  const g = Number(item && item.gap);
+  return item && item.gap !== '' && item.gap != null && Number.isFinite(g) ? Math.min(30, Math.max(0, g)) : (i === 0 ? VOICE_LINES_START : VOICE_LINES_GAP);
+};
+// When the voice lines (played as mixVoicesOnto plays them) have all finished.
+async function voiceLinesEnd(comicId, voiceFiles) {
+  const { execFile } = require('child_process');
+  const probe = p => new Promise((resolve, reject) =>
+    execFile('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', p], (err, so) => (err ? reject(err) : resolve(parseFloat(so)))));
+  const items = voiceFiles.map(v => (typeof v === 'string' ? { file: v } : v));
+  let at = 0;
+  for (let i = 0; i < items.length; i++) at += voiceLineGap(items[i], i) + await probe(await voiceLinePath(comicId, items[i].file));
+  return at;
+}
+
 async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath, subtitles = 'none') {
   const { execFile } = require('child_process');
   const run = (cmd, args) => new Promise((resolve, reject) =>
     execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
-      err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
-  const { slug } = await exportImagesDir(comicId);
-  const audioDir = path.join(PROJECTS_DIR, comicId, 'export', slug, 'audio');
+      err ? reject(new Error(String(se || err.message).trim().split("\n").slice(-30).join("\n"))) : resolve(so)));
   const items = voiceFiles.map(v => (typeof v === 'string' ? { file: v } : v));
   const inputs = ['-i', videoPath];
   const parts = [];
   const events = [];
-  let at = 0.5;
+  let at = 0;
   for (let i = 0; i < items.length; i++) {
-    const f = String(items[i].file || '');
-    // "upload:<name>" = user's own audio from marketing/uploads; otherwise a
-    // comic export audio file.
-    let ap;
-    if (f.startsWith('upload:')) {
-      const n = f.slice(7);
-      if (!/^[\w.\-]+$/i.test(n)) throw new Error('Bad upload filename');
-      ap = path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads', n);
-    } else {
-      if (!/^[\w.\-áéíóúñü]+$/i.test(f)) throw new Error('Bad audio filename');
-      ap = path.join(audioDir, f);
-    }
+    const ap = await voiceLinePath(comicId, items[i].file);
     const dur = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', ap]));
+    at += voiceLineGap(items[i], i);
     inputs.push('-i', ap);
     const ms = Math.round(at * 1000);
     parts.push(`[${i + 1}:a]adelay=${ms}|${ms}[v${i}]`);
@@ -1297,7 +1379,7 @@ async function mixVoicesOnto(comicId, videoPath, voiceFiles, ambient, outPath, s
         : (it.lang === 'en' ? it.en : it.es); // 'match' — the audio's own language
       if (text) events.push({ start: at, end: at + dur + 0.3, text: String(text) });
     }
-    at += dur + 0.35;
+    at += dur;
   }
   const ambVol = ambient === 'mute' ? 0 : ambient === 'duck' ? 0.25 : 1;
   const chains = [`[0:a]volume=${ambVol}[amb]`, ...parts];
@@ -1376,6 +1458,7 @@ async function layeredCardSegment(tmp, name, elements, dur, anim, run, opts = {}
   for (const a of audio) args.push('-i', a.file);
   const chain = [];
   let cur = '[0:v]';
+  if (opts.fadeIn) { chain.push(`[0:v]fade=t=in:st=0:d=0.35:color=${opts.fadeIn}[base]`); cur = '[base]'; }
   elements.forEach((el, k) => {
     const idx = 2 + audio.length + k;
     args.push('-loop', '1', '-framerate', String(FPS), '-t', String(dur), '-i', el.png);
@@ -1438,6 +1521,53 @@ async function soundOnBadgePng(tmp) {
   return { png, w, h };
 }
 
+// "Sound on" pop-up: a rounded speech bubble (yellow, ink outline, speaker
+// icon + the text) that pops up over the FIRST FRAME of the reel's content —
+// the first opening image, or the clip — which is held still for `seconds`
+// so there is time to read it and react; then the content plays. Optional,
+// and independent of the opening card's badge.
+async function soundBubblePng(tmp, text) {
+  const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const maxW = 900, padX = 44, icon = 76;
+  const size = Math.min(60, Math.floor((maxW - padX * 2 - icon - 24) / (0.56 * Math.max(1, text.length))));
+  const textW = Math.round(text.length * size * 0.56);
+  const w = padX * 2 + icon + 24 + textW, bodyH = Math.round(size * 2.3), tail = 46, h = bodyH + tail;
+  const r = Math.round(bodyH / 2);   // fully rounded ends
+  // Body: a pill; tail: a small wedge under the left part, blended into the outline.
+  const svg = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    <path d="M${r} 4 H${w - r} A${r - 4} ${r - 4} 0 0 1 ${w - r} ${bodyH - 4} H${Math.round(w * 0.36)} L${Math.round(w * 0.27)} ${h - 6} L${Math.round(w * 0.26)} ${bodyH - 4} H${r} A${r - 4} ${r - 4} 0 0 1 ${r} 4 Z"
+          fill="#FFD23F" stroke="#16182E" stroke-width="7" stroke-linejoin="round"/>
+    <g transform="translate(${padX},${bodyH / 2 - icon / 2 + 4}) scale(${(icon / 32).toFixed(2)})" fill="#16182E">
+      <path d="M2 11v10h7l8 7V4L9 11H2z"/>
+      <path d="M22 9c2.5 2 2.5 12 0 14" fill="none" stroke="#16182E" stroke-width="3" stroke-linecap="round"/>
+      <path d="M26 5c5 4 5 18 0 22" fill="none" stroke="#16182E" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <text x="${padX + icon + 24}" y="${Math.round(bodyH / 2 + size * 0.36)}" font-family="Helvetica, Arial, sans-serif" font-size="${size}" font-weight="800" fill="#16182E">${esc(text)}</text>
+  </svg>`;
+  const png = path.join(tmp, 'sound-bubble.png');
+  await sharp(Buffer.from(svg)).png().toFile(png);
+  return { png, w, h };
+}
+// The frozen first frame of `framePng` with the bubble popping up on it.
+async function soundBubbleSegment(tmp, framePng, bubble, run, { fadeIn = null } = {}) {
+  const W = 1080, H = 1920;
+  const b = await soundBubblePng(tmp, bubble.text);
+  const el = { key: 'bubble', png: b.png, w: b.w, h: b.h, x: Math.round((W - b.w) / 2), y: Math.round(H * bubble.y / 100 - b.h / 2), def: { effect: 'pop', start: 0.15, dur: 0.4 } };
+  return layeredCardSegment(tmp, 'soundbubble', [el], bubble.seconds, {}, run, { basePng: framePng, fadeIn });
+}
+function parseSoundBubble(src) {
+  if (!src || typeof src !== 'object' || src.enabled !== true) return null;
+  const text = String(src.text || '').replace(/\s+/g, ' ').trim().slice(0, 40) || 'Turn your sound on';
+  return {
+    text,
+    seconds: Math.min(15, Math.max(0.5, Number(src.seconds) || 4.5)),
+    y: Math.min(90, Math.max(10, Number(src.y) || 50)),   // vertical centre, % of the frame
+    // 'content' (default): over the first frame of the content (first still,
+    // or the clip); 'opening': over the finished opening card, after its animation.
+    where: ['opening', 'message'].includes(src.where) ? src.where : 'content',
+  };
+}
+
 // Message card (Reels): an optional second slide after the opening card —
 // its own background (colour or a comic/uploaded image, dimmed), up to
 // MESSAGE_LINES lines of text each with its colour, size and entrance, and
@@ -1490,28 +1620,34 @@ async function messageCardSegment(tmp, comicId, card, run) {
     const font = `font-family="Helvetica, Arial, sans-serif" font-size="${b.size}" font-weight="800" fill="${l.color}"`;
     await sharp(Buffer.from(`<svg width="${W}" height="${b.h}" xmlns="http://www.w3.org/2000/svg">${b.indent ? `<text x="${M}" y="${Math.round(b.size * 1.0)}" ${font}>•</text>` : ''}${b.rows.map((r, k) =>
       `<text x="${txOf(l.align) + b.indent}" y="${Math.round(k * b.rowH + b.size * 1.0)}" text-anchor="${anchorOf(l.align)}" ${font}>${esc(r)}</text>`).join('')}</svg>`)).png().toFile(png);
-    els.push({ key: `line${i}`, png, w: W, h: b.h, x: 0, y, text: l.text, def: { effect: l.effect, start: l.start, dur: l.dur } });
+    els.push({ key: `line${i}`, png, w: W, h: b.h, x: 0, y, text: l.text, say: l.say || l.text, audio: l.audio, def: { effect: l.effect, start: l.start, dur: l.dur } });
     y += b.h + gapAfter(l);
   }
   // Narration (optional): the English narrator reads each line. With autoTime
   // the lines are re-timed to follow the narration, one after another.
   const audio = [];
   if (card.voice && els.length) {
-    if (!process.env.ELEVENLABS_API_KEY) throw new Error('ELEVENLABS_API_KEY not configured (message card narration)');
     const upDir = path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads');
     await fs.mkdir(upDir, { recursive: true });
     let t = 0.3;
     for (let i = 0; i < els.length; i++) {
-      const hash = require('crypto').createHash('sha1').update(els[i].text).digest('hex').slice(0, 12);
-      const file = path.join(upDir, `msgline-${hash}.mp3`);
-      if (!require('fs').existsSync(file)) {
-        const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ENGLISH_VOICE_ID}`, {
-          method: 'POST',
-          headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
-          body: JSON.stringify({ text: els[i].text, model_id: 'eleven_v3', language_code: 'en', voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 } }),
-        });
-        if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
-        await fs.writeFile(file, Buffer.from(await r.arrayBuffer()));
+      // A clip made in the editor (heard and approved there) is used as is;
+      // otherwise the English narrator reads the line now.
+      let file = els[i].audio ? path.join(upDir, els[i].audio.slice(7)) : '';
+      if (file && !require('fs').existsSync(file)) file = '';
+      if (!file) {
+        if (!process.env.ELEVENLABS_API_KEY) throw new Error('ELEVENLABS_API_KEY not configured (message card narration)');
+        const hash = require('crypto').createHash('sha1').update(els[i].say).digest('hex').slice(0, 12);
+        file = path.join(upDir, `msgline-${hash}.mp3`);
+        if (!require('fs').existsSync(file)) {
+          const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ENGLISH_VOICE_ID}`, {
+            method: 'POST',
+            headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+            body: JSON.stringify({ text: els[i].say, model_id: 'eleven_v3', language_code: 'en', voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 } }),
+          });
+          if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
+          await fs.writeFile(file, Buffer.from(await r.arrayBuffer()));
+        }
       }
       const dur = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]));
       if (card.autoTime) { els[i].def.start = Number(t.toFixed(2)); t += dur + 0.4; }
@@ -1556,24 +1692,57 @@ async function openingImageSegment(tmp, comicId, still, run, { index = 0, fadeIn
   const margin = still.margin, boxW = W - 2 * margin, boxH = H - 2 * margin;
   const base = still.fit === 'cover' ? Math.max(boxW / iw, boxH / ih) : Math.min(boxW / iw, boxH / ih);
   const w = Math.max(1, Math.round(iw * base * still.zoom)), h = Math.max(1, Math.round(ih * base * still.zoom));
-  let img = sharp(src).rotate().resize(w, h);
+  // With camera moves the frame is composed at twice the size, so zoompan
+  // crops from real pixels instead of blowing up a 1080-wide raster.
+  const K = (still.moves || []).length ? 2 : 1;
+  let img = sharp(src).rotate().resize(w * K, h * K);
   const cw = Math.min(w, boxW), ch = Math.min(h, boxH);
-  if (cw < w || ch < h) img = img.extract({ left: Math.round((w - cw) * still.focusX), top: Math.round((h - ch) * still.focusY), width: cw, height: ch });
-  await sharp({ create: { width: W, height: H, channels: 3, background: rgb } })
-    .composite([{ input: await img.png().toBuffer(), gravity: 'centre' }]).png().toFile(png);
+  if (cw < w || ch < h) img = img.extract({ left: Math.round((w - cw) * still.focusX) * K, top: Math.round((h - ch) * still.focusY) * K, width: cw * K, height: ch * K });
+  const frame = sharp({ create: { width: W * K, height: H * K, channels: 3, background: rgb } })
+    .composite([{ input: await img.png().toBuffer(), gravity: 'centre' }]).png();
+  // `png` is always the frame at the reel's size (the sound bubble is drawn on
+  // it); the double-size copy only feeds zoompan.
+  const png2x = path.join(tmp, `still-${index}-2x.png`);
+  if (K > 1) { const buf = await frame.toBuffer(); await fs.writeFile(png2x, buf); await sharp(buf).resize(W, H).png().toFile(png); }
+  else await frame.toFile(png);
   const seg = path.join(tmp, `still-${index}.mp4`);
-  const fades = still.fade && still.seconds > 0.6;
-  const fadeOut = fades ? `,fade=t=out:st=${(still.seconds - 0.35).toFixed(2)}:d=0.35:color=0x${bg.slice(1)}` : '';
+  // Voice-over: the lines play one after another from `voiceDelay` seconds
+  // after the still appears, each followed by its own pause; the still stays up at least
+  // until the last line (and its pause) is over.
+  let seconds = still.seconds;
+  const { voices, end: voicesEnd } = await placeVoiceLines(comicId, still, run);
+  if (voices.length) seconds = Math.max(seconds, voicesEnd + 0.3);
+  const fades = still.fade && seconds > 0.6;
+  const fadeOut = fades ? `,fade=t=out:st=${(seconds - 0.35).toFixed(2)}:d=0.35:color=0x${bg.slice(1)}` : '';
   const fadeInF = fades && fadeIn ? `,fade=t=in:st=0:d=0.35:color=0x${bg.slice(1)}` : '';
-  await run('ffmpeg', ['-y', '-loop', '1', '-framerate', String(FPS), '-t', String(still.seconds), '-i', png,
-    '-f', 'lavfi', '-t', String(still.seconds), '-i', 'anullsrc=r=44100:cl=stereo',
-    '-vf', `scale=${W}:${H},setsar=1,format=yuv420p${fadeInF}${fadeOut}`, '-map', '0:v', '-map', '1:a', '-t', String(still.seconds),
-    '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-ar', '44100', '-ac', '2', seg]);
+  const args = ['-y', '-loop', '1', '-framerate', String(FPS), '-t', String(seconds), '-i', K > 1 ? png2x : png];
+  for (const v of voices) args.push('-i', v.file);
+  const zoom = K > 1 ? zoomFilter(still.moves, FPS, W, H).slice(1) + ',' : `scale=${W}:${H},`;
+  const chain = [`[0:v]${zoom}setsar=1,format=yuv420p${fadeInF}${fadeOut}[v]`,
+                 `anullsrc=r=44100:cl=stereo,atrim=0:${seconds}[sil]`];
+  let mix = '[sil]';
+  voices.forEach((v, j) => {
+    const ms = Math.round(v.at * 1000);
+    chain.push(`[${j + 1}:a]aformat=sample_rates=44100:channel_layouts=stereo,adelay=${ms}|${ms}[va${j}]`);
+    mix += `[va${j}]`;
+  });
+  chain.push(`${mix}amix=inputs=${voices.length + 1}:normalize=0,atrim=0:${seconds}[a]`);
+  args.push('-filter_complex', chain.join(';'), '-map', '[v]', '-map', '[a]', '-t', String(seconds),
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-ar', '44100', '-ac', '2', seg);
+  await run('ffmpeg', args);
   return seg;
+}
+// "upload:<name>" (marketing/uploads — a generated voice line or the user's
+// own audio) → its path; anything else is refused.
+function uploadedAudioPath(comicId, token) {
+  const n = String(token).startsWith('upload:') ? String(token).slice(7) : '';
+  if (!/^[\w.\-]+$/i.test(n)) throw new Error('Bad voice-over file');
+  return path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads', n);
 }
 // One still: { image: comic image token, seconds 0.5–60, fit: 'inside' | 'cover',
 // background '#RRGGBB', margin px, zoom (percent in, factor out: 100 → 1),
-// focusX/focusY (percent in, 0–1 out: which part is kept when cropped), fade }
+// focusX/focusY (percent in, 0–1 out: which part is kept when cropped), fade,
+// lines (the voice-over: up to 5 generated lines, each with a pause after it) }
 function parseOpeningImage(src) {
   if (!src || typeof src !== 'object' || src.enabled === false) return null;
   const image = String(src.image || '').slice(0, 300);
@@ -1589,14 +1758,46 @@ function parseOpeningImage(src) {
     focusX: pct(src.focusX, 50),
     focusY: pct(src.focusY, 50),
     fade: src.fade !== false,
+    // camera moves while the still is up (times from the moment it appears)
+    moves: parseZooms(src.moves),
+    // the older single `audio` token is a one-line voice-over
+    ...parseVoiceLines(src.audio && !Array.isArray(src.lines) ? { ...src, lines: [{ audio: src.audio }] } : src),
   };
 }
-// The stills shown in order before the clip, at most 6: `openingImages` (a
+const STILL_VOICE_LINES = 5;
+// The voice-over of a slide (a still, or the sign-off card): { voiceDelay:
+// seconds between the slide appearing and the first line, lines: up to
+// STILL_VOICE_LINES of { audio: "upload:<name>" (see uploadedAudioPath), pause:
+// seconds of silence after it } }. Lines play one after another; the slide
+// holds until the last one is over.
+function parseVoiceLines(src) {
+  src = src && typeof src === 'object' ? src : {};
+  return {
+    voiceDelay: Number.isFinite(Number(src.voiceDelay)) && src.voiceDelay !== '' && src.voiceDelay != null ? Math.min(30, Math.max(0, Number(src.voiceDelay))) : 0.25,
+    lines: (Array.isArray(src.lines) ? src.lines : []).slice(0, STILL_VOICE_LINES)
+      .filter(l => l && /^upload:[\w.\-]+$/i.test(String(l.audio || '')))
+      .map(l => ({ audio: String(l.audio), pause: Math.min(30, Math.max(0, Number(l.pause) || 0)) })),
+  };
+}
+// The lines of a voice-over placed in time: [{ file, at }] plus the second the
+// last pause ends (0 with no lines).
+async function placeVoiceLines(comicId, voice, run) {
+  const voices = [];
+  let t = voice.voiceDelay;
+  for (const line of voice.lines) {
+    const file = uploadedAudioPath(comicId, line.audio);
+    const dur = parseFloat(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file])) || 0;
+    voices.push({ file, at: t });
+    t += dur + line.pause;
+  }
+  return { voices, end: voices.length ? t : 0 };
+}
+// The stills shown in order before the clip, at most 20: `openingImages` (a
 // list) — or the older single `openingImage` ({ enabled: true, … }).
 function parseOpeningImages(body) {
   const list = Array.isArray(body.openingImages) ? body.openingImages
     : body.openingImage && body.openingImage.enabled === true ? [body.openingImage] : [];
-  return list.slice(0, 6).map(parseOpeningImage).filter(Boolean);
+  return list.slice(0, 20).map(parseOpeningImage).filter(Boolean);
 }
 
 async function coversMosaicSegment(tmp, dur, run) {
@@ -1657,23 +1858,36 @@ async function coversMosaicSegment(tmp, dur, run) {
 }
 
 async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
-  const { questionSec = 2.0, endSec = 1.8, endCaption = '', midCaption = '',
+  const { questionSec = 2.0, endCaption = '', midCaption = '',
           openingLine1 = '', openingLine2 = '', openingSec = 2.0, endAnim = {} } = secs;
+  let endSec = secs.endSec || 1.8;
   const { execFile } = require('child_process');
   const os = require('os');
   const run = (cmd, args) => new Promise((resolve, reject) =>
     execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
-      err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+      err ? reject(new Error(String(se || err.message).trim().split("\n").slice(-30).join("\n"))) : resolve(so)));
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'finish-'));
   try {
     const W = 1080, H = 1920, FPS = 25;
     const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const cards = [];
-    if (question) {
-      const fitQ = Math.min(88, Math.floor((W - 260) / (0.56 * String(question).length)));
+    // Question card: the yellow question mid-page, with up to two separate
+    // white lines at the top of the page above it (each optional, each
+    // auto-shrunk to fit). Any of the three on its own makes the card.
+    const questionTop = (secs.questionTop || []).filter(Boolean);
+    if (question || questionTop.length) {
+      const fit = (t, base) => Math.min(base, Math.floor((W - 260) / (0.56 * String(t).length)));
+      const texts = [];
+      let y = 330;
+      for (const line of questionTop) {
+        const s = fit(line, 72);
+        texts.push(`<text x="${W / 2}" y="${y}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${s}" font-weight="800" fill="#FFFFFF">${esc(line)}</text>`);
+        y += Math.round(s * 1.7);
+      }
+      if (question) texts.push(`<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fit(question, 88)}" font-weight="800" fill="#FFD23F">${esc(question)}</text>`);
       const qp = path.join(tmp, 'q.png');
       await sharp({ create: { width: W, height: H, channels: 4, background: VIOLET } })
-        .composite([{ input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fitQ}" font-weight="800" fill="#FFD23F">${esc(question)}</text></svg>`), left: 0, top: 0 }])
+        .composite([{ input: Buffer.from(`<svg width="${W}" height="${H}">${texts.join('')}</svg>`), left: 0, top: 0 }])
         .flatten({ background: VIOLET }).png().toFile(qp);
       cards.push([qp, questionSec]);
     }
@@ -1717,11 +1931,32 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
     const logoPng = path.join(tmp, 'logo.png');
     await fs.writeFile(logoPng, logo);
     const midSize = midCaption ? Math.min(64, Math.floor((W - 260) / (0.56 * midCaption.length))) : 0;
+    // Two separate lines at the top of the page (each optional), above the logo.
+    // Line 1 white, line 2 yellow — the opening card's pairing. Laid out
+    // bottom-up so the gap between the last line and the logo equals the gap
+    // between the logo and the "Interactive Comics" cap height below it.
+    // Its voice-over (lines spoken over the card, see parseVoiceLines): the
+    // card stays up at least until the last line and its pause are over.
+    const endVoice = await placeVoiceLines(comicId, secs.endVoice || { voiceDelay: 0, lines: [] }, run);
+    if (endVoice.voices.length) endSec = Math.max(endSec, endVoice.end + 0.3);
+    const topElements = [];
+    // The whole sign-off sits a tenth of the frame below centre — it reads
+    // better under a phone's top UI than dead centre.
+    const endDown = Math.round(H * 0.10);
+    const logoTop = Math.round(H / 2 - lm.height - 80) + endDown;
+    const gapUnderLogo = Math.round(H / 2 + 130 - 72 * 0.72) + endDown - (logoTop + lm.height);
+    const topLines = (secs.endTop || []).map((line, i) => line ? { i, line, s: Math.min(72, Math.floor((W - 260) / (0.56 * line.length))) } : null).filter(Boolean);
+    let baseline = logoTop - gapUnderLogo;
+    for (const t of [...topLines].reverse()) {
+      topElements.unshift({ key: `top${t.i + 1}`, ...(await textPng(`top${t.i + 1}.png`, t.line, t.s, t.i === 1 ? '#FFD23F' : '#FFFFFF', 800)), x: 0, y: Math.round(baseline - t.s * 1.02), def: { effect: 'fade', start: 0.2 + t.i * 0.25, dur: 0.4 } });
+      baseline -= Math.round(t.s * 1.7);
+    }
     const endElements = [
-      { key: 'logo', png: logoPng, w: lm.width, h: lm.height, x: Math.round((W - lm.width) / 2), y: Math.round(H / 2 - lm.height - 80), def: { effect: 'pop', start: 0, dur: 0.5 } },
-      { key: 'tagline', ...(await textPng('t1.png', 'Interactive Comics', 72, '#FFFFFF', 700, { squiggle: true })), x: 0, y: Math.round(H / 2 + 130 - 72 * 1.02), def: { effect: 'fade', start: 0.35, dur: 0.4 } },
-      ...(midCaption ? [{ key: 'caption', ...(await textPng('t2.png', midCaption, midSize, '#FFD23F')), x: 0, y: Math.round(H / 2 + 250 - midSize * 1.02), def: { effect: 'slide-up', start: 0.6, dur: 0.45 } }] : []),
-      { key: 'net', ...(await textPng('t3.png', 'comigo.net', 104, '#FFFFFF', 400, { display: true })), x: 0, y: Math.round(H / 2 + 420 - 104 * 1.02), def: { effect: 'fade', start: 0.9, dur: 0.5 } },
+      ...topElements,
+      { key: 'logo', png: logoPng, w: lm.width, h: lm.height, x: Math.round((W - lm.width) / 2), y: logoTop, def: { effect: 'pop', start: 0, dur: 0.5 } },
+      { key: 'tagline', ...(await textPng('t1.png', 'Interactive Comics', 72, '#FFFFFF', 700, { squiggle: true })), x: 0, y: Math.round(H / 2 + 130 - 72 * 1.02) + endDown, def: { effect: 'fade', start: 0.35, dur: 0.4 } },
+      ...(midCaption ? [{ key: 'caption', ...(await textPng('t2.png', midCaption, midSize, '#FFD23F')), x: 0, y: Math.round(H / 2 + 250 - midSize * 1.02) + endDown, def: { effect: 'slide-up', start: 0.6, dur: 0.45 } }] : []),
+      { key: 'net', ...(await textPng('t3.png', 'comigo.net', 104, '#FFFFFF', 400, { display: true })), x: 0, y: Math.round(H / 2 + 420 - 104 * 1.02) + endDown, def: { effect: 'fade', start: 0.9, dur: 0.5 } },
     ];
     if (endCaption) {
       const fsC = 68, lineHC = Math.round(fsC * 1.3);
@@ -1734,9 +1969,27 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
       const capH = lines.length * lineHC + 20;
       await sharp(Buffer.from(`<svg width="${W}" height="${capH}" xmlns="http://www.w3.org/2000/svg">${lines.map((l, k) =>
         `<text x="${W / 2}" y="${Math.round((k + 0.85) * lineHC)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fsC}" font-weight="700" fill="#FFD23F">${esc(l)}</text>`).join('')}</svg>`)).png().toFile(capPng);
-      endElements.push({ key: 'bottom', png: capPng, w: W, h: capH, x: 0, y: Math.round(H / 2 + 560), def: { effect: 'fade', start: Math.max(0, endSec - 2), dur: 0.4 } });
+      endElements.push({ key: 'bottom', png: capPng, w: W, h: capH, x: 0, y: Math.round(H / 2 + 560) + endDown, def: { effect: 'fade', start: -2, dur: 0.4 } });
+    }
+    // The card lasts at least until its last entrance has finished (plus a
+    // hold to read it), like the opening card — so a Start past the set
+    // seconds lengthens the card instead of being squeezed onto its last
+    // frame. A negative start counts back from the end of the (final) card.
+    const endCfg = el => ({ ...el.def, ...(endAnim[el.key] || {}) });
+    const endAnimEnd = Math.max(0, ...endElements.map(el => { const c = endCfg(el); return (Number(c.start) || 0) + (Number(c.dur) || 0.4); }));
+    endSec = Math.max(endSec, endAnimEnd + 0.6);
+    for (const el of endElements) {
+      const c = endCfg(el);
+      if ((Number(c.start) || 0) < 0) endAnim[el.key] = { ...c, start: Math.max(0, endSec + Number(c.start)) };
     }
     const endCardSpec = { elements: endElements, dur: endSec };
+    // Preview of the sign-off card on its own (POST /endcard-preview): render
+    // just that segment, so the card can be tuned without rendering the reel.
+    if (secs.endCardOnly) {
+      const seg = await layeredCardSegment(tmp, 'endcard', endCardSpec.elements, endCardSpec.dur, endAnim, run, { audio: endVoice.voices });
+      await run('ffmpeg', ['-y', '-i', seg, '-c', 'copy', '-movflags', '+faststart', outPath]);
+      return;
+    }
 
     const parts = [];
     // Optional opening title card (violet; white line 1 + yellow line 2, same
@@ -1770,14 +2023,70 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
       // hold), so a late element (the sound badge) is never cut off.
       const oAnim = secs.openingAnim || {};
       const animEnd = Math.max(...openElements.map(el => { const c = { ...el.def, ...(oAnim[el.key] || {}) }; return (Number(c.start) || 0) + (Number(c.dur) || 0.4); }));
-      const oDur = Math.max(openingSec, animEnd + (secs.openingHold || 0) + (secs.soundBadge ? 0.6 : 0));
-      parts.push(await layeredCardSegment(tmp, 'open', openElements, oDur, oAnim, run));
+      // Its voice-over (lines spoken over the card): the card stays up at
+      // least until the last line and its pause are over.
+      const openingVoice = await placeVoiceLines(comicId, secs.openingVoice || { voiceDelay: 0, lines: [] }, run);
+      let oDur = Math.max(openingSec, animEnd + (secs.openingHold || 0) + (secs.soundBadge ? 0.6 : 0));
+      if (openingVoice.voices.length) oDur = Math.max(oDur, openingVoice.end + 0.3);
+      const openSeg = await layeredCardSegment(tmp, 'open', openElements, oDur, oAnim, run, { audio: openingVoice.voices });
+      parts.push(openSeg);
+      // The "sound on" pop-up over the finished card: its last frame is held
+      // under the bubble, then the reel goes on.
+      if (secs.soundBubble && secs.soundBubble.where === 'opening') {
+        const last = path.join(tmp, 'open-last.png');
+        await run('ffmpeg', ['-y', '-sseof', '-0.1', '-i', openSeg, '-frames:v', '1', '-update', '1', last]);
+        parts.push(await soundBubbleSegment(tmp, last, secs.soundBubble, run));
+      }
     }
     // Optional message card (second slide) after the opening card.
-    if (secs.messageCard && secs.messageCard.enabled) parts.push(await messageCardSegment(tmp, comicId, secs.messageCard, run));
+    if (secs.messageCard && secs.messageCard.enabled) {
+      const msgSeg = await messageCardSegment(tmp, comicId, secs.messageCard, run);
+      parts.push(msgSeg);
+      // The "sound on" pop-up over the finished message card, as on the opening card.
+      if (secs.soundBubble && secs.soundBubble.where === 'message') {
+        const last = path.join(tmp, 'message-last.png');
+        await run('ffmpeg', ['-y', '-sseof', '-0.1', '-i', msgSeg, '-frames:v', '1', '-update', '1', last]);
+        parts.push(await soundBubbleSegment(tmp, last, secs.soundBubble, run));
+      }
+    }
     // Optional stills (pages of the comic, say), each held for a while, right before the clip.
+    // With the sound bubble on, the first still's frame is held under the
+    // bubble first (the hold takes the still's fade-in, the still then cuts in).
+    // The pop-up over the content's first frame — unless it went on the
+    // opening card (or there is no opening card to put it on).
+    const onOpening = secs.soundBubble && secs.soundBubble.where === 'opening' && (openingLine1 || openingLine2);
+    const onMessage = secs.soundBubble && secs.soundBubble.where === 'message' && secs.messageCard && secs.messageCard.enabled;
+    const bubble = secs.soundBubble && !onOpening && !onMessage ? secs.soundBubble : null;
+    const stillSegs = [];
+    // A stills-only reel with voice lines (the "4 · Voice lines" list): the
+    // stills are the content, so the lines play over them, in order, exactly
+    // as they would over a clip. If the lines outlast the stills, the last
+    // still is held longer (its fade-out then comes after the last line).
+    const sv = !videoPath && secs.stillsVoice && secs.stillsVoice.items.length ? secs.stillsVoice : null;
+    if (sv && secs.openingImages.length) {
+      const need = (await voiceLinesEnd(comicId, sv.items)) + 0.4;
+      const have = secs.openingImages.reduce((t, st) => t + (Number(st.seconds) || 0), 0);
+      if (need > have) {
+        const last = secs.openingImages[secs.openingImages.length - 1];
+        secs.openingImages[secs.openingImages.length - 1] = { ...last, seconds: (Number(last.seconds) || 0) + need - have };
+      }
+    }
     for (const [i, still] of secs.openingImages.entries()) {
-      parts.push(await openingImageSegment(tmp, comicId, still, run, { index: i, fadeIn: parts.length > 0 }));
+      const bubbleHere = bubble && i === 0;
+      const seg = await openingImageSegment(tmp, comicId, still, run, { index: i, fadeIn: parts.length > 0 && !bubbleHere });
+      if (bubbleHere) parts.push(await soundBubbleSegment(tmp, path.join(tmp, 'still-0.png'), bubble, run, { fadeIn: parts.length > 0 ? `0x${still.background.slice(1)}` : null }));
+      parts.push(seg);
+      stillSegs.push(seg);
+    }
+    if (sv && stillSegs.length) {
+      const joined = path.join(tmp, 'stills.mp4');
+      await run('ffmpeg', ['-y', ...stillSegs.flatMap(f => ['-i', f]), '-filter_complex',
+        stillSegs.map((_, i) => `[${i}:v][${i}:a]`).join('') + `concat=n=${stillSegs.length}:v=1:a=1[v][a]`,
+        '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-ar', '44100', '-ac', '2', joined]);
+      const voiced = path.join(tmp, 'stills-voiced.mp4');
+      await mixVoicesOnto(comicId, joined, sv.items, sv.ambient, voiced, sv.subtitles);
+      parts.splice(parts.indexOf(stillSegs[0]), stillSegs.length, voiced);
     }
     // The clip — unless the reel is stills only (videoPath null: the opening
     // images ARE the reel, followed by the usual cards).
@@ -1785,12 +2094,19 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
       const main = path.join(tmp, 'main.mp4');
       // After an opening/message card or a still, the clip fades in quickly rather than cutting hard.
       const lastStill = secs.openingImages[secs.openingImages.length - 1];
-      const mainFade = (openingLine1 || openingLine2 || parts.length) ? `,fade=t=in:st=0:d=0.35:color=0x${(lastStill ? lastStill.background : '#6E40F0').slice(1)}` : '';
+      const bubbleHere = bubble && secs.openingImages.length === 0;   // no stills: the bubble holds the clip's first frame
+      const fadeColor = `0x${(lastStill ? lastStill.background : '#6E40F0').slice(1)}`;
+      const mainFade = (openingLine1 || openingLine2 || parts.length) && !bubbleHere ? `,fade=t=in:st=0:d=0.35:color=${fadeColor}` : '';
       const zoom = zoomFilter(secs.zooms || [], FPS, W, H);
       await run('ffmpeg', ['-y', '-i', videoPath,
         '-vf', `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,fps=${FPS},setsar=1${zoom}${mainFade}`,
         '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
         '-c:a', 'aac', '-ar', '44100', '-ac', '2', main]);
+      if (bubbleHere) {
+        const first = path.join(tmp, 'main-first.png');
+        await run('ffmpeg', ['-y', '-i', main, '-frames:v', '1', first]);
+        parts.push(await soundBubbleSegment(tmp, first, bubble, run, { fadeIn: (openingLine1 || openingLine2 || parts.length) ? fadeColor : null }));
+      }
       parts.push(main);
     }
     for (let i = 0; i < cards.length; i++) {
@@ -1819,7 +2135,7 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
       if (seg) parts.push(seg);
     }
     // Animated sign-off card: violet base + each layer entering with its effect.
-    parts.push(await layeredCardSegment(tmp, 'endcard', endCardSpec.elements, endCardSpec.dur, endAnim, run));
+    parts.push(await layeredCardSegment(tmp, 'endcard', endCardSpec.elements, endCardSpec.dur, endAnim, run, { audio: endVoice.voices }));
     const inputs = parts.flatMap(f => ['-i', f]);
     const filter = parts.map((_, i) => `[${i}:v][${i}:a]`).join('') + `concat=n=${parts.length}:v=1:a=1[v][a]`;
     await run('ffmpeg', ['-y', ...inputs, '-filter_complex', filter, '-map', '[v]', '-map', '[a]',
@@ -1833,9 +2149,13 @@ async function finishClip(comicId, videoPath, question, outPath, secs = {}) {
 // User-dictated card lengths (seconds, clamped 0.5–10).
 const cardSecs = body => ({
   questionSec: Math.min(10, Math.max(0.5, Number(body.questionSeconds) || 2)),
+  // two separate lines at the top of the question card (each optional)
+  questionTop: [body.questionTop1, body.questionTop2].map(l => String(l || '').trim().slice(0, 80)),
   endSec: Math.min(30, Math.max(0.5, Number(body.endCardSeconds) || 1.8)),
   endCaption: String(body.endCardCaption || '').trim().slice(0, 200),
   midCaption: String(body.endCardMidCaption || '').trim().slice(0, 120),
+  // two separate lines at the top of the sign-off card (each optional)
+  endTop: [body.endCardTop1, body.endCardTop2].map(l => String(l || '').trim().slice(0, 80)),
   openingLine1: String(body.openingLine1 || '').trim().slice(0, 80),
   openingLine2: String(body.openingLine2 || '').trim().slice(0, 80),
   openingSec: Math.min(10, Math.max(0.5, Number(body.openingSeconds) || 2)),
@@ -1843,11 +2163,15 @@ const cardSecs = body => ({
   openingHold: Math.min(15, Math.max(0, Number(body.openingHold) || 0)),
   coversCard: body.coversCard === true,
   coversSec: Math.min(15, Math.max(1, Number(body.coversSeconds) || 3.5)),
-  endAnim: parseAnim(body.endAnim, ['logo', 'tagline', 'caption', 'net', 'bottom']),
+  endAnim: parseAnim(body.endAnim, ['top1', 'top2', 'logo', 'tagline', 'caption', 'net', 'bottom']),
+  // the sign-off and opening cards' voice-overs
+  endVoice: parseVoiceLines(body.endVoice),
+  openingVoice: parseVoiceLines(body.openingVoice),
   openingAnim: parseAnim(body.openingAnim, ['logo', 'line1', 'squiggle', 'line2', 'badge']),
   messageCard: parseMessageCard(body.messageCard),
   openingImages: parseOpeningImages(body),
   soundBadge: body.soundBadge === true,
+  soundBubble: parseSoundBubble(body.soundBubble),
   zooms: parseZooms(body.zooms),
 });
 
@@ -1856,7 +2180,7 @@ const cardSecs = body => ({
 // from `start`, over `ramp` seconds; held until `until` (null = to the end of
 // the clip), then back out over `release` seconds. Times are in the clip
 // itself, before any cards are added in front.
-const ZOOM_MOVES = 3;
+const ZOOM_MOVES = 20;
 function parseZooms(src) {
   if (!Array.isArray(src)) return [];
   const num = (v, lo, hi, d) => (Number.isFinite(Number(v)) && v !== '' && v != null ? Math.min(hi, Math.max(lo, Number(v))) : d);
@@ -1912,6 +2236,10 @@ function parseMessageCard(src) {
     effect: effects.includes(l && l.effect) ? l.effect : 'fade',
     start: Math.min(60, Math.max(0, Number(l && l.start) || 0)),
     dur: Math.min(5, Math.max(0.05, Number(l && l.dur) || 0.5)),
+    // Narration: what to say (defaults to the text) and a clip made in the
+    // editor ("upload:line-….mp3"); without a clip the narrator reads `say`.
+    say: String((l && l.say) || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+    audio: /^upload:[\w.\-]+$/.test(String((l && l.audio) || '')) ? String(l.audio) : '',
   });
   // An empty line between two lines of text is kept as a spacer (a blank row
   // of its size); blank heading/subheading and blank lines at either end are dropped.
@@ -1942,11 +2270,35 @@ function parseAnim(src, keys) {
   }
   return out;
 }
-const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim() || parseMessageCard(body.messageCard) || parseOpeningImages(body).length);
+const hasOpening = body => !!(String(body.openingLine1 || '').trim() || String(body.openingLine2 || '').trim() || parseMessageCard(body.messageCard) || parseOpeningImages(body).length || parseSoundBubble(body.soundBubble));
+// The question card is made from the question or either of its top lines.
+const hasQuestionCard = body => !!(String(body.question || '').trim() || String(body.questionTop1 || '').trim() || String(body.questionTop2 || '').trim());
 
 // POST /api/marketing/veo-remix — re-audio an EXISTING generated clip without
 // paying for a new generation. Body: { comicId, file, voiceAudio: [..], ambient }
 // With no `file` and at least one opening image, the reel is made of the
+// POST /api/marketing/endcard-preview — render ONLY the sign-off card (same
+// fields as the reel: captions, top lines, animation, voice-over) so it can be
+// tuned without rendering the whole reel. Written under marketing/previews;
+// each call replaces the previous sign-off preview.
+router.post('/endcard-preview', async (req, res) => {
+  try {
+    const { comicId } = req.body;
+    if (!comicId || !/^[\w.\-]+$/.test(comicId)) return res.status(400).json({ error: 'comicId is required' });
+    const dir = path.join(PROJECTS_DIR, comicId, 'marketing', 'previews');
+    await fs.mkdir(dir, { recursive: true });
+    for (const f of await fs.readdir(dir)) if (/^endcard-\d+\.mp4$/.test(f)) await fs.rm(path.join(dir, f), { force: true });
+    const name = `endcard-${Date.now()}.mp4`;
+    const secs = cardSecs(req.body);
+    secs.endCardOnly = true;
+    await finishClip(comicId, null, '', path.join(dir, name), secs);
+    res.json({ url: `/projects/${comicId}/marketing/previews/${name}`, file: name });
+  } catch (error) {
+    console.error('End card preview error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // stills alone (plus the cards): a page-by-page reel with no clip.
 router.post('/veo-remix', async (req, res) => {
   try {
@@ -1957,7 +2309,10 @@ router.post('/veo-remix', async (req, res) => {
     if (stillsOnly) {
       const fin = path.join(PROJECTS_DIR, comicId, 'marketing', `stills-${Date.now()}-fin.mp4`);
       await fs.mkdir(path.dirname(fin), { recursive: true });
-      await finishClip(comicId, null, question, fin, cardSecs(req.body));
+      // The voice lines play over the stills (there is no clip for them to play over).
+      const secs = cardSecs(req.body);
+      if (voiceAudio.length) secs.stillsVoice = { items: voiceAudio, ambient: ['keep', 'duck', 'mute'].includes(ambient) ? ambient : 'duck', subtitles: req.body.subtitles || 'none' };
+      await finishClip(comicId, null, question, fin, secs);
       const finName = path.basename(fin);
       return res.json({ url: `/projects/${comicId}/marketing/${finName}`, file: finName });
     }
@@ -1985,7 +2340,7 @@ router.post('/veo-remix', async (req, res) => {
       await mixCuesOnto(comicId, cur, spoken.map(c => ({ ...c, at: shift(c.at) })), ['keep', 'duck', 'mute'].includes(req.body.cueOriginal) ? req.body.cueOriginal : 'duck', cued);
       cur = cued;
     }
-    if (question || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) {
+    if (hasQuestionCard(req.body) || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) {
       const fin = out.replace(/\.mp4$/, '-fin.mp4');
       // Zoom times are in the recording's time too: move them with the cuts and freezes.
       const secs = cardSecs(req.body);
@@ -2133,7 +2488,8 @@ async function resolveRefImage(comicId, exportDir, f) {
 }
 
 // Resolve a slide image token: plain name = comic export image; "gen:<name>"
-// = an AI-generated still in the comic's marketing folder.
+// = an AI-generated still in the comic's marketing folder; "page:<file>" = a
+// baked reel page.
 function resolveSlideImage(comicId, exportDir, f) {
   const s = String(f || '');
   // "ref:<server path>" = a style-sheet / character / location reference image
@@ -2153,6 +2509,12 @@ function resolveSlideImage(comicId, exportDir, f) {
     const n = s.slice(7);
     if (!/^[\w.\-]+$/i.test(n)) throw new Error('Bad uploaded image name');
     return path.join(PROJECTS_DIR, comicId, 'marketing', 'uploads', n);
+  }
+  // "page:<file>" = a baked reel page (GET /:comicId/images, bakedReelPages).
+  if (s.startsWith('page:')) {
+    const n = s.slice(5);
+    if (!REEL_PAGE_FILE.test(n)) throw new Error('Bad reel page image name');
+    return path.join(PROJECTS_DIR, comicId, 'images', n);
   }
   if (!/^[\w.\-áéíóúñü]+$/i.test(s)) throw new Error('Bad image filename');
   if (!exportDir) throw new Error('This comic has not been exported yet — export it, or use style/generated/uploaded images');
@@ -2511,7 +2873,7 @@ async function postProcessClip(comicId, outDir, name, body) {
     name = mixed;
   }
   const { question: finQ = '', endCard = false } = body;
-  if (finQ || endCard || hasOpening(body)) {
+  if (hasQuestionCard(body) || endCard || hasOpening(body)) {
     const fin = name.replace(/\.mp4$/, '-fin.mp4');
     await finishClip(comicId, path.join(outDir, name), finQ, path.join(outDir, fin), cardSecs(body));
     name = fin;
@@ -2767,7 +3129,7 @@ router.post('/motion-comic', async (req, res) => {
     await fs.mkdir(outDir, { recursive: true });
     let name = `motion-${Date.now()}.mp4`;
     const { question = '', endCard = false } = req.body;
-    if (question || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) {
+    if (hasQuestionCard(req.body) || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) {
       await finishClip(comicId, cat, question, path.join(outDir, name), cardSecs(req.body));
     } else {
       await fs.copyFile(cat, path.join(outDir, name));
@@ -2788,7 +3150,9 @@ router.post('/motion-comic', async (req, res) => {
 // plays — with a slow camera move over the shot and the motion comic's
 // atmosphere (dust, vignette, grain). Body:
 // { comicId, shots: [{ pageId, panelOrder? (2+; omit = whole page), move,
-//   fit 'fit'|'fill', bubbles 'text'|'highlight'|'none', gap, hold, seconds }],
+//   fit 'fit'|'fill', bubbles 'text'|'highlight'|'none', silent (true = the
+//   bubbles pop in on the same timing but their audio is left out, for a reel
+//   narrated in Marketing), gap, hold, seconds }],
 //   fx: { dust, vignette, grain }, subtitles: 'none'|'en', volume (%),
 //   + the motion comic's finishing fields (opening/question/covers/end card) }
 router.post('/story-reel', async (req, res) => {
@@ -2796,7 +3160,7 @@ router.post('/story-reel', async (req, res) => {
   const fsSync = require('fs');
   const run = (cmd, args) => new Promise((resolve, reject) =>
     execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, so, se) =>
-      err ? reject(new Error(String(se || err.message).trim().split('\n').slice(-6).join('\n'))) : resolve(so)));
+      err ? reject(new Error(String(se || err.message).trim().split("\n").slice(-30).join("\n"))) : resolve(so)));
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'story-'));
   try {
     const { comicId, shots = [], fx = {} } = req.body;
@@ -2841,6 +3205,7 @@ router.post('/story-reel', async (req, res) => {
       if (!bakedImg || !fsSync.existsSync(bakedImg)) return res.status(400).json({ error: `Shot ${i + 1} (${label}) has not been baked yet — bake it in the page editor first` });
       if (!emptyImg || !fsSync.existsSync(emptyImg)) return res.status(400).json({ error: `Shot ${i + 1} (${label}) has no empty-bubbles bake — re-bake it in the page editor` });
       const mode = ['text', 'highlight', 'none'].includes(shot.bubbles) ? shot.bubbles : 'text';
+      const silent = shot.silent === true;   // bubbles still paced by their lines, but unheard
       const fit = shot.fit === 'fill' ? 'fill' : 'fit';
       const gap = num(shot.gap, 0.6, 0, 5), hold = num(shot.hold, 1.0, 0, 10), minSec = num(shot.seconds, 0, 0, 30);
       // The shot's region of the page: a panel's tap zone, or the whole page.
@@ -2898,9 +3263,9 @@ router.post('/story-reel', async (req, res) => {
           }
           await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } }).resize(ow, oh).png().toFile(png);
         }
-        const audio = b.isSoundEffect ? null : audioFile(sen.audioUrl);
-        const len = await audioLen(audio);
-        items.push({ png, x: ox + Math.round((bx - rx) * s), y: oy + Math.round((by - ry) * s), w: ow, h: oh, audio, start: t, len,
+        const spoken = b.isSoundEffect ? null : audioFile(sen.audioUrl);
+        const len = await audioLen(spoken);
+        items.push({ png, x: ox + Math.round((bx - rx) * s), y: oy + Math.round((by - ry) * s), w: ow, h: oh, audio: silent ? null : spoken, start: t, len,
           en: String(sen.translation || '').replace(/\[[^\]]*\]/g, '').trim() });
         t += len + gap;
       }
@@ -2969,7 +3334,7 @@ router.post('/story-reel', async (req, res) => {
     await fs.mkdir(outDir, { recursive: true });
     const name = `story-${Date.now()}.mp4`;
     const { question = '', endCard = false } = req.body;
-    if (question || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) await finishClip(comicId, cat, question, path.join(outDir, name), cardSecs(req.body));
+    if (hasQuestionCard(req.body) || endCard || hasOpening(req.body) || parseZooms(req.body.zooms).length) await finishClip(comicId, cat, question, path.join(outDir, name), cardSecs(req.body));
     else await fs.copyFile(cat, path.join(outDir, name));
     res.json({ url: `/projects/${comicId}/marketing/${name}`, file: name, shots: parts.length });
   } catch (error) {
@@ -3357,6 +3722,67 @@ router.delete('/examples/:comicId/:pageId/publish', async (req, res) => {
     console.error('Example unpublish error:', error.message);
     res.status(500).json({ error: error.message });
   }
+});
+
+// Saved reel setups — everything the Reels form holds (cards, voice lines,
+// opening images with their voice-overs, cues, zooms…), as JSON files under
+// projects/<comicId>/marketing/reel-setups/, so a reel can be picked up again
+// later. The media they refer to (uploads, generated lines, clips) already
+// live on disk under marketing/. No validation of the contents beyond size:
+// it's the form's own state, handed straight back to it.
+const SETUP_MAX_BYTES = 512 * 1024;
+const setupsDir = comicId => path.join(PROJECTS_DIR, comicId, 'marketing', 'reel-setups');
+const setupName = v => { const n = String(v || '').trim().replace(/[^\w .\-]+/g, '').replace(/^[. ]+/, '').slice(0, 60).trim(); return n || null; };
+const setupFile = (comicId, name) => path.join(setupsDir(comicId), `${name}.json`);
+const validComicId = v => /^[\w\-]+$/.test(String(v || ''));
+
+router.get('/:comicId/reel-setups', async (req, res) => {
+  try {
+    const { comicId } = req.params;
+    if (!validComicId(comicId)) return res.status(400).json({ error: 'Bad comic id' });
+    let names = [];
+    try { names = (await fs.readdir(setupsDir(comicId))).filter(f => f.endsWith('.json')); } catch { /* none yet */ }
+    const setups = [];
+    for (const f of names) {
+      const st = await fs.stat(path.join(setupsDir(comicId), f));
+      setups.push({ name: f.slice(0, -5), savedAt: st.mtime });
+    }
+    setups.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+    res.json({ setups });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+router.get('/:comicId/reel-setups/:name', async (req, res) => {
+  try {
+    const { comicId } = req.params; const name = setupName(req.params.name);
+    if (!validComicId(comicId) || !name) return res.status(400).json({ error: 'Bad name' });
+    const raw = await fs.readFile(setupFile(comicId, name), 'utf8').catch(() => null);
+    if (raw == null) return res.status(404).json({ error: 'No such setup' });
+    res.json({ name, setup: JSON.parse(raw) });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+router.put('/:comicId/reel-setups/:name', async (req, res) => {
+  try {
+    const { comicId } = req.params; const name = setupName(req.params.name);
+    if (!validComicId(comicId) || !name) return res.status(400).json({ error: 'Bad name' });
+    const setup = req.body && req.body.setup;
+    if (!setup || typeof setup !== 'object' || Array.isArray(setup)) return res.status(400).json({ error: 'setup (an object) is required' });
+    const json = JSON.stringify(setup);
+    if (Buffer.byteLength(json) > SETUP_MAX_BYTES) return res.status(413).json({ error: 'Setup too large' });
+    await fs.mkdir(setupsDir(comicId), { recursive: true });
+    await fs.writeFile(setupFile(comicId, name), json);
+    res.json({ name, savedAt: new Date() });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+router.delete('/:comicId/reel-setups/:name', async (req, res) => {
+  try {
+    const { comicId } = req.params; const name = setupName(req.params.name);
+    if (!validComicId(comicId) || !name) return res.status(400).json({ error: 'Bad name' });
+    await fs.rm(setupFile(comicId, name), { force: true });
+    res.json({ ok: true });
+  } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
 module.exports = router;

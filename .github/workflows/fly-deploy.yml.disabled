@@ -1,0 +1,28 @@
+# DISABLED (29 Oct 2026). Kept for reference only: GitHub ignores workflow
+# files that do not end in .yml/.yaml, so this never runs.
+#
+# This was Fly's stock "continuous deployment with GitHub Actions" template,
+# added when the app first went to Fly (June 2026). It needs a FLY_API_TOKEN
+# repository secret and never once succeeded (146 failed runs). Production
+# has been deployed since 14 June 2026 by Fly's own GitHub integration
+# (the fly-io bot), which builds on every push to main without this file.
+# To revive it: rename back to fly-deploy.yml and add the secret.
+#
+# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+
+name: Fly Deploy
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    name: Deploy app
+    runs-on: ubuntu-latest
+    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

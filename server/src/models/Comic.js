@@ -42,7 +42,10 @@ const SentenceSchema = new mongoose.Schema({
     audioUrl: String
   }],
   words: [WordSchema],
-  transformations: [TransformationSchema]
+  transformations: [TransformationSchema],
+  // Parts of `text` lettered in another colour: { start, end, color } character
+  // ranges (end exclusive, "#rrggbb"). The text itself stays plain.
+  colorSpans: [{ start: Number, end: Number, color: String }]
 }, { _id: false });
 
 // Bubble Schema (nested in Panel)
@@ -154,6 +157,23 @@ const PanelSchema = new mongoose.Schema({
     }]
   }],
   bubbles: [BubbleSchema]
+}, { _id: false });
+
+// Stroke Schema: a line or arrow drawn over the page in the editor (baked
+// into the page image; see services/strokesSvg.js for the geometry).
+const StrokeSchema = new mongoose.Schema({
+  id: String,
+  kind: { type: String, enum: ['line', 'curve'], default: 'line' },
+  x1: Number, y1: Number, x2: Number, y2: Number,          // page-relative 0..1
+  c1x: Number, c1y: Number, c2x: Number, c2y: Number,      // cubic control points (curves)
+  color: String,
+  width: Number,                                           // px on the 400x600 editing canvas
+  dash: { type: String, enum: ['solid', 'dashed', 'dotted'], default: 'solid' },
+  headStart: Boolean,
+  headEnd: Boolean,
+  headSize: Number,
+  opacity: Number,
+  locked: Boolean
 }, { _id: false });
 
 // Line Schema (for panel dividers)
@@ -268,6 +288,7 @@ const PageSchema = new mongoose.Schema({
   },
   panels: [PanelSchema],
   bubbles: [BubbleSchema],
+  strokes: [StrokeSchema],   // lines and arrows drawn over the page
   hotspots: [HotspotSchema]
 }, { _id: false });
 
@@ -338,6 +359,7 @@ const ComicSchema = new mongoose.Schema({
     // the art: topLeft | topRight | bottomLeft | bottomRight | center | hidden.
     bannerTitlePosition: { type: String, default: 'bottomLeft' },
     bubbles: [BubbleSchema],
+    strokes: [StrokeSchema],
     fitMode: { type: String, default: 'stretch' },
     cropX: { type: Number, default: 0 },
     cropY: { type: Number, default: 0 },

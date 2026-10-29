@@ -22,6 +22,7 @@ const ArchivedPageSchema = new mongoose.Schema({
   },
   panels: [mongoose.Schema.Types.Mixed],
   bubbles: [mongoose.Schema.Types.Mixed],
+  strokes: [mongoose.Schema.Types.Mixed],
 
   // Archive metadata
   archivedAt: { type: Date, default: Date.now },

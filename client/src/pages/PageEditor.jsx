@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { STROKE_DEFAULTS, withDefaults as strokeDefaults, controls as strokeControls, defaultControls as strokeDefaultControls, shapes as strokeShapes, dashArray as strokeDashArray } from '../utils/strokes';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import html2canvas from 'html2canvas';
+import { textRuns, setColorRange, clearColorRange, shiftColorSpans, TEXT_COLOR_PALETTE } from '../utils/textColor';
 
 // Ref image helpers — backward compat with plain string entries
 const getRefPath = (ref) => typeof ref === 'string' ? ref : ref.path;
@@ -796,6 +798,19 @@ function PageEditor({ isCover = false }) {
 
   // Hotspot state
   const [hotspots, setHotspots] = useState([]);
+  // Lines and arrows drawn over the page (see utils/strokes.js); baked into the image under the bubbles.
+  const [strokes, setStrokes] = useState([]);
+  const [selectedStrokeId, setSelectedStrokeId] = useState(null);
+  const [strokeTool, setStrokeTool] = useState(null);        // 'line' | 'curve' | 'arrow' | 'curvedArrow': armed — drag on the page to draw one
+  const [strokeDraft, setStrokeDraft] = useState(null);      // the drag in progress: { x1, y1, x2, y2 }
+  const [strokeDrag, setStrokeDrag] = useState(null);        // moving a stroke ('all') or one of its points ('p1' | 'p2' | 'c1' | 'c2')
+  // The same two, readable synchronously: a quick drag's mousemove can arrive
+  // before React has re-rendered the handlers with the new state.
+  const strokeDraftRef = useRef(null);
+  const strokeDragRef = useRef(null);
+  const putStrokeDraft = (v) => { strokeDraftRef.current = v; setStrokeDraft(v); };
+  const putStrokeDrag = (v) => { strokeDragRef.current = v; setStrokeDrag(v); };
+  const [strokeStyle, setStrokeStyle] = useState({ color: '#000000', width: 3, dash: 'solid', headSize: 1 });   // the last-used look, for the next stroke
   const [selectedHotspotId, setSelectedHotspotId] = useState(null);
   const [isAddingHotspot, setIsAddingHotspot] = useState(false);
   const [isDraggingHotspot, setIsDraggingHotspot] = useState(false);
@@ -1395,6 +1410,7 @@ function PageEditor({ isCover = false }) {
         if (response.data.cover?.bubbles) {
           setBubbles(response.data.cover.bubbles);
         }
+        setStrokes(response.data.cover?.strokes || []);
         // Build list of panels from all pages for cross-page references
         const pages = response.data.pages || [];
         const otherPanels = [];
@@ -1440,7 +1456,7 @@ function PageEditor({ isCover = false }) {
           return;
         }
         console.error('Page not found:', pageId);
-        setPage(null); setLines([]); setPanels([]); setPanelImages({}); setBubbles([]); setHotspots([]);
+        setPage(null); setLines([]); setPanels([]); setPanelImages({}); setBubbles([]); setStrokes([]); setHotspots([]);
         alert('This page could not be loaded. Go back to the comic and open it again.');
         return;
       }
@@ -1453,6 +1469,8 @@ function PageEditor({ isCover = false }) {
       setPanelsComputed(false);
       setPanelImages({});
       setBubbles([]);
+      setStrokes([]);
+      setSelectedStrokeId(null);
       setHotspots([]);
 
       setPage(currentPage);
@@ -1521,6 +1539,7 @@ function PageEditor({ isCover = false }) {
           : currentPage.bubbles;
         setBubbles(withDefaults);
       }
+      setStrokes(currentPage?.strokes || []);
       setHotspots(currentPage?.hotspots || []);
       // Build list of panels from other pages that have artwork
       const currentPage_ = pages.find(p => p.id === pageId);
@@ -2105,6 +2124,33 @@ function PageEditor({ isCover = false }) {
     if (!bubble.sentences || bubble.sentences.length === 0) return '';
     return bubble.sentences.map(s => s.text).join(' ');
   };
+  // The same text as React nodes, with each sentence's colorSpans painted as
+  // coloured <span>s — what the lettering shows and the bake captures. Falls
+  // back to the plain string (so `|| '...'` placeholders still work).
+  const getBubbleDisplayNodes = (bubble) => {
+    if (!bubble.sentences || bubble.sentences.length === 0) return '';
+    if (!bubble.sentences.some(s => s.colorSpans?.length)) return getBubbleDisplayText(bubble);
+    return bubble.sentences.flatMap((sent, i) => [
+      ...(i > 0 ? [' '] : []),
+      ...textRuns(sent.text, sent.colorSpans).map((r, k) => r.color ? <span key={`${sent.id || i}-${k}`} style={{ color: r.color }}>{r.text}</span> : r.text)
+    ]);
+  };
+  // Selection in a sentence's Spanish input, kept so the colour buttons (which
+  // take the focus) still know what was selected.
+  const sentenceSelRef = useRef({});
+  const rememberSentenceSel = (sentenceId, el) => { sentenceSelRef.current[sentenceId] = { start: el.selectionStart ?? 0, end: el.selectionEnd ?? 0 }; };
+  // Colour the selected part of a sentence (null = clear it; with nothing
+  // selected, clear colours the whole sentence back).
+  const colorSentenceSelection = (bubble, sentence, color) => {
+    const sel = sentenceSelRef.current[sentence.id] || { start: 0, end: 0 };
+    const text = sentence.text || '';
+    if (color) {
+      if (sel.end <= sel.start) return;
+      updateSentence(bubble.id, sentence.id, { colorSpans: setColorRange(text, sentence.colorSpans, sel.start, sel.end, color) });
+    } else {
+      updateSentence(bubble.id, sentence.id, { colorSpans: sel.end > sel.start ? clearColorRange(text, sentence.colorSpans, sel.start, sel.end) : [] });
+    }
+  };
 
   // Reading-order numbers for bubbles — mirrors server/src/services/readerFormat.js
   // so the editor shows the SAME order the reader will use. Each bubble is grouped
@@ -2345,6 +2391,48 @@ function PageEditor({ isCover = false }) {
     setBubbles(prev => prev.map(b =>
       b.id === bubbleId ? { ...b, ...updates } : b
     ));
+  };
+
+  // ---- Lines & arrows -------------------------------------------------------
+  // Esc: put the drawing tool down (and drop the selection).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName)) return;
+      setStrokeTool(null); putStrokeDraft(null); putStrokeDrag(null); setSelectedStrokeId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const updateStroke = (strokeId, patch) => setStrokes(prev => prev.map(st => (st.id === strokeId ? { ...st, ...patch } : st)));
+  const deleteStroke = (strokeId) => {
+    setStrokes(prev => prev.filter(st => st.id !== strokeId));
+    setSelectedStrokeId(cur => (cur === strokeId ? null : cur));
+  };
+  const duplicateStroke = (strokeId) => {
+    const st = strokes.find(x => x.id === strokeId);
+    if (!st) return;
+    const d = 0.03;
+    const copy = { ...st, id: `stroke-${Date.now()}`, locked: false, x1: st.x1 + d, y1: st.y1 + d, x2: st.x2 + d, y2: st.y2 + d };
+    if (st.kind === 'curve') { const c = strokeControls(st); Object.assign(copy, { c1x: c.c1x + d, c1y: c.c1y + d, c2x: c.c2x + d, c2y: c.c2y + d }); }
+    setStrokes(prev => [...prev, copy]);
+    setSelectedStrokeId(copy.id);
+  };
+  // The drag just finished with an armed tool becomes a stroke (a mere click doesn't).
+  const finishStrokeDraft = (draft) => {
+    const len = Math.hypot((draft.x2 - draft.x1) * CANVAS_WIDTH, (draft.y2 - draft.y1) * CANVAS_HEIGHT);
+    if (len < 6) return;
+    const curved = strokeTool === 'curve' || strokeTool === 'curvedArrow';
+    const base = {
+      ...STROKE_DEFAULTS, ...strokeStyle,
+      id: `stroke-${Date.now()}`, kind: curved ? 'curve' : 'line',
+      x1: draft.x1, y1: draft.y1, x2: draft.x2, y2: draft.y2,
+      headEnd: strokeTool === 'arrow' || strokeTool === 'curvedArrow', headStart: false, opacity: 1, locked: false,
+    };
+    const st = curved ? { ...base, ...strokeDefaultControls(base) } : base;
+    setStrokes(prev => [...prev, st]);
+    setSelectedStrokeId(st.id);
+    setSelectedBubbleId(null);
+    setStrokeTool(null);
   };
 
   const deleteBubble = (bubbleId) => {
@@ -2683,6 +2771,29 @@ function PageEditor({ isCover = false }) {
 
   const handleCanvasMouseDown = (e) => {
     if (editorMode === 'bubbles') {
+      // Lines & arrows: a handle or a stroke under the mouse starts a drag; an
+      // armed drawing tool starts a new stroke from here.
+      if (e.target.dataset.strokeHandle) {
+        const [sid, part] = e.target.dataset.strokeHandle.split('|');
+        const st = strokes.find(x => x.id === sid);
+        const coords = getRelativeCoords(e);
+        setSelectedStrokeId(sid); setSelectedBubbleId(null); setSelectedHotspotId(null);
+        if (st && coords && !st.locked) putStrokeDrag({ id: sid, part, from: coords, orig: st });
+        return;
+      }
+      if (e.target.dataset.strokeId) {
+        const sid = e.target.dataset.strokeId;
+        const st = strokes.find(x => x.id === sid);
+        const coords = getRelativeCoords(e);
+        setSelectedStrokeId(sid); setSelectedBubbleId(null); setSelectedHotspotId(null);
+        if (st && coords && !st.locked) putStrokeDrag({ id: sid, part: 'all', from: coords, orig: st });
+        return;
+      }
+      if (strokeTool && !isTracingHotspot) {
+        const coords = getRelativeCoords(e);
+        if (coords) putStrokeDraft({ x1: coords.x, y1: coords.y, x2: coords.x, y2: coords.y });
+        return;
+      }
       // Tracing a polygon: each click drops a point; clicking near the first
       // point (once there are >=3) closes the shape.
       if (isTracingHotspot && !e.target.dataset.tracePoint) {
@@ -2709,9 +2820,10 @@ function PageEditor({ isCover = false }) {
           setIsAddingBubble(false); // Exit adding mode after placing bubble
         }
       } else if (!e.target.dataset.bubbleId && !e.target.dataset.resizeHandle && !e.target.dataset.hotspotId && !e.target.dataset.hotspotResize) {
-        // Clicking on empty space deselects current bubble and hotspot
+        // Clicking on empty space deselects current bubble, hotspot and stroke
         setSelectedBubbleId(null);
         setSelectedHotspotId(null);
+        setSelectedStrokeId(null);
       }
     } else {
       // Layout mode. While "draw floating panel" is armed, a mousedown always
@@ -2753,6 +2865,28 @@ function PageEditor({ isCover = false }) {
     if (editorMode === 'bubbles') {
       const coords = getRelativeCoords(e);
       if (!coords) return;
+
+      const draft = strokeDraftRef.current;
+      if (draft) {
+        putStrokeDraft({ ...draft, x2: coords.x, y2: coords.y });
+        return;
+      }
+      const drag = strokeDragRef.current;
+      if (drag) {
+        const o = drag.orig;
+        const dx = coords.x - drag.from.x, dy = coords.y - drag.from.y;
+        if (drag.part === 'all') {
+          const moved = { x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy };
+          if (o.kind === 'curve') { const c = strokeControls(o); Object.assign(moved, { c1x: c.c1x + dx, c1y: c.c1y + dy, c2x: c.c2x + dx, c2y: c.c2y + dy }); }
+          updateStroke(o.id, moved);
+        } else if (drag.part === 'p1' || drag.part === 'p2') {
+          updateStroke(o.id, drag.part === 'p1' ? { x1: coords.x, y1: coords.y } : { x2: coords.x, y2: coords.y });
+        } else {
+          const c = strokeControls(o);   // bend handles: stored from the first drag on
+          updateStroke(o.id, { ...c, ...(drag.part === 'c1' ? { c1x: coords.x, c1y: coords.y } : { c2x: coords.x, c2y: coords.y }) });
+        }
+        return;
+      }
 
       if (isDraggingBubble && selectedBubbleId) {
         const bubble = bubbles.find(b => b.id === selectedBubbleId);
@@ -3013,6 +3147,8 @@ function PageEditor({ isCover = false }) {
 
   const handleCanvasMouseUp = () => {
     if (editorMode === 'bubbles') {
+      if (strokeDraftRef.current) { finishStrokeDraft(strokeDraftRef.current); putStrokeDraft(null); }
+      putStrokeDrag(null);
       setIsDraggingBubble(false);
       setIsResizingBubble(false);
       setResizeCorner(null);
@@ -3164,7 +3300,7 @@ function PageEditor({ isCover = false }) {
     'alternatives', 'transformations', 'audioUrl', 'translationAudioUrl', 'wordTimestamps'
   ])).current;
   const serializeForDirty = () => JSON.stringify(
-    { lines, panels, bubbles, hotspots },
+    { lines, panels, bubbles, strokes, hotspots },
     (k, v) => (DIRTY_IGNORE_KEYS.has(k) ? undefined : v)
   );
   // Recompute dirty when the saved-fields change; snapshot as clean right after a load.
@@ -3178,7 +3314,7 @@ function PageEditor({ isCover = false }) {
       setPageDirty(snap !== cleanSnapshotRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, panels, bubbles, hotspots]);
+  }, [lines, panels, bubbles, strokes, hotspots]);
   useEffect(() => { pageDirtyRef.current = pageDirty; }, [pageDirty]);
   // Warn on browser close / refresh with unsaved changes.
   useEffect(() => {
@@ -3445,7 +3581,8 @@ function PageEditor({ isCover = false }) {
         await api.put(`/comics/${id}/cover`, {
           image: page.masterImage,
           prompt: coverPrompt,
-          bubbles
+          bubbles,
+          strokes
         });
         showToast('Cover saved!');
         markPageSaved();
@@ -3505,6 +3642,7 @@ function PageEditor({ isCover = false }) {
         lines,
         panels: panelsToSave,
         bubbles,
+        strokes,
         hotspots
       });
 
@@ -6187,11 +6325,13 @@ function PageEditor({ isCover = false }) {
       <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ color: '#888', fontSize: '0.85rem' }}>
           {isCover
-            ? (isAddingBubble ? 'Click on canvas to place bubble' : 'Add bubbles for title text')
+            ? (strokeTool ? 'Drag on the page to draw it · Esc or ✕ Done to stop' : isAddingBubble ? 'Click on canvas to place bubble' : 'Add bubbles for title text')
             : editorMode === 'layout'
               ? (isDrawingFloatingPanel ? 'Draw a rectangle for the floating panel' : 'Draw lines by dragging | Drag lines to reposition')
               : isTracingHotspot
                 ? 'Click to add points · drag any point to adjust · Finish to close'
+                : strokeTool
+                ? 'Drag on the page to draw it · Esc or ✕ Done to stop'
                 : isAddingBubble
                 ? 'Click on canvas to place bubble'
                 : isAddingHotspot
@@ -6226,6 +6366,61 @@ function PageEditor({ isCover = false }) {
             {isAddingBubble ? 'Cancel' : '+ Add Bubble'}
           </button>
         )}
+        {editorMode === 'bubbles' && (
+          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }} title="Lines and arrows: pick one, then drag on the page from where it starts to where it ends. A curve gets two orange handles to bend it; the sidebar card sets heads, dashes, width and colour.">
+            <span style={{ fontSize: '0.75rem', color: '#888' }}>Draw:</span>
+            {[['line', '─ Line'], ['curve', '⌒ Curve'], ['arrow', '→ Arrow'], ['curvedArrow', '↷ Curved arrow']].map(([k, label]) => (
+              <button
+                key={k}
+                className={`btn ${strokeTool === k ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => { setStrokeTool(strokeTool === k ? null : k); setIsAddingBubble(false); setIsAddingHotspot(false); }}
+                style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+              >
+                {label}
+              </button>
+            ))}
+            {strokeTool && (
+              <button className="btn btn-secondary" onClick={() => setStrokeTool(null)} style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', background: '#e67e22', border: 'none', color: '#fff' }} title="Put the tool down (Esc does too)">✕ Done</button>
+            )}
+          </div>
+        )}
+        {editorMode === 'bubbles' && (strokeTool || selectedStrokeId) && (() => {
+          // The look: of the selected stroke, or of the next one to be drawn.
+          const sel = strokes.find(x => x.id === selectedStrokeId);
+          const cur = sel ? strokeDefaults(sel) : { ...STROKE_DEFAULTS, ...strokeStyle };
+          const apply = patch => { if (sel) updateStroke(sel.id, patch); setStrokeStyle(prev => ({ ...prev, ...patch })); };
+          const field = { padding: '0.25rem 0.3rem', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', background: '#fff' };
+          const heads = cur.headStart && cur.headEnd ? 'both' : cur.headEnd ? 'end' : cur.headStart ? 'start' : 'none';
+          return (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.25rem 0.5rem', background: '#f5f5f5', borderRadius: '6px', fontSize: '0.8rem', color: '#555' }}>
+              <span style={{ fontWeight: 'bold', color: '#888', fontSize: '0.75rem' }}>{sel ? 'Selected stroke:' : 'Next stroke:'}</span>
+              <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Colour
+                <ColorPicker value={cur.color} onChange={(e) => apply({ color: e.target.value })} onClick={(e) => e.stopPropagation()} style={{ width: '28px', height: '22px', border: '1px solid #ccc', borderRadius: '3px' }} />
+              </label>
+              <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Width
+                <input type="number" min={0.5} max={30} step={0.5} value={cur.width} onChange={(e) => apply({ width: Math.max(0.5, Number(e.target.value) || 3) })} style={{ ...field, width: '56px' }} />
+              </label>
+              <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Style
+                <select value={cur.dash} onChange={(e) => apply({ dash: e.target.value })} style={field}>
+                  <option value="solid">solid</option>
+                  <option value="dashed">dashed</option>
+                  <option value="dotted">dotted</option>
+                </select>
+              </label>
+              {sel && (
+                <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Heads
+                  <select value={heads} onChange={(e) => { const v = e.target.value; updateStroke(sel.id, { headStart: v === 'start' || v === 'both', headEnd: v === 'end' || v === 'both' }); }} style={field}>
+                    <option value="none">none</option>
+                    <option value="end">at the end</option>
+                    <option value="start">at the start</option>
+                    <option value="both">both ends</option>
+                  </select>
+                </label>
+              )}
+              {sel && <button onClick={() => deleteStroke(sel.id)} style={{ padding: '0.2rem 0.5rem', background: '#c0392b', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', fontSize: '0.75rem' }}>Delete</button>}
+            </div>
+          );
+        })()}
         {editorMode === 'bubbles' && bubbles.length > 0 && (
           <button
             className={`btn ${showReadingOrder ? 'btn-primary' : 'btn-secondary'}`}
@@ -6449,6 +6644,8 @@ function PageEditor({ isCover = false }) {
               if (isDraggingTailCtrl2) {
                 setIsDraggingTailCtrl2(false);
               }
+              if (strokeDraftRef.current) { finishStrokeDraft(strokeDraftRef.current); putStrokeDraft(null); }
+              if (strokeDragRef.current) putStrokeDrag(null);
               if (isDraggingFloatingPanel) {
                 setIsDraggingFloatingPanel(false);
                 setDraggingFloatingPanelId(null);
@@ -6467,7 +6664,7 @@ function PageEditor({ isCover = false }) {
               border: '2px solid #ddd',
               borderRadius: '4px',
               position: 'relative',
-              cursor: isDragging || isDraggingFloatingPanel || isDraggingCorner ? 'grabbing' : isDrawingFloatingPanel ? 'crosshair' : (editorMode === 'bubbles' ? (isAddingBubble ? 'crosshair' : 'default') : 'crosshair'),
+              cursor: isDragging || isDraggingFloatingPanel || isDraggingCorner ? 'grabbing' : isDrawingFloatingPanel ? 'crosshair' : (editorMode === 'bubbles' ? ((isAddingBubble || strokeTool) ? 'crosshair' : 'default') : 'crosshair'),
               overflow: 'hidden',
               userSelect: 'none'
             }}
@@ -6926,6 +7123,82 @@ function PageEditor({ isCover = false }) {
               </svg>
             )}
 
+            {/* Lines & arrows — drawn under the bubbles, as in the bake (raised
+                above them only while one is selected, so you can see what you
+                are editing). The hit paths and handles live in a second, always-
+                on-top layer below, so a stroke under a bubble can still be
+                selected. */}
+            {(strokes.length > 0 || strokeDraft) && (
+              <svg
+                width={CANVAS_WIDTH} height={CANVAS_HEIGHT} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
+                style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', overflow: 'visible', zIndex: selectedStrokeId ? 60 : undefined }}
+              >
+                {strokes.map(st => {
+                  const s = strokeDefaults(st);
+                  const { d, heads, width } = strokeShapes(s, CANVAS_WIDTH, CANVAS_HEIGHT);
+                  const dash = strokeDashArray(s, width);
+                  return (
+                    <g key={s.id} opacity={s.opacity ?? 1}>
+                      <path d={d} fill="none" stroke={s.color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash || undefined} />
+                      {heads.map((h, i) => <polygon key={i} points={h.map(pt => pt.join(',')).join(' ')} fill={s.color} stroke={s.color} strokeWidth={width * 0.3} strokeLinejoin="round" />)}
+                    </g>
+                  );
+                })}
+                {strokeDraft && (() => {
+                  const curved = strokeTool === 'curve' || strokeTool === 'curvedArrow';
+                  const draft = { ...STROKE_DEFAULTS, ...strokeStyle, kind: curved ? 'curve' : 'line', ...strokeDraft, headEnd: strokeTool === 'arrow' || strokeTool === 'curvedArrow' };
+                  const { d, heads, width } = strokeShapes(draft, CANVAS_WIDTH, CANVAS_HEIGHT);
+                  return (
+                    <g opacity={0.7}>
+                      <path d={d} fill="none" stroke={draft.color} strokeWidth={width} strokeLinecap="round" strokeDasharray={strokeDashArray(draft, width) || undefined} />
+                      {heads.map((h, i) => <polygon key={i} points={h.map(pt => pt.join(',')).join(' ')} fill={draft.color} />)}
+                    </g>
+                  );
+                })()}
+              </svg>
+            )}
+
+            {/* Stroke hit paths + handles: above bubbles (50) and hotspots (45)
+                so a line can be grabbed wherever it runs; below the drawing
+                capture sheet (100). */}
+            {editorMode === 'bubbles' && strokes.length > 0 && (
+              <svg
+                width={CANVAS_WIDTH} height={CANVAS_HEIGHT} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
+                style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none', overflow: 'visible', zIndex: 61 }}
+              >
+                {strokes.map(st => {
+                  const s = strokeDefaults(st);
+                  const { d, width, geometry: g } = strokeShapes(s, CANVAS_WIDTH, CANVAS_HEIGHT);
+                  const sel = selectedStrokeId === s.id;
+                  const handle = (part, pt, color) => (
+                    <circle key={part} cx={pt.x} cy={pt.y} r={part.startsWith('c') ? 4 : 5} fill={color} stroke="#fff" strokeWidth={1.5}
+                            data-stroke-handle={`${s.id}|${part}`} style={{ pointerEvents: 'auto', cursor: 'move' }} />
+                  );
+                  return (
+                    <g key={s.id}>
+                      <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(width + 10, 14)} data-stroke-id={s.id}
+                            style={{ pointerEvents: 'auto', cursor: s.locked ? 'default' : 'move' }} />
+                      {sel && !s.locked && (
+                        <>
+                          {s.kind === 'curve' && <path d={`M ${g.p1.x} ${g.p1.y} L ${g.c1.x} ${g.c1.y} M ${g.p2.x} ${g.p2.y} L ${g.c2.x} ${g.c2.y}`} stroke="#e94560" strokeWidth={1} strokeDasharray="3 3" fill="none" />}
+                          {handle('p1', g.p1, '#e94560')}
+                          {handle('p2', g.p2, '#e94560')}
+                          {s.kind === 'curve' && handle('c1', g.c1, '#f39c12')}
+                          {s.kind === 'curve' && handle('c2', g.c2, '#f39c12')}
+                        </>
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            )}
+
+            {/* While a drawing tool is armed, this sheet takes the mouse so a drag
+                that starts over a bubble draws instead of moving the bubble. */}
+            {editorMode === 'bubbles' && (strokeTool || strokeDraft) && (
+              <div data-stroke-capture="1" style={{ position: 'absolute', inset: 0, zIndex: 100, cursor: 'crosshair' }} />
+            )}
+
             {/* Speech Bubbles */}
             {bubbles.map((bubble) => {
               // Calculate tail endpoint position in canvas coordinates
@@ -7176,7 +7449,7 @@ function PageEditor({ isCover = false }) {
                                     display: 'inline-block'
                                   }}
                                 >
-                                  {getBubbleDisplayText(bubble) || (editorMode === 'bubbles' ? '...' : '')}
+                                  {getBubbleDisplayNodes(bubble) || (editorMode === 'bubbles' ? '...' : '')}
                                 </span>
                               </div>
                             </foreignObject>
@@ -7523,7 +7796,7 @@ function PageEditor({ isCover = false }) {
                         display: 'inline-block'
                       }}
                     >
-                      {getBubbleDisplayText(bubble) || (editorMode === 'bubbles' ? '...' : '')}
+                      {getBubbleDisplayNodes(bubble) || (editorMode === 'bubbles' ? '...' : '')}
                     </span>
                     )}
 
@@ -8328,6 +8601,87 @@ function PageEditor({ isCover = false }) {
             </div>
           )}
 
+          {/* Lines & arrows drawn over the page */}
+          {editorMode === 'bubbles' && (
+            <div style={{ marginTop: '1rem' }}>
+              <h3 style={{ marginBottom: '0.5rem' }}>Lines & arrows ({strokes.length})</h3>
+              {strokes.length === 0 && (
+                <p style={{ color: '#888', fontSize: '0.9rem' }}>Pick Line, Curve, Arrow or Curved arrow in the toolbar, then drag on the page from where it starts to where it ends.</p>
+              )}
+              {strokes.map((st, i) => {
+                const s = strokeDefaults(st);
+                const sel = selectedStrokeId === s.id;
+                const heads = s.headStart && s.headEnd ? 'both' : s.headEnd ? 'end' : s.headStart ? 'start' : 'none';
+                const setHeads = v => updateStroke(s.id, { headStart: v === 'start' || v === 'both', headEnd: v === 'end' || v === 'both' });
+                const remember = patch => setStrokeStyle(prev => ({ ...prev, ...patch }));   // the next stroke starts from this one's look
+                const field = { padding: '0.2rem 0.3rem', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', background: '#fff' };
+                const btn = bg => ({ padding: '0.2rem 0.5rem', background: bg, border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', fontSize: '0.75rem' });
+                const name = `${heads === 'none' ? (s.kind === 'curve' ? 'Curve' : 'Line') : (s.kind === 'curve' ? 'Curved arrow' : 'Arrow')} ${i + 1}`;
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => { setSelectedStrokeId(s.id); setSelectedBubbleId(null); setSelectedHotspotId(null); }}
+                    style={{ padding: '0.6rem', background: sel ? '#e8f4fc' : '#fff', borderRadius: '8px', marginBottom: '0.5rem', border: sel ? '2px solid #e94560' : '1px solid #ddd', cursor: 'pointer' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                      <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{name} {s.locked ? '(locked)' : ''}</span>
+                      <div style={{ display: 'flex', gap: '0.25rem' }}>
+                        <button onClick={(e) => { e.stopPropagation(); updateStroke(s.id, { locked: !s.locked }); }} style={btn(s.locked ? '#e67e22' : '#95a5a6')} title="A locked stroke can't be dragged on the page">{s.locked ? 'Unlock' : 'Lock'}</button>
+                        <button onClick={(e) => { e.stopPropagation(); duplicateStroke(s.id); }} style={btn('#3498db')} title="A copy, a little below and to the right">Copy</button>
+                        <button onClick={(e) => { e.stopPropagation(); deleteStroke(s.id); }} style={btn('#c0392b')}>Delete</button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem 0.6rem', alignItems: 'center', fontSize: '0.8rem', color: '#555' }} onClick={(e) => e.stopPropagation()}>
+                      <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Shape
+                        <select value={s.kind} onChange={(e) => updateStroke(s.id, e.target.value === 'curve' ? { kind: 'curve', ...(s.c1x == null ? strokeDefaultControls(s) : {}) } : { kind: 'line' })} style={field}>
+                          <option value="line">straight</option>
+                          <option value="curve">curved</option>
+                        </select>
+                      </label>
+                      {s.kind === 'curve' && (
+                        <button onClick={() => updateStroke(s.id, strokeDefaultControls(s))} style={{ ...field, cursor: 'pointer' }} title="Put the two orange bend handles back to a gentle arc">Reset bend</button>
+                      )}
+                      <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Heads
+                        <select value={heads} onChange={(e) => setHeads(e.target.value)} style={field}>
+                          <option value="none">none</option>
+                          <option value="end">at the end</option>
+                          <option value="start">at the start</option>
+                          <option value="both">both ends</option>
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Style
+                        <select value={s.dash} onChange={(e) => { updateStroke(s.id, { dash: e.target.value }); remember({ dash: e.target.value }); }} style={field}>
+                          <option value="solid">solid</option>
+                          <option value="dashed">dashed</option>
+                          <option value="dotted">dotted</option>
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Width
+                        <input type="number" min={0.5} max={30} step={0.5} value={s.width} onChange={(e) => { const w = Math.max(0.5, Number(e.target.value) || 3); updateStroke(s.id, { width: w }); remember({ width: w }); }} style={{ ...field, width: '56px' }} />
+                      </label>
+                      {heads !== 'none' && (
+                        <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Head size
+                          <input type="number" min={0.3} max={5} step={0.1} value={s.headSize} onChange={(e) => { const v = Math.max(0.3, Number(e.target.value) || 1); updateStroke(s.id, { headSize: v }); remember({ headSize: v }); }} style={{ ...field, width: '56px' }} />
+                        </label>
+                      )}
+                      <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Colour
+                        <ColorPicker
+                          value={s.color}
+                          onChange={(e) => { updateStroke(s.id, { color: e.target.value }); remember({ color: e.target.value }); }}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ width: '28px', height: '22px', border: '1px solid #ccc', borderRadius: '3px' }}
+                        />
+                      </label>
+                      <label style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>Opacity
+                        <input type="range" min={0.1} max={1} step={0.05} value={s.opacity ?? 1} onChange={(e) => updateStroke(s.id, { opacity: Number(e.target.value) })} style={{ width: '70px' }} />
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Bubble Editing Section */}
           {editorMode === 'bubbles' && (
             <div style={{ marginTop: '1rem' }}>
@@ -8940,7 +9294,7 @@ function PageEditor({ isCover = false }) {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                              {['[slowly]', '[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[crying]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]', '[fade out slowly]', '[assertive]', '[pleading]', '[loud]'].map(tag => {
+                              {['[slowly]', '[slightly slower]','[whispering]', '[shouting]', '[frightened]', '[surprised]', '[amazed]', '[sad]', '[crying]', '[hopeful]', '[worried]', '[angry]', '[excited]', '[confused]','[sighs]', '[pause]', '[emphasise]', '[fade out very, very slowly]', '[quite paced]','[assertive]', '[pleading]', '[loud]'].map(tag => {
                                 const tagKey = `${sentence.id}-${tag}`;
                                 const isCopied = copiedTag === tagKey;
                                 return (
@@ -8974,8 +9328,11 @@ function PageEditor({ isCover = false }) {
                             <input
                               type="text"
                               value={sentence.text}
-                              onChange={(e) => updateSentence(bubble.id, sentence.id, { text: e.target.value })}
+                              onChange={(e) => updateSentence(bubble.id, sentence.id, { text: e.target.value, ...(sentence.colorSpans?.length ? { colorSpans: shiftColorSpans(sentence.text, e.target.value, sentence.colorSpans) } : {}) })}
                               onClick={(e) => e.stopPropagation()}
+                              onSelect={(e) => rememberSentenceSel(sentence.id, e.target)}
+                              onKeyUp={(e) => rememberSentenceSel(sentence.id, e.target)}
+                              onMouseUp={(e) => rememberSentenceSel(sentence.id, e.target)}
                               placeholder="Text (Spanish)"
                               style={{
                                 width: '100%',
@@ -8988,6 +9345,29 @@ function PageEditor({ isCover = false }) {
                                 marginBottom: '0.25rem'
                               }}
                             />
+                            {/* Colour part of the text: select it in the input above, then a swatch.
+                                Painted in the lettering (bake the page) and in the reader's popup. */}
+                            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', marginBottom: '0.25rem', flexWrap: 'wrap' }}
+                                 title="Select part of the Spanish text above, then click a colour. The colour shows in the bubble (bake the page) and in the reader's bubble popup.">
+                              <span style={{ fontSize: '0.7rem', color: '#888' }}>Colour selection:</span>
+                              {TEXT_COLOR_PALETTE.map(c => (
+                                <button key={c} onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.stopPropagation(); colorSentenceSelection(bubble, sentence, c); }}
+                                        style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: '1px solid #999', cursor: 'pointer', padding: 0 }} title={c} />
+                              ))}
+                              <input type="color" defaultValue="#FFD23F" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
+                                     onChange={(e) => colorSentenceSelection(bubble, sentence, e.target.value.toUpperCase())}
+                                     style={{ width: 24, height: 20, padding: 0, border: '1px solid #999', borderRadius: '3px', cursor: 'pointer', background: 'none' }} title="Any other colour" />
+                              {sentence.colorSpans?.length > 0 && (
+                                <button onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.stopPropagation(); colorSentenceSelection(bubble, sentence, null); }}
+                                        style={{ padding: '0.1rem 0.4rem', fontSize: '0.7rem', background: '#f0f0f0', color: '#666', border: '1px solid #ddd', borderRadius: '3px', cursor: 'pointer' }}
+                                        title="Remove the colour from the selection — or from the whole sentence when nothing is selected">clear</button>
+                              )}
+                              {sentence.colorSpans?.length > 0 && (
+                                <span style={{ fontSize: '0.8rem', color: '#333', marginLeft: '0.3rem' }}>
+                                  {textRuns(sentence.text, sentence.colorSpans).map((r, k) => r.color ? <span key={k} style={{ color: r.color, fontWeight: 600 }}>{r.text}</span> : r.text)}
+                                </span>
+                              )}
+                            </div>
                             <input
                               type="text"
                               value={sentence.translation}
@@ -13516,6 +13896,22 @@ function PageEditor({ isCover = false }) {
                 </filter>
               </defs>
             </svg>
+            {/* Lines & arrows, under the bubbles */}
+            {strokes.length > 0 && (
+              <svg width={CANVAS_WIDTH} height={CANVAS_HEIGHT} viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`} style={{ position: 'absolute', left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, pointerEvents: 'none' }}>
+                {strokes.map(st => {
+                  const s = strokeDefaults(st);
+                  const { d, heads, width } = strokeShapes(s, CANVAS_WIDTH, CANVAS_HEIGHT);
+                  const dash = strokeDashArray(s, width);
+                  return (
+                    <g key={s.id} opacity={s.opacity ?? 1}>
+                      <path d={d} fill="none" stroke={s.color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash || undefined} />
+                      {heads.map((h, i) => <polygon key={i} points={h.map(pt => pt.join(',')).join(' ')} fill={s.color} stroke={s.color} strokeWidth={width * 0.3} strokeLinejoin="round" />)}
+                    </g>
+                  );
+                })}
+              </svg>
+            )}
             {/* Hidden (data-only) bubbles are excluded from the BAKE and from
                 the PREVIEW alike — the preview's job is to show the baked
                 result, and hidden text was ghosting over the art in it. */}
@@ -13631,7 +14027,7 @@ function PageEditor({ isCover = false }) {
                                 transform: `rotate(${bubble.textAngle ?? 0}deg)`,
                                 display: 'inline-block'
                               }}>
-                                {(ref === bakeTargetRef && bakeHideText) ? '' : getBubbleDisplayText(bubble)}
+                                {(ref === bakeTargetRef && bakeHideText) ? '' : getBubbleDisplayNodes(bubble)}
                               </span>
                             </div>
                           );
@@ -13813,7 +14209,7 @@ function PageEditor({ isCover = false }) {
                       transform: `rotate(${-((bubble.id.charCodeAt(bubble.id.length - 1) % 5) - 2) - (bubble.type === 'thought' ? (bubble.rotation ?? 0) : 0) + (bubble.textAngle ?? 0)}deg)`,
                       display: 'inline-block'
                     }}>
-                      {(ref === bakeTargetRef && bakeHideText) ? '' : getBubbleDisplayText(bubble)}
+                      {(ref === bakeTargetRef && bakeHideText) ? '' : getBubbleDisplayNodes(bubble)}
                     </span>
                     )}
                   </div>
