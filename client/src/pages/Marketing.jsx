@@ -829,12 +829,17 @@ function MotionComic() {
   const [openingHold, setOpeningHold] = useState(0);
   const [openingAnim, setOpeningAnim] = useState(OPENING_ANIM_DEFAULT);
   const [question, setQuestion] = useState('');
+  const [questionTop1, setQuestionTop1] = useState('');   // two separate lines at the top of the question card
+  const [questionTop2, setQuestionTop2] = useState('');
+  const hasQuestionCard = !!(question || questionTop1 || questionTop2);
   const [questionSec, setQuestionSec] = useState(2);
   const [endCard, setEndCard] = useState(true);
   const [endSec, setEndSec] = useState(1.8);
   const [coversCard, setCoversCard] = useState(false);
   const [coversSec, setCoversSec] = useState(3.5);
   const [endMidCaption, setEndMidCaption] = useState('');
+  const [endTop1, setEndTop1] = useState('');   // two separate lines at the top of the sign-off card
+  const [endTop2, setEndTop2] = useState('');
   const [endCaption, setEndCaption] = useState('');
   const [endAnim, setEndAnim] = useState(END_ANIM_DEFAULT);
   const [busy, setBusy] = useState(false);
@@ -863,7 +868,7 @@ function MotionComic() {
   };
   const upd = (id, k, v) => setShots(ss => ss.map(sh => (sh.id === id ? { ...sh, [k]: v } : sh)));
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= shots.length) return; setShots(ss => { const n = [...ss]; [n[i], n[j]] = [n[j], n[i]]; return n; }); };
-  const total = shots.reduce((t, sh) => t + (Number(sh.seconds) || 3), 0) + ((openingLine1 || openingLine2) ? openingSec : 0) + (question ? questionSec : 0) + (endCard ? endSec : 0);
+  const total = shots.reduce((t, sh) => t + (Number(sh.seconds) || 3), 0) + ((openingLine1 || openingLine2) ? openingSec : 0) + (hasQuestionCard ? questionSec : 0) + (endCard ? endSec : 0);
 
   const render = async () => {
     setBusy(true); setError(''); setClip(null);
@@ -871,7 +876,7 @@ function MotionComic() {
       const r = await api.post('/marketing/motion-comic', {
         comicId, subtitles, fx, volume,
         shots: shots.map(sh => { const v = voiceOptions.find(o => o.file === sh.voiceFile); return { imageFile: sh.imageFile, move: sh.move, fit: sh.fit, seconds: Number(sh.seconds) || 3, ...(v ? { voice: { file: v.file, es: v.es, en: v.en, lang: v.lang } } : {}) }; }),
-        openingLine1, openingLine2, openingSeconds: openingSec, openingHold, question, questionSeconds: questionSec, endCard, endCardSeconds: endSec, endCardMidCaption: endMidCaption, endCardCaption: endCaption,
+        openingLine1, openingLine2, openingSeconds: openingSec, openingHold, question, questionTop1, questionTop2, questionSeconds: questionSec, endCard, endCardSeconds: endSec, endCardMidCaption: endMidCaption, endCardCaption: endCaption,
         endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim,
       }, { timeout: 600000 });
       setClip(r.data.url); setClipFile(r.data.file);
@@ -974,9 +979,13 @@ function MotionComic() {
                     <input type="number" min={0} max={15} step={0.5} value={openingHold} onChange={e => setOpeningHold(Number(e.target.value) || 0)} style={{ ...input, width: 70 }} /> s</label>
                 </div>
                 {(openingLine1 || openingLine2) && <OpeningCardAnim value={openingAnim} onChange={setOpeningAnim} secs={openingSec} />}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                  <input style={input} placeholder="Question card — top line 1 (white, optional)" value={questionTop1} onChange={e => setQuestionTop1(e.target.value)} />
+                  <input style={input} placeholder="Question card — top line 2 (white, optional)" value={questionTop2} onChange={e => setQuestionTop2(e.target.value)} />
+                </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <input style={input} placeholder="Question card (yellow) — empty to skip" value={question} onChange={e => setQuestion(e.target.value)} />
-                  <input type="number" min={0.5} max={10} step={0.5} value={questionSec} onChange={e => setQuestionSec(Number(e.target.value) || 2)} style={{ ...input, width: 80 }} disabled={!question} />
+                  <input type="number" min={0.5} max={10} step={0.5} value={questionSec} onChange={e => setQuestionSec(Number(e.target.value) || 2)} style={{ ...input, width: 80 }} disabled={!hasQuestionCard} />
                   <span style={{ color: '#888', fontSize: '0.8rem' }}>s</span>
                 </div>
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 8 }}>
@@ -985,9 +994,14 @@ function MotionComic() {
                   <input type="number" min={0.5} max={30} step={0.1} value={endSec} onChange={e => setEndSec(Number(e.target.value) || 1.8)} style={{ ...input, width: 80 }} disabled={!endCard} />
                   <span style={{ color: '#888', fontSize: '0.8rem' }}>s</span>
                 </label>
+                <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                  <input style={input} disabled={!endCard} value={endTop1} onChange={e => setEndTop1(e.target.value)} placeholder="Logo card — top line 1 (white, above the logo, optional)" />
+                  <input style={input} disabled={!endCard} value={endTop2} onChange={e => setEndTop2(e.target.value)} placeholder="Logo card — top line 2 (yellow, optional)" />
+                </div>
                 <input style={{ ...input, marginTop: 6 }} disabled={!endCard} value={endMidCaption} onChange={e => setEndMidCaption(e.target.value)} placeholder="Caption between the logo and comigo.net (optional)" />
                 <input style={{ ...input, marginTop: 6 }} disabled={!endCard} value={endCaption} onChange={e => setEndCaption(e.target.value)} placeholder="Caption under comigo.net — last 2s of the logo card (optional)" />
-                {endCard && <EndCardAnim value={endAnim} onChange={setEndAnim} endSec={endSec} />}
+                {endCard && <EndCardAnim value={endAnim} onChange={setEndAnim} endSec={endSec}
+                                         preview={async () => (await api.post('/marketing/endcard-preview', { comicId, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, endCardTop1: endTop1, endCardTop2: endTop2, endAnim: endAnimFor(endAnim, endSec) }, { timeout: 300000 })).data.url} />}
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 8 }} title="A violet page on which every published comic's cover tiles in one after another, shown just before the logo card">
                   <input type="checkbox" checked={coversCard} onChange={e => setCoversCard(e.target.checked)} disabled={!endCard} />
                   Before the logo card, tile all published covers, for
@@ -1103,10 +1117,14 @@ function InsetControls({ comicId, file, onDone }) {
 }
 
 // Server wants absolute starts; a negative bottom-caption start means "before the end".
-const endAnimFor = (anim, endSec) => Object.fromEntries(Object.entries(anim || {}).map(([k, v]) => [k, { ...v, start: (v.start ?? 0) < 0 ? Math.max(0, endSec + v.start) : v.start }]));
+// Sent as set: a negative start counts back from the end of the card, which
+// the server resolves once it knows the card's final length.
+const endAnimFor = anim => anim || {};
 
 // Sign-off card animation: per element, how it enters and when.
 const END_ANIM_DEFAULT = {
+  top1: { effect: 'fade', start: 0.2, dur: 0.4 },
+  top2: { effect: 'fade', start: 0.45, dur: 0.4 },
   logo: { effect: 'pop', start: 0, dur: 0.5 },
   tagline: { effect: 'fade', start: 0.35, dur: 0.4 },
   caption: { effect: 'slide-up', start: 0.6, dur: 0.45 },
@@ -1115,8 +1133,8 @@ const END_ANIM_DEFAULT = {
 };
 const END_ANIM_PRESETS = {
   lively: END_ANIM_DEFAULT,
-  calm: { logo: { effect: 'fade', start: 0, dur: 0.6 }, tagline: { effect: 'fade', start: 0.4, dur: 0.6 }, caption: { effect: 'fade', start: 0.8, dur: 0.6 }, net: { effect: 'fade', start: 1.2, dur: 0.6 }, bottom: { effect: 'fade', start: -2, dur: 0.6 } },
-  static: { logo: { effect: 'none', start: 0, dur: 0.1 }, tagline: { effect: 'none', start: 0, dur: 0.1 }, caption: { effect: 'none', start: 0, dur: 0.1 }, net: { effect: 'none', start: 0, dur: 0.1 }, bottom: { effect: 'none', start: -2, dur: 0.1 } },
+  calm: { top1: { effect: 'fade', start: 0.3, dur: 0.6 }, top2: { effect: 'fade', start: 0.6, dur: 0.6 }, logo: { effect: 'fade', start: 0, dur: 0.6 }, tagline: { effect: 'fade', start: 0.4, dur: 0.6 }, caption: { effect: 'fade', start: 0.8, dur: 0.6 }, net: { effect: 'fade', start: 1.2, dur: 0.6 }, bottom: { effect: 'fade', start: -2, dur: 0.6 } },
+  static: { top1: { effect: 'none', start: 0, dur: 0.1 }, top2: { effect: 'none', start: 0, dur: 0.1 }, logo: { effect: 'none', start: 0, dur: 0.1 }, tagline: { effect: 'none', start: 0, dur: 0.1 }, caption: { effect: 'none', start: 0, dur: 0.1 }, net: { effect: 'none', start: 0, dur: 0.1 }, bottom: { effect: 'none', start: -2, dur: 0.1 } },
 };
 const OPENING_ANIM_DEFAULT = {
   logo: { effect: 'pop', start: 0, dur: 0.5 },
@@ -1135,13 +1153,23 @@ function OpeningCardAnim({ value, onChange, secs, badge }) {
                    presets={OPENING_ANIM_PRESETS} value={value} onChange={onChange} secs={secs}
                    note={`Card lasts ${secs}s — make sure the last start + length fits inside it.`} />;
 }
-function EndCardAnim({ value, onChange, endSec }) {
-  return <CardAnim title="Sign-off card animation" rows={[['logo', 'Logo'], ['tagline', 'Interactive Comics'], ['caption', 'Yellow caption'], ['net', 'comigo.net'], ['bottom', 'Bottom caption']]}
-                   presets={END_ANIM_PRESETS} value={value} onChange={onChange} secs={endSec}
-                   note={`Card lasts ${endSec}s — make sure the last start + length fits inside it. Bottom caption: negative start counts back from the end.`} />;
+function EndCardAnim({ value, onChange, endSec, preview }) {
+  return <CardAnim title="Sign-off card animation" rows={[['top1', 'Top line 1'], ['top2', 'Top line 2'], ['logo', 'Logo'], ['tagline', 'Interactive Comics'], ['caption', 'Yellow caption'], ['net', 'comigo.net'], ['bottom', 'Bottom caption']]}
+                   presets={END_ANIM_PRESETS} value={value} onChange={onChange} secs={endSec} preview={preview}
+                   note={`Card lasts ${endSec}s, or longer if an entrance ends later (it stays up until the last one has finished, plus a moment). Bottom caption: negative start counts back from the end.`} />;
 }
-function CardAnim({ title, rows, presets, value, onChange, secs, note }) {
+function CardAnim({ title, rows, presets, value, onChange, secs, note, preview }) {
   const input = { padding: '0.25rem 0.4rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.8rem' };
+  // "Preview this card": renders just this card on the server and plays it here.
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const runPreview = async () => {
+    setPreviewBusy(true); setPreviewError('');
+    try { setPreviewUrl(`${await preview()}?t=${Date.now()}`); }
+    catch (e) { setPreviewError(e.response?.data?.error || e.message); }
+    finally { setPreviewBusy(false); }
+  };
   const effects = [['none', 'Appear'], ['fade', 'Fade in'], ['pop', 'Pop (grow in)'], ['slide-up', 'Slide up'], ['slide-down', 'Slide down'], ['slide-left', 'Slide from right'], ['slide-right', 'Slide from left'], ['typewriter', 'Typewriter']];
   const set = (k, f, v) => onChange({ ...value, [k]: { ...value[k], [f]: v } });
   return (
@@ -1152,7 +1180,23 @@ function CardAnim({ title, rows, presets, value, onChange, secs, note }) {
         {Object.keys(presets).map(k => (
           <button key={k} className="btn btn-secondary" onClick={() => onChange(presets[k])} style={{ padding: '0.15rem 0.6rem', fontSize: '0.75rem' }}>{k}</button>
         ))}
+        {preview && (
+          <button className="btn btn-primary" disabled={previewBusy} onClick={runPreview} style={{ padding: '0.15rem 0.7rem', fontSize: '0.75rem' }}
+                  title="Render just this card (a few seconds) and play it here — no need to render the whole reel">
+            {previewBusy ? 'Rendering…' : '▶ Preview this card'}
+          </button>
+        )}
       </div>
+      {previewError && <div style={{ color: '#ff8a8a', fontSize: '0.78rem', marginBottom: 6 }}>{previewError}</div>}
+      {previewUrl && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8 }}>
+          <video key={previewUrl} src={previewUrl} controls autoPlay playsInline style={{ width: 180, aspectRatio: '9 / 16', borderRadius: 8, border: '1px solid #444', background: '#000' }} />
+          <div style={{ fontSize: '0.75rem', color: '#9a93b5', flex: 1 }}>
+            The card as it will be rendered, with the settings as they are now. Change something and press Preview again.
+            <div style={{ marginTop: 6 }}><button className="btn btn-secondary" onClick={() => setPreviewUrl('')} style={{ padding: '0.1rem 0.5rem', fontSize: '0.72rem' }}>hide</button></div>
+          </div>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 70px 70px', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
         <span style={{ color: '#c4bdd8' }}></span><span style={{ color: '#c4bdd8' }}>Entrance</span><span style={{ color: '#c4bdd8' }}>Start s</span><span style={{ color: '#c4bdd8' }}>Length s</span>
         {rows.map(([k, label]) => (
@@ -1258,17 +1302,176 @@ function MessageCardPreview({ card, images }) {
   );
 }
 
-const OPENING_IMAGE_DEFAULT = { image: '', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, zoom: 100, focusX: 50, focusY: 50, fade: true };
-const OPENING_IMAGES_MAX = 6;
+const OPENING_IMAGE_DEFAULT = { image: '', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, zoom: 100, focusX: 50, focusY: 50, fade: true, voiceDelay: 0.25, lines: [] };
+// One voice-over line of a still: what to say, in which voice, the generated
+// clip, and the silence kept after it.
+// `stable`: the eleven_multilingual_v2 model — no accent drift on short lines, but
+// it reads tags like [whispers] literally; off = eleven_v3 (tags work).
+const STILL_LINE_DEFAULT = { text: '', lang: 'en', voice: '', speed: 1.0, stable: false, audio: '', audioText: '', audioUrl: '', pause: 0.5 };
+const STILL_VOICE_LINES = 5;
+// The English narrator (ElevenLabs) used for English voice lines everywhere here.
+const ENGLISH_VOICE_ID = 'GP1bgf0sjoFuuHkyrg8E';
+const OPENING_IMAGES_MAX = 20;
+// The "sound on" speech bubble over the held first frame of the content.
+const SOUND_BUBBLE_DEFAULT = { enabled: false, text: 'Turn your sound on', seconds: 4.5, y: 50 };
+// The sign-off (logo) card's voice-over: same shape as a still's.
+const END_VOICE_DEFAULT = { voiceDelay: 0.25, lines: [] };
+// The voice-over of one slide (a still, or the logo card): up to
+// STILL_VOICE_LINES lines, each an ElevenLabs clip in the chosen voice (saved
+// under marketing/uploads), played one after another while the slide is up,
+// each followed by its pause; the slide holds until the last one is over.
+// `value` = { lines, voiceDelay }; onChange gets a patch of those.
+function VoiceLinesEditor({ value, onChange, comicId, cast = [], what = 'this image' }) {
+  const lines = (value.lines || []).map(l => ({ ...STILL_LINE_DEFAULT, ...l }));
+  const voiceDelay = Number.isFinite(Number(value.voiceDelay)) && value.voiceDelay !== '' && value.voiceDelay != null ? Number(value.voiceDelay) : 0.25;
+  const [voicing, setVoicing] = useState(-1);   // line being generated
+  const [auditioning, setAuditioning] = useState(false);   // the lines are playing in sequence
+  const audition = useRef(null);   // the <audio> + timer of the sequence playing now
+  const urlOf = l => l.audioUrl || `/projects/${comicId}/marketing/uploads/${l.audio.slice(7)}`;
+  // Hear the whole voice-over as the reel will play it: the clips in order,
+  // each followed by its pause.
+  const stopAudition = () => {
+    const a = audition.current; audition.current = null;
+    if (a) { clearTimeout(a.timer); a.audio?.pause(); a.paused = true; PLAYING.delete(a); }
+    setAuditioning(false);
+  };
+  const playAll = () => {
+    stopAudition();
+    const ready = lines.filter(l => l.audio);
+    if (!ready.length) return;
+    setAuditioning(true);
+    const state = { audio: null, timer: null, paused: false, pause: () => stopAudition() };
+    audition.current = state;
+    PLAYING.add(state);
+    const playFrom = k => {
+      if (audition.current !== state) return;
+      if (k >= ready.length) { stopAudition(); return; }
+      const l = ready[k];
+      const a = new Audio(urlOf(l));
+      state.audio = a;
+      const next = () => { state.timer = setTimeout(() => playFrom(k + 1), Math.max(0, Number(l.pause) || 0) * 1000); };
+      a.onended = next;
+      a.onerror = next;
+      a.play().catch(next);
+    };
+    state.timer = setTimeout(() => playFrom(0), Math.max(0, voiceDelay) * 1000);
+  };
+  useEffect(() => stopAudition, []);
+  const setLine = (k, patch) => onChange({ lines: lines.map((l, m) => (m === k ? { ...l, ...patch } : l)) });
+  const addLine = () => onChange({ lines: [...lines, { ...STILL_LINE_DEFAULT, lang: lines[lines.length - 1]?.lang || 'en', voice: lines[lines.length - 1]?.voice || '' }] });
+  const removeLine = k => onChange({ lines: lines.filter((_, m) => m !== k) });
+  const generateVoice = async k => {
+    const line = lines[k];
+    const text = line.text.trim(); if (!text) return;
+    const english = line.lang === 'en';
+    const v = cast.find(c => c.voiceId === line.voice) || cast[0];
+    if (!english && !v) { alert('No cast voice for this comic — choose English, or add voices first.'); return; }
+    setVoicing(k);
+    try {
+      const r = await api.post('/marketing/reel-line-audio', {
+        comicId, voiceId: english ? ENGLISH_VOICE_ID : v.voiceId, text, languageCode: line.lang,
+        stability: v?.settings?.stability ?? 0.5,
+        similarityBoost: v?.settings?.similarity_boost ?? v?.settings?.similarityBoost ?? 0.75,
+        speed: Number(line.speed) || 1.0,
+        ...(line.stable ? { modelId: 'eleven_multilingual_v2' } : !english && v?.settings?.model ? { modelId: v.settings.model } : {}),
+      });
+      setLine(k, { audio: r.data.file, audioText: text, audioUrl: `/projects/${comicId}/marketing/uploads/${r.data.file.slice(7)}` });
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setVoicing(-1); }
+  };
+  const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem' };
+  const small = { ...input, padding: '0.15rem 0.45rem', cursor: 'pointer' };
+  return (
+    <div style={{ width: '100%', color: '#c4bdd8', fontSize: '0.8rem' }}>
+      {lines.map((l, k) => (
+        <div key={k} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }} title={`Spoken while ${what} is up, after the line before it — it stays until the last line and its pause are over`}>
+          <span>🎙 {k + 1}.</span>
+          <input value={l.text} onChange={e => setLine(k, { text: e.target.value })} placeholder="What to say — ElevenLabs tags like [whispers] [pause] [excited] work" style={{ ...input, flex: 1, minWidth: 260 }}
+                 onKeyDown={e => { if (e.key === 'Enter') generateVoice(k); }} />
+          <select value={l.lang} onChange={e => setLine(k, { lang: e.target.value })} style={input}>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+          </select>
+          {l.lang === 'es' && (
+            <select value={l.voice || cast[0]?.voiceId || ''} onChange={e => setLine(k, { voice: e.target.value })} style={input} title="Which cast voice says it">
+              {cast.map(c => <option key={c.voiceId} value={c.voiceId}>{c.name}</option>)}
+            </select>
+          )}
+          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }} title="Speaking speed (ElevenLabs): 1 = normal, 0.7 slow, 1.2 fast">
+            speed <input type="number" min={0.7} max={1.2} step={0.05} value={l.speed} onChange={e => setLine(k, { speed: Number(e.target.value) || 1 })} style={{ ...input, width: 60 }} />
+          </label>
+          <label style={{ display: 'flex', gap: 4, alignItems: 'center' }} title="Use the steadier v2 model: no accent drift on short lines, but tags like [whispers] are read out literally">
+            <input type="checkbox" checked={!!l.stable} onChange={e => setLine(k, { stable: e.target.checked })} /> stable
+          </label>
+          <button type="button" onClick={() => generateVoice(k)} disabled={voicing >= 0 || !l.text.trim()}
+                  style={{ ...small, ...(l.audio && l.text.trim() !== l.audioText ? { borderColor: '#FFD23F', color: '#FFD23F' } : {}) }}
+                  title={l.audio ? 'Make the clip again from the text above (highlighted when the text has changed since)' : 'Make the clip'}>
+            {voicing === k ? 'Generating…' : l.audio ? 'Regenerate' : 'Generate'}
+          </button>
+          {l.audio && <button type="button" onClick={() => new Audio(urlOf(l)).play().catch(() => {})} style={small} title="Hear the clip">▶</button>}
+          {!l.audio && l.text && <span style={{ color: '#9a8fc0' }}>no clip yet</span>}
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title={`Silence after this line before the next one (or before ${what} ends)`}>
+            then pause <input type="number" min={0} max={30} step={0.1} value={l.pause} onChange={e => setLine(k, { pause: Math.max(0, Number(e.target.value) || 0) })} style={{ ...input, width: 64 }} /> s
+          </label>
+          <button type="button" onClick={() => removeLine(k)} style={{ ...small, color: '#f88' }} title="Cancel this line — removes it and its clip from the reel">✕ cancel</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+        {lines.length > 0 && (
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title={`Seconds between ${what} appearing and the first line starting`}>
+            first line starts after <input type="number" min={0} max={30} step={0.1} value={voiceDelay} onChange={e => onChange({ voiceDelay: Math.max(0, Number(e.target.value) || 0) })} style={{ ...input, width: 64 }} /> s
+          </label>
+        )}
+        {lines.length < STILL_VOICE_LINES && (
+          <button type="button" onClick={addLine} style={small} title={`A voice-over line for ${what} (up to ${STILL_VOICE_LINES}, spoken one after another)`}>🎙 + add a voice-over line</button>
+        )}
+        {lines.some(l => l.audio) && (
+          auditioning
+            ? <button type="button" onClick={stopAudition} style={small} title="Stop">■ stop</button>
+            : <button type="button" onClick={playAll} style={small} title={`Hear every line of ${what} in order, with the pauses, as the reel will play them`}>▶ play all</button>
+        )}
+      </div>
+    </div>
+  );
+}
 // Stills — the comic's images, or your own uploaded pages — each held for a
 // few seconds, shown in order right before the clip (after the opening and
 // message cards, if any). With no clip at all, they ARE the reel.
-function OpeningImagesEditor({ value, onChange, images, comicId }) {
+// A readable name for a picker image: its label when it has one (reel pages,
+// uploads), else read off the export file name (la_oferta_p3.jpg → "Page 3").
+function imageCaption(im) {
+  if (im.label) return im.label;
+  const f = im.file;
+  const m = f.match(/_p(\d+)(?:_s(\d+))?(?:_[a-z_]+)?\.(?:jpg|png)$/i);
+  if (!m) return /cover/i.test(f) ? `Cover${/landscape/i.test(f) ? ' (landscape)' : ''}${/no_text/i.test(f) ? ' (no text)' : ''}` : f;
+  const n = Number(m[1]);
+  const page = n >= 3001 ? `Example ${n - 3000}` : n >= 2001 ? `Reel page ${n - 2000}` : n >= 1001 ? `Practice ${n - 1000}` : `Page ${n}`;
+  return `${page}${m[2] ? ` · panel ${m[2]}` : ''}${/no_text/i.test(f) ? ' (no text)' : ''}`;
+}
+// The export's sort is alphabetical (p1, p10, p11, p2…); show pages in reading order.
+function pageOrder(a, b) {
+  const n = f => { const m = f.match(/_p(\d+)(?:_s(\d+))?/i); return m ? Number(m[1]) * 100 + Number(m[2] || 0) : /cover/i.test(f) ? -1 : 1e9; };
+  return n(a.file) - n(b.file) || a.file.localeCompare(b.file);
+}
+function OpeningImagesEditor({ value, onChange, images, comicId, cast = [] }) {
   const list = value;
   const [uploads, setUploads] = useState([]);   // your own images, this session: { file: 'upload:…', url, label }
+  const [onServer, setOnServer] = useState([]); // every upload already on the server — only to show a box's image after a reload, never offered in the grid
   const [uploading, setUploading] = useState(false);
-  const all = [...uploads, ...images];
-  const upload = async e => {
+  const [picking, setPicking] = useState(-1);   // the row whose thumbnail grid is open
+  useEffect(() => {
+    let live = true;
+    api.get(`/marketing/${comicId}/uploaded-images`).then(r => { if (live) setOnServer(r.data.images || []); }).catch(() => {});
+    return () => { live = false; };
+  }, [comicId]);
+  // Rows restored from a saved reel (or from before a reload) carry their own upload's url/label.
+  const rowUploads = list.filter(r => r.image && !uploads.some(u => u.file === r.image)).map(r => r.imageUrl ? { file: r.image, url: r.imageUrl, label: r.imageLabel || r.image } : onServer.find(u => u.file === r.image)).filter(Boolean);
+  // The grid: this session's uploads, the uploads the boxes use, then the comic's images — it starts clean.
+  const all = [...uploads, ...rowUploads.filter((u, i, a) => a.findIndex(x => x.file === u.file) === i), ...images.filter(im => im.label), ...images.filter(im => !im.label).sort(pageOrder)];
+  // `after` (a row index): the uploads go in right after that row; with
+  // `into` the first one goes into that row itself (the rest after it);
+  // otherwise they fill the empty rows first and then go on the end.
+  const upload = async (e, after = -1, into = false) => {
     const files = [...(e.target.files || [])]; e.target.value = '';
     if (!files.length) return;
     setUploading(true);
@@ -1282,10 +1485,18 @@ function OpeningImagesEditor({ value, onChange, images, comicId }) {
       setUploads(u => [...added, ...u]);
       // Each uploaded page becomes a slide (filling empty rows first).
       let l = [...list];
-      for (const a of added) {
+      let at = after;
+      for (const [k, a] of added.entries()) {
+        const stamp = { image: a.file, imageUrl: a.url, imageLabel: a.label };
+        if (into && k === 0 && after >= 0) { l[after] = { ...l[after], ...stamp }; continue; }
+        if (after >= 0) {
+          if (l.length >= OPENING_IMAGES_MAX) break;
+          l.splice(at + 1, 0, { ...(l[at] || OPENING_IMAGE_DEFAULT), ...stamp, lines: [] }); at += 1;
+          continue;
+        }
         const empty = l.findIndex(s => !s.image);
-        if (empty >= 0) l[empty] = { ...l[empty], image: a.file };
-        else if (l.length < OPENING_IMAGES_MAX) l.push({ ...(l[l.length - 1] || OPENING_IMAGE_DEFAULT), image: a.file });
+        if (empty >= 0) l[empty] = { ...l[empty], ...stamp };
+        else if (l.length < OPENING_IMAGES_MAX) l.push({ ...(l[l.length - 1] || OPENING_IMAGE_DEFAULT), ...stamp });
       }
       onChange(l);
     } catch (err) { alert(err.response?.data?.error || err.message); }
@@ -1293,8 +1504,21 @@ function OpeningImagesEditor({ value, onChange, images, comicId }) {
   };
   const setAt = (i, k, x) => onChange(list.map((s, j) => (j === i ? { ...s, [k]: x } : s)));
   const remove = i => onChange(list.filter((_, j) => j !== i));
+  // Get rid of one of your own uploads: off the server and out of the picker;
+  // any row that was using it goes back to "choose an image".
+  const dropUpload = async im => {
+    if (!window.confirm(`Delete "${imageCaption(im)}"? It is removed from the server too, so a saved reel that uses it will need another image.`)) return;
+    try { await api.delete(`/marketing/${comicId}/image`, { data: { file: im.file } }); }
+    catch (err) { alert(err.response?.data?.error || err.message); return; }
+    setUploads(u => u.filter(x => x.file !== im.file)); setOnServer(u => u.filter(x => x.file !== im.file));
+    if (list.some(r => r.image === im.file)) onChange(list.map(r => (r.image === im.file ? { ...r, image: '', imageUrl: '', imageLabel: '' } : r)));
+  };
   const move = (i, d) => { const l = [...list]; [l[i], l[i + d]] = [l[i + d], l[i]]; onChange(l); };
-  const add = () => onChange([...list, { ...(list[list.length - 1] || OPENING_IMAGE_DEFAULT), image: '' }]);   // a new one takes the last one's settings
+  // A new, empty row (taking the last one's settings, not its image or voice-over), with its picker open.
+  const add = () => { onChange([...list, { ...(list[list.length - 1] || OPENING_IMAGE_DEFAULT), image: '', imageUrl: '', imageLabel: '', lines: [] }]); setPicking(list.length); };
+  // A new, empty row in front of / right after row i (takes that row's settings, not its image or voice-over).
+  const insertBefore = i => { onChange([...list.slice(0, i), { ...list[i], image: '', imageUrl: '', imageLabel: '', lines: [] }, ...list.slice(i)]); setPicking(i); };
+  const insertAfter = i => { onChange([...list.slice(0, i + 1), { ...list[i], image: '', imageUrl: '', imageLabel: '', lines: [] }, ...list.slice(i + 1)]); setPicking(i + 1); };
   const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem' };
   const grey = { color: '#c4bdd8', fontSize: '0.8rem' };
   const small = { ...input, padding: '0.15rem 0.45rem', cursor: 'pointer' };
@@ -1314,13 +1538,17 @@ function OpeningImagesEditor({ value, onChange, images, comicId }) {
         const v = { ...OPENING_IMAGE_DEFAULT, ...row };   // rows made before a setting existed get its default
         const chosen = all.find(im => im.file === v.image);
         return (
-          <div key={i} style={{ marginTop: 8, display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', paddingTop: i ? 8 : 0, borderTop: i ? '1px dashed #3a2f5c' : 'none' }}>
+          <div key={i} style={{ marginTop: 8, display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', padding: 8, border: '1px solid #5a4b8a', borderRadius: 8, background: '#160f2c' }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', ...grey }}>
               <span style={{ color: '#9a8fc0' }}>{i + 1}.</span>
-              <select value={v.image} onChange={e => setAt(i, 'image', e.target.value)} style={{ ...input, maxWidth: 260 }} title="Which image to show">
-                <option value="">— choose an image —</option>
-                {all.map(im => <option key={im.file} value={im.file}>{im.label ? `📁 ${im.label}` : im.file}</option>)}
-              </select>
+              <button type="button" onClick={() => setPicking(picking === i ? -1 : i)} style={{ ...small, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      title={chosen ? `${imageCaption(chosen)} — click to change` : 'Pick an image'}>
+                {chosen ? `🖼 ${imageCaption(chosen)} ▾` : '🖼 choose an image ▾'}
+              </button>
+              <label style={{ ...small, display: 'inline-block' }} title={chosen ? 'Replace this image with one of your own (jpg/png/webp); any further files go in after it' : 'Your own image (jpg/png/webp) goes into this box; any further files go in after it'}>
+                {uploading ? 'Uploading…' : '📁 upload'}
+                <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple style={{ display: 'none' }} onChange={e => { upload(e, i, true); setPicking(-1); }} disabled={uploading} />
+              </label>
               <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="How long the image stays on screen">
                 for <input type="number" min={0.5} max={60} step={0.5} value={v.seconds} onChange={e => setAt(i, 'seconds', Number(e.target.value) || 3)} style={{ ...input, width: 70 }} /> s
               </label>
@@ -1352,15 +1580,47 @@ function OpeningImagesEditor({ value, onChange, images, comicId }) {
               <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Fade to the background colour at the end (and in from it, after another slide), so what follows fades in instead of cutting hard">
                 <input type="checkbox" checked={v.fade} onChange={e => setAt(i, 'fade', e.target.checked)} /> fade
               </label>
+              {list.length < OPENING_IMAGES_MAX && <button type="button" onClick={() => insertBefore(i)} style={small} title="Add a new image in front of this one">+ before</button>}
               {i > 0 && <button type="button" onClick={() => move(i, -1)} style={small} title="Show earlier">↑</button>}
               {i < list.length - 1 && <button type="button" onClick={() => move(i, 1)} style={small} title="Show later">↓</button>}
               <button type="button" onClick={() => remove(i)} style={small} title="Remove this image">✕</button>
             </div>
+            {picking === i && (
+              <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 8, maxHeight: 300, overflowY: 'auto', padding: 6, border: '1px solid #3a2f5c', borderRadius: 8, background: '#120d24' }}>
+                {/* An upload another box already uses is not offered again here. */}
+                {all.filter(im => !(im.file.startsWith('upload:') && im.file !== v.image && list.some(r => r.image === im.file))).map(im => (
+                  <div key={im.file} onClick={() => { const up = im.file.startsWith('upload:'); onChange(list.map((r, j) => (j === i ? { ...r, image: im.file, imageUrl: up ? im.url : '', imageLabel: up ? im.label || '' : '' } : r))); setPicking(-1); }}
+                       style={{ cursor: 'pointer', textAlign: 'center', position: 'relative' }} title={im.file}>
+                    <img src={im.url} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '2 / 3', objectFit: 'cover', borderRadius: 4, outline: v.image === im.file ? '3px solid #8e6bf0' : '1px solid #444' }} />
+                    {im.file.startsWith('upload:') && (
+                      <button type="button" onClick={e => { e.stopPropagation(); dropUpload(im); }} title="Delete this upload (from the server too)"
+                              style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, lineHeight: '20px', padding: 0, borderRadius: 11, border: '1px solid #777', background: 'rgba(20,12,40,0.85)', color: '#f88', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
+                    )}
+                    <div style={{ fontSize: '0.72rem', color: '#c4bdd8', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{im.file.startsWith('page:') ? '🎬 ' : im.file.startsWith('upload:') ? '📁 ' : ''}{imageCaption(im)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
             {chosen && (
               <div style={{ width: 90, height: 160, borderRadius: 6, background: v.background, overflow: 'hidden', padding: Math.round(v.margin / 12), boxSizing: 'border-box' }} title="Roughly how it sits in the frame">
                 <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
                   <img src={chosen.url} alt="" style={{ width: '100%', height: '100%', objectFit: v.fit === 'cover' ? 'cover' : 'contain', objectPosition: `${v.focusX}% ${v.focusY}%`, transform: `scale(${(v.zoom || 100) / 100})`, transformOrigin: `${v.focusX}% ${v.focusY}%` }} />
                 </div>
+              </div>
+            )}
+            <VoiceLinesEditor value={v} onChange={patch => onChange(list.map((s, j) => (j === i ? { ...s, ...patch } : s)))} comicId={comicId} cast={cast} />
+            {chosen && (
+              <StillZoomSection still={{ imageUrl: chosen.url, seconds: v.seconds, background: v.background, fit: v.fit, margin: v.margin, zoom: v.zoom, focusX: v.focusX, focusY: v.focusY, voiceDelay: v.voiceDelay,
+                                         lines: (v.lines || []).filter(l => l.audio).map(l => ({ url: l.audioUrl || `/projects/${comicId}/marketing/uploads/${String(l.audio).slice(7)}`, pause: l.pause })) }}
+                                value={v.moves || []} onChange={moves => onChange(list.map((s, j) => (j === i ? { ...s, moves } : s)))} />
+            )}
+            {list.length < OPENING_IMAGES_MAX && (
+              <div style={{ width: '100%', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', ...grey }}>
+                <button type="button" onClick={() => insertAfter(i)} style={small} title="Add a new image right after this one (its picker opens here)">+ add an image after this one</button>
+                <label style={{ ...small, display: 'inline-block' }} title="Your own images (jpg/png/webp) — each one becomes a slide, placed right after this one">
+                  {uploading ? 'Uploading…' : '📁 upload your own after this one'}
+                  <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple style={{ display: 'none' }} onChange={e => upload(e, i)} disabled={uploading} />
+                </label>
               </div>
             )}
           </div>
@@ -1369,11 +1629,48 @@ function OpeningImagesEditor({ value, onChange, images, comicId }) {
     </div>
   );
 }
-function MessageCardEditor({ value, onChange, images }) {
+// A still's camera moves — the zoom editor, driven by the still's voice-over.
+function StillZoomSection({ still, value, onChange }) {
+  return (
+    <div style={{ width: '100%' }}>
+      <ZoomEditor value={value} onChange={onChange} still={still} />
+    </div>
+  );
+}
+function MessageCardEditor({ value, onChange, images, comicId = '', cast = [] }) {
   const v = value;
   const set = (k, x) => onChange({ ...v, [k]: x });
   const setItem = (k, f, x) => set(k, { ...v[k], [f]: x });
   const setLine = (i, f, x) => set('lines', v.lines.map((l, j) => (j === i ? { ...l, [f]: x } : l)));
+  // Narration, item by item: what is said (defaults to the text), in which
+  // voice, at what speed — made here so it can be heard before the render.
+  const items = [['heading', v.heading, 'Heading'], ['subheading', v.subheading, 'Subheading'], ...v.lines.map((l, i) => [`line:${i}`, l, `Line ${i + 1}`])].filter(([, l]) => l.text && l.text.trim());
+  const patchItem = (key, patch) => (key.startsWith('line:') ? set('lines', v.lines.map((l, j) => (j === Number(key.slice(5)) ? { ...l, ...patch } : l))) : set(key, { ...v[key], ...patch }));
+  const [voicing, setVoicing] = useState('');
+  const audition = useRef(null);
+  const urlOf = l => `/projects/${comicId}/marketing/uploads/${String(l.audio || '').slice(7)}`;
+  const stopAll = () => { const a = audition.current; if (a) { clearTimeout(a.timer); a.audio?.pause(); a.paused = true; PLAYING.delete(a); } audition.current = null; };
+  const hearAll = () => {
+    stopAll();
+    const ready = items.filter(([, l]) => l.audio);
+    const st = { audio: null, timer: null, paused: false, pause: () => stopAll() }; audition.current = st; PLAYING.add(st);
+    const play = k => { if (audition.current !== st || k >= ready.length) { if (audition.current === st) stopAll(); return; } const a = new Audio(urlOf(ready[k][1])); st.audio = a; a.onended = () => { st.timer = setTimeout(() => play(k + 1), 400); }; a.onerror = () => play(k + 1); a.play().catch(() => play(k + 1)); };
+    play(0);
+  };
+  const generate = async (key, l) => {
+    const text = (l.say || l.text || '').trim(); if (!text || !comicId) return;
+    const cv = cast.find(c => c.voiceId === l.voice);
+    setVoicing(key);
+    try {
+      const r = await api.post('/marketing/reel-line-audio', {
+        comicId, voiceId: cv ? cv.voiceId : ENGLISH_VOICE_ID, text, languageCode: cv ? 'es' : 'en',
+        stability: cv?.settings?.stability ?? 0.5, similarityBoost: cv?.settings?.similarity_boost ?? cv?.settings?.similarityBoost ?? 0.75,
+        speed: Number(l.speed) || 1.0, ...(cv?.settings?.model ? { modelId: cv.settings.model } : {}),
+      });
+      patchItem(key, { audio: r.data.file, audioText: text });
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setVoicing(''); }
+  };
   const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem' };
   const cell = { ...input, width: '100%', minWidth: 0, boxSizing: 'border-box' };   // fits its grid column (inputs otherwise keep their default width)
   const grey = { color: '#c4bdd8' };
@@ -1464,8 +1761,42 @@ function MessageCardEditor({ value, onChange, images }) {
               {v.voice && <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Each item appears as its narration starts, one after another; off = your Start times, narration at each item's start">
                 <input type="checkbox" checked={v.autoTime} onChange={e => set('autoTime', e.target.checked)} /> time the items to the narration
               </label>}
-              <span>The card lasts until the last item (and its narration) has finished, plus the hold — never less than "at least". Long text wraps; an empty line between lines is a blank row.</span>
+              <span>The card lasts until the last item (and its narration) has finished, plus the hold — never less than "at least". Long text wraps; an empty line between lines is a blank row. The 💬 "Sound on" pop-up (below) can sit over this card.</span>
             </div>
+            {v.voice && items.length > 0 && (
+              <div style={{ border: '1px solid #3a2f5c', borderRadius: 8, padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.8rem', ...grey }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <strong style={{ color: '#d6d0e6' }}>🎙 Narration</strong>
+                  <span>What each item says, and who says it. Make the clip to hear it; an item without a clip is read by the English narrator at render time.</span>
+                  {items.some(([, l]) => l.audio) && <button type="button" className="btn btn-secondary" onClick={hearAll} style={{ padding: '0.15rem 0.6rem', fontSize: '0.78rem' }} title="Hear the clips in order">▶ Hear in order</button>}
+                </div>
+                {items.map(([key, l, label]) => {
+                  const text = (l.say || l.text || '').trim();
+                  const stale = l.audio && l.audioText && l.audioText !== text;
+                  return (
+                    <div key={key} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ width: 86, color: '#d6d0e6' }}>{label}</span>
+                      <input style={{ ...input, flex: 1, minWidth: 200 }} value={l.say ?? ''} placeholder={l.text} onChange={e => patchItem(key, { say: e.target.value })}
+                             title="What is said (leave empty to read the text as shown)" onKeyDown={e => { if (e.key === 'Enter') generate(key, l); }} />
+                      <select value={l.voice || ''} onChange={e => patchItem(key, { voice: e.target.value })} style={{ ...input, width: 150 }} title="English narrator, or one of the comic's voices (Spanish)">
+                        <option value="">🇬🇧 English narrator</option>
+                        {cast.map(c => <option key={c.voiceId} value={c.voiceId}>🇪🇸 {c.name}</option>)}
+                      </select>
+                      <label style={{ display: 'flex', gap: 4, alignItems: 'center' }} title="Speaking speed: 1 = normal, 0.7 slow, 1.2 fast">
+                        <input type="number" min={0.7} max={1.2} step={0.05} value={l.speed ?? 1} onChange={e => patchItem(key, { speed: Number(e.target.value) || 1 })} style={{ ...input, width: 60 }} />×
+                      </label>
+                      <button type="button" className="btn btn-secondary" disabled={voicing !== '' || !text} onClick={() => generate(key, l)}
+                              style={{ padding: '0.15rem 0.6rem', fontSize: '0.78rem', ...(stale ? { borderColor: '#FFD23F', color: '#FFD23F' } : {}) }}
+                              title={l.audio ? 'Make the clip again from the text above (highlighted when the text has changed since)' : 'Make the clip'}>
+                        {voicing === key ? 'Generating…' : l.audio ? 'Regenerate' : 'Generate'}
+                      </button>
+                      {l.audio && <button type="button" className="btn btn-secondary" onClick={() => { stopAll(); new Audio(urlOf(l)).play().catch(() => {}); }} style={{ padding: '0.15rem 0.5rem' }} title="Hear the clip">▶</button>}
+                      {!l.audio && <span style={{ color: '#9a8fc0' }}>no clip yet</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <MessageCardPreview card={v} images={images} />
         </div>
@@ -1474,78 +1805,322 @@ function MessageCardEditor({ value, onChange, images }) {
   );
 }
 
-// Reels: camera moves on the clip — up to 3 pushes in, each on a point you
-// click in the source clip, from a start time (grab it from the video), held
-// until a time or to the end, then released. The frame shows the zoom window.
+// Reels: camera moves on the clip — up to ZOOM_MAX pushes in, each on a point
+// you click in the picture. Listen to the clip: the waveform timeline shows
+// where you are, "Zoom in here" starts a move at the playhead, "Zoom out here"
+// ends the selected one, and the picture shows the window (or the zoomed
+// result) following the sound. Times are in the clip itself (before the cards).
+// A pill fixed to the top of the window while any clip or audio on the page is
+// playing (the zoom editor's clip, a cue preview, the finished reel…) — one
+// press pauses them all, wherever you have scrolled to.
+// Players that are not <video>/<audio> elements in the page (the voice-line
+// auditions, the stills' zoom players) register here while they play, so the
+// pill can see and stop them: anything with `paused` and pause().
+const PLAYING = new Set();
+function StopPlayingPill() {
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    const check = () => setPlaying([...document.querySelectorAll('video, audio')].some(m => !m.paused && !m.ended) || [...PLAYING].some(p => !p.paused));
+    const id = setInterval(check, 250);
+    return () => clearInterval(id);
+  }, []);
+  if (!playing) return null;
+  const stopAll = () => {
+    document.querySelectorAll('video, audio').forEach(m => { if (!m.paused) m.pause(); });
+    [...PLAYING].forEach(p => p.pause());
+  };
+  return (
+    <button className="btn btn-primary" onClick={stopAll} title="Pause every clip and voice that is playing on this page"
+            style={{ position: 'fixed', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 2000, padding: '0.4rem 1.1rem', fontSize: '0.9rem', borderRadius: 999, boxShadow: '0 2px 10px rgba(0,0,0,0.45)' }}>
+      ⏹ Stop playing
+    </button>
+  );
+}
+
+const ZOOM_MAX = 20;
 const ZOOM_DEFAULT = () => ({ enabled: true, start: 0, ramp: 1, zoom: 1.6, until: '', release: 1, cx: 0.5, cy: 0.5 });
-function ZoomEditor({ value, onChange, src }) {
+// The zoom factor and centre at a moment — the server's zoompan maths
+// (zoomFilter: eased push in, hold, eased release; the first move whose span
+// covers the moment owns the centre), so the preview matches the render.
+const zoomStateAt = (zooms, tt) => {
+  const ease = p => p * p * (3 - 2 * p);
+  const clip01 = v => Math.min(1, Math.max(0, v));
+  let z = 1, cx = 0.5, cy = 0.5, active = -1;
+  zooms.forEach((m, i) => {
+    if (m.enabled === false) return;
+    const pin = clip01((tt - Number(m.start)) / (Number(m.ramp) || 1));
+    const pout = m.until === '' ? 0 : clip01((tt - Number(m.until)) / (Number(m.release) || 1));
+    z = Math.max(z, 1 + (Number(m.zoom) - 1) * ease(pin) * (1 - ease(pout)));
+    const endAt = m.until === '' ? Infinity : Number(m.until) + (Number(m.release) || 1);
+    if (active < 0 && tt >= Number(m.start) && tt <= endAt) { active = i; cx = Number(m.cx); cy = Number(m.cy); }
+  });
+  const left = Math.min(Math.max(cx - 0.5 / z, 0), 1 - 1 / z), top = Math.min(Math.max(cy - 0.5 / z, 0), 1 - 1 / z);
+  return { z, cx, cy, active, left, top };
+};
+// Plays a still's voice-over the way the reel will: the lines one after
+// another from `at`, on a clock of `duration` seconds — with the <video>-like
+// surface the zoom editor drives (currentTime, duration, paused, play, pause).
+class StillPlayer {
+  constructor(lines, duration) {
+    this.lines = lines.map(l => ({ ...l, el: Object.assign(new Audio(l.url), { preload: 'auto' }) }));
+    this.duration = duration; this.paused = true; this._t = 0; this._t0 = 0; this._wall = 0; this._raf = 0;
+  }
+  get currentTime() { return this.paused ? this._t : Math.min(this.duration, this._t0 + (performance.now() - this._wall) / 1000); }
+  set currentTime(v) { const was = !this.paused; this.pause(); this._t = Math.min(Math.max(0, Number(v) || 0), this.duration); if (was) this.play(); }
+  play() {
+    if (!this.paused) return Promise.resolve();
+    if (this._t >= this.duration - 0.01) this._t = 0;
+    this.paused = false; this._t0 = this._t; this._wall = performance.now(); PLAYING.add(this);
+    this._tick();
+    return Promise.resolve();
+  }
+  pause() {
+    if (this.paused) return;
+    this._t = this.currentTime; this.paused = true; cancelAnimationFrame(this._raf); PLAYING.delete(this);
+    for (const l of this.lines) if (!l.el.paused) l.el.pause();
+  }
+  _tick() {
+    if (this.paused) return;
+    const t = this.currentTime;
+    for (const l of this.lines) {
+      const inside = t >= l.at && t < l.at + l.dur - 0.05;
+      if (inside && l.el.paused) { l.el.currentTime = Math.max(0, t - l.at); l.el.play().catch(() => {}); }
+      else if (!inside && !l.el.paused) l.el.pause();
+    }
+    if (t >= this.duration) { this.pause(); this._t = this.duration; return; }
+    this._raf = requestAnimationFrame(() => this._tick());
+  }
+}
+// Peaks (one per column) of decoded audio placed on a `total`-second timeline.
+const peaksOf = (audio, cols, offsetSec, total, out) => {
+  const ch = audio.getChannelData(0), rate = audio.sampleRate;
+  const c0 = Math.floor(offsetSec / total * cols), c1 = Math.min(cols, Math.ceil((offsetSec + audio.duration) / total * cols));
+  for (let c = c0; c < c1; c++) {
+    const s0 = Math.max(0, Math.floor((c / cols * total - offsetSec) * rate)), s1 = Math.min(ch.length, Math.floor(((c + 1) / cols * total - offsetSec) * rate));
+    let m = out[c] || 0; for (let k = s0; k < s1; k += 4) { const a = Math.abs(ch[k]); if (a > m) m = a; } out[c] = m;
+  }
+};
+// `src`: a clip to zoom on. `still`: an opening image instead — { imageUrl,
+// seconds, background, fit, margin, zoom, focusX, focusY, voiceDelay, lines:
+// [{ url, pause }] } — its voice-over is the sound, its frame the picture.
+function ZoomEditor({ value, onChange, src, still }) {
   const zooms = value;
   const [sel, setSel] = useState(0);
   const [t, setT] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [peaks, setPeaks] = useState(null);      // waveform of the clip's sound, one peak per column
+  const [rendered, setRendered] = useState(false); // picture shows the zoomed result instead of the window frame
   const videoRef = useRef(null);
+  const stillRef = useRef(null);   // the StillPlayer when editing a still
+  const media = () => (still ? stillRef.current : videoRef.current);
+  const canvasRef = useRef(null);
+  const zoomsRef = useRef(zooms); zoomsRef.current = zooms;
+  const selRef = useRef(sel); selRef.current = sel;
   const input = { padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.82rem', width: '100%', minWidth: 0, boxSizing: 'border-box' };
   const grey = { color: '#c4bdd8' };
+  const btn = { padding: '0.2rem 0.6rem', fontSize: '0.78rem' };
   const setZ = (i, f, x) => onChange(zooms.map((z, j) => (j === i ? { ...z, [f]: x } : z)));
   const cur = zooms[sel];
-  // Which move (if any) is active at the video's current time — for the frame.
-  const activeAt = tt => zooms.findIndex(z => z.enabled !== false && tt >= Number(z.start) && (z.until === '' || tt <= Number(z.until) + Number(z.release)));
-  const shown = activeAt(t) >= 0 ? zooms[activeAt(t)] : cur;
-  const onClick = e => {
+  const now = () => Number((media()?.currentTime || 0).toFixed(1));
+  const seek = v => { const x = Math.min(Math.max(v, 0), dur || v); setT(x); const m = media(); if (m) m.currentTime = x; };
+  const togglePlay = () => { const m = media(); if (!m) return; if (m.paused) m.play().catch(() => {}); else m.pause(); };
+  // "Zoom in here": a new move from the playhead (same strength and speed as the
+  // last one). A previous move still open (no "out") is closed at this moment,
+  // so the camera moves on to the new centre instead of staying on the old one.
+  const zoomInHere = () => {
+    const list = zoomsRef.current;
+    if (list.length >= ZOOM_MAX) return;
+    const at = now();
+    const last = list[list.length - 1];
+    const closed = list.map(z => (z.until === '' && Number(z.start) < at ? { ...z, until: at } : z));
+    onChange([...closed, { ...ZOOM_DEFAULT(), ...(last ? { zoom: last.zoom, ramp: last.ramp, release: last.release } : {}), start: at }]);
+    setSel(list.length);
+  };
+  const zoomOutHere = () => {
+    const list = zoomsRef.current, i = selRef.current;
+    if (!list[i]) return;
+    const at = now();
+    if (at > Number(list[i].start)) onChange(list.map((z, j) => (j === i ? { ...z, until: at } : z)));
+  };
+  // Follow the playhead smoothly (timeupdate alone is ~4 times a second).
+  useEffect(() => {
+    let raf;
+    const tick = () => {
+      const m = media();
+      if (m) { setT(m.currentTime); setPlaying(!m.paused); if (m.duration && Number.isFinite(m.duration)) setDur(m.duration); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  // The waveform: decode the sound in the browser, one peak per column. For a
+  // still that is its voice-over, laid out as the reel plays it (from
+  // voiceDelay, each line then its pause) — which also makes its player.
+  const stillKey = still ? JSON.stringify([still.seconds, still.voiceDelay, still.lines.map(l => [l.url, l.pause])]) : '';
+  useEffect(() => {
+    let cancelled = false;
+    setPeaks(null);
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const decode = async url => { const ctx = new Ctx(); try { return await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer()); } finally { ctx.close?.(); } };
+    const cols = 1200;
+    (async () => {
+      try {
+        const out = new Float32Array(cols);
+        if (still) {
+          stillRef.current?.pause();
+          const decoded = [];
+          for (const l of still.lines) { try { decoded.push([l, await decode(l.url)]); } catch { decoded.push([l, null]); } }
+          if (cancelled) return;
+          let at = Number(still.voiceDelay) || 0;
+          const placed = decoded.map(([l, a]) => { const d = a ? a.duration : 0; const item = { url: l.url, at, dur: d, audio: a }; at += d + (Number(l.pause) || 0); return item; });
+          const total = Math.max(Number(still.seconds) || 0, placed.length ? at + 0.3 : 0, 0.5);
+          placed.forEach(it => { if (it.audio) peaksOf(it.audio, cols, it.at, total, out); });
+          stillRef.current = new StillPlayer(placed.map(({ url, at, dur }) => ({ url, at, dur })), total);
+          setDur(total); setT(0);
+        } else {
+          const audio = await decode(src);
+          if (cancelled) return;
+          peaksOf(audio, cols, 0, audio.duration, out);
+        }
+        const top = Math.max(0.05, ...out);
+        setPeaks(out.map(v => v / top));
+      } catch { if (!cancelled) setPeaks(new Float32Array(0)); }
+    })();
+    return () => { cancelled = true; };
+  }, [src, stillKey]);
+  useEffect(() => () => stillRef.current?.pause(), []);
+  useEffect(() => {
+    const c = canvasRef.current; if (!c) return;
+    const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
+    if (!peaks || !peaks.length) return;
+    const mid = c.height / 2;
+    g.fillStyle = '#8e6bf0';
+    for (let x = 0; x < c.width; x++) { const h = Math.max(1, peaks[Math.floor(x / c.width * peaks.length)] * (c.height - 4)); g.fillRect(x, mid - h / 2, 1, h); }
+  }, [peaks]);
+  const onKey = e => {
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); zoomInHere(); }
+    else if (e.key === 'o' || e.key === 'O') { e.preventDefault(); zoomOutHere(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); seek(t - (e.shiftKey ? 1 : 0.1)); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); seek(t + (e.shiftKey ? 1 : 0.1)); }
+  };
+  // Click the picture to put the selected zoom's centre there — also while
+  // "show the result" is on (the click is mapped back through the zoom).
+  const onPictureClick = e => {
     if (!cur) return;
     const r = e.currentTarget.getBoundingClientRect();
-    setZ(sel, 'cx', Number(((e.clientX - r.left) / r.width).toFixed(3)));
-    setZ(sel, 'cy', Number(((e.clientY - r.top) / r.height).toFixed(3)));
+    let fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+    if (rendered) { fx = state.left + fx / state.z; fy = state.top + fy / state.z; }
+    fx = Math.min(1, Math.max(0, fx)); fy = Math.min(1, Math.max(0, fy));
+    onChange(zooms.map((z, j) => (j === sel ? { ...z, cx: Number(fx.toFixed(3)), cy: Number(fy.toFixed(3)) } : z)));
   };
-  const frame = shown && shown.enabled !== false ? {
-    width: `${100 / shown.zoom}%`, height: `${100 / shown.zoom}%`,
-    left: `${Math.min(Math.max(shown.cx * 100 - 50 / shown.zoom, 0), 100 - 100 / shown.zoom)}%`,
-    top: `${Math.min(Math.max(shown.cy * 100 - 50 / shown.zoom, 0), 100 - 100 / shown.zoom)}%`,
-  } : null;
+  // Scrub by pressing or dragging on the timeline.
+  const scrub = e => { const r = e.currentTarget.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * (dur || 0)); };
+  const onTimelineDown = e => { e.currentTarget.setPointerCapture(e.pointerId); scrub(e); };
+  const onTimelineMove = e => { if (e.buttons & 1) scrub(e); };
+  const state = zoomStateAt(zooms, t);
+  // The window at the playhead when a move is under way; otherwise the selected move's own window, so its centre can be placed.
+  const shownZoom = state.z > 1.001 ? state : (cur && cur.enabled !== false ? zoomStateAt([cur], Number(cur.start) + Number(cur.ramp)) : null);
+  const frame = shownZoom ? { width: `${100 / shownZoom.z}%`, height: `${100 / shownZoom.z}%`, left: `${shownZoom.left * 100}%`, top: `${shownZoom.top * 100}%` } : null;
+  const pct = v => `${dur ? Math.min(100, Math.max(0, Number(v) / dur * 100)) : 0}%`;
+  const fmt = v => `${Number(v).toFixed(1)}s`;
   return (
-    <div style={{ border: '1px solid #444', borderRadius: 8, padding: 8, margin: '8px 0' }}>
+    <div tabIndex={0} onKeyDown={onKey} style={{ border: '1px solid #444', borderRadius: 8, padding: 8, margin: '8px 0', outline: 'none' }}
+         title="Keys (with this box focused): space = play/pause, I = zoom in here, O = zoom out here, ←/→ = a tenth of a second (shift: a second)">
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', flexWrap: 'wrap' }}>
-        🔍 Zoom in while the reel runs
-        <button className="btn btn-secondary" onClick={() => { onChange([...zooms, { ...ZOOM_DEFAULT(), start: Number(t.toFixed(1)) }]); setSel(zooms.length); }}
-                disabled={zooms.length >= 3} style={{ padding: '0.2rem 0.7rem', fontSize: '0.78rem' }}>＋ Add a zoom</button>
-        {zooms.length > 0 && <span style={{ ...grey, fontSize: '0.78rem' }}>Times are in the clip itself (before the cards). Click the picture to set where the camera pushes in. The zooms are rendered when you press "Apply audio & cards to this clip".</span>}
+        🔍 {still ? 'Zoom in while this image is up' : 'Zoom in while the reel runs'}
+        <button className="btn btn-secondary" onClick={togglePlay} style={{ ...btn, minWidth: 74 }} title="Play / pause the clip with its sound (space)">{playing ? '⏸ Pause' : '▶ Play'}</button>
+        <span style={{ ...grey, fontVariantNumeric: 'tabular-nums', minWidth: 92 }}>{fmt(t)} / {fmt(dur)}</span>
+        <button className="btn btn-primary" onClick={zoomInHere} disabled={zooms.length >= ZOOM_MAX} style={btn} title="Start a new zoom at the playhead (I)">⤓ Zoom in here</button>
+        <button className="btn btn-secondary" onClick={zoomOutHere} disabled={!cur || now() <= Number(cur.start)} style={btn} title="End the selected zoom at the playhead (O)">⤒ Zoom out here</button>
+        <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: '0.78rem', ...grey }} title="Show the picture as the camera will see it (instead of the window drawn on the whole picture)">
+          <input type="checkbox" checked={rendered} onChange={e => setRendered(e.target.checked)} /> show the result
+        </label>
+        <span style={{ ...grey, fontSize: '0.75rem' }}>{zooms.length}/{ZOOM_MAX}</span>
       </div>
-      {zooms.length > 0 && (
-        <div style={{ display: 'flex', gap: 14, marginTop: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {/* The picture sits beside the table when there is room for the whole table, otherwise below it. */}
-          <div style={{ flex: '1 1 560px', minWidth: 0, display: 'grid', gridTemplateColumns: '20px 64px 68px 64px 72px 68px 84px 28px', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
-            <span /><span style={grey}>Start s</span><span style={grey} title="How long the push in takes">In over s</span><span style={grey}>Zoom ×</span>
-            <span style={grey} title="When to zoom back out — leave blank to stay zoomed to the end of the clip">Out at s</span><span style={grey}>Out over s</span><span style={grey}>Centre</span><span />
-            {zooms.map((z, i) => (
-              <React.Fragment key={i}>
-                <input type="radio" checked={sel === i} onChange={() => setSel(i)} title="Edit this zoom (click the picture to set its centre)" />
-                <input type="number" min={0} step={0.1} value={z.start} onChange={e => setZ(i, 'start', Number(e.target.value) || 0)} style={input} />
-                <input type="number" min={0.05} step={0.1} value={z.ramp} onChange={e => setZ(i, 'ramp', Number(e.target.value) || 1)} style={input} />
-                <input type="number" min={1.05} max={4} step={0.1} value={z.zoom} onChange={e => setZ(i, 'zoom', Number(e.target.value) || 1.6)} style={input} />
-                <input type="number" min={0} step={0.1} value={z.until} placeholder="end" onChange={e => setZ(i, 'until', e.target.value === '' ? '' : Number(e.target.value) || 0)} style={input} />
-                <input type="number" min={0.05} step={0.1} value={z.release} onChange={e => setZ(i, 'release', Number(e.target.value) || 1)} style={input} disabled={z.until === ''} />
-                <span style={{ ...grey, fontSize: '0.75rem' }}>{Math.round(z.cx * 100)}% , {Math.round(z.cy * 100)}%</span>
-                <button className="btn btn-secondary" onClick={() => { onChange(zooms.filter((_, j) => j !== i)); setSel(0); }} style={{ padding: '0.15rem 0.45rem', color: '#f88' }} title="Remove">✕</button>
-              </React.Fragment>
-            ))}
-            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-              <button className="btn btn-secondary" disabled={!cur} onClick={() => setZ(sel, 'start', Number(t.toFixed(1)))} style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
-                      title="Use the video's current time as this zoom's start">⏱ Start = {t.toFixed(1)}s</button>
-              <button className="btn btn-secondary" disabled={!cur} onClick={() => setZ(sel, 'until', Number(t.toFixed(1)))} style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
-                      title="Use the video's current time as when this zoom releases">⏱ Out at = {t.toFixed(1)}s</button>
+      {/* The timeline: the clip's sound, the moves as bars (selected in yellow), the playhead. */}
+      <div onPointerDown={onTimelineDown} onPointerMove={onTimelineMove}
+           style={{ position: 'relative', height: 64, marginTop: 8, borderRadius: 6, background: '#120c24', border: '1px solid #3a2f5c', overflow: 'hidden', cursor: 'col-resize', userSelect: 'none', touchAction: 'none' }}
+           title="Press or drag to move the playhead">
+        <canvas ref={canvasRef} width={1200} height={64} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.85 }} />
+        {peaks === null && <span style={{ position: 'absolute', left: 8, top: 24, fontSize: '0.72rem', color: '#776d99' }}>reading the sound…</span>}
+        {peaks !== null && still && !still.lines.length && <span style={{ position: 'absolute', left: 8, top: 24, fontSize: '0.72rem', color: '#776d99' }}>no voice-over yet — the image is up for {Number(still.seconds) || 0}s</span>}
+        {dur > 0 && zooms.map((z, i) => {
+          if (z.enabled === false) return null;
+          const s0 = Number(z.start), s1 = z.until === '' ? dur : Math.min(dur, Number(z.until) + Number(z.release));
+          const hold0 = Math.min(s1, s0 + Number(z.ramp)), hold1 = z.until === '' ? dur : Math.min(dur, Number(z.until));
+          const col = i === sel ? '#FFD23F' : '#b39cff';
+          return (
+            <div key={i} onPointerDown={e => { e.stopPropagation(); setSel(i); seek(s0); }} title={`Zoom ${i + 1}: in at ${fmt(s0)}, ${z.until === '' ? 'to the end' : `out at ${fmt(z.until)}`} — click to select`}
+                 style={{ position: 'absolute', left: pct(s0), width: `calc(${pct(s1 - s0)} + 1px)`, top: i === sel ? 2 : 6, height: i === sel ? 14 : 8, cursor: 'pointer' }}>
+              <div style={{ position: 'absolute', inset: 0, background: col, opacity: 0.35, borderRadius: 3 }} />
+              <div style={{ position: 'absolute', left: pct((hold0 - s0) / Math.max(0.001, s1 - s0) * dur), right: pct((s1 - hold1) / Math.max(0.001, s1 - s0) * dur), top: 0, bottom: 0, background: col, opacity: 0.6 }} />
+              <span style={{ position: 'absolute', left: 3, top: -1, fontSize: 10, lineHeight: '14px', color: '#120c24', fontWeight: 700 }}>{i === sel ? i + 1 : ''}</span>
             </div>
-          </div>
-          <div style={{ width: 216, flex: 'none' }}>
-            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 8, cursor: 'crosshair' }} onClick={onClick} title="Click to set the centre of the selected zoom">
-              <video ref={videoRef} src={src} muted playsInline controls={false} onTimeUpdate={e => setT(e.target.currentTime)}
-                     style={{ width: '100%', display: 'block', background: '#000', pointerEvents: 'none' }} />
-              {frame && <div style={{ position: 'absolute', border: '2px solid #FFD23F', boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)', pointerEvents: 'none', borderRadius: 4, ...frame }} />}
+          );
+        })}
+        <div style={{ position: 'absolute', left: pct(t), top: 0, bottom: 0, width: 2, background: '#fff', boxShadow: '0 0 4px #000', pointerEvents: 'none' }} />
+      </div>
+      <div style={{ display: 'flex', gap: 14, marginTop: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 560px', minWidth: 0 }}>
+          {zooms.length === 0 ? (
+            <div style={{ ...grey, fontSize: '0.8rem' }}>Play {still ? 'the voice-over' : 'the clip'} and press "Zoom in here" where the camera should push in, then "Zoom out here" where it should pull back; click the picture to set where it pushes in. Up to {ZOOM_MAX} moves. The zooms are rendered when you press "Apply audio & cards".</div>
+          ) : (
+            <div style={{ maxHeight: 250, overflowY: 'auto', paddingRight: 4 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '20px 64px 68px 64px 72px 68px 84px 28px', gap: '4px 8px', alignItems: 'center', fontSize: '0.8rem', color: '#ccc' }}>
+                <span /><span style={grey}>In at s</span><span style={grey} title="How long the push in takes">In over s</span><span style={grey}>Zoom ×</span>
+                <span style={grey} title="When to zoom back out — leave blank to stay zoomed to the end of the clip">Out at s</span><span style={grey}>Out over s</span><span style={grey}>Centre</span><span />
+                {zooms.map((z, i) => (
+                  <React.Fragment key={i}>
+                    <input type="radio" checked={sel === i} onChange={() => { setSel(i); seek(Number(z.start)); }} title="Edit this zoom (click the picture to set its centre)" />
+                    <input type="number" min={0} step={0.1} value={z.start} onChange={e => setZ(i, 'start', Number(e.target.value) || 0)} style={input} />
+                    <input type="number" min={0.05} step={0.1} value={z.ramp} onChange={e => setZ(i, 'ramp', Number(e.target.value) || 1)} style={input} />
+                    <input type="number" min={1.05} max={4} step={0.1} value={z.zoom} onChange={e => setZ(i, 'zoom', Number(e.target.value) || 1.6)} style={input} />
+                    <input type="number" min={0} step={0.1} value={z.until} placeholder="end" onChange={e => setZ(i, 'until', e.target.value === '' ? '' : Number(e.target.value) || 0)} style={input} />
+                    <input type="number" min={0.05} step={0.1} value={z.release} onChange={e => setZ(i, 'release', Number(e.target.value) || 1)} style={input} disabled={z.until === ''} />
+                    <span style={{ ...grey, fontSize: '0.75rem' }}>{Math.round(z.cx * 100)}% , {Math.round(z.cy * 100)}%</span>
+                    <button className="btn btn-secondary" onClick={() => { onChange(zooms.filter((_, j) => j !== i)); setSel(Math.max(0, Math.min(sel, zooms.length - 2))); }} style={{ padding: '0.15rem 0.45rem', color: '#f88' }} title="Remove">✕</button>
+                  </React.Fragment>
+                ))}
+              </div>
             </div>
-            <input type="range" min={0} max={videoRef.current?.duration || 0} step={0.1} value={t} onClick={e => e.stopPropagation()}
-                   onChange={e => { const v = Number(e.target.value); setT(v); if (videoRef.current) videoRef.current.currentTime = v; }}
-                   style={{ width: '100%', marginTop: 4 }} title="Scrub the clip" />
-          </div>
+          )}
+          {zooms.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+              <button className="btn btn-secondary" disabled={!cur} onClick={() => setZ(sel, 'start', now())} style={btn} title="Use the playhead as the selected zoom's start">⏱ In at = {fmt(t)}</button>
+              <button className="btn btn-secondary" disabled={!cur} onClick={() => setZ(sel, 'until', now())} style={btn} title="Use the playhead as when the selected zoom releases">⏱ Out at = {fmt(t)}</button>
+              <span style={{ ...grey, fontSize: '0.75rem', alignSelf: 'center' }}>{still ? 'Times count from the moment this image appears.' : 'Times are in the clip itself (before the cards).'}</span>
+            </div>
+          )}
         </div>
-      )}
+        <div style={{ width: 216, flex: 'none' }}>
+          <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 8, cursor: 'crosshair', background: '#000' }} onClick={onPictureClick}
+               title="Click where the selected zoom should push in">
+            {still ? (
+              <div style={{ width: '100%', aspectRatio: '9 / 16', background: still.background, position: 'relative', pointerEvents: 'none', transformOrigin: '0 0',
+                            transform: rendered ? `scale(${state.z}) translate(${-state.left * 100}%, ${-state.top * 100}%)` : 'none' }}>
+                <div style={{ position: 'absolute', inset: `${(still.margin || 0) / 1920 * 100}% ${(still.margin || 0) / 1080 * 100}%`, overflow: 'hidden' }}>
+                  {still.imageUrl && <img src={still.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: still.fit === 'cover' ? 'cover' : 'contain', objectPosition: `${still.focusX}% ${still.focusY}%`, transform: `scale(${(still.zoom || 100) / 100})`, transformOrigin: `${still.focusX}% ${still.focusY}%` }} />}
+                </div>
+              </div>
+            ) : (
+              <video ref={videoRef} src={src} playsInline controls={false} preload="auto"
+                     style={{ width: '100%', display: 'block', background: '#000', pointerEvents: 'none', transformOrigin: '0 0',
+                              transform: rendered ? `scale(${state.z}) translate(${-state.left * 100}%, ${-state.top * 100}%)` : 'none' }} />
+            )}
+            {!rendered && frame && <div style={{ position: 'absolute', border: '2px solid #FFD23F', boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)', pointerEvents: 'none', borderRadius: 4, ...frame }} />}
+            {cur && cur.enabled !== false && (() => {
+              // The centre dot, in the picture's own coordinates (through the zoom when showing the result).
+              const dx = rendered ? (Number(cur.cx) - state.left) * state.z : Number(cur.cx), dy = rendered ? (Number(cur.cy) - state.top) * state.z : Number(cur.cy);
+              if (dx < 0 || dx > 1 || dy < 0 || dy > 1) return null;
+              return <div style={{ position: 'absolute', left: `${dx * 100}%`, top: `${dy * 100}%`, width: 10, height: 10, marginLeft: -5, marginTop: -5, borderRadius: 5, border: '2px solid #FFD23F', background: 'rgba(255,210,63,0.5)', pointerEvents: 'none' }} />;
+            })()}
+          </div>
+          <div style={{ ...grey, fontSize: '0.72rem', marginTop: 4 }}>{state.active >= 0 ? `zoom ${state.active + 1} · ×${state.z.toFixed(2)}` : cur ? `zoom ${sel + 1} selected` : ''}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1983,6 +2558,9 @@ function Reels() {
   const [error, setError] = useState('');
   const [audios, setAudios] = useState([]);
   const [question, setQuestion] = useState('');
+  const [questionTop1, setQuestionTop1] = useState('');   // two separate lines at the top of the question card
+  const [questionTop2, setQuestionTop2] = useState('');
+  const hasQuestionCard = !!(question || questionTop1 || questionTop2);
   const [negativePrompt, setNegativePrompt] = useState('');
   const [styleLock, setStyleLock] = useState(false);   // off: the plain request produced better comic-style clips
   const [resolution, setResolution] = useState('720p');
@@ -2005,7 +2583,11 @@ function Reels() {
   const [coversSec, setCoversSec] = useState(3.5);
   const [endCaption, setEndCaption] = useState('');
   const [endMidCaption, setEndMidCaption] = useState('');
+  const [endTop1, setEndTop1] = useState('');   // two separate lines at the top of the sign-off card
+  const [endTop2, setEndTop2] = useState('');
   const [endAnim, setEndAnim] = useState(END_ANIM_DEFAULT);
+  const [endVoice, setEndVoice] = useState(END_VOICE_DEFAULT);   // voice-over spoken over the sign-off card
+  const [openingVoice, setOpeningVoice] = useState(END_VOICE_DEFAULT);   // voice-over spoken over the opening card
   const [openingLine1, setOpeningLine1] = useState('');
   const [openingLine2, setOpeningLine2] = useState('');
   const [openingSec, setOpeningSec] = useState(2);
@@ -2014,6 +2596,7 @@ function Reels() {
   const [messageCard, setMessageCard] = useState(MESSAGE_CARD_DEFAULT);
   const [openingImages, setOpeningImages] = useState([]);   // stills held before the clip, in order
   const [soundBadge, setSoundBadge] = useState(false);   // "Turn sound on" badge over the reel
+  const [soundBubble, setSoundBubble] = useState(SOUND_BUBBLE_DEFAULT);   // speech-bubble pop-up holding the first frame
   const [zooms, setZooms] = useState([]);                 // camera pushes on the clip (ZoomEditor)
   const [cues, setCues] = useState([]);                   // Quick audio clips placed on the clip (CueEditor)
   const [cueOriginal, setCueOriginal] = useState('duck'); // the recording's own sound under the cues
@@ -2033,10 +2616,99 @@ function Reels() {
     api.get(`/marketing/${comicId}/voices`).then(r => { setCast(r.data.voices); if (r.data.voices[0]) setLineVoice(r.data.voices[0].voiceId); }).catch(() => setCast([]));
   }, [comicId]);
 
+  // ---- Saving the reel ---------------------------------------------------
+  // Everything the form holds, as one object: kept as a draft in this browser
+  // (per comic) on every change, and saved by name on the server (under the
+  // comic's marketing/reel-setups) on request. Media (uploads, generated
+  // lines, clips) are referred to by file and already live on the server.
+  const setupFields = {
+    prompt: [prompt, setPrompt], model: [model, setModel], mode: [mode, setMode], refs: [refs, setRefs],
+    clipFile: [clipFile, setClipFile], question: [question, setQuestion], questionTop1: [questionTop1, setQuestionTop1], questionTop2: [questionTop2, setQuestionTop2],
+    negativePrompt: [negativePrompt, setNegativePrompt], styleLock: [styleLock, setStyleLock], resolution: [resolution, setResolution],
+    lineVoice: [lineVoice, setLineVoice], lineEn: [lineEn, setLineEn], lineEs: [lineEs, setLineEs], lineOrder: [lineOrder, setLineOrder],
+    endCard: [endCard, setEndCard], voices: [voices, setVoices], ambient: [ambient, setAmbient], subtitles: [subtitles, setSubtitles],
+    durationSeconds: [durationSeconds, setDurationSeconds], questionSec: [questionSec, setQuestionSec], endSec: [endSec, setEndSec],
+    coversCard: [coversCard, setCoversCard], coversSec: [coversSec, setCoversSec], endCaption: [endCaption, setEndCaption],
+    endMidCaption: [endMidCaption, setEndMidCaption], endTop1: [endTop1, setEndTop1], endTop2: [endTop2, setEndTop2], endAnim: [endAnim, setEndAnim], endVoice: [endVoice, setEndVoice], openingVoice: [openingVoice, setOpeningVoice],
+    openingLine1: [openingLine1, setOpeningLine1], openingLine2: [openingLine2, setOpeningLine2], openingSec: [openingSec, setOpeningSec],
+    openingHold: [openingHold, setOpeningHold], openingAnim: [openingAnim, setOpeningAnim], messageCard: [messageCard, setMessageCard],
+    openingImages: [openingImages, setOpeningImages], soundBadge: [soundBadge, setSoundBadge], soundBubble: [soundBubble, setSoundBubble], zooms: [zooms, setZooms],
+    cues: [cues, setCues], cueOriginal: [cueOriginal, setCueOriginal], cuts: [cuts, setCuts],
+    clip: [clip, setClip],   // the finished reel (URL), so a loaded setup shows it in the player
+  };
+  const snapshot = () => Object.fromEntries(Object.entries(setupFields).map(([k, [v]]) => [k, v]));
+  const restore = setup => {
+    for (const [k, [, set]] of Object.entries(setupFields)) if (k in setup) set(setup[k]);
+    // Older setups have no `clip`: show the base clip, if any.
+    if (!('clip' in setup)) { const file = setup.clipFile || null; setClip(file ? `/projects/${comicId}/marketing/${file}` : null); }
+  };
+  const draftKey = `reel-draft:${comicId}`;
+  const draftFor = useRef('');   // the comic whose draft has been applied — the autosave waits for it
+  useEffect(() => {
+    if (!comicId) { draftFor.current = ''; return; }
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw && !(handoffRef.current && comicId === handoffRef.current)) restore(JSON.parse(raw));
+    } catch { /* a bad draft is just dropped */ }
+    draftFor.current = comicId;
+  }, [comicId]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const snapshotJson = JSON.stringify(snapshot());
+  useEffect(() => {
+    if (!comicId || draftFor.current !== comicId) return;
+    const t = setTimeout(() => { try { localStorage.setItem(draftKey, snapshotJson); } catch { /* storage full/blocked */ } }, 400);
+    return () => clearTimeout(t);
+  }, [snapshotJson, comicId]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [setups, setSetups] = useState([]);        // saved on the server: [{ name, savedAt }]
+  const [setupName, setSetupName] = useState('');
+  const [setupPick, setSetupPick] = useState('');
+  const [setupBusy, setSetupBusy] = useState('');
+  const loadSetups = () => api.get(`/marketing/${comicId}/reel-setups`).then(r => setSetups(r.data.setups)).catch(() => setSetups([]));
+  useEffect(() => { setSetups([]); setSetupPick(''); if (comicId) loadSetups(); }, [comicId]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const saveSetup = async () => {
+    const name = setupName.trim() || setupPick; if (!name) return;
+    if (setups.some(x => x.name === name) && !window.confirm(`Overwrite the saved reel "${name}"?`)) return;
+    setSetupBusy('save');
+    try { await api.put(`/marketing/${comicId}/reel-setups/${encodeURIComponent(name)}`, { setup: snapshot() }); await loadSetups(); setSetupPick(name); setSetupName(''); }
+    catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setSetupBusy(''); }
+  };
+  const loadSetup = async (name = setupPick) => {
+    if (!name) return;
+    setSetupBusy('load');
+    try { const r = await api.get(`/marketing/${comicId}/reel-setups/${encodeURIComponent(name)}`); restore(r.data.setup); }
+    catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setSetupBusy(''); }
+  };
+  const deleteSetup = async () => {
+    if (!setupPick || !window.confirm(`Delete the saved reel "${setupPick}"? (Its images and audio stay on the server.)`)) return;
+    setSetupBusy('delete');
+    try { await api.delete(`/marketing/${comicId}/reel-setups/${encodeURIComponent(setupPick)}`); setSetupPick(''); await loadSetups(); }
+    catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setSetupBusy(''); }
+  };
+  // Every finished reel keeps its setup on the server too ("Rendered <when>"),
+  // so a reel can be picked up again later even if it was never saved by name.
+  const autoSaveSetup = async () => {
+    const d = new Date(), two = n => String(n).padStart(2, '0');
+    const name = `Rendered ${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}.${two(d.getMinutes())}`;
+    try { await api.put(`/marketing/${comicId}/reel-setups/${encodeURIComponent(name)}`, { setup: snapshot() }); await loadSetups(); }
+    catch { /* the render itself is done; a missed auto-save is not worth an alert */ }
+  };
+  const clearDraft = () => {
+    if (!window.confirm('Start this reel from scratch? The automatic draft for this comic is cleared (saved reels are kept).')) return;
+    try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+    const fresh = { prompt: '', model: 'fast', mode: 'refs', refs: [], clipFile: null, question: '', questionTop1: '', questionTop2: '', negativePrompt: '', styleLock: false, resolution: '720p',
+      lineEn: '', lineEs: '', lineOrder: 'en-es', endCard: true, voices: [], ambient: 'duck', subtitles: 'none', durationSeconds: 8, questionSec: 2, endSec: 1.8, coversCard: false, coversSec: 3.5,
+      endCaption: '', endMidCaption: '', endTop1: '', endTop2: '', endAnim: END_ANIM_DEFAULT, endVoice: END_VOICE_DEFAULT, openingVoice: END_VOICE_DEFAULT, openingLine1: '', openingLine2: '', openingSec: 2, openingHold: 0, openingAnim: OPENING_ANIM_DEFAULT,
+      messageCard: MESSAGE_CARD_DEFAULT, openingImages: [], soundBadge: false, soundBubble: SOUND_BUBBLE_DEFAULT, zooms: [], cues: [], cueOriginal: 'duck', cuts: [] };
+    restore(fresh);
+  };
+
   // One option per language per sentence, labelled with its text.
   const voiceOptions = audios.flatMap(a => [
-    { file: a.file, lang: 'es', es: a.text, en: a.translation || '', label: `🇪🇸 p${a.page} · ${a.text}` },
-    ...(a.translationFile ? [{ file: a.translationFile, lang: 'en', es: a.text, en: a.translation || a.text, label: `🇬🇧 p${a.page} · ${a.translation || a.text}` }] : []),
+    { file: a.file, url: a.url, lang: 'es', es: a.text, en: a.translation || '', label: `🇪🇸 p${a.page} · ${a.text}` },
+    ...(a.translationFile ? [{ file: a.translationFile, url: a.translationUrl, lang: 'en', es: a.text, en: a.translation || a.text, label: `🇬🇧 p${a.page} · ${a.translation || a.text}` }] : []),
   ]);
   const addVoice = file => {
     const opt = voiceOptions.find(o => o.file === file);
@@ -2046,6 +2718,54 @@ function Reels() {
   const moveVoice = (i, d) => {
     const j = i + d; if (j < 0 || j >= voices.length) return;
     const next = [...voices]; [next[i], next[j]] = [next[j], next[i]]; setVoices(next);
+  };
+  // Where a voice line can be heard: generated/uploaded lines live in
+  // marketing/uploads; the comic's own lines carry their export URL.
+  const voiceUrl = v => v.url || (String(v.file || '').startsWith('upload:') ? `/projects/${comicId}/marketing/uploads/${v.file.slice(7)}` : '');
+  const [voicePlaying, setVoicePlaying] = useState(null);   // the <audio> of the line(s) playing now
+  const stopVoices = () => { if (voicePlaying) { voicePlaying.stop = true; clearTimeout(voicePlaying.timer); voicePlaying.audio?.pause(); } setVoicePlaying(null); };
+  // The pause before a line (seconds): its own, or the mixer's defaults
+  // (0.5 s before the first line, 0.35 s between lines).
+  const voiceGap = (v, i) => (v.gap !== '' && v.gap != null && Number.isFinite(Number(v.gap)) ? Math.min(30, Math.max(0, Number(v.gap))) : (i === 0 ? 0.5 : 0.35));
+  // Hear the lines as the reel will play them: in order, with their pauses.
+  const playVoices = (from = 0, only = false) => {
+    stopVoices();
+    const state = { audio: null, stop: false, timer: null };
+    const step = i => {
+      if (state.stop || i >= voices.length || (only && i > from)) { setVoicePlaying(null); return; }
+      const u = voiceUrl(voices[i]);
+      if (!u) { step(i + 1); return; }
+      const a = new Audio(u); state.audio = a;
+      a.onended = () => { state.timer = setTimeout(() => step(i + 1), voiceGap(voices[i + 1] || {}, i + 1) * 1000); };
+      a.onerror = () => step(i + 1);
+      state.timer = setTimeout(() => { if (!state.stop) a.play().catch(() => step(i + 1)); }, (only ? 0 : voiceGap(voices[i], i)) * 1000);
+    };
+    setVoicePlaying(state);
+    step(from);
+  };
+  // Editing a generated line: reword it (and/or pick another cast voice) and
+  // make the audio again in place — the line keeps its spot in the order.
+  const [voiceEdit, setVoiceEdit] = useState(null);   // { i, text, voiceId }
+  const regenerateVoice = async () => {
+    const { i, text, voiceId } = voiceEdit;
+    const v = voices[i];
+    const english = v.lang === 'en';
+    const cv = cast.find(c => c.voiceId === voiceId) || cast[0];
+    if (!text.trim() || (!english && !cv)) return;
+    setLineBusy('edit');
+    try {
+      const r = await api.post('/marketing/reel-line-audio', {
+        comicId, voiceId: english ? ENGLISH_VOICE_ID : cv.voiceId, text: text.trim(), languageCode: v.lang,
+        stability: cv?.settings?.stability ?? 0.5,
+        similarityBoost: cv?.settings?.similarity_boost ?? cv?.settings?.similarityBoost ?? 0.75,
+        speed: cv?.settings?.speed ?? 1.0,
+        ...(cv?.settings?.model ? { modelId: cv.settings.model } : {}),
+      });
+      const flag = english ? '🇬🇧' : '🇪🇸';
+      setVoices(vs => vs.map((x, j) => (j === i ? { ...x, file: r.data.file, url: '', [english ? 'en' : 'es']: text.trim(), voiceId: english ? '' : cv.voiceId, label: `${flag} ${english ? 'English' : cv.name}: ${r.data.label}` } : x)));
+      setVoiceEdit(null);
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setLineBusy(''); }
   };
 
   const translateLine = async () => {
@@ -2058,27 +2778,27 @@ function Reels() {
 
   // House English narrator — every English take uses this voice regardless of
   // the cast selection (which picks the SPANISH voice).
-  const ENGLISH_VOICE_ID = 'GP1bgf0sjoFuuHkyrg8E';
 
   const generateLines = async () => {
-    const v = cast.find(c => c.voiceId === lineVoice);
-    if (!v) return;
+    const v = cast.find(c => c.voiceId === lineVoice) || cast[0];
+    const wantEs = lineOrder !== 'en-only' && lineEs;
+    if (wantEs && !v) { alert('This comic has no cast voices for Spanish — add voices in the Voices tab, or choose "English only".'); return; }
     setLineBusy('gen');
     try {
       const make = async (text, languageCode, flag) => {
         const english = languageCode === 'en';
         const r = await api.post('/marketing/reel-line-audio', {
           comicId, voiceId: english ? ENGLISH_VOICE_ID : v.voiceId, text, languageCode,
-          stability: v.settings?.stability ?? 0.5,
-          similarityBoost: v.settings?.similarity_boost ?? v.settings?.similarityBoost ?? 0.75,
-          speed: v.settings?.speed ?? 1.0,
-          ...(v.settings?.model ? { modelId: v.settings.model } : {}),
+          stability: v?.settings?.stability ?? 0.5,
+          similarityBoost: v?.settings?.similarity_boost ?? v?.settings?.similarityBoost ?? 0.75,
+          speed: v?.settings?.speed ?? 1.0,
+          ...(v?.settings?.model ? { modelId: v.settings.model } : {}),
         });
-        return { file: r.data.file, lang: languageCode, es: lineEs, en: lineEn, label: `${flag} ${english ? 'English' : v.name}: ${r.data.label}` };
+        return { file: r.data.file, lang: languageCode, es: lineEs, en: lineEn, voiceId: english ? '' : v.voiceId, label: `${flag} ${english ? 'English' : v.name}: ${r.data.label}` };
       };
       const items = [];
       if (lineOrder !== 'es-only' && lineEn) items.push(await make(lineEn, 'en', '🇬🇧'));
-      if (lineOrder !== 'en-only' && lineEs) items.push(await make(lineEs, 'es', '🇪🇸'));
+      if (wantEs) items.push(await make(lineEs, 'es', '🇪🇸'));
       if (lineOrder === 'es-en') items.reverse();
       setVoices(vs => [...vs, ...items]);
     } catch (e) { alert(e.response?.data?.error || e.message); }
@@ -2088,8 +2808,9 @@ function Reels() {
   const remix = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, openingImages, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
+      const r = await api.post('/marketing/veo-remix', { comicId, file: clipFile, voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es', ...(v.gap !== '' && v.gap != null ? { gap: Number(v.gap) } : {}) })), ambient, subtitles, question, questionTop1, questionTop2, endCard, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, endCardTop1: endTop1, endCardTop2: endTop2, endVoice, openingVoice, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, openingImages, soundBadge, soundBubble, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url);
+      autoSaveSetup();
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
   };
@@ -2102,6 +2823,7 @@ function Reels() {
   const refLabel = token => token.startsWith('upload:') ? `📁 ${token.slice(7).replace(/^\d+-/, '')}`
     : token.startsWith('ref:') ? `🎨 ${token.split('/').pop()}`
     : token.startsWith('gen:') ? `✨ ${token.slice(4)}`
+    : token.startsWith('page:') ? `🎬 ${images.find(i => i.file === token)?.label || token.slice(5)}`
     : token.startsWith('comic:') ? `📚 ${comics.find(c => c.id === token.split(':')[1])?.title || 'other comic'} · ${token.split(':').slice(2).join(':')}`
     : token;
   useEffect(() => {
@@ -2114,14 +2836,27 @@ function Reels() {
     setBusy(true); setClip(null); setError('');
     try {
       const r = await api.post(model.startsWith('sora') ? '/marketing/sora-clip' : '/marketing/veo-clip', { comicId, prompt, imageFiles: refs, model, mode, aspectRatio: '9:16', styleLock, resolution,
-        voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es' })), ambient, subtitles, question, endCard, negativePrompt,
-        durationSeconds, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, openingImages, soundBadge, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
+        voiceAudio: voices.map(v => ({ file: v.file, es: v.es || '', en: v.en || '', lang: v.lang || 'es', ...(v.gap !== '' && v.gap != null ? { gap: Number(v.gap) } : {}) })), ambient, subtitles, question, endCard, negativePrompt,
+        durationSeconds, questionTop1, questionTop2, questionSeconds: questionSec, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, endCardTop1: endTop1, endCardTop2: endTop2, endVoice, openingVoice, openingLine1, openingLine2, openingSeconds: openingSec, openingHold, endAnim: endAnimFor(endAnim, endSec), coversCard, coversSeconds: coversSec, openingAnim, messageCard, openingImages, soundBadge, soundBubble, zooms, cues: cues.filter(c => c.file || Number(c.freeze) > 0), cueOriginal, cuts: cuts.filter(c => c.to > c.from) });
       setClip(r.data.url); setClipFile(r.data.file);
+      autoSaveSetup();
     } catch (e) { setError(e.response?.data?.error || e.message); }
     finally { setBusy(false); }
   };
 
   const input = { width: '100%', padding: '0.5rem 0.7rem', borderRadius: 6, border: '1px solid #555', background: '#1a1332', color: '#e9e4ff', fontSize: '0.95rem' };
+
+  // Earlier clips of this comic (generated, uploaded, finished reels) — any
+  // one can be the base again.
+  const [pastClips, setPastClips] = useState([]);
+  useEffect(() => { setPastClips([]); if (comicId) api.get(`/marketing/${comicId}/clips`).then(r => setPastClips(r.data.clips || [])).catch(() => {}); }, [comicId, clipFile]);
+  const pastClipPicker = pastClips.length > 0 && (
+    <select value="" onChange={e => { const c = pastClips.find(x => x.file === e.target.value); if (c) { setClip(c.url); setClipFile(c.file); setError(''); } }}
+            style={{ ...input, maxWidth: 360 }} title="Pick up an earlier clip of this comic as the base — generated, uploaded, or a finished reel">
+      <option value="">📼 Previous clips…</option>
+      {pastClips.map(c => <option key={c.file} value={c.file}>{new Date(c.at).toLocaleString()} · {c.kind} · {(c.bytes / 1048576).toFixed(1)} MB · {c.file}</option>)}
+    </select>
+  );
 
   // Your own video as the reel's base (instead of a generated clip).
   const ownClipUpload = (
@@ -2154,6 +2889,23 @@ function Reels() {
           <option value={OWN}>No comic — my own images / clip</option>
           <ComicOptions comics={comics} />
         </select>
+        {comicId && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8, padding: '8px 10px', border: '1px solid #3a2f5c', borderRadius: 8, fontSize: '0.82rem', color: '#c4bdd8' }}
+               title="Everything below is kept as a draft in this browser as you work (it survives a refresh). Every reel you render is also saved here as 'Rendered <when>'; save by name to keep one for good, or to keep several reels for this comic.">
+            <span>💾 Saved reels</span>
+            <select value={setupPick} onChange={e => { setSetupPick(e.target.value); loadSetup(e.target.value); }} style={{ ...input, minWidth: 180 }} title="Choosing a saved reel loads it (its images, lines, cards and the finished video)">
+              <option value="">— choose —</option>
+              {setups.map(x => <option key={x.name} value={x.name}>{x.name} · {new Date(x.savedAt).toLocaleString()}</option>)}
+            </select>
+            <button className="btn btn-secondary" disabled={!setupPick || setupBusy !== ''} onClick={() => loadSetup()} style={{ padding: '0.25rem 0.7rem' }} title="Load it again, dropping any changes made since">{setupBusy === 'load' ? 'Loading…' : '↻ Reload'}</button>
+            <button className="btn btn-secondary" disabled={!setupPick || setupBusy !== ''} onClick={deleteSetup} style={{ padding: '0.25rem 0.7rem', color: '#f88' }}>Delete</button>
+            <span style={{ flex: 1 }} />
+            <input value={setupName} onChange={e => setSetupName(e.target.value)} placeholder={setupPick ? `Save as… (empty = overwrite "${setupPick}")` : 'Name this reel…'} style={{ ...input, minWidth: 220 }}
+                   onKeyDown={e => { if (e.key === 'Enter') saveSetup(); }} />
+            <button className="btn btn-primary" disabled={(!setupName.trim() && !setupPick) || setupBusy !== ''} onClick={saveSetup} style={{ padding: '0.25rem 0.8rem' }}>{setupBusy === 'save' ? 'Saving…' : 'Save'}</button>
+            <button className="btn btn-secondary" onClick={clearDraft} style={{ padding: '0.25rem 0.7rem' }} title="Clear the form and its automatic draft">Start fresh</button>
+          </div>
+        )}
 
         {images.length > 0 && (
           <>
@@ -2290,16 +3042,17 @@ function Reels() {
                 </span>
               )}
               <span style={{ color: '#c4bdd8', fontSize: '0.8rem' }}>
-                9:16 · total ≈ {(((openingLine1 || openingLine2) ? openingSec : 0) + durationSeconds + (question ? questionSec : 0) + (endCard ? endSec : 0)).toFixed(1)}s
-                {' '}({(openingLine1 || openingLine2) ? `${openingSec}s opening + ` : ''}{durationSeconds}s clip{question ? ` + ${questionSec}s question` : ''}{endCard ? ` + ${endSec}s logo` : ''}) · costs real money per run
+                9:16 · total ≈ {(((openingLine1 || openingLine2) ? openingSec : 0) + durationSeconds + (hasQuestionCard ? questionSec : 0) + (endCard ? endSec : 0)).toFixed(1)}s
+                {' '}({(openingLine1 || openingLine2) ? `${openingSec}s opening + ` : ''}{durationSeconds}s clip{hasQuestionCard ? ` + ${questionSec}s question` : ''}{endCard ? ` + ${endSec}s logo` : ''}) · costs real money per run
               </span>
               <button className="btn btn-primary" disabled={busy || !prompt} onClick={generate} style={{ padding: '0.55rem 1.4rem' }}>
                 {busy ? 'Generating… (1–6 min)' : `🎞 Generate clip${model.startsWith('sora') ? ' (Sora)' : ''}`}
               </button>
               {ownClipUpload}
+              {pastClipPicker}
             </div>
             </>}
-            {own && <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>{ownClipUpload}</div>}
+            {own && <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>{ownClipUpload}{pastClipPicker}</div>}
             {error && <p style={{ color: '#f88', fontSize: '0.85rem' }}>{error}</p>}
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1.2rem 0 4px' }}>
               4 · Voice lines (optional) — the comic's own ElevenLabs audio, in order
@@ -2308,12 +3061,14 @@ function Reels() {
               <option value="">Add a line…</option>
               {voiceOptions.map((o, i) => <option key={i} value={o.file}>{o.label}</option>)}
             </select>
-            {cast.length > 0 && (
+            {(
               <div style={{ border: '1px solid #444', borderRadius: 8, padding: 10, marginTop: 10 }}>
-                <div style={{ fontSize: '0.85rem', color: '#d6d0e6', marginBottom: 6 }}>🎤 Speak a line — pick the Spanish voice; English always uses the house English voice</div>
-                <select value={lineVoice} onChange={e => setLineVoice(e.target.value)} style={{ ...input, marginBottom: 6 }}>
-                  {cast.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
-                </select>
+                <div style={{ fontSize: '0.85rem', color: '#d6d0e6', marginBottom: 6 }}>🎤 Speak a line — pick which of the comic's voices says the Spanish; English always uses the house English voice</div>
+                {cast.length > 0
+                  ? <select value={lineVoice} onChange={e => setLineVoice(e.target.value)} style={{ ...input, marginBottom: 6 }} title="The comic's cast voice for the Spanish line">
+                      {cast.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
+                    </select>
+                  : <div style={{ color: '#f0b04a', fontSize: '0.78rem', marginBottom: 6 }}>This comic has no cast voices yet (Voices tab) — English lines still work.</div>}
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input style={input} placeholder="English line" value={lineEn} onChange={e => setLineEn(e.target.value)} />
                   <button className="btn btn-secondary" disabled={lineBusy !== '' || !lineEn} onClick={translateLine} style={{ padding: '0.3rem 0.8rem', whiteSpace: 'nowrap' }}>
@@ -2349,15 +3104,51 @@ function Reels() {
             </label>
             {voices.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                {voices.map((v, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1px solid #444', borderRadius: 8, padding: '4px 8px', fontSize: '0.85rem' }}>
-                    <span style={{ color: '#c4bdd8', width: 16 }}>{i + 1}</span>
-                    <span style={{ flex: 1 }}>{v.label}</span>
-                    <button className="btn btn-secondary" onClick={() => moveVoice(i, -1)} style={{ padding: '0.15rem 0.45rem' }}>↑</button>
-                    <button className="btn btn-secondary" onClick={() => moveVoice(i, 1)} style={{ padding: '0.15rem 0.45rem' }}>↓</button>
-                    <button className="btn btn-secondary" onClick={() => removeVoice(i)} style={{ padding: '0.15rem 0.45rem', color: '#f88' }}>✕</button>
-                  </div>
-                ))}
+                {voices.map((v, i) => {
+                  const editable = String(v.file || '').startsWith('upload:line-');   // a line spoken here (not a comic line or an upload)
+                  const editing = voiceEdit && voiceEdit.i === i;
+                  return (
+                    <div key={i} style={{ border: '1px solid #444', borderRadius: 8, padding: '4px 8px', fontSize: '0.85rem' }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ color: '#c4bdd8', width: 16 }}>{i + 1}</span>
+                        <span style={{ flex: 1 }}>{v.label}</span>
+                        <label style={{ display: 'flex', gap: 4, alignItems: 'center', color: '#c4bdd8', whiteSpace: 'nowrap' }}
+                               title={i === 0 ? 'Silence before this line, from the start of the clip (or the first image)' : 'Pause after the previous line has finished, before this one starts'}>
+                          {i === 0 ? 'starts after' : 'pause before'}
+                          <input type="number" min={0} max={30} step={0.1} value={v.gap ?? ''} placeholder={i === 0 ? '0.5' : '0.35'}
+                                 onChange={e => setVoices(vs => vs.map((x, j) => (j === i ? { ...x, gap: e.target.value === '' ? '' : Math.min(30, Math.max(0, Number(e.target.value))) } : x)))}
+                                 style={{ ...input, width: 64, padding: '0.15rem 0.3rem' }} /> s
+                        </label>
+                        {voiceUrl(v) && <button className="btn btn-secondary" onClick={() => playVoices(i, true)} style={{ padding: '0.15rem 0.45rem' }} title="Hear this line">▶</button>}
+                        {editable && <button className="btn btn-secondary" onClick={() => setVoiceEdit(editing ? null : { i, text: v.lang === 'en' ? v.en : v.es, voiceId: v.voiceId || cast[0]?.voiceId || '' })}
+                                             style={{ padding: '0.15rem 0.45rem', ...(editing ? { borderColor: '#FFD23F', color: '#FFD23F' } : {}) }} title="Reword the line or change its voice, then make the audio again">✎</button>}
+                        <button className="btn btn-secondary" onClick={() => moveVoice(i, -1)} style={{ padding: '0.15rem 0.45rem' }}>↑</button>
+                        <button className="btn btn-secondary" onClick={() => moveVoice(i, 1)} style={{ padding: '0.15rem 0.45rem' }}>↓</button>
+                        <button className="btn btn-secondary" onClick={() => removeVoice(i)} style={{ padding: '0.15rem 0.45rem', color: '#f88' }}>✕</button>
+                      </div>
+                      {editing && (
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+                          <input style={{ ...input, flex: 1, minWidth: 180 }} value={voiceEdit.text} onChange={e => setVoiceEdit({ ...voiceEdit, text: e.target.value })}
+                                 onKeyDown={e => { if (e.key === 'Enter') regenerateVoice(); }} placeholder={v.lang === 'en' ? 'English line' : 'Spanish line'} />
+                          {v.lang !== 'en' && cast.length > 0 && (
+                            <select value={voiceEdit.voiceId} onChange={e => setVoiceEdit({ ...voiceEdit, voiceId: e.target.value })} style={{ ...input, width: 160 }} title="Which of the comic's voices says it">
+                              {cast.map(c => <option key={c.voiceId} value={c.voiceId}>{c.name}</option>)}
+                            </select>
+                          )}
+                          <button className="btn btn-primary" disabled={lineBusy !== '' || !voiceEdit.text.trim()} onClick={regenerateVoice} style={{ padding: '0.3rem 0.8rem' }}>
+                            {lineBusy === 'edit' ? 'Generating…' : 'Regenerate'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {voicePlaying
+                    ? <button className="btn btn-secondary" onClick={stopVoices} style={{ padding: '0.2rem 0.7rem' }}>■ Stop</button>
+                    : <button className="btn btn-secondary" onClick={() => playVoices(0)} style={{ padding: '0.2rem 0.7rem' }} title="Hear all the lines in order, as the reel will play them">▶ Hear them in order</button>}
+                  {!clipFile && openingImages.some(s => s.image) && <span style={{ color: '#c4bdd8', fontSize: '0.78rem' }}>With no clip, these play over the opening images (the last image holds if they run longer).</span>}
+                </div>
               </div>
             )}
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#d6d0e6', margin: '1rem 0 4px' }}>
@@ -2379,14 +3170,47 @@ function Reels() {
               </label>
             )}
             {(openingLine1 || openingLine2) && <OpeningCardAnim value={openingAnim} onChange={setOpeningAnim} secs={openingSec} badge={soundBadge} />}
-            <MessageCardEditor value={messageCard} onChange={setMessageCard} images={images} />
-            <OpeningImagesEditor key={comicId} value={openingImages} onChange={setOpeningImages} images={images} comicId={comicId} />
+            {(openingLine1 || openingLine2) && (
+              <div style={{ border: '1px solid #3a2f5c', borderRadius: 8, padding: '8px 10px', margin: '6px 0' }} title="Spoken over the opening card; the card stays up until the last line has finished">
+                <VoiceLinesEditor value={openingVoice} onChange={patch => setOpeningVoice({ ...openingVoice, ...patch })} comicId={comicId} cast={cast} what="the opening card" />
+              </div>
+            )}
+            <MessageCardEditor value={messageCard} onChange={setMessageCard} images={images} comicId={comicId} cast={cast} />
+            <div style={{ border: '1px solid #3a2f5c', borderRadius: 8, padding: '8px 10px', margin: '6px 0', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: '0.85rem', color: '#ccc' }}
+                 title="A rounded speech bubble that pops up over the first frame of the reel's content (the first opening image, or the clip). The frame is held still for the time set, so there is time to read it and switch the sound on; then the content plays. Independent of the opening card and its badge.">
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="checkbox" checked={soundBubble.enabled} onChange={e => setSoundBubble({ ...soundBubble, enabled: e.target.checked })} /> 💬 "Sound on" pop-up over the first frame
+              </label>
+              {soundBubble.enabled && (
+                <>
+                  <input value={soundBubble.text} onChange={e => setSoundBubble({ ...soundBubble, text: e.target.value })} maxLength={40} placeholder="Turn your sound on" style={{ ...input, width: 240 }} />
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="How long the first frame is held under the bubble before the content starts">
+                    hold for <input type="number" min={0.5} max={15} step={0.5} value={soundBubble.seconds} onChange={e => setSoundBubble({ ...soundBubble, seconds: Number(e.target.value) || 4.5 })} style={{ ...input, width: 70 }} /> s
+                  </label>
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Where the bubble sits, top to bottom (% of the frame)">
+                    at <input type="number" min={10} max={90} step={5} value={soundBubble.y} onChange={e => setSoundBubble({ ...soundBubble, y: Number(e.target.value) || 50 })} style={{ ...input, width: 64 }} /> % down
+                  </label>
+                  <select value={soundBubble.where || 'content'} onChange={e => setSoundBubble({ ...soundBubble, where: e.target.value })} style={{ ...input, width: 'auto' }}
+                          title="Over the first frame of the content (first image, or the clip) — or over the finished opening or message card, once its items have appeared">
+                    <option value="content">over the first frame of the content</option>
+                    <option value="opening" disabled={!(openingLine1 || openingLine2)}>over the opening card{(openingLine1 || openingLine2) ? '' : ' (needs an opening card)'}</option>
+                    <option value="message" disabled={!messageCard.enabled}>over the message card{messageCard.enabled ? '' : ' (needs the message card)'}</option>
+                  </select>
+                </>
+              )}
+            </div>
+            <OpeningImagesEditor key={comicId} value={openingImages} onChange={setOpeningImages} images={images} comicId={comicId} cast={cast} />
             {clipFile && <CueEditor comicId={comicId} src={`/projects/${comicId}/marketing/${clipFile}`} cues={cues} onChange={setCues} original={cueOriginal} onOriginal={setCueOriginal} cuts={cuts} onCuts={setCuts} />}
+            <StopPlayingPill />
             {clipFile && <ZoomEditor value={zooms} onChange={setZooms} src={`/projects/${comicId}/marketing/${clipFile}`} />}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+              <input style={input} placeholder="Question card — top line 1 (white, optional)" value={questionTop1} onChange={e => setQuestionTop1(e.target.value)} />
+              <input style={input} placeholder="Question card — top line 2 (white, optional)" value={questionTop2} onChange={e => setQuestionTop2(e.target.value)} />
+            </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input style={input} placeholder="Question card (yellow) — leave empty to skip" value={question} onChange={e => setQuestion(e.target.value)} />
               <input type="number" min={0.5} max={10} step={0.5} value={questionSec} title="How long the question card shows"
-                     onChange={e => setQuestionSec(Number(e.target.value) || 2)} style={{ ...input, width: 80 }} disabled={!question} />
+                     onChange={e => setQuestionSec(Number(e.target.value) || 2)} style={{ ...input, width: 80 }} disabled={!hasQuestionCard} />
               <span style={{ color: '#c4bdd8', fontSize: '0.8rem' }}>s</span>
             </div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 8 }}>
@@ -2396,11 +3220,22 @@ function Reels() {
                      onChange={e => setEndSec(Number(e.target.value) || 1.8)} style={{ ...input, width: 80 }} disabled={!endCard} />
               <span style={{ color: '#c4bdd8', fontSize: '0.8rem' }}>s</span>
             </label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <input style={input} disabled={!endCard} value={endTop1} onChange={e => setEndTop1(e.target.value)} placeholder="Logo card — top line 1 (white, above the logo, optional)" />
+              <input style={input} disabled={!endCard} value={endTop2} onChange={e => setEndTop2(e.target.value)} placeholder="Logo card — top line 2 (yellow, optional)" />
+            </div>
             <input style={{ ...input, marginTop: 6 }} disabled={!endCard} value={endMidCaption} onChange={e => setEndMidCaption(e.target.value)}
                    placeholder="Caption between the logo and comigo.net — shows the whole card (optional)" />
             <input style={{ ...input, marginTop: 6 }} disabled={!endCard} value={endCaption} onChange={e => setEndCaption(e.target.value)}
                    placeholder="Caption under comigo.net — appears only in the last 2s of the logo card (optional)" />
-            {endCard && <EndCardAnim value={endAnim} onChange={setEndAnim} endSec={endSec} />}
+            {endCard && <EndCardAnim value={endAnim} onChange={setEndAnim} endSec={endSec}
+                                     preview={async () => (await api.post('/marketing/endcard-preview', { comicId, endCardSeconds: endSec, endCardCaption: endCaption, endCardMidCaption: endMidCaption, endCardTop1: endTop1, endCardTop2: endTop2, endVoice, endAnim: endAnimFor(endAnim, endSec) }, { timeout: 300000 })).data.url} />}
+            {endCard && (
+              <div style={{ border: '1px solid #3a2f5c', borderRadius: 8, padding: '6px 10px', margin: '6px 0' }} title="Spoken over the logo card — the card stays up until the last line and its pause are over (at least its own length)">
+                <div style={{ fontSize: '0.85rem', color: '#ccc' }}>Logo card voice-over</div>
+                <VoiceLinesEditor value={endVoice} onChange={patch => setEndVoice({ ...endVoice, ...patch })} comicId={comicId} cast={cast} what="the logo card" />
+              </div>
+            )}
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem', color: '#ccc', marginTop: 8 }} title="A violet page on which every published comic's cover tiles in one after another, shown just before the logo card">
               <input type="checkbox" checked={coversCard} onChange={e => setCoversCard(e.target.checked)} disabled={!endCard} />
               Before the logo card, tile all published covers, for
@@ -2408,11 +3243,12 @@ function Reels() {
               <span style={{ color: '#c4bdd8', fontSize: '0.8rem' }}>s</span>
             </label>
             <div style={{ display: 'flex', gap: 12, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <label style={{ fontSize: '0.8rem', color: '#c4bdd8' }}>Veo's own audio:</label>
-              <select value={ambient} onChange={e => setAmbient(e.target.value)} style={{ ...input, width: 220 }}>
-                <option value="keep">Keep as generated</option>
-                <option value="duck">Duck under the voices</option>
-                <option value="mute">Mute — voices only</option>
+              <label style={{ fontSize: '0.8rem', color: '#c4bdd8' }} title="What the voice lines (step 4) play over: the clip's own sound (Veo's, or your upload's) — or, in a reel made from the images, the images' own voice-over lines. Mute to hear the step-4 lines alone.">The clip's / images' own sound:</label>
+              <select value={ambient} onChange={e => setAmbient(e.target.value)} style={{ ...input, width: 260 }}
+                      title="What the voice lines (step 4) play over: the clip's own sound (Veo's, or your upload's) — or, in a reel made from the images, the images' own voice-over lines. Mute to hear the step-4 lines alone.">
+                <option value="keep">Keep as is</option>
+                <option value="duck">Duck under the voice lines</option>
+                <option value="mute">Mute — the voice lines only</option>
               </select>
               <label style={{ fontSize: '0.8rem', color: '#c4bdd8' }}>Subtitles:</label>
               <select value={subtitles} onChange={e => setSubtitles(e.target.value)} style={{ ...input, width: 220 }}
@@ -2427,6 +3263,17 @@ function Reels() {
                         title="Re-apply audio to the last generated clip without paying for a new generation">
                   {busy ? 'Mixing…' : (/^(own-|challenge-|demo-)/.test(clipFile || '') ? '🔁 Apply audio & cards to this clip' : '🔁 Apply audio to last clip')}
                 </button>
+              )}
+              {clipFile && (
+                <button className="btn btn-secondary" disabled={busy} onClick={() => { setClipFile(null); setClip(null); }} style={{ padding: '0.45rem 1rem' }}
+                        title="Forget the base clip — the reel is then made from the opening images alone (the clip's file stays on the server, under Previous clips)">
+                  ✕ Drop this clip
+                </button>
+              )}
+              {clipFile && /-fin(-|\.mp4$)/.test(clipFile) && (
+                <div style={{ width: '100%', color: '#FFD23F', fontSize: '0.8rem' }}>
+                  ⚠️ The base clip is already a finished reel ({clipFile}) — applying the cards again puts that whole reel, old sign-off and all, inside a new one. To change a reel, drop the clip and make it again from the images (or from the original clip under Previous clips).
+                </div>
               )}
               {!clipFile && openingImages.some(s => s.image) && (
                 <button className="btn btn-secondary" disabled={busy} onClick={remix} style={{ padding: '0.45rem 1rem' }}
@@ -2444,7 +3291,11 @@ function Reels() {
           <>
             <video src={clip} controls playsInline style={{ width: '100%', borderRadius: 10, border: '1px solid #444', background: '#000' }} />
             <a className="btn btn-primary" href={clip} download style={{ display: 'inline-block', padding: '0.45rem 1.1rem', textDecoration: 'none', marginTop: 10 }}>⬇ Download</a>
-            <InsetControls comicId={comicId} file={clipFile} onDone={(u, f) => { setClip(u); setClipFile(f); }} />
+            {/* Frame the video shown above. Framing the bare base clip makes the
+                framed one the base (cards then go around the phone); framing a
+                finished reel is just a finished reel — the base stays, so a change
+                + "Apply" rebuilds the reel from the base rather than nesting it. */}
+            <InsetControls comicId={comicId} file={clip.split('/').pop()} onDone={(u, f) => { if (clipFile && clip.endsWith('/' + clipFile)) setClipFile(f); setClip(u); }} />
             {clipFile && (
               <div style={{ border: '1px solid #444', borderRadius: 8, padding: 10, marginTop: 12 }}>
                 <div style={{ fontSize: '0.85rem', color: '#d6d0e6', marginBottom: 6 }}>Improve on this clip</div>
