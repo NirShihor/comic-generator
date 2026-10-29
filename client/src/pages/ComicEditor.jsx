@@ -6479,6 +6479,10 @@ ${userPrompt.trim()}`;
                     </select>
                     <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>gap <input type="number" min={0} max={5} step={0.1} value={v.gap} onChange={e => setReelCfg(pg.id, { [key]: { ...v, gap: Number(e.target.value) } })} style={{ ...inp, width: 64 }} disabled={!v.on} /> s</label>
                     <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>hold at end <input type="number" min={0} max={10} step={0.5} value={v.hold} onChange={e => setReelCfg(pg.id, { [key]: { ...v, hold: Number(e.target.value) } })} style={{ ...inp, width: 64 }} disabled={!v.on} /> s</label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+                           title="Leave the lines out: the bubbles still appear one by one on the same timing, but nothing is heard — for a reel you narrate yourself with voice lines in Marketing (step 4)">
+                      <input type="checkbox" checked={!!v.silent} onChange={e => setReelCfg(pg.id, { [key]: { ...v, silent: e.target.checked } })} disabled={!v.on} /> 🔇 silent
+                    </label>
                   </div>
                 );
                 return [row, (
@@ -6627,6 +6631,12 @@ ${userPrompt.trim()}`;
                             <option value="highlight">Bubbles stay empty — green highlight + audio</option>
                             <option value="none">No bubbles, silent shot</option>
                           </select>
+                          {sh.bubbles !== 'none' && (
+                            <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}
+                                   title="Leave the bubbles' audio out: they still pop in one by one on the same timing, but nothing is heard — for a reel you narrate yourself with voice lines in Marketing (step 4)">
+                              <input type="checkbox" checked={!!sh.silent} onChange={e => updStoryShot(sh.id, { silent: e.target.checked })} /> 🔇 silent
+                            </label>
+                          )}
                           <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>gap <input type="number" min={0} max={5} step={0.1} value={sh.gap} onChange={e => updStoryShot(sh.id, { gap: Number(e.target.value) })} style={{ ...inp, width: 58 }} /> s</label>
                           <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>hold <input type="number" min={0} max={10} step={0.5} value={sh.hold} onChange={e => updStoryShot(sh.id, { hold: Number(e.target.value) })} style={{ ...inp, width: 58 }} /> s</label>
                           <span style={{ flex: 1 }} />

@@ -1,3 +1,5 @@
+const { cleanColorSpans, tokenRanges, wordColorRuns } = require('./textColor');
+
 function sanitizeWordForFilename(word) {
   if (!word) return '';
   return word.toLowerCase().replace(/[.,!?;:"""''¿¡…\[\](){}\/\\]/g, '').trim().replace(/\s+/g, '_');
@@ -158,10 +160,15 @@ function transformToReaderFormat(comic, comicSlug) {
               const tokens = sentenceText.match(/\S+/g) || [];
               // Also extract bare words for case-matching fallback
               const originalWords = sentenceText.match(/[\p{L}\p{N}]+/gu) || [];
+              // partial colouring → per-word runs for the reader's word chips
+              const colorSpans = cleanColorSpans(sentenceText, sentence.colorSpans);
+              const tokenPos = tokenRanges(sentenceText);
+              let colorCursor = 0;
               return {
                 id: sentenceId,
                 text: sentenceText,
                 translation: sentence.translation || '',
+                ...(colorSpans.length > 0 && { colorSpans }),
                 ...(sentence.grammarNote && { grammarNote: sentence.grammarNote }),
                 audioUrl: sentence.audioUrl || '',
                 ...(sentence.translationAudioUrl && { translationAudioUrl: sentence.translationAudioUrl }),
@@ -192,9 +199,12 @@ function transformToReaderFormat(comic, comicSlug) {
                   } else if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === wordLower) {
                     displayText = originalWords[wIdx];
                   }
+                  const colored = wordColorRuns(colorSpans, tokenPos, wIdx, displayText, sentenceText, colorCursor);
+                  colorCursor = colored.cursor;
                   return {
                     id: `${comicSlug}-w${wordCounter++}`,
                     text: displayText,
+                    ...(colored.runs.length > 0 && { colors: colored.runs }),
                     meaning: word.meaning || '',
                     baseForm: word.baseForm || word.text || '',
                     ...(word.baseMeaning && { baseMeaning: word.baseMeaning }),
@@ -445,11 +455,16 @@ function transformToReaderFormat(comic, comicSlug) {
               const tokens = sentenceText.match(/\S+/g) || [];
               // Also extract bare words for case-matching fallback
               const originalWords = sentenceText.match(/[\p{L}\p{N}]+/gu) || [];
+              // partial colouring → per-word runs for the reader's word chips
+              const colorSpans = cleanColorSpans(sentenceText, sentence.colorSpans);
+              const tokenPos = tokenRanges(sentenceText);
+              let colorCursor = 0;
 
                 return {
                   id: sentenceId,
                   text: sentenceText,
                   translation: sentence.translation || '',
+                  ...(colorSpans.length > 0 && { colorSpans }),
                   ...(sentence.grammarNote && { grammarNote: sentence.grammarNote }),
                   audioUrl: sentence.audioUrl || '',
                 ...(sentence.translationAudioUrl && { translationAudioUrl: sentence.translationAudioUrl }),
@@ -480,9 +495,12 @@ function transformToReaderFormat(comic, comicSlug) {
                     } else if (originalWords[wIdx] && originalWords[wIdx].toLowerCase() === wordLower) {
                       displayText = originalWords[wIdx];
                     }
+                    const colored = wordColorRuns(colorSpans, tokenPos, wIdx, displayText, sentenceText, colorCursor);
+                    colorCursor = colored.cursor;
                     return {
                       id: `${comicSlug}-w${wordCounter++}`,
                       text: displayText,
+                      ...(colored.runs.length > 0 && { colors: colored.runs }),
                       meaning: word.meaning || '',
                       baseForm: word.baseForm || word.text || '',
                       ...(word.baseMeaning && { baseMeaning: word.baseMeaning }),

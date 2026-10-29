@@ -14,19 +14,27 @@ test('opening image settings are validated and defaulted', () => {
   assert.strictEqual(parseOpeningImage({ enabled: true }), null, 'no image → no slide');
   assert.strictEqual(parseOpeningImage({ enabled: false, image: 'page_1.jpg' }), null);
   assert.deepStrictEqual(parseOpeningImage({ enabled: true, image: 'page_1.jpg' }),
-    { image: 'page_1.jpg', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, zoom: 1, focusX: 0.5, focusY: 0.5, fade: true });
+    { image: 'page_1.jpg', seconds: 3, fit: 'inside', background: '#6E40F0', margin: 0, zoom: 1, focusX: 0.5, focusY: 0.5, fade: true, moves: [], voiceDelay: 0.25, lines: [] });
   assert.deepStrictEqual(parseOpeningImage({ enabled: true, image: 'ref:/uploads/x.png', seconds: 99, fit: 'cover', background: '#ffd23f', margin: 1000, zoom: 900, focusX: 0, focusY: 120, fade: false }),
-    { image: 'ref:/uploads/x.png', seconds: 60, fit: 'cover', background: '#FFD23F', margin: 300, zoom: 4, focusX: 0, focusY: 1, fade: false });
+    { image: 'ref:/uploads/x.png', seconds: 60, fit: 'cover', background: '#FFD23F', margin: 300, zoom: 4, focusX: 0, focusY: 1, fade: false, moves: [], voiceDelay: 0.25, lines: [] });
+  // Zoom moves (the audio-driven zoom editor) ride along, validated by parseZooms.
+  assert.strictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', moves: [{ start: 29, zoom: 2.05, cx: 0.3, cy: 0.2 }] }).moves.length, 1);
+  assert.deepStrictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', moves: 'nonsense' }).moves, []);
+  // Voice-over: up to 5 upload: lines with a clamped pause each, a clamped delay before the first; anything else dropped.
+  assert.deepStrictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', voiceDelay: 0, lines: [{ audio: 'upload:a.mp3', pause: 99 }, { audio: '/etc/passwd' }, { audio: 'upload:b.mp3' }] }).lines,
+    [{ audio: 'upload:a.mp3', pause: 30 }, { audio: 'upload:b.mp3', pause: 0 }]);
+  assert.strictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', voiceDelay: 0, lines: [] }).voiceDelay, 0);
+  assert.deepStrictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', audio: 'upload:old.mp3' }).lines, [{ audio: 'upload:old.mp3', pause: 0 }], 'the older single audio token is one line');
   assert.strictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', seconds: 0.1, background: 'red' }).seconds, 0.5);
   assert.strictEqual(parseOpeningImage({ enabled: true, image: 'p.jpg', background: 'red' }).background, '#6E40F0');
 });
 
-test('several opening images come through in order, empty ones dropped, at most six', () => {
+test('several opening images come through in order, empty ones dropped, at most twenty', () => {
   assert.deepStrictEqual(parseOpeningImages({}), []);
   assert.deepStrictEqual(parseOpeningImages({ openingImages: 'nope' }), []);
   const two = parseOpeningImages({ openingImages: [{ image: 'page_1.jpg', seconds: 2 }, { image: '' }, { image: 'page_2.jpg', seconds: 4, fit: 'cover' }] });
   assert.deepStrictEqual(two.map(s => [s.image, s.seconds, s.fit]), [['page_1.jpg', 2, 'inside'], ['page_2.jpg', 4, 'cover']]);
-  assert.strictEqual(parseOpeningImages({ openingImages: Array.from({ length: 9 }, (_, i) => ({ image: `p${i}.jpg` })) }).length, 6);
+  assert.strictEqual(parseOpeningImages({ openingImages: Array.from({ length: 25 }, (_, i) => ({ image: `p${i}.jpg` })) }).length, 20);
   // The older single-image shape still works.
   assert.deepStrictEqual(parseOpeningImages({ openingImage: { enabled: true, image: 'page_1.jpg' } }).map(s => s.image), ['page_1.jpg']);
   assert.deepStrictEqual(parseOpeningImages({ openingImage: { enabled: false, image: 'page_1.jpg' } }), []);

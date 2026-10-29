@@ -5,6 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
+const { strokesSvg } = require('../services/strokesSvg');
 const Comic = require('../models/Comic');
 const ArchivedPage = require('../models/ArchivedPage');
 const { sanitizeTitle, sanitizeWordForFilename, transformToReaderFormat, computePanelCorners } = require('../services/readerFormat');
@@ -709,6 +710,9 @@ router.put('/:id/pages/:pageId', async (req, res) => {
     if (req.body.bubbles !== undefined) {
       page.bubbles = req.body.bubbles;
     }
+    if (req.body.strokes !== undefined) {
+      page.strokes = req.body.strokes;
+    }
     if (req.body.hotspots !== undefined) {
       page.hotspots = req.body.hotspots;
     }
@@ -860,6 +864,9 @@ router.put('/:id/cover', async (req, res) => {
 
     if (req.body.bubbles !== undefined) {
       comic.cover.bubbles = req.body.bubbles;
+    }
+    if (req.body.strokes !== undefined) {
+      comic.cover.strokes = req.body.strokes;
     }
 
     if (req.body.image) {
@@ -1106,9 +1113,12 @@ router.post('/:id/export-full', async (req, res) => {
               // Get image bubbles from this page
               const pageBubbles = page.bubbles || [];
               const imageBubbles = pageBubbles.filter(b => b.type === 'image' && b.imageUrl);
+              // Lines and arrows drawn over the page are part of the art too
+              // (the baked image has them; so must the text-free variant).
+              const strokes = (page.strokes || []).filter(st => Number.isFinite(st.x1) && Number.isFinite(st.y2));
 
-              if (imageBubbles.length > 0) {
-                // Composite image bubbles onto the raw master
+              if (imageBubbles.length > 0 || strokes.length > 0) {
+                // Composite image bubbles (and the strokes) onto the raw master
                 const rawMeta = await sharp(rawMasterPath).metadata();
                 const composites = [];
                 for (const ib of imageBubbles) {
@@ -1124,6 +1134,9 @@ router.post('/:id/export-full', async (req, res) => {
                   } catch (e) {
                     console.log('Image bubble source not found, skipping:', imgPath);
                   }
+                }
+                if (strokes.length > 0) {
+                  composites.push({ input: Buffer.from(strokesSvg(strokes, rawMeta.width, rawMeta.height)), left: 0, top: 0 });
                 }
                 await sharp(rawMasterPath).composite(composites).resize(1024, null, { withoutEnlargement: true }).jpeg({ quality: 85 }).toFile(noTextDestPath);
               } else {
@@ -1458,7 +1471,8 @@ router.delete('/:id/pages/:pageId', async (req, res) => {
         lines: page.lines,
         dividerLines: page.dividerLines,
         panels: page.panels,
-        bubbles: page.bubbles
+        bubbles: page.bubbles,
+        strokes: page.strokes
       });
       await archivedPage.save();
     }
@@ -1552,7 +1566,8 @@ router.post('/:id/archived-pages/:archivedPageId/restore', async (req, res) => {
       lines: archivedPage.lines,
       dividerLines: archivedPage.dividerLines,
       panels: archivedPage.panels,
-      bubbles: archivedPage.bubbles
+      bubbles: archivedPage.bubbles,
+      strokes: archivedPage.strokes
     };
 
     comic.pages.push(restoredPage);
