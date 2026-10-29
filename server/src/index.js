@@ -226,6 +226,7 @@ app.use('/api/notebook', notebookRoutes);
 app.use('/api/backgrounds', backgroundRoutes);
 app.use('/api/marketing', require('./routes/marketing'));
 app.use('/api/appstore', require('./routes/appstore'));
+app.use('/api/stories', require('./routes/story'));
 
 // Health check
 app.get('/api/health', (req, res) => {

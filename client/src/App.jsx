@@ -7,6 +7,8 @@ import ReorderComics from './pages/ReorderComics';
 import NotebookAdmin from './pages/NotebookAdmin';
 import Backgrounds from './pages/Backgrounds';
 import Marketing from './pages/Marketing';
+import StoryList from './pages/StoryList';
+import StoryWorkshop from './pages/StoryWorkshop';
 import './App.css';
 
 function App() {
@@ -16,6 +18,7 @@ function App() {
         <nav className="navbar">
           <Link to="/" className="nav-brand">Comic Generator</Link>
           <Link to="/backgrounds" style={{ color: '#007bff', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 600 }}>Backgrounds</Link>
+          <Link to="/stories" style={{ color: '#007bff', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 600, marginLeft: '1rem' }}>Stories</Link>
         </nav>
 
         <main className="main-content">
@@ -25,6 +28,8 @@ function App() {
             <Route path="/notebook" element={<NotebookAdmin />} />
             <Route path="/backgrounds" element={<Backgrounds />} />
             <Route path="/marketing" element={<Marketing />} />
+            <Route path="/stories" element={<StoryList />} />
+            <Route path="/story/:id" element={<StoryWorkshop />} />
             <Route path="/comic/:id" element={<ComicEditor />} />
             <Route path="/comic/:id/settings" element={<ComicSettings />} />
             <Route path="/comic/:id/page/:pageId" element={<PageEditor />} />
